@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Palette Parade — Slate Mono + accent indigo #4F46E5 */
+    --background: 0 0% 100%;
+    --foreground: 222 22% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 22% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 22% 11%;
+
+    /* primary = accent indigo */
+    --primary: 244 75% 59%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 22% 11%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 220 14% 96%;
+    --accent-foreground: 222 22% 11%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 244 75% 59%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 22% 7%;
+    --foreground: 210 17% 95%;
+
+    --card: 222 22% 9%;
+    --card-foreground: 210 17% 95%;
+
+    --popover: 222 22% 9%;
+    --popover-foreground: 210 17% 95%;
+
+    --primary: 244 80% 67%;
+    --primary-foreground: 222 22% 11%;
+
+    --secondary: 217 19% 17%;
+    --secondary-foreground: 210 17% 95%;
+
+    --muted: 217 19% 17%;
+    --muted-foreground: 218 11% 65%;
+
+    --accent: 217 19% 17%;
+    --accent-foreground: 210 17% 95%;
+
+    --destructive: 0 63% 45%;
+    --destructive-foreground: 210 17% 95%;
+
+    --border: 217 19% 20%;
+    --input: 217 19% 20%;
+    --ring: 244 80% 67%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
