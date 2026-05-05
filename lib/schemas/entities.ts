@@ -101,6 +101,11 @@ export const patchEntitySchema = z.object({
   ownerId: nullableUuid.optional(),
 });
 
+export const quickCreateEntitySchema = z.object({
+  name: z.string().trim().min(1, "Le nom est requis.").max(200),
+});
+
 export type CreateEntityInput = z.infer<typeof createEntitySchema>;
 export type UpdateEntityInput = z.infer<typeof updateEntitySchema>;
 export type PatchEntityInput = z.infer<typeof patchEntitySchema>;
+export type QuickCreateEntityInput = z.infer<typeof quickCreateEntitySchema>;

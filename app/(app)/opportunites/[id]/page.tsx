@@ -199,6 +199,7 @@ export default async function OpportunityDetailPage({ params }: { params: Params
                     : null
                 }
                 options={visibleContacts}
+                entityId={opp.entityId}
               />
             </div>
             {contact ? (

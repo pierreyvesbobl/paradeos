@@ -75,6 +75,16 @@ export const patchContactSchema = z.object({
   notes: nullableText(5000).optional(),
 });
 
+/**
+ * Création rapide depuis un picker FK : juste un nom complet (split
+ * sur le premier espace pour distinguer prénom / nom).
+ */
+export const quickCreateContactSchema = z.object({
+  fullName: z.string().trim().min(1, "Le nom est requis.").max(200),
+  entityId: z.string().uuid().optional(),
+});
+
 export type CreateContactInput = z.infer<typeof createContactSchema>;
 export type UpdateContactInput = z.infer<typeof updateContactSchema>;
 export type PatchContactInput = z.infer<typeof patchContactSchema>;
+export type QuickCreateContactInput = z.infer<typeof quickCreateContactSchema>;

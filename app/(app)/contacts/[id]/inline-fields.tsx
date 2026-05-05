@@ -5,6 +5,7 @@ import { InlineMultiline } from "@/components/inline/inline-multiline";
 import { InlineText } from "@/components/inline/inline-text";
 import type { SaveResult, Saver } from "@/components/inline/types";
 import { patchContact } from "@/lib/actions/contacts";
+import { quickCreateEntity } from "@/lib/actions/entities";
 
 type FieldId =
   | "firstName"
@@ -171,6 +172,12 @@ export function ContEntity({
       onSave={makeSaver<string | null>(id, "entityId")}
       searchPlaceholder="Rechercher une entité…"
       clearLabel="Aucune entité"
+      onCreate={async (name) => {
+        const res = await quickCreateEntity({ name });
+        if (!res.ok) throw new Error(res.message);
+        return { id: res.data.id, label: res.data.name };
+      }}
+      createLabel="Créer l'entité"
     />
   );
 }

@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserAvatar } from "@/components/user/user-avatar";
+import { quickCreateEntity } from "@/lib/actions/entities";
 import { patchProject } from "@/lib/actions/projects";
 import { formatEuro } from "@/lib/format";
 import {
@@ -188,6 +189,12 @@ export function ProjEntity({
       onSave={makeSaver<string | null>(id, "entityId")}
       searchPlaceholder="Rechercher une entité…"
       clearLabel="Aucune entité"
+      onCreate={async (name) => {
+        const res = await quickCreateEntity({ name });
+        if (!res.ok) throw new Error(res.message);
+        return { id: res.data.id, label: res.data.name };
+      }}
+      createLabel="Créer l'entité"
     />
   );
 }

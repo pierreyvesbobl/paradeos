@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Check, X } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -42,6 +42,15 @@ type Props = {
    * - "leading-only" : seul `value.leading` est affiché (pas de label).
    */
   triggerVariant?: "default" | "leading-only";
+  /**
+   * Si fourni, un item "Créer « X »" apparaît dans la liste quand la
+   * recherche ne matche pas une option existante. Doit créer le record
+   * en base et retourner son `{ id, label }` ; le picker l'auto-sélectionne
+   * derrière.
+   */
+  onCreate?: (query: string) => Promise<{ id: string; label: string } | null>;
+  /** Préfixe affiché dans l'item de création (defaut: "Créer"). */
+  createLabel?: string;
 };
 
 export function InlineFk({
@@ -53,10 +62,13 @@ export function InlineFk({
   clearLabel = "Aucun",
   emptyLabel = "Aucun résultat.",
   triggerVariant = "default",
+  onCreate,
+  createLabel = "Créer",
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [search, setSearch] = useState("");
 
   function pick(next: string | null) {
     if ((next ?? null) === (value?.id ?? null)) {
@@ -73,6 +85,36 @@ export function InlineFk({
       router.refresh();
     });
   }
+
+  function handleCreate(query: string) {
+    if (!onCreate) return;
+    startTransition(async () => {
+      try {
+        const created = await onCreate(query);
+        if (!created) {
+          toast.error("Création impossible.");
+          return;
+        }
+        const res = await onSave(created.id);
+        if (!res.ok) {
+          toast.error(res.message);
+          return;
+        }
+        setOpen(false);
+        setSearch("");
+        toast.success(`« ${created.label} » créé et lié.`);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Création échouée.");
+      }
+    });
+  }
+
+  const trimmed = search.trim();
+  const showCreate =
+    !!onCreate &&
+    trimmed.length > 0 &&
+    !options.some((o) => o.label.toLowerCase() === trimmed.toLowerCase());
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -101,9 +143,23 @@ export function InlineFk({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-0">
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
           <CommandList>
-            <CommandEmpty>{emptyLabel}</CommandEmpty>
+            <CommandEmpty>
+              {showCreate ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => handleCreate(trimmed)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+                >
+                  <Plus className="size-3.5" />
+                  {createLabel} « {trimmed} »
+                </button>
+              ) : (
+                <span className="text-muted-foreground text-sm">{emptyLabel}</span>
+              )}
+            </CommandEmpty>
             <CommandGroup>
               {clearLabel !== null ? (
                 <CommandItem onSelect={() => pick(null)} value="__aucun__">
@@ -126,6 +182,16 @@ export function InlineFk({
                 </CommandItem>
               ))}
             </CommandGroup>
+            {showCreate ? (
+              <CommandGroup heading="Créer">
+                <CommandItem value={`__create__${trimmed}`} onSelect={() => handleCreate(trimmed)}>
+                  <Plus className="size-3.5" />
+                  <span>
+                    {createLabel} « <strong>{trimmed}</strong> »
+                  </span>
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
           </CommandList>
         </Command>
       </PopoverContent>

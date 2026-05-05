@@ -7,6 +7,7 @@ import {
   createProjectSchema,
   deleteProjectSchema,
   patchProjectSchema,
+  quickCreateProjectSchema,
   updateProjectSchema,
 } from "@/lib/schemas/projects";
 import { eq } from "drizzle-orm";
@@ -69,6 +70,27 @@ export const updateProject = action(updateProjectSchema, async ({ input }) => {
  * Patch partiel d'un projet depuis l'édition inline. Seuls les champs
  * fournis sont mis à jour. `null` = effacer.
  */
+/**
+ * Création rapide depuis un picker FK : juste un nom (kind=transverse,
+ * status=planning par défaut).
+ */
+export const quickCreateProject = action(quickCreateProjectSchema, async ({ input, user }) => {
+  const conn = await db();
+  const [row] = await conn
+    .insert(projects)
+    .values({
+      name: input.name,
+      kind: "transverse",
+      status: "planning",
+      ownerId: user.id,
+      createdBy: user.id,
+    })
+    .returning({ id: projects.id, name: projects.name });
+  if (!row) throw new Error("Création échouée.");
+  revalidatePath("/projets");
+  return { id: row.id, name: row.name };
+});
+
 export const patchProject = action(patchProjectSchema, async ({ input }) => {
   const conn = await db();
   const updates: Partial<typeof projects.$inferInsert> = {};

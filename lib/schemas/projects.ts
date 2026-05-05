@@ -164,5 +164,10 @@ export const patchProjectSchema = z.object({
   hourlyRate: nullableNumeric.optional(),
 });
 
+export const quickCreateProjectSchema = z.object({
+  name: z.string().trim().min(1, "Le nom est requis.").max(200),
+});
+
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
+export type QuickCreateProjectInput = z.infer<typeof quickCreateProjectSchema>;

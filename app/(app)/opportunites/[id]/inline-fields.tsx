@@ -8,6 +8,8 @@ import { InlineText } from "@/components/inline/inline-text";
 import type { SaveResult, Saver } from "@/components/inline/types";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/user/user-avatar";
+import { quickCreateContact } from "@/lib/actions/contacts";
+import { quickCreateEntity } from "@/lib/actions/entities";
 import { patchOpportunity } from "@/lib/actions/opportunities";
 import { formatEuro } from "@/lib/format";
 import { type OpportunityStatus, opportunityStatusLabels } from "@/lib/schemas/opportunities";
@@ -189,6 +191,12 @@ export function OppEntity({
       onSave={makeSaver<string | null>(id, "entityId")}
       searchPlaceholder="Rechercher une entité…"
       clearLabel="Aucune entité"
+      onCreate={async (name) => {
+        const res = await quickCreateEntity({ name });
+        if (!res.ok) throw new Error(res.message);
+        return { id: res.data.id, label: res.data.name };
+      }}
+      createLabel="Créer l'entité"
     />
   );
 }
@@ -197,10 +205,14 @@ export function OppContact({
   id,
   value,
   options,
+  entityId,
 }: {
   id: string;
   value: { id: string; firstName: string; lastName: string } | null;
   options: { id: string; firstName: string; lastName: string }[];
+  /** Si l'opportunité est liée à une entité, on rattache automatiquement
+   * le contact créé à la volée à cette entité. */
+  entityId?: string | null;
 }) {
   return (
     <InlineFk
@@ -212,6 +224,15 @@ export function OppContact({
       onSave={makeSaver<string | null>(id, "contactId")}
       searchPlaceholder="Rechercher un contact…"
       clearLabel="Aucun contact"
+      onCreate={async (fullName) => {
+        const res = await quickCreateContact({
+          fullName,
+          entityId: entityId ?? undefined,
+        });
+        if (!res.ok) throw new Error(res.message);
+        return { id: res.data.id, label: res.data.fullName };
+      }}
+      createLabel="Créer le contact"
     />
   );
 }

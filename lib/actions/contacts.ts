@@ -7,6 +7,7 @@ import {
   createContactSchema,
   deleteContactSchema,
   patchContactSchema,
+  quickCreateContactSchema,
   updateContactSchema,
 } from "@/lib/schemas/contacts";
 import { eq } from "drizzle-orm";
@@ -57,6 +58,41 @@ export const updateContact = action(updateContactSchema, async ({ input }) => {
   revalidatePath(`/contacts/${input.id}`);
   if (input.entityId) revalidatePath(`/entites/${input.entityId}`);
   return { id: input.id };
+});
+
+/**
+ * Création rapide depuis un picker FK. `fullName` est splitté sur le
+ * premier espace : "Pierre-Yves Sage" → firstName="Pierre-Yves",
+ * lastName="Sage". Si pas d'espace, lastName=fullName.
+ */
+export const quickCreateContact = action(quickCreateContactSchema, async ({ input, user }) => {
+  const conn = await db();
+  const trimmed = input.fullName.trim();
+  const idx = trimmed.indexOf(" ");
+  const firstName = idx > 0 ? trimmed.slice(0, idx) : "";
+  const lastName = idx > 0 ? trimmed.slice(idx + 1) : trimmed;
+
+  const [row] = await conn
+    .insert(contacts)
+    .values({
+      firstName,
+      lastName,
+      entityId: input.entityId ?? null,
+      ownerId: user.id,
+      createdBy: user.id,
+    })
+    .returning({
+      id: contacts.id,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+    });
+  if (!row) throw new Error("Création échouée.");
+  revalidatePath("/contacts");
+  if (input.entityId) revalidatePath(`/entites/${input.entityId}`);
+  return {
+    id: row.id,
+    fullName: `${row.firstName} ${row.lastName}`.trim(),
+  };
 });
 
 export const patchContact = action(patchContactSchema, async ({ input }) => {

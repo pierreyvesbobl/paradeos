@@ -7,6 +7,7 @@ import {
   createEntitySchema,
   deleteEntitySchema,
   patchEntitySchema,
+  quickCreateEntitySchema,
   updateEntitySchema,
 } from "@/lib/schemas/entities";
 import { eq } from "drizzle-orm";
@@ -53,6 +54,26 @@ export const updateEntity = action(updateEntitySchema, async ({ input }) => {
   revalidatePath("/entites");
   revalidatePath(`/entites/${input.id}`);
   return { id: input.id };
+});
+
+/**
+ * Création rapide depuis un picker FK (Notion-like). Crée une entité
+ * avec juste un nom (kind=prospect par défaut), retourne id + nom.
+ */
+export const quickCreateEntity = action(quickCreateEntitySchema, async ({ input, user }) => {
+  const conn = await db();
+  const [row] = await conn
+    .insert(entities)
+    .values({
+      name: input.name,
+      kind: "prospect",
+      ownerId: user.id,
+      createdBy: user.id,
+    })
+    .returning({ id: entities.id, name: entities.name });
+  if (!row) throw new Error("Création échouée.");
+  revalidatePath("/entites");
+  return { id: row.id, name: row.name };
 });
 
 export const patchEntity = action(patchEntitySchema, async ({ input }) => {
