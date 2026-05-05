@@ -24,6 +24,17 @@ const MENTION_RE =
   /(@[\p{L}][\p{L}\p{N}_-]*)|(#(?:project|projet|opp|opportunite|opportunité|contact|entity|entite|entité|task|tache|tâche):[^\s)\]]+)/giu;
 
 /**
+ * Réécrit `attachment://path` en `/api/note-attachments/path` (route
+ * auth-gatée qui redirige vers une URL signée fraîche). Permet aux
+ * images insérées dans une note de se rendre via la stack Next.js.
+ */
+function rewriteAttachments(content: string): string {
+  return content.replace(/attachment:\/\/([^\s)\]]+)/g, (_match, path) => {
+    return `/api/note-attachments/${String(path).split("/").map(encodeURIComponent).join("/")}`;
+  });
+}
+
+/**
  * Pré-traite le contenu pour transformer @mention et #subject:slug en
  * liens markdown que react-markdown rendra automatiquement.
  */
@@ -62,7 +73,7 @@ function inlineLinkify(content: string, resolver?: MentionResolver): string {
 }
 
 export function Markdown({ content, resolver, className }: Props) {
-  const prepared = inlineLinkify(content, resolver);
+  const prepared = rewriteAttachments(inlineLinkify(content, resolver));
   return (
     <div
       className={cn(
@@ -72,6 +83,7 @@ export function Markdown({ content, resolver, className }: Props) {
         "prose-a:text-primary prose-a:no-underline hover:prose-a:underline",
         "prose-li:my-0.5 prose-ol:my-1.5 prose-ul:my-1.5",
         "prose-hr:my-3",
+        "prose-img:my-2 prose-img:rounded-md prose-img:border",
         className,
       )}
     >

@@ -1,10 +1,10 @@
 "use client";
 
+import { quickCreateTask } from "@/lib/actions/tasks";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { quickCreateTask } from "@/lib/actions/tasks";
 
 type Props = {
   /** Si fourni, la tâche créée est rattachée à ce projet. */

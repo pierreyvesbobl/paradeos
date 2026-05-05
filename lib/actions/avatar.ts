@@ -1,11 +1,11 @@
 "use server";
 
+import { users } from "@/db/schema/users";
+import { requireUser } from "@/lib/auth/server";
+import { db } from "@/lib/db/server";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { users } from "@/db/schema/users";
-import { db } from "@/lib/db/server";
-import { requireUser } from "@/lib/auth/server";
 
 const BUCKET = "avatars";
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -33,10 +33,9 @@ function publicUrl(path: string): string {
  * permettre un retrieve déterministe. Ajout d'un timestamp comme suffixe
  * pour casser le cache côté navigateur sans avoir à invalider le CDN.
  */
-export async function uploadAvatar(formData: FormData): Promise<
-  | { ok: true; url: string }
-  | { ok: false; message: string }
-> {
+export async function uploadAvatar(
+  formData: FormData,
+): Promise<{ ok: true; url: string } | { ok: false; message: string }> {
   const user = await requireUser();
   const file = formData.get("file");
 
@@ -56,13 +55,11 @@ export async function uploadAvatar(formData: FormData): Promise<
   const sb = admin();
   const arrayBuffer = await file.arrayBuffer();
 
-  const { error: uploadError } = await sb.storage
-    .from(BUCKET)
-    .upload(path, arrayBuffer, {
-      contentType: file.type,
-      cacheControl: "3600",
-      upsert: false,
-    });
+  const { error: uploadError } = await sb.storage.from(BUCKET).upload(path, arrayBuffer, {
+    contentType: file.type,
+    cacheControl: "3600",
+    upsert: false,
+  });
   if (uploadError) {
     return { ok: false, message: `Upload échoué : ${uploadError.message}` };
   }
@@ -82,7 +79,7 @@ export async function uploadAvatar(formData: FormData): Promise<
   // Cleanup ancien fichier (best-effort, ne bloque pas).
   if (previous?.avatarUrl?.includes(`/storage/v1/object/public/${BUCKET}/`)) {
     const oldPath = previous.avatarUrl.split(`/${BUCKET}/`)[1];
-    if (oldPath && oldPath.startsWith(`${user.id}/`)) {
+    if (oldPath?.startsWith(`${user.id}/`)) {
       await sb.storage.from(BUCKET).remove([oldPath]);
     }
   }
@@ -92,10 +89,7 @@ export async function uploadAvatar(formData: FormData): Promise<
   return { ok: true, url };
 }
 
-export async function removeAvatar(): Promise<
-  | { ok: true }
-  | { ok: false; message: string }
-> {
+export async function removeAvatar(): Promise<{ ok: true } | { ok: false; message: string }> {
   const user = await requireUser();
   const conn = await db();
 
@@ -107,7 +101,7 @@ export async function removeAvatar(): Promise<
 
   if (previous?.avatarUrl?.includes(`/storage/v1/object/public/${BUCKET}/`)) {
     const oldPath = previous.avatarUrl.split(`/${BUCKET}/`)[1];
-    if (oldPath && oldPath.startsWith(`${user.id}/`)) {
+    if (oldPath?.startsWith(`${user.id}/`)) {
       const sb = admin();
       await sb.storage.from(BUCKET).remove([oldPath]);
     }

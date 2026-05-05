@@ -22,13 +22,7 @@ import { users as usersTable } from "../db/schema/users";
 loadEnv({ path: ".env.local" });
 loadEnv({ path: ".env" });
 
-type Status =
-  | "not_started"
-  
-  | "to_follow_up"
-  | "awaiting_response"
-  | "won"
-  | "lost";
+type Status = "not_started" | "to_follow_up" | "awaiting_response" | "won" | "lost";
 
 type OpportunitySeed = {
   title: string;

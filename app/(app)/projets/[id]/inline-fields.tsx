@@ -301,7 +301,7 @@ export function ProjColor({ id, value }: { id: string; value: string | null }) {
           disabled={pending}
           aria-label="Couleur du projet"
           title={value ?? "Aucune couleur"}
-          className="inline-flex size-5 items-center justify-center rounded-full ring-1 ring-border outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          className="inline-flex size-5 items-center justify-center rounded-full outline-none ring-1 ring-border hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           style={value ? { backgroundColor: value } : undefined}
         >
           {!value ? (

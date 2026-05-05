@@ -24,13 +24,7 @@ import { users as usersTable } from "../db/schema/users";
 loadEnv({ path: ".env.local" });
 loadEnv({ path: ".env" });
 
-type OppStatus =
-  | "not_started"
-  
-  | "to_follow_up"
-  | "awaiting_response"
-  | "won"
-  | "lost";
+type OppStatus = "not_started" | "to_follow_up" | "awaiting_response" | "won" | "lost";
 
 type ProjectKind = "client" | "product" | "transverse";
 type ProjectStatus = "planning" | "active" | "on_hold" | "completed" | "archived";

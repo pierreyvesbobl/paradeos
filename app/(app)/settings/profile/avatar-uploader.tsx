@@ -1,12 +1,12 @@
 "use client";
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { removeAvatar, uploadAvatar } from "@/lib/actions/avatar";
 import { Camera, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { removeAvatar, uploadAvatar } from "@/lib/actions/avatar";
 
 type Props = {
   /** URL actuelle (ou null). */
@@ -94,9 +94,7 @@ export function AvatarUploader({ avatarUrl, initials }: Props) {
             </Button>
           ) : null}
         </div>
-        <p className="text-xs text-muted-foreground">
-          PNG, JPEG, WebP ou GIF · max 5 MB.
-        </p>
+        <p className="text-muted-foreground text-xs">PNG, JPEG, WebP ou GIF · max 5 MB.</p>
       </div>
     </div>
   );

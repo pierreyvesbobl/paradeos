@@ -1,5 +1,5 @@
 import { EmptyState } from "@/components/empty-state";
-import { Markdown } from "@/components/markdown";
+import { InlineNoteEditor } from "@/components/notes/inline-note-editor";
 import { PageHeader } from "@/components/page-header";
 import { FilterRow } from "@/components/table/filter-row";
 import { Badge } from "@/components/ui/badge";
@@ -288,7 +288,18 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
                   </span>
                 </div>
                 <div className="mt-2">
-                  <Markdown content={note.content} resolver={mdResolver} />
+                  <InlineNoteEditor
+                    note={{
+                      id: note.id,
+                      title: note.title,
+                      content: note.content,
+                      kind: note.kind,
+                      occurredAt: note.occurredAt,
+                      subjectType: note.subjectType,
+                      subjectId: note.subjectId,
+                    }}
+                    resolver={mdResolver}
+                  />
                 </div>
                 {note.authorName ? (
                   <p className="mt-2 text-muted-foreground text-xs">— {note.authorName}</p>

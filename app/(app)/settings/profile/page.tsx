@@ -1,13 +1,13 @@
-import { eq } from "drizzle-orm";
 import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
+import { eq } from "drizzle-orm";
 import { AvatarUploader } from "./avatar-uploader";
 import { PasswordForm } from "./password-form";
 import { ProfileForm } from "./profile-form";
 
 function initialsFromName(name: string | null, email: string | null | undefined): string {
-  if (name && name.trim()) {
+  if (name?.trim()) {
     const parts = name.trim().split(/\s+/);
     const first = parts[0]?.[0] ?? "";
     const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";

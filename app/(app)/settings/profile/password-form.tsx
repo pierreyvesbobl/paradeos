@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setPassword } from "@/lib/actions/auth";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 
 export function PasswordForm() {
   const [password, setPasswordValue] = useState("");
@@ -55,9 +55,7 @@ export function PasswordForm() {
           onChange={(e) => setPasswordValue(e.target.value)}
           disabled={pending}
         />
-        {errors.password ? (
-          <p className="text-destructive text-xs">{errors.password[0]}</p>
-        ) : null}
+        {errors.password ? <p className="text-destructive text-xs">{errors.password[0]}</p> : null}
       </div>
 
       <div className="space-y-2">

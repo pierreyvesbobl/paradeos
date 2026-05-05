@@ -283,7 +283,7 @@ function Card({ item }: { item: KanbanItem }) {
           </div>
         ) : null}
 
-        <div className="flex items-center gap-1.5 pt-1 text-muted-foreground text-[11px]">
+        <div className="flex items-center gap-1.5 pt-1 text-[11px] text-muted-foreground">
           {item.valueAmount ? (
             <span className={`rounded px-1.5 py-0.5 font-medium ${colors.amount}`}>
               {formatEuro(Number(item.valueAmount))}

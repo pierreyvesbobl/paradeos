@@ -1,12 +1,12 @@
-import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
 import type { buildMarkdownResolver } from "@/lib/db/queries/mention-resolver";
 import type { AttachmentRow } from "@/lib/db/queries/notes";
 import { formatDateTime } from "@/lib/format";
 import type { NoteKind, NoteSubjectType } from "@/lib/schemas/notes";
 import { noteKindLabels } from "@/lib/schemas/notes";
-import { MessageCircle, Pencil, Phone, StickyNote, Users } from "lucide-react";
+import { MessageCircle, Phone, StickyNote, Users } from "lucide-react";
 import { AttachmentUploader } from "./attachment-uploader";
+import { InlineNoteEditor } from "./inline-note-editor";
 import { NoteDialog } from "./note-dialog";
 
 const KIND_ICON: Record<NoteKind, React.ComponentType<{ className?: string }>> = {
@@ -108,16 +108,28 @@ export function NoteList({ subjectType, subjectId, notes, resolver, attachmentsB
                           size="icon"
                           variant="ghost"
                           className="size-7 opacity-0 transition-opacity group-hover:opacity-100"
-                          aria-label="Modifier"
+                          aria-label="Métadonnées"
+                          title="Modifier titre / type / date"
                         >
-                          <Pencil className="size-3.5" />
+                          <span className="text-muted-foreground text-xs">…</span>
                         </Button>
                       }
                     />
                   </div>
                 </div>
                 <div className="mt-2">
-                  <Markdown content={note.content} resolver={resolver} />
+                  <InlineNoteEditor
+                    note={{
+                      id: note.id,
+                      title: note.title,
+                      content: note.content,
+                      kind: note.kind,
+                      occurredAt: note.occurredAt,
+                      subjectType,
+                      subjectId,
+                    }}
+                    resolver={resolver}
+                  />
                 </div>
                 <div className="mt-3">
                   <AttachmentUploader
