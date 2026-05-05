@@ -9,11 +9,14 @@ test.describe("Auth gate", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("/login renvoie le formulaire magic link", async ({ page }) => {
+  test("/login renvoie le formulaire email + mot de passe", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByText("Connexion")).toBeVisible();
     await expect(page.getByLabel(/e-?mail/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /lien/i })).toBeVisible();
+    await expect(page.getByLabel(/mot de passe/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /se connecter/i })).toBeVisible();
+    // Toggle vers la création de compte.
+    await expect(page.getByRole("button", { name: /créer un compte/i })).toBeVisible();
   });
 
   test("le middleware protège les routes applicatives", async ({ page }) => {
