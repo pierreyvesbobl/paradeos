@@ -31,6 +31,11 @@ export const revertProposalSchema = z.object({
   proposalId: z.string().uuid(),
 });
 
+export const updateAcceptedProposalSchema = z.object({
+  proposalId: z.string().uuid(),
+  payload: z.record(z.unknown()),
+});
+
 export const updateMeetingSummarySchema = z.object({
   meetingId: z.string().uuid(),
   summary: z.string().max(20_000).nullable(),

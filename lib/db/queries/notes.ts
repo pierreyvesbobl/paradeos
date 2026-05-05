@@ -76,6 +76,8 @@ export type NotesFilter = {
   /** Date métier < end (exclus). */
   end?: Date;
   limit?: number;
+  /** Tri sur `occurredAt`. Default: desc (récents en premier). */
+  order?: "asc" | "desc";
 };
 
 export async function getRecentNotes(filter: NotesFilter = {}) {
@@ -92,6 +94,7 @@ export async function getRecentNotes(filter: NotesFilter = {}) {
     if (orCond) conditions.push(orCond);
   }
 
+  const dir = filter.order === "asc" ? asc : desc;
   return conn
     .select({
       id: notes.id,
@@ -107,6 +110,6 @@ export async function getRecentNotes(filter: NotesFilter = {}) {
     .from(notes)
     .innerJoin(users, eq(notes.authorId, users.id))
     .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(notes.occurredAt))
+    .orderBy(dir(notes.occurredAt))
     .limit(filter.limit ?? 100);
 }

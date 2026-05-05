@@ -1,12 +1,7 @@
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { FilterRow } from "@/components/table/filter-row";
-import {
-  type SortState,
-  SortableHeader,
-  parseSort,
-  sortToParam,
-} from "@/components/table/sortable-header";
+import { NotionFilters } from "@/components/table/notion-filters";
+import { type SortState, SortableHeader, parseSort } from "@/components/table/sortable-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,11 +14,26 @@ import {
 } from "@/components/ui/table";
 import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
-import { type EntityKind, entityKindEnum, entityKindLabels } from "@/lib/schemas/entities";
-import { type SQL, and, asc, desc, eq, ilike, or } from "drizzle-orm";
+import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
+import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
+import { entityKindEnum, entityKindLabels } from "@/lib/schemas/entities";
+import { type SQL, and, asc, desc, ilike, or } from "drizzle-orm";
 import { ArrowRight, Building2, Plus } from "lucide-react";
 import Link from "next/link";
 import { EntKind, EntName, EntWebsite } from "./[id]/inline-fields";
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+const FILTER_DEFS = [
+  {
+    key: "kind",
+    label: "Type",
+    type: "enum" as const,
+    options: entityKindEnum.options.map((k) => ({ value: k, label: entityKindLabels[k] })),
+  },
+  { key: "name", label: "Nom", type: "text" as const },
+  { key: "website", label: "Site web", type: "text" as const },
+];
 
 const SORT_FIELDS = ["name", "kind", "website", "created"] as const;
 
@@ -44,30 +54,29 @@ function orderByFor(sort: SortState): SQL[] {
   }
 }
 
-type SearchParams = Promise<{ q?: string; kind?: EntityKind; sort?: string }>;
-
-function buildHref(params: { q?: string; kind?: EntityKind; sort?: string | null }): string {
-  const sp = new URLSearchParams();
-  if (params.q) sp.set("q", params.q);
-  if (params.kind) sp.set("kind", params.kind);
-  if (params.sort) sp.set("sort", params.sort);
-  const qs = sp.toString();
-  return qs ? `/entites?${qs}` : "/entites";
-}
-
 export default async function EntitiesPage({ searchParams }: { searchParams: SearchParams }) {
-  const { q, kind, sort } = await searchParams;
-  const query = q?.trim() ?? "";
-  const activeKind = kind && entityKindEnum.options.includes(kind) ? kind : undefined;
-  const sortState = parseSort(sort, SORT_FIELDS);
+  const params = await searchParams;
+  const query = typeof params.q === "string" ? params.q.trim() : "";
+  const sortRaw = typeof params.sort === "string" ? params.sort : undefined;
+  const sortState = parseSort(sortRaw, SORT_FIELDS);
+
+  const filters = parseFiltersFromSearchParams(
+    params,
+    FILTER_DEFS.map((d) => d.key),
+  );
+  const filterColumns = [
+    { key: "kind", column: entities.kind, kind: "enum" as const },
+    { key: "name", column: entities.name, kind: "text" as const },
+    { key: "website", column: entities.website, kind: "text" as const },
+  ];
+  const filterConditions = applyFilters(filters, filterColumns);
 
   const conn = await db();
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [...filterConditions];
   if (query) {
     const like = or(ilike(entities.name, `%${query}%`), ilike(entities.website, `%${query}%`));
     if (like) conditions.push(like);
   }
-  if (activeKind) conditions.push(eq(entities.kind, activeKind));
 
   const rows = await conn
     .select({
@@ -97,23 +106,10 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Sea
         }
       />
 
-      <FilterRow
-        label="Type"
-        items={[
-          { value: undefined, label: "Tous", active: !activeKind },
-          ...entityKindEnum.options.map((k) => ({
-            value: k as string,
-            label: entityKindLabels[k],
-            active: activeKind === k,
-          })),
-        ]}
-        buildHref={(value) =>
-          buildHref({
-            kind: value as EntityKind | undefined,
-            q: query,
-            sort: sortToParam(sortState),
-          })
-        }
+      <NotionFilters
+        pathname="/entites"
+        filterDefs={FILTER_DEFS}
+        activeFilters={filters.map((f) => ({ key: f.key, op: f.op, value: f.value }))}
       />
 
       <form className="max-w-sm">
@@ -123,8 +119,10 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Sea
           placeholder="Rechercher par nom, site web…"
           className="h-9"
         />
-        {activeKind ? <input type="hidden" name="kind" value={activeKind} /> : null}
-        {sort ? <input type="hidden" name="sort" value={sort} /> : null}
+        {collectF(params).map((f, i) => (
+          <input key={`f-${i}-${f}`} type="hidden" name="f" value={f} />
+        ))}
+        {sortRaw ? <input type="hidden" name="sort" value={sortRaw} /> : null}
       </form>
 
       {rows.length === 0 ? (
@@ -153,9 +151,7 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Sea
                     label="Nom"
                     field="name"
                     current={sortState}
-                    buildHref={(next) =>
-                      buildHref({ kind: activeKind, q: query, sort: sortToParam(next) })
-                    }
+                    buildHref={(next) => buildSortHref("/entites", params, next)}
                   />
                 </TableHead>
                 <TableHead>
@@ -163,9 +159,7 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Sea
                     label="Type"
                     field="kind"
                     current={sortState}
-                    buildHref={(next) =>
-                      buildHref({ kind: activeKind, q: query, sort: sortToParam(next) })
-                    }
+                    buildHref={(next) => buildSortHref("/entites", params, next)}
                   />
                 </TableHead>
                 <TableHead>
@@ -173,9 +167,7 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Sea
                     label="Site web"
                     field="website"
                     current={sortState}
-                    buildHref={(next) =>
-                      buildHref({ kind: activeKind, q: query, sort: sortToParam(next) })
-                    }
+                    buildHref={(next) => buildSortHref("/entites", params, next)}
                   />
                 </TableHead>
               </TableRow>

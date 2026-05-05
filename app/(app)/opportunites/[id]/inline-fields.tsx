@@ -44,7 +44,6 @@ const STATUS_VARIANT: Record<
   "default" | "secondary" | "outline" | "destructive"
 > = {
   not_started: "outline",
-  proposal_sent: "default",
   to_follow_up: "secondary",
   awaiting_response: "secondary",
   won: "default",

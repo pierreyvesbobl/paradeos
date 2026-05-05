@@ -17,7 +17,6 @@ import { users } from "./users";
 
 export const opportunityStatus = pgEnum("opportunity_status", [
   "not_started",
-  "proposal_sent",
   "to_follow_up",
   "awaiting_response",
   "won",

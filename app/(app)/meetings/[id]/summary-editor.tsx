@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { updateMeetingSummary } from "@/lib/actions/meetings";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 export function SummaryEditor({
@@ -15,19 +15,23 @@ export function SummaryEditor({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [current, setCurrent] = useState<string | null>(initial);
   const [draft, setDraft] = useState(initial ?? "");
   const [pending, startTransition] = useTransition();
 
+  useEffect(() => {
+    setCurrent(initial);
+  }, [initial]);
+
   function save() {
     startTransition(async () => {
-      const res = await updateMeetingSummary({
-        meetingId,
-        summary: draft.trim() === "" ? null : draft,
-      });
+      const next = draft.trim() === "" ? null : draft;
+      const res = await updateMeetingSummary({ meetingId, summary: next });
       if (!res.ok) {
         toast.error(res.message);
         return;
       }
+      setCurrent(next);
       setEditing(false);
       toast.success("Résumé enregistré.");
       router.refresh();
@@ -37,12 +41,19 @@ export function SummaryEditor({
   if (!editing) {
     return (
       <div className="space-y-2">
-        {initial ? (
-          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{initial}</pre>
+        {current ? (
+          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{current}</pre>
         ) : (
           <p className="text-muted-foreground text-sm">—</p>
         )}
-        <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setDraft(current ?? "");
+            setEditing(true);
+          }}
+        >
           Modifier
         </Button>
       </div>
@@ -67,7 +78,7 @@ export function SummaryEditor({
           variant="ghost"
           disabled={pending}
           onClick={() => {
-            setDraft(initial ?? "");
+            setDraft(current ?? "");
             setEditing(false);
           }}
         >

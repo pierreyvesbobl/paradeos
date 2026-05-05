@@ -1,6 +1,7 @@
 import { EmptyState } from "@/components/empty-state";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
+import { FilterRow } from "@/components/table/filter-row";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { users as usersTable } from "@/db/schema/users";
@@ -17,7 +18,7 @@ import {
   noteSubjectTypeLabels,
 } from "@/lib/schemas/notes";
 import { asc } from "drizzle-orm";
-import { MessageCircle, Phone, StickyNote, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, MessageCircle, Phone, StickyNote, Users } from "lucide-react";
 import Link from "next/link";
 
 type SearchParams = Promise<{
@@ -27,7 +28,29 @@ type SearchParams = Promise<{
   author?: string;
   start?: string;
   end?: string;
+  sort?: "asc" | "desc";
 }>;
+
+function buildHref(params: {
+  q?: string;
+  kind?: NoteKind | "all";
+  subject?: NoteSubjectType | "all";
+  author?: string;
+  start?: string;
+  end?: string;
+  sort?: "asc" | "desc";
+}): string {
+  const sp = new URLSearchParams();
+  if (params.q) sp.set("q", params.q);
+  if (params.kind && params.kind !== "all") sp.set("kind", params.kind);
+  if (params.subject && params.subject !== "all") sp.set("subject", params.subject);
+  if (params.author) sp.set("author", params.author);
+  if (params.start) sp.set("start", params.start);
+  if (params.end) sp.set("end", params.end);
+  if (params.sort) sp.set("sort", params.sort);
+  const qs = sp.toString();
+  return qs ? `/notes?${qs}` : "/notes";
+}
 
 const KIND_ICON: Record<NoteKind, React.ComponentType<{ className?: string }>> = {
   memo: StickyNote,
@@ -62,17 +85,23 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
   const params = await searchParams;
   const conn = await db();
 
+  const sortDir: "asc" | "desc" = params.sort === "asc" ? "asc" : "desc";
+  const activeKind =
+    params.kind && noteKindEnum.options.includes(params.kind) ? params.kind : undefined;
+  const activeSubject =
+    params.subject && noteSubjectTypeEnum.options.includes(params.subject)
+      ? params.subject
+      : undefined;
+
   const filter: NotesFilter = {
     query: params.q?.trim() || undefined,
-    kind: params.kind && noteKindEnum.options.includes(params.kind) ? params.kind : undefined,
-    subjectType:
-      params.subject && noteSubjectTypeEnum.options.includes(params.subject)
-        ? params.subject
-        : undefined,
+    kind: activeKind,
+    subjectType: activeSubject,
     authorId: params.author && /^[0-9a-f-]{36}$/i.test(params.author) ? params.author : undefined,
     start: parseDate(params.start),
     end: parseDate(params.end),
     limit: 200,
+    order: sortDir,
   };
 
   const [notes, authors, mdResolver] = await Promise.all([
@@ -92,6 +121,53 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
         description="Compte-rendus, mémos, points de contact — toute l'historique chronologique."
       />
 
+      <div className="space-y-3">
+        <FilterRow
+          label="Type"
+          items={[
+            { value: undefined, label: "Tous", active: !activeKind },
+            ...noteKindEnum.options.map((opt) => ({
+              value: opt as string,
+              label: noteKindLabels[opt],
+              active: activeKind === opt,
+            })),
+          ]}
+          buildHref={(value) =>
+            buildHref({
+              q: params.q,
+              kind: value as NoteKind | "all" | undefined,
+              subject: activeSubject,
+              author: params.author,
+              start: params.start,
+              end: params.end,
+              sort: sortDir === "desc" ? undefined : sortDir,
+            })
+          }
+        />
+        <FilterRow
+          label="Sujet"
+          items={[
+            { value: undefined, label: "Tous", active: !activeSubject },
+            ...noteSubjectTypeEnum.options.map((opt) => ({
+              value: opt as string,
+              label: noteSubjectTypeLabels[opt],
+              active: activeSubject === opt,
+            })),
+          ]}
+          buildHref={(value) =>
+            buildHref({
+              q: params.q,
+              kind: activeKind,
+              subject: value as NoteSubjectType | "all" | undefined,
+              author: params.author,
+              start: params.start,
+              end: params.end,
+              sort: sortDir === "desc" ? undefined : sortDir,
+            })
+          }
+        />
+      </div>
+
       <form
         method="get"
         className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-6"
@@ -102,32 +178,6 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
           placeholder="Rechercher dans le contenu…"
           className="h-9 lg:col-span-2"
         />
-
-        <select
-          name="kind"
-          defaultValue={params.kind ?? ""}
-          className="h-9 rounded-md border bg-background px-2 text-sm"
-        >
-          <option value="">Type — tous</option>
-          {noteKindEnum.options.map((opt) => (
-            <option key={opt} value={opt}>
-              {noteKindLabels[opt]}
-            </option>
-          ))}
-        </select>
-
-        <select
-          name="subject"
-          defaultValue={params.subject ?? ""}
-          className="h-9 rounded-md border bg-background px-2 text-sm"
-        >
-          <option value="">Sujet — tous</option>
-          {noteSubjectTypeEnum.options.map((opt) => (
-            <option key={opt} value={opt}>
-              {noteSubjectTypeLabels[opt]}
-            </option>
-          ))}
-        </select>
 
         <select
           name="author"
@@ -142,7 +192,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
           ))}
         </select>
 
-        <div className="flex gap-2 lg:col-span-1">
+        <div className="flex gap-2 lg:col-span-2">
           <Input
             name="start"
             type="date"
@@ -158,6 +208,32 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
             aria-label="Au"
           />
         </div>
+
+        <Link
+          href={buildHref({
+            q: params.q,
+            kind: activeKind,
+            subject: activeSubject,
+            author: params.author,
+            start: params.start,
+            end: params.end,
+            sort: sortDir === "desc" ? "asc" : undefined,
+          })}
+          className="inline-flex h-9 items-center justify-center gap-1 rounded-md border px-3 text-sm hover:bg-muted"
+          title="Inverser le tri par date"
+        >
+          {sortDir === "desc" ? (
+            <ArrowDown className="size-3.5" />
+          ) : (
+            <ArrowUp className="size-3.5" />
+          )}
+          {sortDir === "desc" ? "Plus récent" : "Plus ancien"}
+        </Link>
+
+        {/* Inputs cachés : conserve les filtres chip à la soumission */}
+        {activeKind ? <input type="hidden" name="kind" value={activeKind} /> : null}
+        {activeSubject ? <input type="hidden" name="subject" value={activeSubject} /> : null}
+        {sortDir !== "desc" ? <input type="hidden" name="sort" value={sortDir} /> : null}
 
         <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-6">
           <button

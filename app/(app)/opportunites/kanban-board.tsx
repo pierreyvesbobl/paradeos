@@ -1,7 +1,7 @@
 "use client";
 
 import { UserAvatar } from "@/components/user/user-avatar";
-import { moveOpportunityStatus } from "@/lib/actions/opportunities";
+import { createOpportunity, moveOpportunityStatus } from "@/lib/actions/opportunities";
 import { formatDate, formatEuro } from "@/lib/format";
 import {
   type OpportunityStatus,
@@ -17,9 +17,10 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { Building2 } from "lucide-react";
+import { Building2, Clock, Plus, X } from "lucide-react";
 import Link from "next/link";
-import { useOptimistic, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 export type KanbanItem = {
@@ -37,67 +38,35 @@ export type KanbanItem = {
 };
 
 /**
- * Couleurs par statut. Classes Tailwind statiques (le scanner les détecte
- * dans cette source). Pas de string concat dynamique.
+ * Couleurs par statut. Inspiré Trello : pas de bandeau plein dans le
+ * header, juste un dot d'accent + un label tag de couleur en haut de
+ * carte. Le reste de la colonne reste neutre.
  */
-const STATUS_STYLE: Record<
-  OpportunityStatus,
-  {
-    column: string; // bord gauche + fond léger de la colonne
-    header: string; // header column accent
-    headerText: string;
-    cardBorder: string; // bord gauche carte
-    dot: string; // pastille indicateur
-    badge: string; // badge montant inline
-  }
-> = {
+const STATUS_STYLE: Record<OpportunityStatus, { dot: string; tag: string; amount: string }> = {
   not_started: {
-    column: "border-slate-300 dark:border-slate-700",
-    header: "bg-slate-100 dark:bg-slate-900/40",
-    headerText: "text-slate-700 dark:text-slate-300",
-    cardBorder: "border-l-slate-400",
     dot: "bg-slate-400",
-    badge: "bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-300",
-  },
-  proposal_sent: {
-    column: "border-indigo-300 dark:border-indigo-800",
-    header: "bg-indigo-100 dark:bg-indigo-950/50",
-    headerText: "text-indigo-700 dark:text-indigo-300",
-    cardBorder: "border-l-indigo-500",
-    dot: "bg-indigo-500",
-    badge: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+    tag: "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+    amount: "bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-300",
   },
   to_follow_up: {
-    column: "border-amber-300 dark:border-amber-800",
-    header: "bg-amber-100 dark:bg-amber-950/50",
-    headerText: "text-amber-800 dark:text-amber-300",
-    cardBorder: "border-l-amber-500",
     dot: "bg-amber-500",
-    badge: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+    tag: "bg-amber-200 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+    amount: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
   },
   awaiting_response: {
-    column: "border-orange-300 dark:border-orange-800",
-    header: "bg-orange-100 dark:bg-orange-950/50",
-    headerText: "text-orange-800 dark:text-orange-300",
-    cardBorder: "border-l-orange-500",
     dot: "bg-orange-500",
-    badge: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300",
+    tag: "bg-orange-200 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+    amount: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300",
   },
   won: {
-    column: "border-emerald-300 dark:border-emerald-800",
-    header: "bg-emerald-100 dark:bg-emerald-950/50",
-    headerText: "text-emerald-800 dark:text-emerald-300",
-    cardBorder: "border-l-emerald-500",
     dot: "bg-emerald-500",
-    badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+    tag: "bg-emerald-200 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+    amount: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
   },
   lost: {
-    column: "border-rose-300 dark:border-rose-800",
-    header: "bg-rose-100 dark:bg-rose-950/50",
-    headerText: "text-rose-800 dark:text-rose-300",
-    cardBorder: "border-l-rose-500",
     dot: "bg-rose-500",
-    badge: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+    tag: "bg-rose-200 text-rose-800 dark:bg-rose-900 dark:text-rose-200",
+    amount: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
   },
 };
 
@@ -134,14 +103,16 @@ export function KanbanBoard({ items }: { items: KanbanItem[] }) {
 
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        {columns.map((status) => (
-          <Column
-            key={status}
-            status={status}
-            items={optimisticItems.filter((it) => it.status === status)}
-          />
-        ))}
+      <div className="-mx-6 overflow-x-auto px-6 pb-2">
+        <div className="flex items-start gap-3">
+          {columns.map((status) => (
+            <Column
+              key={status}
+              status={status}
+              items={optimisticItems.filter((it) => it.status === status)}
+            />
+          ))}
+        </div>
       </div>
     </DndContext>
   );
@@ -155,31 +126,114 @@ function Column({ status, items }: { status: OpportunityStatus; items: KanbanIte
   return (
     <div
       ref={setNodeRef}
-      className={`flex min-h-[220px] flex-col rounded-lg border-2 bg-card transition-all ${style.column} ${
-        isOver ? "scale-[1.005] shadow-lg ring-2 ring-foreground/20" : ""
+      className={`flex w-72 shrink-0 flex-col rounded-xl bg-muted/50 transition-shadow ${
+        isOver ? "ring-2 ring-foreground/30" : ""
       }`}
     >
-      <div className={`flex items-center justify-between rounded-t-md px-3 py-2 ${style.header}`}>
-        <div className="flex items-center gap-2">
-          <span className={`size-2 rounded-full ${style.dot}`} aria-hidden />
-          <p className={`font-semibold text-xs uppercase tracking-wide ${style.headerText}`}>
+      <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`size-2 shrink-0 rounded-full ${style.dot}`} aria-hidden />
+          <p className="truncate font-semibold text-foreground text-sm">
             {opportunityStatusLabels[status]}
           </p>
+          <span className="text-muted-foreground text-xs">{items.length}</span>
         </div>
-        <span className={`font-medium text-[11px] ${style.headerText}`}>
-          {items.length} · {formatEuro(total)}
-        </span>
+        {total > 0 ? (
+          <span className="text-muted-foreground text-xs">{formatEuro(total)}</span>
+        ) : null}
       </div>
-      <ul className="flex flex-1 flex-col gap-2 p-2">
+      <ul className="flex flex-col gap-2 px-2 pb-1">
         {items.map((item) => (
           <Card key={item.id} item={item} />
         ))}
-        {items.length === 0 ? (
-          <li className="flex items-center justify-center rounded-md border border-dashed bg-background/50 px-3 py-8 text-center text-muted-foreground text-xs">
-            Glisser ici
-          </li>
-        ) : null}
       </ul>
+      <QuickAddCard status={status} />
+    </div>
+  );
+}
+
+function QuickAddCard({ status }: { status: OpportunityStatus }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [pending, startTransition] = useTransition();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (open) textareaRef.current?.focus();
+  }, [open]);
+
+  function submit() {
+    const trimmed = title.trim();
+    if (trimmed.length === 0) return;
+    startTransition(async () => {
+      const res = await createOpportunity({ title: trimmed, status });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      setTitle("");
+      // On laisse l'input ouvert pour enchaîner les ajouts (Trello-like).
+      router.refresh();
+    });
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mx-2 mt-1 mb-2 flex items-center gap-1.5 rounded-md px-2 py-2 text-left text-muted-foreground text-sm transition-colors hover:bg-foreground/5 hover:text-foreground"
+      >
+        <Plus className="size-4" />
+        Ajouter une carte
+      </button>
+    );
+  }
+
+  return (
+    <div className="mx-2 mt-1 mb-2 space-y-1.5 rounded-md border bg-background p-2 shadow-sm">
+      <textarea
+        ref={textareaRef}
+        rows={2}
+        value={title}
+        disabled={pending}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submit();
+          }
+          if (e.key === "Escape") {
+            setOpen(false);
+            setTitle("");
+          }
+        }}
+        placeholder="Titre de l'opportunité…"
+        className="block w-full resize-none rounded-md border bg-background p-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={pending || title.trim().length === 0}
+          className="rounded-md bg-foreground px-3 py-1 font-medium text-background text-xs hover:opacity-90 disabled:opacity-40"
+        >
+          {pending ? "…" : "Ajouter"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setTitle("");
+          }}
+          disabled={pending}
+          aria-label="Fermer"
+          className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+        >
+          <X className="size-3.5" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -200,8 +254,8 @@ function Card({ item }: { item: KanbanItem }) {
       style={style}
       {...attributes}
       {...listeners}
-      className={`group cursor-grab rounded-md border border-l-4 bg-background p-3 shadow-sm transition-shadow active:cursor-grabbing ${colors.cardBorder} ${
-        isDragging ? "opacity-60 shadow-lg ring-2 ring-foreground/20" : "hover:shadow-md"
+      className={`group cursor-grab rounded-lg border border-border/60 bg-background shadow-sm transition-shadow active:cursor-grabbing ${
+        isDragging ? "opacity-70 shadow-lg ring-2 ring-foreground/20" : "hover:shadow-md"
       }`}
     >
       <Link
@@ -209,9 +263,18 @@ function Card({ item }: { item: KanbanItem }) {
         onClick={(e) => {
           if (isDragging) e.preventDefault();
         }}
-        className="block space-y-2"
+        className="block space-y-2 px-3 py-2.5"
       >
-        <p className="font-medium text-sm leading-tight">{item.title}</p>
+        {/* Tag de couleur en haut, façon labels Trello */}
+        <span
+          className={`inline-block h-1.5 w-10 rounded-full ${colors.tag
+            .split(" ")
+            .filter((c) => c.startsWith("bg-"))
+            .join(" ")}`}
+          aria-hidden
+        />
+
+        <p className="font-medium text-foreground text-sm leading-snug">{item.title}</p>
 
         {item.entityName ? (
           <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -220,18 +283,17 @@ function Card({ item }: { item: KanbanItem }) {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+        <div className="flex items-center gap-1.5 pt-1 text-muted-foreground text-[11px]">
           {item.valueAmount ? (
-            <span className={`rounded px-1.5 py-0.5 font-medium text-[11px] ${colors.badge}`}>
+            <span className={`rounded px-1.5 py-0.5 font-medium ${colors.amount}`}>
               {formatEuro(Number(item.valueAmount))}
             </span>
           ) : null}
-          {item.probability != null ? (
-            <span className="text-[11px] text-muted-foreground">{item.probability}%</span>
-          ) : null}
+          {item.probability != null ? <span>{item.probability}%</span> : null}
           {item.followUpDate ? (
-            <span className="text-[11px] text-muted-foreground">
-              ↻ {formatDate(item.followUpDate)}
+            <span className="inline-flex items-center gap-0.5">
+              <Clock className="size-3" />
+              {formatDate(item.followUpDate)}
             </span>
           ) : null}
           {item.ownerId ? (

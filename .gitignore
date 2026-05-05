@@ -42,3 +42,6 @@ supabase/.env
 # divers
 .turbo
 .vercel
+
+# claude code local state
+.claude/

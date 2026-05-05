@@ -1,5 +1,6 @@
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { NotionFilters } from "@/components/table/notion-filters";
 import {
   type SortState,
   SortableHeader,
@@ -21,6 +22,8 @@ import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
+import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
+import { collectF } from "@/lib/filters/url-helpers";
 import { type TaskStatus, taskStatusEnum } from "@/lib/schemas/tasks";
 import { type SQL, and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { CheckSquare, Plus } from "lucide-react";
@@ -49,17 +52,19 @@ function orderByFor(sort: SortState): SQL[] {
   }
 }
 
-function buildHref(params: {
+function buildHref(p: {
   q?: string;
   status?: string;
   scope?: string;
   sort?: string | null;
+  filters?: string[];
 }): string {
   const sp = new URLSearchParams();
-  if (params.q) sp.set("q", params.q);
-  if (params.status) sp.set("status", params.status);
-  if (params.scope) sp.set("scope", params.scope);
-  if (params.sort) sp.set("sort", params.sort);
+  if (p.q) sp.set("q", p.q);
+  if (p.status) sp.set("status", p.status);
+  if (p.scope) sp.set("scope", p.scope);
+  if (p.filters) for (const f of p.filters) sp.append("f", f);
+  if (p.sort) sp.set("sort", p.sort);
   const qs = sp.toString();
   return qs ? `/taches?${qs}` : "/taches";
 }
@@ -72,16 +77,15 @@ import { TaskStatusEditor } from "./inline-editors/status-editor";
 import { QuickAddTask } from "./quick-add-task";
 import { TaskToggle } from "./task-toggle";
 
-type SearchParams = Promise<{
-  q?: string;
-  status?: TaskStatus | "open";
-  scope?: "mine" | "all";
-  sort?: string;
-}>;
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function TasksPage({ searchParams }: { searchParams: SearchParams }) {
   const authUser = await requireUser();
-  const { q, status, scope, sort } = await searchParams;
+  const params = await searchParams;
+  const q = typeof params.q === "string" ? params.q : undefined;
+  const status = typeof params.status === "string" ? params.status : undefined;
+  const scope = typeof params.scope === "string" ? params.scope : undefined;
+  const sort = typeof params.sort === "string" ? params.sort : undefined;
   const query = q?.trim() ?? "";
   const activeStatus =
     status && (taskStatusEnum.options.includes(status as TaskStatus) || status === "open")
@@ -98,12 +102,76 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
   if (activeStatus === "open") {
     conditions.push(sql`${tasks.status} not in ('done', 'cancelled')`);
   } else if (activeStatus) {
-    conditions.push(eq(tasks.status, activeStatus));
+    conditions.push(eq(tasks.status, activeStatus as TaskStatus));
   }
 
   if (query) {
-    conditions.push(or(ilike(tasks.title, `%${query}%`), ilike(projects.name, `%${query}%`)));
+    const like = or(ilike(tasks.title, `%${query}%`), ilike(projects.name, `%${query}%`));
+    if (like) conditions.push(like);
   }
+
+  // Notion filters (filtres riches additionnels) — récupère les options
+  // dynamiques avant de parser/appliquer les filtres URL.
+  const projectOptionsForFilter = await (await db())
+    .select({ id: projects.id, name: projects.name })
+    .from(projects)
+    .orderBy(asc(projects.name));
+  const userOptionsForFilter = await (await db())
+    .select({ id: users.id, fullName: users.fullName })
+    .from(users)
+    .orderBy(asc(users.fullName));
+
+  const FILTER_DEFS = [
+    {
+      key: "status",
+      label: "Statut",
+      type: "enum" as const,
+      options: taskStatusEnum.options.map((s) => ({ value: s, label: s })),
+    },
+    {
+      key: "priority",
+      label: "Priorité",
+      type: "enum" as const,
+      options: [
+        { value: "low", label: "Basse" },
+        { value: "medium", label: "Moyenne" },
+        { value: "high", label: "Haute" },
+        { value: "urgent", label: "Urgente" },
+      ],
+    },
+    {
+      key: "project",
+      label: "Projet",
+      type: "enum" as const,
+      options: projectOptionsForFilter.map((p) => ({ value: p.id, label: p.name })),
+    },
+    {
+      key: "assignee",
+      label: "Assignée",
+      type: "enum" as const,
+      options: userOptionsForFilter.map((u) => ({
+        value: u.id,
+        label: u.fullName ?? "(sans nom)",
+      })),
+    },
+    { key: "title", label: "Titre", type: "text" as const },
+    { key: "dueDate", label: "Échéance", type: "date" as const },
+  ];
+
+  const richFilters = parseFiltersFromSearchParams(
+    params,
+    FILTER_DEFS.map((d) => d.key),
+  );
+  const richFilterColumns = [
+    { key: "status", column: tasks.status, kind: "enum" as const },
+    { key: "priority", column: tasks.priority, kind: "enum" as const },
+    { key: "project", column: tasks.projectId, kind: "enum" as const },
+    { key: "assignee", column: tasks.assigneeId, kind: "enum" as const },
+    { key: "title", column: tasks.title, kind: "text" as const },
+    { key: "dueDate", column: tasks.dueDate, kind: "date" as const },
+  ];
+  const richConditions = applyFilters(richFilters, richFilterColumns);
+  conditions.push(...richConditions);
 
   const [rows, projectOptions, userOptions] = await Promise.all([
     conn
@@ -161,6 +229,12 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
         <FilterLink href="/taches?status=done" active={activeStatus === "done"} label="Terminées" />
       </div>
 
+      <NotionFilters
+        pathname="/taches"
+        filterDefs={FILTER_DEFS}
+        activeFilters={richFilters.map((f) => ({ key: f.key, op: f.op, value: f.value }))}
+      />
+
       <form className="max-w-sm">
         <Input
           name="q"
@@ -170,6 +244,9 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
         />
         {activeStatus ? <input type="hidden" name="status" value={activeStatus} /> : null}
         {onlyMine ? <input type="hidden" name="scope" value="mine" /> : null}
+        {collectF(params).map((f, i) => (
+          <input key={`f-${i}-${f}`} type="hidden" name="f" value={f} />
+        ))}
         {sort ? <input type="hidden" name="sort" value={sort} /> : null}
       </form>
 
@@ -205,6 +282,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
                       buildHref({
                         q: query,
                         status: activeStatus,
+                        filters: collectF(params),
                         scope: onlyMine ? "mine" : undefined,
                         sort: sortToParam(next),
                       })
@@ -220,6 +298,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
                       buildHref({
                         q: query,
                         status: activeStatus,
+                        filters: collectF(params),
                         scope: onlyMine ? "mine" : undefined,
                         sort: sortToParam(next),
                       })
@@ -235,6 +314,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
                       buildHref({
                         q: query,
                         status: activeStatus,
+                        filters: collectF(params),
                         scope: onlyMine ? "mine" : undefined,
                         sort: sortToParam(next),
                       })
@@ -250,6 +330,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
                       buildHref({
                         q: query,
                         status: activeStatus,
+                        filters: collectF(params),
                         scope: onlyMine ? "mine" : undefined,
                         sort: sortToParam(next),
                       })
@@ -265,6 +346,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
                       buildHref({
                         q: query,
                         status: activeStatus,
+                        filters: collectF(params),
                         scope: onlyMine ? "mine" : undefined,
                         sort: sortToParam(next),
                       })
@@ -280,6 +362,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
                       buildHref({
                         q: query,
                         status: activeStatus,
+                        filters: collectF(params),
                         scope: onlyMine ? "mine" : undefined,
                         sort: sortToParam(next),
                       })

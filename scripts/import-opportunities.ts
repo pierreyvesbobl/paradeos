@@ -24,7 +24,7 @@ loadEnv({ path: ".env" });
 
 type Status =
   | "not_started"
-  | "proposal_sent"
+  
   | "to_follow_up"
   | "awaiting_response"
   | "won"
@@ -71,7 +71,7 @@ const OPPORTUNITIES: OpportunitySeed[] = [
   },
   {
     title: "Junik (tatoueur) — Site web + RDV intelligent",
-    status: "proposal_sent",
+    status: "awaiting_response",
     entityName: "Junik",
     contactFullName: "Junik —",
   },
@@ -119,7 +119,7 @@ const OPPORTUNITIES: OpportunitySeed[] = [
   },
   {
     title: "Inox Tag — Automatisation post-production vidéo",
-    status: "proposal_sent",
+    status: "awaiting_response",
     entityName: "Inox Tag",
   },
   {
@@ -142,7 +142,6 @@ const OPPORTUNITIES: OpportunitySeed[] = [
 
 const DEFAULT_PROBABILITY: Record<Status, number> = {
   not_started: 10,
-  proposal_sent: 50,
   to_follow_up: 40,
   awaiting_response: 60,
   won: 100,

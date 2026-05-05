@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export const opportunityStatusEnum = z.enum([
   "not_started",
-  "proposal_sent",
   "to_follow_up",
   "awaiting_response",
   "won",
@@ -12,7 +11,6 @@ export type OpportunityStatus = z.infer<typeof opportunityStatusEnum>;
 
 export const opportunityStatusLabels: Record<OpportunityStatus, string> = {
   not_started: "Non démarrée",
-  proposal_sent: "Proposition envoyée",
   to_follow_up: "À relancer",
   awaiting_response: "En attente de réponse",
   won: "Signée",
@@ -22,7 +20,6 @@ export const opportunityStatusLabels: Record<OpportunityStatus, string> = {
 /** Probabilités par défaut suggérées selon le statut. */
 export const opportunityDefaultProbability: Record<OpportunityStatus, number> = {
   not_started: 10,
-  proposal_sent: 50,
   to_follow_up: 40,
   awaiting_response: 60,
   won: 100,

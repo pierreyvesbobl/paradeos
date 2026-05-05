@@ -26,7 +26,7 @@ loadEnv({ path: ".env" });
 
 type OppStatus =
   | "not_started"
-  | "proposal_sent"
+  
   | "to_follow_up"
   | "awaiting_response"
   | "won"
@@ -56,7 +56,6 @@ type ProjectSeed = {
 
 const DEFAULT_PROBABILITY: Record<OppStatus, number> = {
   not_started: 10,
-  proposal_sent: 50,
   to_follow_up: 40,
   awaiting_response: 60,
   won: 100,
@@ -67,7 +66,7 @@ const DEFAULT_PROBABILITY: Record<OppStatus, number> = {
 // OPPORTUNITÉS — extraites du Notion data source
 // (collection://2335d5cd-375f-804c-93bd-000b46395664).
 // Statuts mappés depuis "Status Prise De Contact" :
-//   "Not started" → not_started, "Proposition en cours" → proposal_sent,
+//   "Not started" → not_started, "Proposition en cours" → awaiting_response,
 //   "à relancer" → to_follow_up, "En attente de réponse" → awaiting_response,
 //   "Signé" → won, "Abandon" → lost.
 // ---------------------------------------------------------------------------
@@ -94,12 +93,12 @@ const OPPORTUNITIES: OpportunitySeed[] = [
   },
   {
     title: "Junik (tatoueur) — Site web + RDV intelligent",
-    status: "proposal_sent",
+    status: "awaiting_response",
     entityName: "Junik",
   },
   {
     title: "Junik — Site web tatoueur",
-    status: "proposal_sent",
+    status: "awaiting_response",
     entityName: "Junik",
   },
   {
@@ -129,7 +128,7 @@ const OPPORTUNITIES: OpportunitySeed[] = [
   { title: "Alunites", status: "to_follow_up", entityName: "Alunites" },
   {
     title: "Inox Tag — Automatisation post-production vidéo",
-    status: "proposal_sent",
+    status: "awaiting_response",
     entityName: "Inox Tag",
   },
   {

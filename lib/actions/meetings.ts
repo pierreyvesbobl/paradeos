@@ -24,6 +24,7 @@ import {
   deleteMeetingSchema,
   extractMeetingSchema,
   revertProposalSchema,
+  updateAcceptedProposalSchema,
   updateMeetingSummarySchema,
 } from "@/lib/schemas/meetings";
 import { eq, ilike } from "drizzle-orm";
@@ -213,13 +214,32 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
     ...(input.payloadOverride ?? {}),
   };
 
-  // Si l'humain a édité la proposition, on ignore le match auto et on
-  // crée un nouveau record avec ses valeurs.
-  const hasOverride = !!input.payloadOverride && Object.keys(input.payloadOverride).length > 0;
-  let createdEntityId: string | null = hasOverride ? null : (proposal.matchedId ?? null);
+  // Cas 1 — l'humain a explicitement choisi de lier à un record existant
+  // via le picker UI (`_linkExistingId`). On l'utilise direct.
+  const linkExistingId =
+    typeof payload._linkExistingId === "string" && payload._linkExistingId.length > 0
+      ? payload._linkExistingId
+      : null;
+
+  // Cas 2 — l'humain a édité d'autres champs (sans choisir de lien
+  // explicite) → on ignore le match auto et on crée un nouveau record.
+  // Cas 3 — pas d'override → on retombe sur le match auto si présent.
+  const overrideKeys = input.payloadOverride
+    ? Object.keys(input.payloadOverride).filter((k) => k !== "_linkExistingId")
+    : [];
+  const hasNonLinkOverride = overrideKeys.length > 0;
+
+  let createdEntityId: string | null = linkExistingId
+    ? linkExistingId
+    : hasNonLinkOverride
+      ? null
+      : (proposal.matchedId ?? null);
 
   if (!createdEntityId) {
-    createdEntityId = await createForKind(proposal.kind, payload, user.id);
+    // Nettoie le marqueur interne avant de pousser au créateur.
+    const { _linkExistingId: _omit, ...createPayload } = payload;
+    void _omit;
+    createdEntityId = await createForKind(proposal.kind, createPayload, user.id);
   }
 
   await conn
@@ -239,6 +259,51 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
   revalidatePath("/opportunites");
   revalidatePath("/taches");
   return { ok: true as const, createdEntityId };
+});
+
+/**
+ * Met à jour le record lié à une proposition déjà acceptée. Permet de
+ * corriger après coup (mauvais titre, mauvais projet, etc.) sans avoir
+ * à passer par un revert + re-accept (qui créerait un nouveau record).
+ *
+ * Met aussi à jour le `payload` de la proposition pour qu'il reflète
+ * l'état courant.
+ */
+export const updateAcceptedProposal = action(updateAcceptedProposalSchema, async ({ input }) => {
+  const conn = await db();
+  const [proposal] = await conn
+    .select()
+    .from(meetingProposals)
+    .where(eq(meetingProposals.id, input.proposalId))
+    .limit(1);
+  if (!proposal) throw new Error("Proposition introuvable.");
+  if (proposal.status !== "accepted") {
+    throw new Error("Seules les propositions acceptées peuvent être éditées ici.");
+  }
+  if (!proposal.createdEntityId) {
+    throw new Error("Aucun record lié à mettre à jour.");
+  }
+
+  const { _linkExistingId: _omitOld, ...prevPayload } = proposal.payload as Record<string, unknown>;
+  const { _linkExistingId: _omitNew, ...newPayload } = input.payload;
+  void _omitOld;
+  void _omitNew;
+  const merged = { ...prevPayload, ...newPayload };
+
+  await applyUpdateForKind(proposal.kind, proposal.createdEntityId, merged);
+
+  await conn
+    .update(meetingProposals)
+    .set({ payload: merged })
+    .where(eq(meetingProposals.id, proposal.id));
+
+  revalidatePath(`/meetings/${proposal.meetingId}`);
+  revalidatePath("/contacts");
+  revalidatePath("/entites");
+  revalidatePath("/projets");
+  revalidatePath("/opportunites");
+  revalidatePath("/taches");
+  return { ok: true as const };
 });
 
 /**
@@ -438,3 +503,138 @@ async function createForKind(
 
 // Type pour matchedId — utilisé par le caller seulement.
 export type _MatchTypeFix = Match;
+
+/**
+ * Met à jour le record lié (table déduite par `kind`) avec les
+ * nouvelles valeurs du payload. Mêmes règles de fallback nom→id pour
+ * les FKs (entityName, projectName, assigneeName).
+ */
+async function applyUpdateForKind(
+  kind: "task" | "project" | "opportunity" | "contact" | "entity",
+  recordId: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const conn = await db();
+
+  switch (kind) {
+    case "entity": {
+      await conn
+        .update(entities)
+        .set({
+          name: String(payload.name ?? "Sans nom"),
+          kind:
+            (payload.kind as "client" | "prospect" | "partner" | "supplier" | "other") ??
+            "prospect",
+        })
+        .where(eq(entities.id, recordId));
+      return;
+    }
+    case "contact": {
+      let entityId: string | null = null;
+      const entityName = payload.entityName as string | null | undefined;
+      if (entityName) {
+        const [matched] = await conn
+          .select({ id: entities.id })
+          .from(entities)
+          .where(ilike(entities.name, entityName))
+          .limit(1);
+        entityId = matched?.id ?? null;
+      }
+      await conn
+        .update(contacts)
+        .set({
+          firstName: String(payload.firstName ?? ""),
+          lastName: String(payload.lastName ?? ""),
+          email: (payload.email as string | null) ?? null,
+          jobTitle: (payload.jobTitle as string | null) ?? null,
+          entityId,
+        })
+        .where(eq(contacts.id, recordId));
+      return;
+    }
+    case "project": {
+      let entityId: string | null = null;
+      const entityName = payload.entityName as string | null | undefined;
+      if (entityName) {
+        const [matched] = await conn
+          .select({ id: entities.id })
+          .from(entities)
+          .where(ilike(entities.name, entityName))
+          .limit(1);
+        entityId = matched?.id ?? null;
+      }
+      await conn
+        .update(projects)
+        .set({
+          name: String(payload.name ?? "Sans nom"),
+          kind: (payload.kind as "client" | "product" | "transverse") ?? "transverse",
+          entityId,
+        })
+        .where(eq(projects.id, recordId));
+      return;
+    }
+    case "opportunity": {
+      let entityId: string | null = null;
+      const entityName = payload.entityName as string | null | undefined;
+      if (entityName) {
+        const [matched] = await conn
+          .select({ id: entities.id })
+          .from(entities)
+          .where(ilike(entities.name, entityName))
+          .limit(1);
+        entityId = matched?.id ?? null;
+      }
+      const valueAmount = payload.valueAmount as number | null | undefined;
+      await conn
+        .update(opportunities)
+        .set({
+          title: String(payload.title ?? "Sans titre"),
+          entityId,
+          valueAmount: valueAmount != null ? valueAmount.toString() : null,
+        })
+        .where(eq(opportunities.id, recordId));
+      return;
+    }
+    case "task": {
+      let projectId: string | null = (payload.projectId as string | null | undefined) ?? null;
+      if (!projectId) {
+        const projectName = payload.projectName as string | null | undefined;
+        if (projectName) {
+          const [matched] = await conn
+            .select({ id: projects.id })
+            .from(projects)
+            .where(ilike(projects.name, projectName))
+            .limit(1);
+          projectId = matched?.id ?? null;
+        }
+      }
+      let assigneeId: string | null = (payload.assigneeId as string | null | undefined) ?? null;
+      if (!assigneeId) {
+        const assigneeName = payload.assigneeName as string | null | undefined;
+        if (assigneeName) {
+          const [matched] = await conn
+            .select({ id: users.id })
+            .from(users)
+            .where(ilike(users.fullName, `%${assigneeName}%`))
+            .limit(1);
+          assigneeId = matched?.id ?? null;
+        }
+      }
+      const dueDate = payload.dueDate as string | null | undefined;
+      const priorityIn = payload.priority as "low" | "normal" | "high" | null | undefined;
+      const priority: "low" | "medium" | "high" | "urgent" =
+        priorityIn === "high" ? "high" : priorityIn === "low" ? "low" : "medium";
+      await conn
+        .update(tasks)
+        .set({
+          title: String(payload.title ?? "Sans titre"),
+          priority,
+          projectId,
+          assigneeId,
+          dueDate: dueDate ?? null,
+        })
+        .where(eq(tasks.id, recordId));
+      return;
+    }
+  }
+}

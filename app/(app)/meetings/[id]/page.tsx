@@ -1,15 +1,24 @@
 import { DeleteButton } from "@/components/delete-button";
 import { PageHeader } from "@/components/page-header";
+import { contacts } from "@/db/schema/contacts";
+import { entities } from "@/db/schema/entities";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
+import { opportunities } from "@/db/schema/opportunities";
 import { projects } from "@/db/schema/projects";
+import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { deleteMeetingAndRedirect } from "@/lib/actions/meetings";
 import { db } from "@/lib/db/server";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { ProposalsPanel } from "./proposals-panel";
 import { ReExtractButton } from "./re-extract-button";
 import { SummaryEditor } from "./summary-editor";
+
+// Pas de cache statique sur cette page : les propositions et le résumé
+// changent en continu à chaque action humaine, on veut toujours la
+// donnée fraîche.
+export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
 
@@ -20,7 +29,15 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
   const [meeting] = await conn.select().from(meetings).where(eq(meetings.id, id)).limit(1);
   if (!meeting) notFound();
 
-  const [proposals, projectOptions, userOptions] = await Promise.all([
+  const [
+    proposals,
+    projectOptions,
+    userOptions,
+    entityOptions,
+    contactOptions,
+    opportunityOptions,
+    taskOptions,
+  ] = await Promise.all([
     conn
       .select()
       .from(meetingProposals)
@@ -34,10 +51,32 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
       .select({ id: users.id, fullName: users.fullName })
       .from(users)
       .orderBy(asc(users.fullName)),
+    conn
+      .select({ id: entities.id, name: entities.name })
+      .from(entities)
+      .orderBy(asc(entities.name)),
+    conn
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+      })
+      .from(contacts)
+      .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
+    conn
+      .select({ id: opportunities.id, title: opportunities.title })
+      .from(opportunities)
+      .orderBy(asc(opportunities.title)),
+    conn
+      .select({ id: tasks.id, title: tasks.title })
+      .from(tasks)
+      .where(and(sql`${tasks.status} not in ('done', 'cancelled')`))
+      .orderBy(asc(tasks.title)),
   ]);
 
   const pending = proposals.filter((p) => p.status === "pending");
-  const decided = proposals.filter((p) => p.status !== "pending");
+  const accepted = proposals.filter((p) => p.status === "accepted");
+  const rejected = proposals.filter((p) => p.status === "rejected");
 
   return (
     <div className="space-y-6">
@@ -83,8 +122,9 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
           <h2 className="font-medium text-sm">État</h2>
           <dl className="space-y-2 text-sm">
             <Stat label="Statut" value={STATUS_LABEL[meeting.status]} />
-            <Stat label="Propositions à valider" value={pending.length.toString()} />
-            <Stat label="Propositions décidées" value={decided.length.toString()} />
+            <Stat label="À valider" value={pending.length.toString()} />
+            <Stat label="Acceptées" value={accepted.length.toString()} />
+            <Stat label="Rejetées" value={rejected.length.toString()} />
             <Stat
               label="Transcript"
               value={`${meeting.transcript.length.toLocaleString("fr-FR")} car.`}
@@ -94,10 +134,16 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
       </div>
 
       <ProposalsPanel
-        pending={pending}
-        decided={decided}
+        proposals={proposals}
         projects={projectOptions}
         users={userOptions}
+        entities={entityOptions}
+        contacts={contactOptions.map((c) => ({
+          id: c.id,
+          fullName: `${c.firstName} ${c.lastName}`.trim(),
+        }))}
+        opportunities={opportunityOptions}
+        existingTasks={taskOptions}
       />
 
       <details className="rounded-lg border bg-card">

@@ -1,12 +1,7 @@
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { FilterRow } from "@/components/table/filter-row";
-import {
-  type SortState,
-  SortableHeader,
-  parseSort,
-  sortToParam,
-} from "@/components/table/sortable-header";
+import { NotionFilters } from "@/components/table/notion-filters";
+import { type SortState, SortableHeader, parseSort } from "@/components/table/sortable-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,7 +15,9 @@ import {
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
-import { type SQL, and, asc, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
+import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
+import { type SQL, and, asc, desc, ilike, or, sql } from "drizzle-orm";
 import { ArrowRight, Plus, Users } from "lucide-react";
 import Link from "next/link";
 import {
@@ -31,6 +28,8 @@ import {
   ContLastName,
   ContPhone,
 } from "./[id]/inline-fields";
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const SORT_FIELDS = ["lastName", "firstName", "jobTitle", "entity", "email"] as const;
 
@@ -53,25 +52,45 @@ function orderByFor(sort: SortState): SQL[] {
   }
 }
 
-type SearchParams = Promise<{ q?: string; entity?: string; sort?: string }>;
-
-function buildHref(params: { q?: string; entity?: string; sort?: string | null }): string {
-  const sp = new URLSearchParams();
-  if (params.q) sp.set("q", params.q);
-  if (params.entity) sp.set("entity", params.entity);
-  if (params.sort) sp.set("sort", params.sort);
-  const qs = sp.toString();
-  return qs ? `/contacts?${qs}` : "/contacts";
-}
-
 export default async function ContactsPage({ searchParams }: { searchParams: SearchParams }) {
-  const { q, entity, sort } = await searchParams;
-  const query = q?.trim() ?? "";
-  const sortState = parseSort(sort, SORT_FIELDS);
-  const activeEntity = entity ?? "all";
+  const params = await searchParams;
+  const query = typeof params.q === "string" ? params.q.trim() : "";
+  const sortRaw = typeof params.sort === "string" ? params.sort : undefined;
+  const sortState = parseSort(sortRaw, SORT_FIELDS);
 
   const conn = await db();
-  const conditions: SQL[] = [];
+  const entityList = await conn
+    .select({ id: entities.id, name: entities.name })
+    .from(entities)
+    .orderBy(asc(entities.name));
+
+  const FILTER_DEFS = [
+    {
+      key: "entity",
+      label: "Entité",
+      type: "enum" as const,
+      options: entityList.map((e) => ({ value: e.id, label: e.name })),
+    },
+    { key: "firstName", label: "Prénom", type: "text" as const },
+    { key: "lastName", label: "Nom", type: "text" as const },
+    { key: "email", label: "E-mail", type: "text" as const },
+    { key: "jobTitle", label: "Poste", type: "text" as const },
+  ];
+
+  const filters = parseFiltersFromSearchParams(
+    params,
+    FILTER_DEFS.map((d) => d.key),
+  );
+  const filterColumns = [
+    { key: "entity", column: contacts.entityId, kind: "enum" as const },
+    { key: "firstName", column: contacts.firstName, kind: "text" as const },
+    { key: "lastName", column: contacts.lastName, kind: "text" as const },
+    { key: "email", column: contacts.email, kind: "text" as const },
+    { key: "jobTitle", column: contacts.jobTitle, kind: "text" as const },
+  ];
+  const filterConditions = applyFilters(filters, filterColumns);
+
+  const conditions: SQL[] = [...filterConditions];
   if (query) {
     const like = or(
       ilike(contacts.firstName, `%${query}%`),
@@ -81,30 +100,22 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
     );
     if (like) conditions.push(like);
   }
-  if (activeEntity === "none") conditions.push(isNull(contacts.entityId));
-  else if (activeEntity !== "all") conditions.push(eq(contacts.entityId, activeEntity));
 
-  const [rows, entityList] = await Promise.all([
-    conn
-      .select({
-        id: contacts.id,
-        firstName: contacts.firstName,
-        lastName: contacts.lastName,
-        email: contacts.email,
-        phone: contacts.phone,
-        jobTitle: contacts.jobTitle,
-        entityId: entities.id,
-        entityName: entities.name,
-      })
-      .from(contacts)
-      .leftJoin(entities, sql`${contacts.entityId} = ${entities.id}`)
-      .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(...orderByFor(sortState)),
-    conn
-      .select({ id: entities.id, name: entities.name })
-      .from(entities)
-      .orderBy(asc(entities.name)),
-  ]);
+  const rows = await conn
+    .select({
+      id: contacts.id,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+      email: contacts.email,
+      phone: contacts.phone,
+      jobTitle: contacts.jobTitle,
+      entityId: entities.id,
+      entityName: entities.name,
+    })
+    .from(contacts)
+    .leftJoin(entities, sql`${contacts.entityId} = ${entities.id}`)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(...orderByFor(sortState));
 
   return (
     <div className="space-y-6">
@@ -122,18 +133,10 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
         }
       />
 
-      <FilterRow
-        label="Entité"
-        items={[
-          { value: undefined, label: "Toutes", active: activeEntity === "all" },
-          { value: "none", label: "Sans entité", active: activeEntity === "none" },
-          ...entityList.slice(0, 12).map((e) => ({
-            value: e.id,
-            label: e.name,
-            active: activeEntity === e.id,
-          })),
-        ]}
-        buildHref={(value) => buildHref({ q: query, entity: value, sort: sortToParam(sortState) })}
+      <NotionFilters
+        pathname="/contacts"
+        filterDefs={FILTER_DEFS}
+        activeFilters={filters.map((f) => ({ key: f.key, op: f.op, value: f.value }))}
       />
 
       <form className="max-w-sm">
@@ -143,8 +146,10 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
           placeholder="Rechercher par nom, e-mail, entité…"
           className="h-9"
         />
-        {entity ? <input type="hidden" name="entity" value={entity} /> : null}
-        {sort ? <input type="hidden" name="sort" value={sort} /> : null}
+        {collectF(params).map((f, i) => (
+          <input key={`f-${i}-${f}`} type="hidden" name="f" value={f} />
+        ))}
+        {sortRaw ? <input type="hidden" name="sort" value={sortRaw} /> : null}
       </form>
 
       {rows.length === 0 ? (
@@ -173,7 +178,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
                     label="Nom"
                     field="lastName"
                     current={sortState}
-                    buildHref={(next) => buildHref({ q: query, entity, sort: sortToParam(next) })}
+                    buildHref={(next) => buildSortHref("/contacts", params, next)}
                   />
                 </TableHead>
                 <TableHead>
@@ -181,7 +186,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
                     label="Entité"
                     field="entity"
                     current={sortState}
-                    buildHref={(next) => buildHref({ q: query, entity, sort: sortToParam(next) })}
+                    buildHref={(next) => buildSortHref("/contacts", params, next)}
                   />
                 </TableHead>
                 <TableHead>
@@ -189,7 +194,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
                     label="E-mail"
                     field="email"
                     current={sortState}
-                    buildHref={(next) => buildHref({ q: query, entity, sort: sortToParam(next) })}
+                    buildHref={(next) => buildSortHref("/contacts", params, next)}
                   />
                 </TableHead>
                 <TableHead>Téléphone</TableHead>

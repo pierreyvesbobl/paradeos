@@ -1,6 +1,6 @@
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { FilterRow } from "@/components/table/filter-row";
+import { NotionFilters } from "@/components/table/notion-filters";
 import {
   type SortState,
   SortableHeader,
@@ -20,15 +20,15 @@ import {
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
+import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import {
   type ProjectKind,
   type ProjectStatus,
-  projectKindEnum,
   projectKindLabels,
   projectStatusEnum,
   projectStatusLabels,
 } from "@/lib/schemas/projects";
-import { type SQL, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { type SQL, and, asc, desc, ilike, or, sql } from "drizzle-orm";
 import { ArrowRight, Briefcase, Plus } from "lucide-react";
 import Link from "next/link";
 import {
@@ -40,13 +40,38 @@ import {
   ProjStatus,
 } from "./[id]/inline-fields";
 
-const SORT_FIELDS = ["name", "kind", "status", "entity", "startDate", "updated"] as const;
-type SortField = (typeof SORT_FIELDS)[number];
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+const FILTER_DEFS = [
+  {
+    key: "kind",
+    label: "Type",
+    type: "enum" as const,
+    options: (Object.keys(projectKindLabels) as ProjectKind[]).map((k) => ({
+      value: k,
+      label: projectKindLabels[k],
+    })),
+  },
+  {
+    key: "status",
+    label: "Statut",
+    type: "enum" as const,
+    options: projectStatusEnum.options.map((s) => ({
+      value: s,
+      label: projectStatusLabels[s as ProjectStatus],
+    })),
+  },
+  { key: "name", label: "Nom", type: "text" as const },
+  { key: "startDate", label: "Date de début", type: "date" as const },
+  { key: "endDate", label: "Date de fin", type: "date" as const },
+] as const;
+
+const SORT_FIELDS = ["name", "kind", "status", "entity", "startDate"] as const;
 
 function orderByFor(sort: SortState): SQL[] {
   if (!sort) return [desc(projects.updatedAt), asc(projects.name)];
   const dir = sort.dir === "asc" ? asc : desc;
-  switch (sort.field as SortField) {
+  switch (sort.field) {
     case "name":
       return [dir(projects.name)];
     case "kind":
@@ -57,44 +82,54 @@ function orderByFor(sort: SortState): SQL[] {
       return [dir(entities.name), asc(projects.name)];
     case "startDate":
       return [dir(projects.startDate), asc(projects.name)];
-    case "updated":
-      return [dir(projects.updatedAt)];
     default:
       return [desc(projects.updatedAt), asc(projects.name)];
   }
 }
 
-type SearchParams = Promise<{
-  q?: string;
-  kind?: ProjectKind;
-  status?: ProjectStatus | "all";
-  sort?: string;
-}>;
-
-const DEFAULT_STATUSES: ProjectStatus[] = ["planning", "active", "on_hold"];
-
 export default async function ProjectsPage({ searchParams }: { searchParams: SearchParams }) {
-  const { q, kind, status, sort } = await searchParams;
-  const query = q?.trim() ?? "";
-  const activeKind = kind && projectKindEnum.options.includes(kind) ? kind : undefined;
-  const activeStatus =
-    status === "all"
-      ? undefined
-      : status && projectStatusEnum.options.includes(status)
-        ? status
-        : "default";
-  const sortState = parseSort(sort, SORT_FIELDS);
+  const params = await searchParams;
+  const query = typeof params.q === "string" ? params.q.trim() : "";
+  const sortRaw = typeof params.sort === "string" ? params.sort : undefined;
+  const sortState = parseSort(sortRaw, SORT_FIELDS);
+
+  const filters = parseFiltersFromSearchParams(
+    params,
+    FILTER_DEFS.map((d) => d.key),
+  );
+
+  const filterColumns = [
+    { key: "kind", column: projects.kind, kind: "enum" as const },
+    { key: "status", column: projects.status, kind: "enum" as const },
+    { key: "name", column: projects.name, kind: "text" as const },
+    { key: "startDate", column: projects.startDate, kind: "date" as const },
+    { key: "endDate", column: projects.endDate, kind: "date" as const },
+  ];
+  const filterConditions = applyFilters(filters, filterColumns);
 
   const conn = await db();
-  const conditions = [];
-  if (activeKind) conditions.push(eq(projects.kind, activeKind));
-  if (activeStatus === "default") {
-    conditions.push(inArray(projects.status, DEFAULT_STATUSES));
-  } else if (activeStatus !== undefined) {
-    conditions.push(eq(projects.status, activeStatus));
+
+  const conditions: SQL[] = [...filterConditions];
+  if (query) {
+    const like = or(ilike(projects.name, `%${query}%`), ilike(entities.name, `%${query}%`));
+    if (like) conditions.push(like);
   }
-  if (query)
-    conditions.push(or(ilike(projects.name, `%${query}%`), ilike(entities.name, `%${query}%`)));
+
+  function buildSortHref(next: SortState): string {
+    const sp = new URLSearchParams();
+    if (query) sp.set("q", query);
+    for (const raw of (typeof params.f === "string"
+      ? [params.f]
+      : Array.isArray(params.f)
+        ? params.f
+        : []) as string[]) {
+      sp.append("f", raw);
+    }
+    const s = sortToParam(next);
+    if (s) sp.set("sort", s);
+    const qs = sp.toString();
+    return qs ? `/projets?${qs}` : "/projets";
+  }
 
   const [rows, entityList] = await Promise.all([
     conn
@@ -112,7 +147,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
       })
       .from(projects)
       .leftJoin(entities, sql`${projects.entityId} = ${entities.id}`)
-      .where(conditions.length ? sql`${sql.join(conditions, sql` and `)}` : undefined)
+      .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(...orderByFor(sortState)),
     conn
       .select({ id: entities.id, name: entities.name })
@@ -136,51 +171,11 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
         }
       />
 
-      <div className="space-y-3">
-        <FilterRow
-          label="Type"
-          items={[
-            { value: undefined, label: "Tous", active: !activeKind },
-            ...projectKindEnum.options.map((k) => ({
-              value: k as string,
-              label: projectKindLabels[k],
-              active: activeKind === k,
-            })),
-          ]}
-          buildHref={(value) =>
-            buildHref({
-              kind: value as ProjectKind | undefined,
-              status,
-              q: query,
-              sort: sortToParam(sortState),
-            })
-          }
-        />
-        <FilterRow
-          label="Statut"
-          items={[
-            {
-              value: undefined,
-              label: "Actifs",
-              active: activeStatus === "default",
-            },
-            ...projectStatusEnum.options.map((s) => ({
-              value: s as string,
-              label: projectStatusLabels[s],
-              active: activeStatus === s,
-            })),
-            { value: "all", label: "Tous", active: activeStatus === undefined },
-          ]}
-          buildHref={(value) =>
-            buildHref({
-              kind: activeKind,
-              status: value as ProjectStatus | "all" | undefined,
-              q: query,
-              sort: sortToParam(sortState),
-            })
-          }
-        />
-      </div>
+      <NotionFilters
+        pathname="/projets"
+        filterDefs={[...FILTER_DEFS]}
+        activeFilters={filters.map((f) => ({ key: f.key, op: f.op, value: f.value }))}
+      />
 
       <form className="max-w-sm">
         <Input
@@ -189,9 +184,13 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
           placeholder="Rechercher par nom, entité…"
           className="h-9"
         />
-        {activeKind ? <input type="hidden" name="kind" value={activeKind} /> : null}
-        {status ? <input type="hidden" name="status" value={status} /> : null}
-        {sort ? <input type="hidden" name="sort" value={sort} /> : null}
+        {/* Conserve les filtres et le tri à la soumission de la recherche. */}
+        {(typeof params.f === "string" ? [params.f] : Array.isArray(params.f) ? params.f : []).map(
+          (f, i) => (
+            <input key={`f-${i}-${f}`} type="hidden" name="f" value={f} />
+          ),
+        )}
+        {sortRaw ? <input type="hidden" name="sort" value={sortRaw} /> : null}
       </form>
 
       {rows.length === 0 ? (
@@ -219,14 +218,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
                     label="Projet"
                     field="name"
                     current={sortState}
-                    buildHref={(next) =>
-                      buildHref({
-                        kind: activeKind,
-                        status,
-                        q: query,
-                        sort: sortToParam(next),
-                      })
-                    }
+                    buildHref={buildSortHref}
                   />
                 </TableHead>
                 <TableHead>
@@ -234,14 +226,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
                     label="Type"
                     field="kind"
                     current={sortState}
-                    buildHref={(next) =>
-                      buildHref({
-                        kind: activeKind,
-                        status,
-                        q: query,
-                        sort: sortToParam(next),
-                      })
-                    }
+                    buildHref={buildSortHref}
                   />
                 </TableHead>
                 <TableHead>
@@ -249,14 +234,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
                     label="Statut"
                     field="status"
                     current={sortState}
-                    buildHref={(next) =>
-                      buildHref({
-                        kind: activeKind,
-                        status,
-                        q: query,
-                        sort: sortToParam(next),
-                      })
-                    }
+                    buildHref={buildSortHref}
                   />
                 </TableHead>
                 <TableHead>
@@ -264,14 +242,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
                     label="Entité"
                     field="entity"
                     current={sortState}
-                    buildHref={(next) =>
-                      buildHref({
-                        kind: activeKind,
-                        status,
-                        q: query,
-                        sort: sortToParam(next),
-                      })
-                    }
+                    buildHref={buildSortHref}
                   />
                 </TableHead>
                 <TableHead>
@@ -279,14 +250,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
                     label="Début"
                     field="startDate"
                     current={sortState}
-                    buildHref={(next) =>
-                      buildHref({
-                        kind: activeKind,
-                        status,
-                        q: query,
-                        sort: sortToParam(next),
-                      })
-                    }
+                    buildHref={buildSortHref}
                   />
                 </TableHead>
               </TableRow>
@@ -343,19 +307,4 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
       )}
     </div>
   );
-}
-
-function buildHref(params: {
-  kind?: ProjectKind;
-  status?: ProjectStatus | "all";
-  q?: string;
-  sort?: string | null;
-}): string {
-  const sp = new URLSearchParams();
-  if (params.kind) sp.set("kind", params.kind);
-  if (params.status) sp.set("status", params.status);
-  if (params.q) sp.set("q", params.q);
-  if (params.sort) sp.set("sort", params.sort);
-  const qs = sp.toString();
-  return qs ? `/projets?${qs}` : "/projets";
 }
