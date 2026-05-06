@@ -1,8 +1,12 @@
 "use client";
 
+import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   Select,
   SelectContent,
@@ -12,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createProject, updateProject } from "@/lib/actions/projects";
+import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import {
   type ProjectBillingType,
   type ProjectKind,
@@ -52,8 +57,6 @@ type Props = {
   };
 };
 
-const NONE = "__none__";
-
 export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -62,13 +65,13 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
   const [name, setName] = useState(defaultValues.name);
   const [kind, setKind] = useState<ProjectKind>(defaultValues.kind);
   const [status, setStatus] = useState<ProjectStatus>(defaultValues.status);
-  const [entityId, setEntityId] = useState(defaultValues.entityId || NONE);
+  const [entityId, setEntityId] = useState<string | null>(defaultValues.entityId || null);
   const [color, setColor] = useState(defaultValues.color);
   const [icon, setIcon] = useState(defaultValues.icon);
   const [description, setDescription] = useState(defaultValues.description);
   const [startDate, setStartDate] = useState(defaultValues.startDate);
   const [endDate, setEndDate] = useState(defaultValues.endDate);
-  const [ownerId, setOwnerId] = useState(defaultValues.ownerId || NONE);
+  const [ownerId, setOwnerId] = useState<string | null>(defaultValues.ownerId || null);
   const [billingType, setBillingType] = useState<ProjectBillingType>(defaultValues.billingType);
   const [budgetAmount, setBudgetAmount] = useState(defaultValues.budgetAmount);
   const [hourlyRate, setHourlyRate] = useState(defaultValues.hourlyRate);
@@ -78,13 +81,13 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
       name,
       kind,
       status,
-      entityId: entityId === NONE ? undefined : entityId,
+      entityId: entityId ?? undefined,
       color: color || undefined,
       icon: icon || undefined,
       description: description || undefined,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
-      ownerId: ownerId === NONE ? undefined : ownerId,
+      ownerId: ownerId ?? undefined,
       billingType,
       budgetAmount: billingType === "fixed" ? budgetAmount || undefined : undefined,
       hourlyRate: billingType === "hourly" ? hourlyRate || undefined : undefined,
@@ -103,6 +106,7 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
 
       if (!result.ok) {
         if (result.fieldErrors) setErrors(result.fieldErrors);
+        scrollToFirstError(result.fieldErrors);
         toast.error(result.message);
         return;
       }
@@ -114,9 +118,11 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-8">
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Identité</h2>
+    <form onSubmit={onSubmit} className="space-y-10">
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Identité
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="name">Nom *</Label>
@@ -127,7 +133,7 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
               onChange={(e) => setName(e.target.value)}
               disabled={pending}
             />
-            {errors.name ? <p className="text-destructive text-xs">{errors.name[0]}</p> : null}
+            <FieldError messages={errors.name} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="kind">Type *</Label>
@@ -171,33 +177,30 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
       </section>
 
       {kind === "client" ? (
-        <section className="space-y-4 rounded-lg border bg-card p-6">
-          <h2 className="font-medium text-sm">Client</h2>
+        <section className="space-y-4">
+          <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+            Client
+          </h2>
           <div className="space-y-2">
             <Label htmlFor="entityId">Entité *</Label>
-            <Select value={entityId} onValueChange={setEntityId} disabled={pending}>
-              <SelectTrigger id="entityId">
-                <SelectValue placeholder="—" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>—</SelectItem>
-                {entities.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.entityId ? (
-              <p className="text-destructive text-xs">{errors.entityId[0]}</p>
-            ) : null}
+            <FkCombobox
+              id="entityId"
+              value={entityId}
+              onValueChange={setEntityId}
+              options={entities.map((e) => ({ id: e.id, label: e.name }))}
+              searchPlaceholder="Rechercher une entité…"
+              disabled={pending}
+            />
+            <FieldError messages={errors.entityId} />
           </div>
         </section>
       ) : null}
 
       {kind === "product" ? (
-        <section className="space-y-4 rounded-lg border bg-card p-6">
-          <h2 className="font-medium text-sm">Apparence</h2>
+        <section className="space-y-4">
+          <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+            Apparence
+          </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="color">Couleur (hex)</Label>
@@ -208,7 +211,7 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
                 placeholder="#4F46E5"
                 disabled={pending}
               />
-              {errors.color ? <p className="text-destructive text-xs">{errors.color[0]}</p> : null}
+              <FieldError messages={errors.color} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="icon">Icône (emoji)</Label>
@@ -224,8 +227,10 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
         </section>
       ) : null}
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Facturation</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Facturation
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="billingType">Type</Label>
@@ -248,34 +253,28 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
           </div>
           {billingType === "fixed" ? (
             <div className="space-y-2">
-              <Label htmlFor="budgetAmount">Budget (€ HT)</Label>
-              <Input
+              <Label htmlFor="budgetAmount">Budget (HT)</Label>
+              <MoneyInput
                 id="budgetAmount"
-                inputMode="decimal"
                 value={budgetAmount}
-                onChange={(e) => setBudgetAmount(e.target.value)}
+                onValueChange={setBudgetAmount}
                 placeholder="2 000"
                 disabled={pending}
               />
-              {errors.budgetAmount ? (
-                <p className="text-destructive text-xs">{errors.budgetAmount[0]}</p>
-              ) : null}
+              <FieldError messages={errors.budgetAmount} />
             </div>
           ) : null}
           {billingType === "hourly" ? (
             <div className="space-y-2">
-              <Label htmlFor="hourlyRate">Taux horaire (€ HT/h)</Label>
-              <Input
+              <Label htmlFor="hourlyRate">Taux horaire (HT/h)</Label>
+              <MoneyInput
                 id="hourlyRate"
-                inputMode="decimal"
                 value={hourlyRate}
-                onChange={(e) => setHourlyRate(e.target.value)}
+                onValueChange={setHourlyRate}
                 placeholder="120"
                 disabled={pending}
               />
-              {errors.hourlyRate ? (
-                <p className="text-destructive text-xs">{errors.hourlyRate[0]}</p>
-              ) : null}
+              <FieldError messages={errors.hourlyRate} />
             </div>
           ) : null}
         </div>
@@ -286,57 +285,51 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
         ) : null}
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Pilotage</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Pilotage
+        </h2>
         <div className="space-y-2">
           <Label htmlFor="ownerId">Lead</Label>
-          <Select value={ownerId} onValueChange={setOwnerId} disabled={pending}>
-            <SelectTrigger id="ownerId">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>—</SelectItem>
-              {users.map((u) => (
-                <SelectItem key={u.id} value={u.id}>
-                  {u.fullName ?? "(sans nom)"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FkCombobox
+            id="ownerId"
+            value={ownerId}
+            onValueChange={setOwnerId}
+            options={users.map((u) => ({ id: u.id, label: u.fullName ?? "(sans nom)" }))}
+            searchPlaceholder="Rechercher un membre…"
+            disabled={pending}
+          />
           <p className="text-muted-foreground text-xs">
             Référent·e du projet (par défaut, son créateur).
           </p>
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Calendrier</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Calendrier
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="startDate">Début</Label>
-            <Input
+            <DateInput
               id="startDate"
-              type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onValueChange={setStartDate}
               disabled={pending}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="endDate">Fin</Label>
-            <Input
-              id="endDate"
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              disabled={pending}
-            />
+            <DateInput id="endDate" value={endDate} onValueChange={setEndDate} disabled={pending} />
           </div>
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Description</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Description
+        </h2>
         <Textarea
           rows={5}
           value={description}
@@ -345,7 +338,7 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
         />
       </section>
 
-      <div className="flex items-center justify-end gap-2">
+      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/90 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <Button type="button" variant="ghost" onClick={() => router.back()} disabled={pending}>
           Annuler
         </Button>

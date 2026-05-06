@@ -1,8 +1,12 @@
 "use client";
 
+import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   Select,
   SelectContent,
@@ -12,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createOpportunity, updateOpportunity } from "@/lib/actions/opportunities";
+import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import {
   type OpportunityStatus,
   opportunityDefaultProbability,
@@ -49,8 +54,6 @@ type Props = {
   };
 };
 
-const NONE = "__none__";
-
 export function OpportunityForm({ mode, entities, contacts, users, defaultValues }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -58,8 +61,8 @@ export function OpportunityForm({ mode, entities, contacts, users, defaultValues
 
   const [title, setTitle] = useState(defaultValues.title);
   const [status, setStatus] = useState<OpportunityStatus>(defaultValues.status);
-  const [entityId, setEntityId] = useState(defaultValues.entityId || NONE);
-  const [contactId, setContactId] = useState(defaultValues.contactId || NONE);
+  const [entityId, setEntityId] = useState<string | null>(defaultValues.entityId || null);
+  const [contactId, setContactId] = useState<string | null>(defaultValues.contactId || null);
   const [valueAmount, setValueAmount] = useState(defaultValues.valueAmount);
   const [probability, setProbability] = useState(defaultValues.probability);
   const [probaTouched, setProbaTouched] = useState(Boolean(defaultValues.probability));
@@ -68,7 +71,7 @@ export function OpportunityForm({ mode, entities, contacts, users, defaultValues
   const [lastContactDate, setLastContactDate] = useState(defaultValues.lastContactDate);
   const [followUpDate, setFollowUpDate] = useState(defaultValues.followUpDate);
   const [expectedCloseDate, setExpectedCloseDate] = useState(defaultValues.expectedCloseDate);
-  const [ownerId, setOwnerId] = useState(defaultValues.ownerId || NONE);
+  const [ownerId, setOwnerId] = useState<string | null>(defaultValues.ownerId || null);
   const [notes, setNotes] = useState(defaultValues.notes);
 
   function onStatusChange(s: OpportunityStatus) {
@@ -80,7 +83,7 @@ export function OpportunityForm({ mode, entities, contacts, users, defaultValues
 
   // Filtre les contacts selon l'entité sélectionnée (si l'utilisateur en a choisi une).
   const visibleContacts =
-    entityId === NONE
+    entityId === null
       ? contacts
       : contacts.filter((c) => c.entityId === entityId || c.id === contactId);
 
@@ -88,8 +91,8 @@ export function OpportunityForm({ mode, entities, contacts, users, defaultValues
     return {
       title,
       status,
-      entityId: entityId === NONE ? undefined : entityId,
-      contactId: contactId === NONE ? undefined : contactId,
+      entityId: entityId ?? undefined,
+      contactId: contactId ?? undefined,
       valueAmount: valueAmount || undefined,
       probability: probability || undefined,
       source: source || undefined,
@@ -97,7 +100,7 @@ export function OpportunityForm({ mode, entities, contacts, users, defaultValues
       lastContactDate: lastContactDate || undefined,
       followUpDate: followUpDate || undefined,
       expectedCloseDate: expectedCloseDate || undefined,
-      ownerId: ownerId === NONE ? undefined : ownerId,
+      ownerId: ownerId ?? undefined,
       notes: notes || undefined,
     };
   }
@@ -114,6 +117,7 @@ export function OpportunityForm({ mode, entities, contacts, users, defaultValues
 
       if (!result.ok) {
         if (result.fieldErrors) setErrors(result.fieldErrors);
+        scrollToFirstError(result.fieldErrors);
         toast.error(result.message);
         return;
       }
@@ -125,9 +129,11 @@ export function OpportunityForm({ mode, entities, contacts, users, defaultValues
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-8">
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Identification</h2>
+    <form onSubmit={onSubmit} className="space-y-10">
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Identification
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="title">Titre *</Label>
@@ -138,7 +144,7 @@ export function OpportunityForm({ mode, entities, contacts, users, defaultValues
               onChange={(e) => setTitle(e.target.value)}
               disabled={pending}
             />
-            {errors.title ? <p className="text-destructive text-xs">{errors.title[0]}</p> : null}
+            <FieldError messages={errors.title} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="status">Statut</Label>
@@ -172,67 +178,57 @@ export function OpportunityForm({ mode, entities, contacts, users, defaultValues
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Lien</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Lien
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="entityId">Entité</Label>
-            <Select
+            <FkCombobox
+              id="entityId"
               value={entityId}
               onValueChange={(v) => {
                 setEntityId(v);
-                if (v !== entityId) setContactId(NONE);
+                if (v !== entityId) setContactId(null);
               }}
+              options={entities.map((e) => ({ id: e.id, label: e.name }))}
+              searchPlaceholder="Rechercher une entité…"
               disabled={pending}
-            >
-              <SelectTrigger id="entityId">
-                <SelectValue placeholder="—" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>—</SelectItem>
-                {entities.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="contactId">Contact principal</Label>
-            <Select value={contactId} onValueChange={setContactId} disabled={pending}>
-              <SelectTrigger id="contactId">
-                <SelectValue placeholder="—" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>—</SelectItem>
-                {visibleContacts.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.firstName} {c.lastName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <FkCombobox
+              id="contactId"
+              value={contactId}
+              onValueChange={setContactId}
+              options={visibleContacts.map((c) => ({
+                id: c.id,
+                label: `${c.firstName} ${c.lastName}`.trim(),
+              }))}
+              searchPlaceholder="Rechercher un contact…"
+              disabled={pending}
+            />
           </div>
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Valeur</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Valeur
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="valueAmount">Montant (€ HT)</Label>
-            <Input
+            <Label htmlFor="valueAmount">Montant (HT)</Label>
+            <MoneyInput
               id="valueAmount"
-              inputMode="decimal"
               value={valueAmount}
-              onChange={(e) => setValueAmount(e.target.value)}
+              onValueChange={setValueAmount}
               placeholder="12 500"
               disabled={pending}
             />
-            {errors.valueAmount ? (
-              <p className="text-destructive text-xs">{errors.valueAmount[0]}</p>
-            ) : null}
+            <FieldError messages={errors.valueAmount} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="probability">Probabilité (%)</Label>
@@ -252,77 +248,74 @@ export function OpportunityForm({ mode, entities, contacts, users, defaultValues
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Dates</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Dates
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="firstContactDate">Premier contact</Label>
-            <Input
+            <DateInput
               id="firstContactDate"
-              type="date"
               value={firstContactDate}
-              onChange={(e) => setFirstContactDate(e.target.value)}
+              onValueChange={setFirstContactDate}
               disabled={pending}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="lastContactDate">Dernier contact</Label>
-            <Input
+            <DateInput
               id="lastContactDate"
-              type="date"
               value={lastContactDate}
-              onChange={(e) => setLastContactDate(e.target.value)}
+              onValueChange={setLastContactDate}
               disabled={pending}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="followUpDate">Relance prévue</Label>
-            <Input
+            <DateInput
               id="followUpDate"
-              type="date"
               value={followUpDate}
-              onChange={(e) => setFollowUpDate(e.target.value)}
+              onValueChange={setFollowUpDate}
               disabled={pending}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="expectedCloseDate">Closing estimé</Label>
-            <Input
+            <DateInput
               id="expectedCloseDate"
-              type="date"
               value={expectedCloseDate}
-              onChange={(e) => setExpectedCloseDate(e.target.value)}
+              onValueChange={setExpectedCloseDate}
               disabled={pending}
             />
           </div>
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Pilotage</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Pilotage
+        </h2>
         <div className="space-y-2">
           <Label htmlFor="ownerId">Lead</Label>
-          <Select value={ownerId} onValueChange={setOwnerId} disabled={pending}>
-            <SelectTrigger id="ownerId">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>—</SelectItem>
-              {users.map((u) => (
-                <SelectItem key={u.id} value={u.id}>
-                  {u.fullName ?? "(sans nom)"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FkCombobox
+            id="ownerId"
+            value={ownerId}
+            onValueChange={setOwnerId}
+            options={users.map((u) => ({ id: u.id, label: u.fullName ?? "(sans nom)" }))}
+            searchPlaceholder="Rechercher un membre…"
+            disabled={pending}
+          />
           <p className="text-muted-foreground text-xs">
             Référent·e de l'opportunité (par défaut, son créateur).
           </p>
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Notes</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Notes
+        </h2>
         <Textarea
           rows={5}
           value={notes}
@@ -331,7 +324,7 @@ export function OpportunityForm({ mode, entities, contacts, users, defaultValues
         />
       </section>
 
-      <div className="flex items-center justify-end gap-2">
+      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/90 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <Button type="button" variant="ghost" onClick={() => router.back()} disabled={pending}>
           Annuler
         </Button>

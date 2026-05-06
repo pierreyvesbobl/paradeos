@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -20,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createNote, deleteNote, updateNote } from "@/lib/actions/notes";
+import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import {
   type NoteKind,
   type NoteSubjectType,
@@ -66,6 +69,7 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
   const [occurredAt, setOccurredAt] = useState(seed.occurredAt);
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   function reset() {
     setTitle(seed.title);
@@ -93,6 +97,7 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
 
       if (!result.ok) {
         if (result.fieldErrors) setErrors(result.fieldErrors);
+        scrollToFirstError(result.fieldErrors);
         toast.error(result.message);
         return;
       }
@@ -105,7 +110,11 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
 
   function onDelete() {
     if (!isEdit || !initial?.id) return;
-    if (!confirm("Supprimer cette note ?")) return;
+    setConfirmDelete(true);
+  }
+
+  function confirmDeleteNote() {
+    if (!isEdit || !initial?.id) return;
     startTransition(async () => {
       const result = await deleteNote({ id: initial.id ?? "" });
       if (!result.ok) {
@@ -113,6 +122,7 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
         return;
       }
       toast.success("Note supprimée.");
+      setConfirmDelete(false);
       setOpen(false);
       router.refresh();
     });
@@ -183,9 +193,7 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
               onChange={(e) => setContent(e.target.value)}
               disabled={pending}
             />
-            {errors.content ? (
-              <p className="text-destructive text-xs">{errors.content[0]}</p>
-            ) : null}
+            <FieldError messages={errors.content} />
           </div>
 
           <DialogFooter className="!justify-between">
@@ -218,6 +226,16 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Supprimer cette note ?"
+        description="Cette action est irréversible."
+        confirmLabel="Supprimer"
+        variant="destructive"
+        onConfirm={confirmDeleteNote}
+        pending={pending}
+      />
     </Dialog>
   );
 }

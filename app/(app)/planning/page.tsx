@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { contacts } from "@/db/schema/contacts";
+import { opportunities } from "@/db/schema/opportunities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { timeEntries } from "@/db/schema/time-entries";
@@ -35,7 +36,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Sea
   const weekEnd = addDays(weekStart, 7);
 
   const conn = await db();
-  const [entries, taskList, projectList, contactList] = await Promise.all([
+  const [entries, taskList, projectList, opportunityList, contactList] = await Promise.all([
     conn
       .select({
         id: timeEntries.id,
@@ -46,6 +47,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Sea
         description: timeEntries.description,
         taskId: timeEntries.taskId,
         projectId: timeEntries.projectId,
+        opportunityId: timeEntries.opportunityId,
         contactId: timeEntries.contactId,
         color: timeEntries.color,
       })
@@ -63,6 +65,10 @@ export default async function PlanningPage({ searchParams }: { searchParams: Sea
       .select({ id: projects.id, name: projects.name })
       .from(projects)
       .orderBy(asc(projects.name)),
+    conn
+      .select({ id: opportunities.id, title: opportunities.title })
+      .from(opportunities)
+      .orderBy(asc(opportunities.title)),
     conn
       .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
       .from(contacts)
@@ -104,11 +110,13 @@ export default async function PlanningPage({ searchParams }: { searchParams: Sea
           description: e.description,
           taskId: e.taskId,
           projectId: e.projectId,
+          opportunityId: e.opportunityId,
           contactId: e.contactId,
           color: e.color,
         }))}
         tasks={taskList}
         projects={projectList}
+        opportunities={opportunityList}
         contacts={contactList.map((c) => ({
           id: c.id,
           label: `${c.firstName} ${c.lastName}`,

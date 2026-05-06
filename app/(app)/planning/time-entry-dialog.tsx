@@ -1,6 +1,8 @@
 "use client";
 
+import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createTimeEntry, deleteTimeEntry, updateTimeEntry } from "@/lib/actions/time-entries";
+import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import {
   type TimeEntryKind,
   timeEntryKindEnum,
@@ -27,8 +31,6 @@ import {
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-
-const NONE = "__none__";
 
 type Defaults = {
   id?: string;
@@ -39,6 +41,7 @@ type Defaults = {
   description: string;
   taskId: string;
   projectId: string;
+  opportunityId: string;
   contactId: string;
 };
 
@@ -49,6 +52,7 @@ type Props = {
   defaults: Defaults;
   tasks: { id: string; title: string }[];
   projects: { id: string; name: string }[];
+  opportunities: { id: string; title: string }[];
   contacts: { id: string; label: string }[];
 };
 
@@ -59,20 +63,23 @@ export function TimeEntryDialog({
   defaults,
   tasks,
   projects,
+  opportunities,
   contacts,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [kind, setKind] = useState<TimeEntryKind>(defaults.kind);
   const [startAt, setStartAt] = useState(defaults.startAt);
   const [endAt, setEndAt] = useState(defaults.endAt);
   const [title, setTitle] = useState(defaults.title);
   const [description, setDescription] = useState(defaults.description);
-  const [taskId, setTaskId] = useState(defaults.taskId || NONE);
-  const [projectId, setProjectId] = useState(defaults.projectId || NONE);
-  const [contactId, setContactId] = useState(defaults.contactId || NONE);
+  const [taskId, setTaskId] = useState<string | null>(defaults.taskId || null);
+  const [projectId, setProjectId] = useState<string | null>(defaults.projectId || null);
+  const [opportunityId, setOpportunityId] = useState<string | null>(defaults.opportunityId || null);
+  const [contactId, setContactId] = useState<string | null>(defaults.contactId || null);
 
   function buildPayload() {
     return {
@@ -81,9 +88,10 @@ export function TimeEntryDialog({
       endAt: toIso(endAt),
       title: title || undefined,
       description: description || undefined,
-      taskId: taskId === NONE ? undefined : taskId,
-      projectId: projectId === NONE ? undefined : projectId,
-      contactId: contactId === NONE ? undefined : contactId,
+      taskId: taskId ?? undefined,
+      projectId: projectId ?? undefined,
+      opportunityId: opportunityId ?? undefined,
+      contactId: contactId ?? undefined,
     };
   }
 
@@ -99,6 +107,7 @@ export function TimeEntryDialog({
 
       if (!result.ok) {
         if (result.fieldErrors) setErrors(result.fieldErrors);
+        scrollToFirstError(result.fieldErrors);
         toast.error(result.message);
         return;
       }
@@ -110,7 +119,11 @@ export function TimeEntryDialog({
 
   function onDelete() {
     if (mode !== "edit" || !defaults.id) return;
-    if (!confirm("Supprimer ce créneau ?")) return;
+    setConfirmDelete(true);
+  }
+
+  function confirmDeleteEntry() {
+    if (mode !== "edit" || !defaults.id) return;
     startTransition(async () => {
       const result = await deleteTimeEntry({ id: defaults.id ?? "" });
       if (!result.ok) {
@@ -118,6 +131,7 @@ export function TimeEntryDialog({
         return;
       }
       toast.success("Créneau supprimé.");
+      setConfirmDelete(false);
       onClose();
       router.refresh();
     });
@@ -173,7 +187,7 @@ export function TimeEntryDialog({
                 onChange={(e) => setEndAt(e.target.value)}
                 disabled={pending}
               />
-              {errors.endAt ? <p className="text-destructive text-xs">{errors.endAt[0]}</p> : null}
+              <FieldError messages={errors.endAt} />
             </div>
           </div>
 
@@ -188,54 +202,50 @@ export function TimeEntryDialog({
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="taskId">Tâche</Label>
-              <Select value={taskId} onValueChange={setTaskId} disabled={pending}>
-                <SelectTrigger id="taskId">
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>—</SelectItem>
-                  {tasks.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FkCombobox
+                id="taskId"
+                value={taskId}
+                onValueChange={setTaskId}
+                options={tasks.map((t) => ({ id: t.id, label: t.title }))}
+                searchPlaceholder="Rechercher une tâche…"
+                disabled={pending}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="projectId">Projet</Label>
-              <Select value={projectId} onValueChange={setProjectId} disabled={pending}>
-                <SelectTrigger id="projectId">
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>—</SelectItem>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FkCombobox
+                id="projectId"
+                value={projectId}
+                onValueChange={setProjectId}
+                options={projects.map((p) => ({ id: p.id, label: p.name }))}
+                searchPlaceholder="Rechercher un projet…"
+                disabled={pending}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="opportunityId">Opportunité (avant-vente)</Label>
+              <FkCombobox
+                id="opportunityId"
+                value={opportunityId}
+                onValueChange={setOpportunityId}
+                options={opportunities.map((o) => ({ id: o.id, label: o.title }))}
+                searchPlaceholder="Rechercher une opportunité…"
+                disabled={pending}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="contactId">Contact</Label>
-              <Select value={contactId} onValueChange={setContactId} disabled={pending}>
-                <SelectTrigger id="contactId">
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>—</SelectItem>
-                  {contacts.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FkCombobox
+                id="contactId"
+                value={contactId}
+                onValueChange={setContactId}
+                options={contacts.map((c) => ({ id: c.id, label: c.label }))}
+                searchPlaceholder="Rechercher un contact…"
+                disabled={pending}
+              />
             </div>
           </div>
 
@@ -275,6 +285,16 @@ export function TimeEntryDialog({
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Supprimer ce créneau ?"
+        description="Cette action est irréversible."
+        confirmLabel="Supprimer"
+        variant="destructive"
+        onConfirm={confirmDeleteEntry}
+        pending={pending}
+      />
     </Dialog>
   );
 }

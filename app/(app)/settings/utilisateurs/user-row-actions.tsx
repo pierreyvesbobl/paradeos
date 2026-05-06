@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   Select,
   SelectContent,
@@ -159,12 +160,11 @@ export function UserRowActions({ user, isSelf }: { user: UserRow; isSelf: boolea
               ) : null}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-cost">Taux horaire (€HT/h)</Label>
-              <Input
+              <Label htmlFor="edit-cost">Taux horaire (HT/h)</Label>
+              <MoneyInput
                 id="edit-cost"
-                inputMode="decimal"
                 value={draft.costRateHourly}
-                onChange={(e) => setDraft({ ...draft, costRateHourly: e.target.value })}
+                onValueChange={(v) => setDraft({ ...draft, costRateHourly: v })}
                 disabled={pending}
                 placeholder="80"
               />

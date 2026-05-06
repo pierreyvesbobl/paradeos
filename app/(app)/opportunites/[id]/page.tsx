@@ -1,4 +1,5 @@
 import { DeleteButton } from "@/components/delete-button";
+import { EmptyState } from "@/components/empty-state";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
@@ -9,7 +10,9 @@ import { users } from "@/db/schema/users";
 import { deleteOpportunityAndRedirect } from "@/lib/actions/opportunities";
 import { buildMarkdownResolver } from "@/lib/db/queries/mention-resolver";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
+import { getOpportunityTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
+import { formatDuration } from "@/lib/format";
 import { asc, eq } from "drizzle-orm";
 import { Briefcase, ExternalLink } from "lucide-react";
 import Link from "next/link";
@@ -75,6 +78,8 @@ export default async function OpportunityDetailPage({ params }: { params: Params
       .orderBy(asc(users.fullName)),
     getNotesForSubject("opportunity", id),
   ]);
+
+  const presaleTime = await getOpportunityTimeStats(id);
 
   // Filtre côté UI : si une entité est définie, montrer en priorité ses contacts
   // (mais on garde tous les contacts disponibles pour permettre une réaffectation).
@@ -226,15 +231,54 @@ export default async function OpportunityDetailPage({ params }: { params: Params
                 <ExternalLink className="size-3" />
               </Link>
             ) : (
-              <p className="mt-2 text-muted-foreground text-sm">
-                {opp.status === "won"
-                  ? "Pas encore de projet — clique sur « Convertir »."
-                  : "Aucun (l'opportunité doit être Signée)."}
-              </p>
+              <EmptyState
+                compact
+                title={
+                  opp.status === "won"
+                    ? "Pas encore de projet — clique sur « Convertir »."
+                    : "Aucun projet (l'opportunité doit être Signée)."
+                }
+              />
             )}
           </div>
         </section>
       </div>
+
+      <section className="space-y-3 rounded-lg border bg-card p-6">
+        <h2 className="font-medium text-sm">Temps avant-vente</h2>
+        {presaleTime.actualMinutes === 0 && presaleTime.plannedMinutes === 0 ? (
+          <EmptyState
+            compact
+            title="Aucun créneau lié à cette opportunité."
+            description={
+              <>
+                Depuis le{" "}
+                <Link href="/planning" className="underline">
+                  calendrier
+                </Link>
+                , crée un créneau et sélectionne cette opportunité dans le picker « Opportunité
+                (avant-vente) » pour tracker le temps passé en prospection / découverte /
+                proposition.
+              </>
+            }
+          />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded border bg-background p-3">
+              <p className="text-muted-foreground text-xs uppercase tracking-wide">Réalisé</p>
+              <p className="mt-1 font-semibold text-xl tracking-tight text-emerald-600 dark:text-emerald-400">
+                {formatDuration(presaleTime.actualMinutes)}
+              </p>
+            </div>
+            <div className="rounded border bg-background p-3">
+              <p className="text-muted-foreground text-xs uppercase tracking-wide">Planifié</p>
+              <p className="mt-1 font-semibold text-xl tracking-tight text-primary">
+                {formatDuration(presaleTime.plannedMinutes)}
+              </p>
+            </div>
+          </div>
+        )}
+      </section>
 
       <NoteList
         subjectType="opportunity"

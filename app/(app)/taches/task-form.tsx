@@ -1,6 +1,9 @@
 "use client";
 
+import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createTask, updateTask } from "@/lib/actions/tasks";
+import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import {
   type TaskPriority,
   type TaskStatus,
@@ -43,8 +47,6 @@ type Props = {
   };
 };
 
-const NONE = "__none__";
-
 export function TaskForm({ mode, projects, users, defaultValues }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -54,8 +56,8 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
   const [description, setDescription] = useState(defaultValues.description);
   const [status, setStatus] = useState<TaskStatus>(defaultValues.status);
   const [priority, setPriority] = useState<TaskPriority>(defaultValues.priority);
-  const [projectId, setProjectId] = useState(defaultValues.projectId || NONE);
-  const [assigneeId, setAssigneeId] = useState(defaultValues.assigneeId || NONE);
+  const [projectId, setProjectId] = useState<string | null>(defaultValues.projectId || null);
+  const [assigneeId, setAssigneeId] = useState<string | null>(defaultValues.assigneeId || null);
   const [dueDate, setDueDate] = useState(defaultValues.dueDate);
 
   function buildPayload() {
@@ -64,8 +66,8 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
       description: description || undefined,
       status,
       priority,
-      projectId: projectId === NONE ? undefined : projectId,
-      assigneeId: assigneeId === NONE ? undefined : assigneeId,
+      projectId: projectId ?? undefined,
+      assigneeId: assigneeId ?? undefined,
       dueDate: dueDate || undefined,
     };
   }
@@ -82,6 +84,7 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
 
       if (!result.ok) {
         if (result.fieldErrors) setErrors(result.fieldErrors);
+        scrollToFirstError(result.fieldErrors);
         toast.error(result.message);
         return;
       }
@@ -93,9 +96,11 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-8">
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Tâche</h2>
+    <form onSubmit={onSubmit} className="space-y-10">
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Tâche
+        </h2>
         <div className="space-y-2">
           <Label htmlFor="title">Titre *</Label>
           <Input
@@ -105,7 +110,7 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
             onChange={(e) => setTitle(e.target.value)}
             disabled={pending}
           />
-          {errors.title ? <p className="text-destructive text-xs">{errors.title[0]}</p> : null}
+          <FieldError messages={errors.title} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="description">Description</Label>
@@ -119,8 +124,10 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">État</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          État
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="status">Statut</Label>
@@ -163,55 +170,41 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Lien & assignation</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Lien & assignation
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="projectId">Projet</Label>
-            <Select value={projectId} onValueChange={setProjectId} disabled={pending}>
-              <SelectTrigger id="projectId">
-                <SelectValue placeholder="—" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>—</SelectItem>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <FkCombobox
+              id="projectId"
+              value={projectId}
+              onValueChange={setProjectId}
+              options={projects.map((p) => ({ id: p.id, label: p.name }))}
+              searchPlaceholder="Rechercher un projet…"
+              disabled={pending}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="assigneeId">Assignée à</Label>
-            <Select value={assigneeId} onValueChange={setAssigneeId} disabled={pending}>
-              <SelectTrigger id="assigneeId">
-                <SelectValue placeholder="—" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>—</SelectItem>
-                {users.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {u.fullName ?? "(sans nom)"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <FkCombobox
+              id="assigneeId"
+              value={assigneeId}
+              onValueChange={setAssigneeId}
+              options={users.map((u) => ({ id: u.id, label: u.fullName ?? "(sans nom)" }))}
+              searchPlaceholder="Rechercher un membre…"
+              disabled={pending}
+            />
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="dueDate">Échéance</Label>
-            <Input
-              id="dueDate"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              disabled={pending}
-            />
+            <DateInput id="dueDate" value={dueDate} onValueChange={setDueDate} disabled={pending} />
           </div>
         </div>
       </section>
 
-      <div className="flex items-center justify-end gap-2">
+      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/90 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <Button type="button" variant="ghost" onClick={() => router.back()} disabled={pending}>
           Annuler
         </Button>

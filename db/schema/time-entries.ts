@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { contacts } from "./contacts";
+import { opportunities } from "./opportunities";
 import { projects } from "./projects";
 import { tasks } from "./tasks";
 import { users } from "./users";
@@ -28,6 +29,11 @@ export const timeEntries = pgTable(
     description: text("description"),
     taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    /** Pour le tracking avant-vente : un créneau peut être rattaché à
+     * une opportunité au lieu (ou en plus) d'un projet. */
+    opportunityId: uuid("opportunity_id").references(() => opportunities.id, {
+      onDelete: "set null",
+    }),
     contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
     color: text("color"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
@@ -38,6 +44,7 @@ export const timeEntries = pgTable(
     kindIdx: index("time_entries_kind_idx").on(table.kind),
     taskIdx: index("time_entries_task_idx").on(table.taskId),
     projectIdx: index("time_entries_project_idx").on(table.projectId),
+    opportunityIdx: index("time_entries_opportunity_idx").on(table.opportunityId),
   }),
 );
 

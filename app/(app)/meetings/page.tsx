@@ -12,10 +12,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { meetings } from "@/db/schema/meetings";
 import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
+import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
 import { type SQL, and, asc, desc, ilike, sql } from "drizzle-orm";
 import { Mic, Plus } from "lucide-react";
 import Link from "next/link";
@@ -49,6 +51,8 @@ const FILTER_DEFS = [
 
 const SORT_FIELDS = ["title", "occurredAt", "status", "pending"] as const;
 
+const PERSISTED_KEYS = ["q", "f", "sort"] as const;
+
 function orderByFor(sort: SortState): SQL[] {
   if (!sort) return [desc(meetings.occurredAt), desc(meetings.createdAt)];
   const dir = sort.dir === "asc" ? asc : desc;
@@ -77,6 +81,12 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function MeetingsPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
+  await applyViewPrefRedirect({
+    pageKey: "meetings",
+    pathname: "/meetings",
+    searchParams: params,
+    relevantKeys: PERSISTED_KEYS,
+  });
   const query = typeof params.q === "string" ? params.q.trim() : "";
   const sortRaw = typeof params.sort === "string" ? params.sort : undefined;
   const sortState = parseSort(sortRaw, SORT_FIELDS);
@@ -134,6 +144,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
         filterDefs={FILTER_DEFS}
         activeFilters={filters.map((f) => ({ key: f.key, op: f.op, value: f.value }))}
       />
+      <PersistViewParams pageKey="meetings" relevantKeys={PERSISTED_KEYS} />
 
       <form className="max-w-sm">
         <Input name="q" defaultValue={query} placeholder="Rechercher par titre…" className="h-9" />
@@ -144,19 +155,34 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
       </form>
 
       {rows.length === 0 ? (
-        <EmptyState
-          icon={Mic}
-          title="Pas encore de meeting."
-          description="Colle ou téléverse un transcript pour démarrer."
-          action={
-            <Button asChild size="sm">
-              <Link href="/meetings/nouveau">
-                <Plus className="size-4" />
-                Importer un transcript
-              </Link>
-            </Button>
-          }
-        />
+        (() => {
+          const hasFilter = Boolean(query) || filters.length > 0;
+          return (
+            <EmptyState
+              icon={Mic}
+              title={hasFilter ? "Aucun meeting trouvé." : "Pas encore de meeting."}
+              description={
+                hasFilter
+                  ? "Réinitialise les filtres ou ajuste la recherche."
+                  : "Colle ou téléverse un transcript pour démarrer."
+              }
+              action={
+                hasFilter ? (
+                  <Link href="/meetings" className="text-muted-foreground text-sm hover:underline">
+                    Réinitialiser les filtres
+                  </Link>
+                ) : (
+                  <Button asChild size="sm">
+                    <Link href="/meetings/nouveau">
+                      <Plus className="size-4" />
+                      Importer un transcript
+                    </Link>
+                  </Button>
+                )
+              }
+            />
+          );
+        })()
       ) : (
         <div className="rounded-lg border bg-card">
           <Table>

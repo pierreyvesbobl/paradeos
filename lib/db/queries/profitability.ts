@@ -1,3 +1,4 @@
+import { opportunities } from "@/db/schema/opportunities";
 import { projects } from "@/db/schema/projects";
 import { timeEntries } from "@/db/schema/time-entries";
 import { users } from "@/db/schema/users";
@@ -9,7 +10,7 @@ import {
   computeRevenue,
 } from "@/lib/profitability-math";
 import type { ProjectBillingType } from "@/lib/schemas/projects";
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 
 /**
  * Pour une time entry réalisée, le coût est `(durée minutes / 60) × user.cost_rate_hourly`.
@@ -80,6 +81,18 @@ export async function getProjectProfitability(projectId: string): Promise<Profit
     };
   }
 
+  // Inclut le temps avant-vente : opportunités déjà converties en ce projet.
+  const linkedOppRows = await conn
+    .select({ id: opportunities.id })
+    .from(opportunities)
+    .where(eq(opportunities.projectId, projectId));
+  const linkedOppIds = linkedOppRows.map((r) => r.id);
+
+  const projectFilter = eq(timeEntries.projectId, projectId);
+  const presaleFilter =
+    linkedOppIds.length > 0 ? inArray(timeEntries.opportunityId, linkedOppIds) : undefined;
+  const filter = presaleFilter ? or(projectFilter, presaleFilter) : projectFilter;
+
   const [agg] = await conn
     .select({
       actualMinutes: sumActualMinutes,
@@ -87,7 +100,7 @@ export async function getProjectProfitability(projectId: string): Promise<Profit
     })
     .from(timeEntries)
     .innerJoin(users, eq(timeEntries.userId, users.id))
-    .where(eq(timeEntries.projectId, projectId));
+    .where(filter);
 
   const billingType = project.billingType;
   const budgetAmount = Number(project.budgetAmount ?? 0);

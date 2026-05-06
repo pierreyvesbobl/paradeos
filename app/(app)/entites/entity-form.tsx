@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createEntity, updateEntity } from "@/lib/actions/entities";
+import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import { type EntityKind, entityKindEnum, entityKindLabels } from "@/lib/schemas/entities";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -80,6 +82,7 @@ export function EntityForm({ mode, defaultValues }: Props) {
 
       if (!result.ok) {
         if (result.fieldErrors) setErrors(result.fieldErrors);
+        scrollToFirstError(result.fieldErrors);
         toast.error(result.message);
         return;
       }
@@ -91,9 +94,11 @@ export function EntityForm({ mode, defaultValues }: Props) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-8">
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Identité</h2>
+    <form onSubmit={onSubmit} className="space-y-10">
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Identité
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="name">Nom *</Label>
@@ -104,7 +109,7 @@ export function EntityForm({ mode, defaultValues }: Props) {
               onChange={(e) => setName(e.target.value)}
               disabled={pending}
             />
-            {errors.name ? <p className="text-destructive text-xs">{errors.name[0]}</p> : null}
+            <FieldError messages={errors.name} />
           </div>
 
           <div className="space-y-2">
@@ -133,15 +138,15 @@ export function EntityForm({ mode, defaultValues }: Props) {
               placeholder="https://…"
               disabled={pending}
             />
-            {errors.website ? (
-              <p className="text-destructive text-xs">{errors.website[0]}</p>
-            ) : null}
+            <FieldError messages={errors.website} />
           </div>
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Identifiants légaux</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Identifiants légaux
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="siren">SIREN</Label>
@@ -152,7 +157,7 @@ export function EntityForm({ mode, defaultValues }: Props) {
               placeholder="9 chiffres"
               disabled={pending}
             />
-            {errors.siren ? <p className="text-destructive text-xs">{errors.siren[0]}</p> : null}
+            <FieldError messages={errors.siren} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="vatNumber">N° TVA intracommunautaire</Label>
@@ -167,8 +172,10 @@ export function EntityForm({ mode, defaultValues }: Props) {
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Adresse</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Adresse
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="street">Rue</Label>
@@ -210,8 +217,10 @@ export function EntityForm({ mode, defaultValues }: Props) {
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Notes</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Notes
+        </h2>
         <Textarea
           rows={5}
           value={notes}
@@ -220,7 +229,7 @@ export function EntityForm({ mode, defaultValues }: Props) {
         />
       </section>
 
-      <div className="flex items-center justify-end gap-2">
+      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/90 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <Button type="button" variant="ghost" onClick={() => router.back()} disabled={pending}>
           Annuler
         </Button>

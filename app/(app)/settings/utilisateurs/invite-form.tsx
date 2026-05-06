@@ -1,8 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   Select,
   SelectContent,
@@ -11,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { inviteUser } from "@/lib/actions/users";
+import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import { type UserRoleValue, userRoleEnum, userRoleLabels } from "@/lib/schemas/users";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -37,6 +40,7 @@ export function InviteForm() {
       });
       if (!res.ok) {
         if (res.fieldErrors) setErrors(res.fieldErrors);
+        scrollToFirstError(res.fieldErrors);
         toast.error(res.message);
         return;
       }
@@ -71,7 +75,7 @@ export function InviteForm() {
             disabled={pending}
             placeholder="prenom.nom@parade-os.com"
           />
-          {errors.email ? <p className="text-destructive text-xs">{errors.email[0]}</p> : null}
+          <FieldError messages={errors.email} />
         </div>
 
         <div className="space-y-2">
@@ -86,9 +90,7 @@ export function InviteForm() {
             disabled={pending}
             placeholder="Bénilde Dupont"
           />
-          {errors.fullName ? (
-            <p className="text-destructive text-xs">{errors.fullName[0]}</p>
-          ) : null}
+          <FieldError messages={errors.fullName} />
         </div>
 
         <div className="space-y-2">
@@ -112,18 +114,15 @@ export function InviteForm() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="invite-cost">Taux horaire (€HT/h)</Label>
-          <Input
+          <Label htmlFor="invite-cost">Taux horaire (HT/h)</Label>
+          <MoneyInput
             id="invite-cost"
-            inputMode="decimal"
             value={costRateHourly}
-            onChange={(e) => setCostRateHourly(e.target.value)}
+            onValueChange={setCostRateHourly}
             disabled={pending}
             placeholder="80"
           />
-          {errors.costRateHourly ? (
-            <p className="text-destructive text-xs">{errors.costRateHourly[0]}</p>
-          ) : null}
+          <FieldError messages={errors.costRateHourly} />
         </div>
       </div>
 

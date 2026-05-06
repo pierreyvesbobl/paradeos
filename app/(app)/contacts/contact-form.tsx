@@ -1,17 +1,13 @@
 "use client";
 
+import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createContact, updateContact } from "@/lib/actions/contacts";
+import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -34,8 +30,6 @@ type Props = {
   };
 };
 
-const NONE_VALUE = "__none__";
-
 export function ContactForm({ mode, entities, defaultValues }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -47,7 +41,7 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
   const [phone, setPhone] = useState(defaultValues.phone);
   const [jobTitle, setJobTitle] = useState(defaultValues.jobTitle);
   const [linkedinUrl, setLinkedinUrl] = useState(defaultValues.linkedinUrl);
-  const [entityId, setEntityId] = useState(defaultValues.entityId || NONE_VALUE);
+  const [entityId, setEntityId] = useState<string | null>(defaultValues.entityId || null);
   const [notes, setNotes] = useState(defaultValues.notes);
 
   function buildPayload() {
@@ -58,7 +52,7 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
       phone: phone || undefined,
       jobTitle: jobTitle || undefined,
       linkedinUrl: linkedinUrl || undefined,
-      entityId: entityId === NONE_VALUE ? undefined : entityId,
+      entityId: entityId ?? undefined,
       notes: notes || undefined,
     };
   }
@@ -75,6 +69,7 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
 
       if (!result.ok) {
         if (result.fieldErrors) setErrors(result.fieldErrors);
+        scrollToFirstError(result.fieldErrors);
         toast.error(result.message);
         return;
       }
@@ -86,9 +81,11 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-8">
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Identité</h2>
+    <form onSubmit={onSubmit} className="space-y-10">
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Identité
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="firstName">Prénom *</Label>
@@ -99,9 +96,7 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
               onChange={(e) => setFirstName(e.target.value)}
               disabled={pending}
             />
-            {errors.firstName ? (
-              <p className="text-destructive text-xs">{errors.firstName[0]}</p>
-            ) : null}
+            <FieldError messages={errors.firstName} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="lastName">Nom *</Label>
@@ -112,9 +107,7 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
               onChange={(e) => setLastName(e.target.value)}
               disabled={pending}
             />
-            {errors.lastName ? (
-              <p className="text-destructive text-xs">{errors.lastName[0]}</p>
-            ) : null}
+            <FieldError messages={errors.lastName} />
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="jobTitle">Fonction</Label>
@@ -128,25 +121,22 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="entityId">Entité</Label>
-            <Select value={entityId} onValueChange={setEntityId} disabled={pending}>
-              <SelectTrigger id="entityId">
-                <SelectValue placeholder="—" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE_VALUE}>—</SelectItem>
-                {entities.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <FkCombobox
+              id="entityId"
+              value={entityId}
+              onValueChange={setEntityId}
+              options={entities.map((e) => ({ id: e.id, label: e.name }))}
+              searchPlaceholder="Rechercher une entité…"
+              disabled={pending}
+            />
           </div>
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Contact</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Contact
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="email">E-mail</Label>
@@ -157,7 +147,7 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
               onChange={(e) => setEmail(e.target.value)}
               disabled={pending}
             />
-            {errors.email ? <p className="text-destructive text-xs">{errors.email[0]}</p> : null}
+            <FieldError messages={errors.email} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="phone">Téléphone</Label>
@@ -179,15 +169,15 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
               placeholder="https://www.linkedin.com/in/…"
               disabled={pending}
             />
-            {errors.linkedinUrl ? (
-              <p className="text-destructive text-xs">{errors.linkedinUrl[0]}</p>
-            ) : null}
+            <FieldError messages={errors.linkedinUrl} />
           </div>
         </div>
       </section>
 
-      <section className="space-y-4 rounded-lg border bg-card p-6">
-        <h2 className="font-medium text-sm">Notes</h2>
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Notes
+        </h2>
         <Textarea
           rows={5}
           value={notes}
@@ -196,7 +186,7 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
         />
       </section>
 
-      <div className="flex items-center justify-end gap-2">
+      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/90 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <Button type="button" variant="ghost" onClick={() => router.back()} disabled={pending}>
           Annuler
         </Button>

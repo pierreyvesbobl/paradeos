@@ -1,7 +1,22 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { UserAvatar } from "@/components/user/user-avatar";
-import { createOpportunity, moveOpportunityStatus } from "@/lib/actions/opportunities";
+import {
+  convertOpportunityToProject,
+  createOpportunity,
+  moveOpportunityStatus,
+} from "@/lib/actions/opportunities";
 import { formatDate, formatEuro } from "@/lib/format";
 import {
   type OpportunityStatus,
@@ -32,6 +47,7 @@ export type KanbanItem = {
   followUpDate: string | null;
   entityId: string | null;
   entityName: string | null;
+  projectId: string | null;
   ownerId: string | null;
   ownerName: string | null;
   ownerAvatarUrl: string | null;
@@ -78,6 +94,8 @@ export function KanbanBoard({ items }: { items: KanbanItem[] }) {
     state.map((it) => (it.id === payload.id ? { ...it, status: payload.status } : it)),
   );
   const [, startTransition] = useTransition();
+  // Stocke l'opp à convertir après un drop sur "Signée".
+  const [convertCandidate, setConvertCandidate] = useState<KanbanItem | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -97,24 +115,119 @@ export function KanbanBoard({ items }: { items: KanbanItem[] }) {
       if (!result.ok) {
         toast.error(result.message);
         applyMove({ id, status: current.status });
+        return;
+      }
+      // Si l'opp passe en "Signée" et n'a pas encore de projet lié,
+      // on propose la conversion immédiate.
+      if (nextStatus === "won" && current.status !== "won" && !current.projectId) {
+        if (!current.entityId) {
+          toast.message("Opportunité signée — lie une entité pour créer le projet.");
+        } else {
+          // Defer hors du transition pour que l'ouverture du dialog
+          // ne soit pas marquée comme transition (sinon React peut différer
+          // l'affichage le temps que la revalidation se termine).
+          queueMicrotask(() => setConvertCandidate({ ...current, status: "won" }));
+        }
       }
     });
   }
 
   return (
-    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <div className="-mx-6 overflow-x-auto px-6 pb-2">
-        <div className="flex items-start gap-3">
-          {columns.map((status) => (
-            <Column
-              key={status}
-              status={status}
-              items={optimisticItems.filter((it) => it.status === status)}
-            />
-          ))}
+    <>
+      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+        <div className="-mx-6 overflow-x-auto px-6 pb-2">
+          <div className="flex items-start gap-3">
+            {columns.map((status) => (
+              <Column
+                key={status}
+                status={status}
+                items={optimisticItems.filter((it) => it.status === status)}
+              />
+            ))}
+          </div>
         </div>
-      </div>
-    </DndContext>
+      </DndContext>
+      {convertCandidate ? (
+        <ConvertDialog opportunity={convertCandidate} onClose={() => setConvertCandidate(null)} />
+      ) : null}
+    </>
+  );
+}
+
+function ConvertDialog({
+  opportunity,
+  onClose,
+}: {
+  opportunity: KanbanItem;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const suggested = `${opportunity.entityName ?? "Projet"} — ${opportunity.title}`;
+  const [name, setName] = useState(suggested);
+
+  function submit() {
+    startTransition(async () => {
+      const res = await convertOpportunityToProject({
+        id: opportunity.id,
+        projectName: name.trim() || undefined,
+      });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Projet créé.");
+      onClose();
+      if (res.data.projectId) {
+        router.push(`/projets/${res.data.projectId}`);
+      } else {
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Créer le projet associé ?</DialogTitle>
+          <DialogDescription>
+            L'opportunité « {opportunity.title} » est passée en Signée. On crée le projet client
+            (rattaché à {opportunity.entityName ?? "l'entité"}) ? Le temps avant-vente déjà tracké
+            restera lié et remontera dans les stats du projet.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="proj-name">Nom du projet</Label>
+          <Input
+            id="proj-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={pending}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submit();
+              }
+            }}
+          />
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>
+            Plus tard
+          </Button>
+          <Button type="button" onClick={submit} disabled={pending || name.trim().length === 0}>
+            {pending ? "Création…" : "Créer le projet"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -289,13 +402,49 @@ function Card({ item }: { item: KanbanItem }) {
               {formatEuro(Number(item.valueAmount))}
             </span>
           ) : null}
-          {item.probability != null ? <span>{item.probability}%</span> : null}
-          {item.followUpDate ? (
-            <span className="inline-flex items-center gap-0.5">
-              <Clock className="size-3" />
-              {formatDate(item.followUpDate)}
+          {item.probability != null ? (
+            <span
+              className="inline-flex items-center gap-1"
+              title={`Probabilité ${item.probability}%`}
+            >
+              <span className="relative inline-block h-1 w-6 overflow-hidden rounded-full bg-muted">
+                <span
+                  className="absolute inset-y-0 left-0 bg-foreground/70"
+                  style={{ width: `${Math.max(0, Math.min(100, item.probability))}%` }}
+                />
+              </span>
+              <span className="tabular-nums">{item.probability}%</span>
             </span>
           ) : null}
+          {item.followUpDate
+            ? (() => {
+                const followUp = new Date(item.followUpDate);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const followUpDay = new Date(
+                  followUp.getFullYear(),
+                  followUp.getMonth(),
+                  followUp.getDate(),
+                );
+                const overdueDays = Math.floor(
+                  (today.getTime() - followUpDay.getTime()) / 86400000,
+                );
+                if (overdueDays > 0) {
+                  return (
+                    <span className="inline-flex items-center gap-0.5 font-medium text-destructive">
+                      <Clock className="size-3" />
+                      En retard de {overdueDays}j
+                    </span>
+                  );
+                }
+                return (
+                  <span className="inline-flex items-center gap-0.5">
+                    <Clock className="size-3" />
+                    {formatDate(item.followUpDate)}
+                  </span>
+                );
+              })()
+            : null}
           {item.ownerId ? (
             <span className="ml-auto">
               <UserAvatar size="xs" name={item.ownerName} avatarUrl={item.ownerAvatarUrl} />

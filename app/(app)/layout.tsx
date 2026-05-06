@@ -1,3 +1,4 @@
+import { CommandPalette } from "@/components/command-palette";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { requireUser } from "@/lib/auth/server";
@@ -11,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Topbar user={user} />
         <main className="flex-1 overflow-x-auto p-6">{children}</main>
       </div>
+      <CommandPalette />
     </div>
   );
 }

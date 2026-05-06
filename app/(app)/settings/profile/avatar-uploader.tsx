@@ -2,6 +2,7 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { removeAvatar, uploadAvatar } from "@/lib/actions/avatar";
 import { Camera, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -19,6 +20,7 @@ export function AvatarUploader({ avatarUrl, initials }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [previewUrl, setPreviewUrl] = useState<string | null>(avatarUrl);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   function onFile(file: File | null) {
     if (!file) return;
@@ -44,14 +46,14 @@ export function AvatarUploader({ avatarUrl, initials }: Props) {
     });
   }
 
-  function onRemove() {
-    if (!confirm("Retirer ta photo de profil ?")) return;
+  function confirmRemove() {
     startTransition(async () => {
       const result = await removeAvatar();
       if (!result.ok) {
         toast.error(result.message);
         return;
       }
+      setConfirmOpen(false);
       setPreviewUrl(null);
       toast.success("Photo retirée.");
       router.refresh();
@@ -85,7 +87,7 @@ export function AvatarUploader({ avatarUrl, initials }: Props) {
               type="button"
               variant="ghost"
               size="sm"
-              onClick={onRemove}
+              onClick={() => setConfirmOpen(true)}
               disabled={pending}
               className="text-destructive hover:text-destructive"
             >
@@ -96,6 +98,15 @@ export function AvatarUploader({ avatarUrl, initials }: Props) {
         </div>
         <p className="text-muted-foreground text-xs">PNG, JPEG, WebP ou GIF · max 5 MB.</p>
       </div>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Retirer ta photo de profil ?"
+        confirmLabel="Retirer"
+        variant="destructive"
+        onConfirm={confirmRemove}
+        pending={pending}
+      />
     </div>
   );
 }

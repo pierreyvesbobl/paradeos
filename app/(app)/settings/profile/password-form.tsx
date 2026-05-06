@@ -1,9 +1,11 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setPassword } from "@/lib/actions/auth";
+import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -24,6 +26,7 @@ export function PasswordForm() {
       const result = await setPassword({ password });
       if (!result.ok) {
         if (result.fieldErrors) setErrors(result.fieldErrors);
+        scrollToFirstError(result.fieldErrors);
         toast.error(result.message);
         return;
       }
@@ -55,7 +58,7 @@ export function PasswordForm() {
           onChange={(e) => setPasswordValue(e.target.value)}
           disabled={pending}
         />
-        {errors.password ? <p className="text-destructive text-xs">{errors.password[0]}</p> : null}
+        <FieldError messages={errors.password} />
       </div>
 
       <div className="space-y-2">

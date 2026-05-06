@@ -77,3 +77,25 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+/* react-day-picker — theming aligné sur la palette shadcn */
+.rdp-paradeos {
+  --rdp-accent-color: hsl(var(--primary));
+  --rdp-accent-background-color: hsl(var(--primary) / 0.12);
+  --rdp-today-color: hsl(var(--primary));
+  --rdp-day-height: 32px;
+  --rdp-day-width: 32px;
+  --rdp-day_button-height: 28px;
+  --rdp-day_button-width: 28px;
+  --rdp-day_button-border-radius: 6px;
+  --rdp-nav_button-height: 1.75rem;
+  --rdp-nav_button-width: 1.75rem;
+  --rdp-nav-height: 2rem;
+  --rdp-months-gap: 1rem;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+.rdp-paradeos .rdp-day_button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}

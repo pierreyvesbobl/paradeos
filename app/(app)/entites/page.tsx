@@ -12,11 +12,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
 import { entityKindEnum, entityKindLabels } from "@/lib/schemas/entities";
+import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
 import { type SQL, and, asc, desc, ilike, or } from "drizzle-orm";
 import { ArrowRight, Building2, Plus } from "lucide-react";
 import Link from "next/link";
@@ -37,6 +39,8 @@ const FILTER_DEFS = [
 
 const SORT_FIELDS = ["name", "kind", "website", "created"] as const;
 
+const PERSISTED_KEYS = ["q", "f", "sort"] as const;
+
 function orderByFor(sort: SortState): SQL[] {
   if (!sort) return [asc(entities.name)];
   const dir = sort.dir === "asc" ? asc : desc;
@@ -56,6 +60,12 @@ function orderByFor(sort: SortState): SQL[] {
 
 export default async function EntitiesPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
+  await applyViewPrefRedirect({
+    pageKey: "entites",
+    pathname: "/entites",
+    searchParams: params,
+    relevantKeys: PERSISTED_KEYS,
+  });
   const query = typeof params.q === "string" ? params.q.trim() : "";
   const sortRaw = typeof params.sort === "string" ? params.sort : undefined;
   const sortState = parseSort(sortRaw, SORT_FIELDS);
@@ -111,6 +121,7 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Sea
         filterDefs={FILTER_DEFS}
         activeFilters={filters.map((f) => ({ key: f.key, op: f.op, value: f.value }))}
       />
+      <PersistViewParams pageKey="entites" relevantKeys={PERSISTED_KEYS} />
 
       <form className="max-w-sm">
         <Input

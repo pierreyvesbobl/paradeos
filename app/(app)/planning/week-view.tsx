@@ -24,6 +24,7 @@ type EntrySerialized = {
   description: string | null;
   taskId: string | null;
   projectId: string | null;
+  opportunityId: string | null;
   contactId: string | null;
   color: string | null;
 };
@@ -33,6 +34,7 @@ type Props = {
   entries: EntrySerialized[];
   tasks: { id: string; title: string }[];
   projects: { id: string; name: string }[];
+  opportunities: { id: string; title: string }[];
   contacts: { id: string; label: string }[];
 };
 
@@ -56,7 +58,14 @@ type CreateDrag = {
   currentMinutes: number;
 };
 
-export function WeekView({ weekStartIso, entries, tasks, projects, contacts }: Props) {
+export function WeekView({
+  weekStartIso,
+  entries,
+  tasks,
+  projects,
+  opportunities,
+  contacts,
+}: Props) {
   const weekStart = startOfIsoWeek(new Date(`${weekStartIso}T00:00:00`));
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -324,6 +333,7 @@ export function WeekView({ weekStartIso, entries, tasks, projects, contacts }: P
           mode={dialogState.mode}
           tasks={tasks}
           projects={projects}
+          opportunities={opportunities}
           contacts={contacts}
           defaults={
             dialogState.mode === "create"
@@ -335,6 +345,7 @@ export function WeekView({ weekStartIso, entries, tasks, projects, contacts }: P
                   description: "",
                   taskId: "",
                   projectId: "",
+                  opportunityId: "",
                   contactId: "",
                 }
               : {
@@ -346,6 +357,7 @@ export function WeekView({ weekStartIso, entries, tasks, projects, contacts }: P
                   description: dialogState.entry.description ?? "",
                   taskId: dialogState.entry.taskId ?? "",
                   projectId: dialogState.entry.projectId ?? "",
+                  opportunityId: dialogState.entry.opportunityId ?? "",
                   contactId: dialogState.entry.contactId ?? "",
                 }
           }

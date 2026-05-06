@@ -1,9 +1,11 @@
 import { EmptyState } from "@/components/empty-state";
+import { DeleteNoteButton } from "@/components/notes/delete-note-button";
 import { InlineNoteEditor } from "@/components/notes/inline-note-editor";
 import { PageHeader } from "@/components/page-header";
 import { FilterRow } from "@/components/table/filter-row";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { users as usersTable } from "@/db/schema/users";
 import { buildMarkdownResolver } from "@/lib/db/queries/mention-resolver";
 import { type NotesFilter, getRecentNotes } from "@/lib/db/queries/notes";
@@ -17,6 +19,7 @@ import {
   noteSubjectTypeEnum,
   noteSubjectTypeLabels,
 } from "@/lib/schemas/notes";
+import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
 import { asc } from "drizzle-orm";
 import { ArrowDown, ArrowUp, MessageCircle, Phone, StickyNote, Users } from "lucide-react";
 import Link from "next/link";
@@ -30,6 +33,8 @@ type SearchParams = Promise<{
   end?: string;
   sort?: "asc" | "desc";
 }>;
+
+const PERSISTED_KEYS = ["q", "kind", "subject", "author", "start", "end", "sort"] as const;
 
 function buildHref(params: {
   q?: string;
@@ -83,6 +88,12 @@ function parseDate(raw: string | undefined): Date | undefined {
 
 export default async function NotesPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
+  await applyViewPrefRedirect({
+    pageKey: "notes",
+    pathname: "/notes",
+    searchParams: params,
+    relevantKeys: PERSISTED_KEYS,
+  });
   const conn = await db();
 
   const sortDir: "asc" | "desc" = params.sort === "asc" ? "asc" : "desc";
@@ -120,6 +131,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
         title="Notes"
         description="Compte-rendus, mémos, points de contact — toute l'historique chronologique."
       />
+      <PersistViewParams pageKey="notes" relevantKeys={PERSISTED_KEYS} />
 
       <div className="space-y-3">
         <FilterRow
@@ -252,11 +264,34 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
       </form>
 
       {notes.length === 0 ? (
-        <EmptyState
-          icon={StickyNote}
-          title="Aucune note pour ce filtre."
-          description="Les notes se créent depuis chaque fiche (projet, contact, opportunité, tâche)."
-        />
+        (() => {
+          const hasFilter = Boolean(
+            filter.query ||
+              filter.kind ||
+              filter.subjectType ||
+              filter.authorId ||
+              filter.start ||
+              filter.end,
+          );
+          return (
+            <EmptyState
+              icon={StickyNote}
+              title={hasFilter ? "Aucune note pour ce filtre." : "Pas encore de note."}
+              description={
+                hasFilter
+                  ? "Réinitialise les filtres ou ajuste les dates pour élargir la recherche."
+                  : "Les notes se créent depuis chaque fiche (projet, contact, opportunité, tâche)."
+              }
+              action={
+                hasFilter ? (
+                  <Link href="/notes" className="text-muted-foreground text-sm hover:underline">
+                    Réinitialiser les filtres
+                  </Link>
+                ) : null
+              }
+            />
+          );
+        })()
       ) : (
         <ul className="space-y-3">
           {notes.map((note) => {
@@ -267,7 +302,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
                 ? SUBJECT_PATH[note.subjectType]?.(note.subjectId)
                 : null;
             return (
-              <li key={note.id} className="rounded-lg border bg-card p-4">
+              <li key={note.id} className="group rounded-lg border bg-card p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <Icon className={`size-4 ${colorClass}`} />
                   <span className={`font-medium text-xs uppercase tracking-wide ${colorClass}`}>
@@ -286,6 +321,10 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
                   <span className="ml-auto text-muted-foreground text-xs">
                     {formatDateTime(note.occurredAt)}
                   </span>
+                  <DeleteNoteButton
+                    noteId={note.id}
+                    label={note.title ?? note.content.slice(0, 60)}
+                  />
                 </div>
                 <div className="mt-2">
                   <InlineNoteEditor

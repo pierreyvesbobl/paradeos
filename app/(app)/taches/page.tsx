@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
@@ -25,11 +26,14 @@ import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { collectF } from "@/lib/filters/url-helpers";
 import { type TaskStatus, taskStatusEnum } from "@/lib/schemas/tasks";
+import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
 import { type SQL, and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { CheckSquare, Plus } from "lucide-react";
 import Link from "next/link";
 
 const SORT_FIELDS = ["title", "project", "status", "priority", "assignee", "dueDate"] as const;
+
+const PERSISTED_KEYS = ["q", "f", "sort", "status", "scope"] as const;
 
 function orderByFor(sort: SortState): SQL[] {
   if (!sort) return [asc(tasks.dueDate), asc(tasks.title)];
@@ -82,6 +86,12 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default async function TasksPage({ searchParams }: { searchParams: SearchParams }) {
   const authUser = await requireUser();
   const params = await searchParams;
+  await applyViewPrefRedirect({
+    pageKey: "taches",
+    pathname: "/taches",
+    searchParams: params,
+    relevantKeys: PERSISTED_KEYS,
+  });
   const q = typeof params.q === "string" ? params.q : undefined;
   const status = typeof params.status === "string" ? params.status : undefined;
   const scope = typeof params.scope === "string" ? params.scope : undefined;
@@ -234,6 +244,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
         filterDefs={FILTER_DEFS}
         activeFilters={richFilters.map((f) => ({ key: f.key, op: f.op, value: f.value }))}
       />
+      <PersistViewParams pageKey="taches" relevantKeys={PERSISTED_KEYS} />
 
       <form className="max-w-sm">
         <Input

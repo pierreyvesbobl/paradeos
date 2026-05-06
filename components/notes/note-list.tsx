@@ -6,6 +6,7 @@ import type { NoteKind, NoteSubjectType } from "@/lib/schemas/notes";
 import { noteKindLabels } from "@/lib/schemas/notes";
 import { MessageCircle, Phone, StickyNote, Users } from "lucide-react";
 import { AttachmentUploader } from "./attachment-uploader";
+import { DeleteNoteButton } from "./delete-note-button";
 import { InlineNoteEditor } from "./inline-note-editor";
 import { NoteDialog } from "./note-dialog";
 
@@ -114,6 +115,10 @@ export function NoteList({ subjectType, subjectId, notes, resolver, attachmentsB
                           <span className="text-muted-foreground text-xs">…</span>
                         </Button>
                       }
+                    />
+                    <DeleteNoteButton
+                      noteId={note.id}
+                      label={note.title ?? note.content.slice(0, 60)}
                     />
                   </div>
                 </div>

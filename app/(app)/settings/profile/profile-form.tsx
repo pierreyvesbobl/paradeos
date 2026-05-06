@@ -1,9 +1,12 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import { updateProfile } from "@/lib/actions/profile";
+import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -27,6 +30,7 @@ export function ProfileForm({ defaultValues }: Props) {
       });
       if (!result.ok) {
         if (result.fieldErrors) setErrors(result.fieldErrors);
+        scrollToFirstError(result.fieldErrors);
         toast.error(result.message);
         return;
       }
@@ -47,16 +51,15 @@ export function ProfileForm({ defaultValues }: Props) {
           onChange={(e) => setFullName(e.target.value)}
           disabled={pending}
         />
-        {errors.fullName ? <p className="text-destructive text-xs">{errors.fullName[0]}</p> : null}
+        <FieldError messages={errors.fullName} />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="costRateHourly">Taux de coût horaire (€ HT/h)</Label>
-        <Input
+        <Label htmlFor="costRateHourly">Taux de coût horaire (HT/h)</Label>
+        <MoneyInput
           id="costRateHourly"
-          inputMode="decimal"
           value={costRateHourly}
-          onChange={(e) => setCostRateHourly(e.target.value)}
+          onValueChange={setCostRateHourly}
           placeholder="80"
           disabled={pending}
         />
@@ -64,9 +67,7 @@ export function ProfileForm({ defaultValues }: Props) {
           Utilisé pour calculer le coût interne et la marge des projets. Visible uniquement dans les
           agrégats — pas affiché sur ta fiche publique.
         </p>
-        {errors.costRateHourly ? (
-          <p className="text-destructive text-xs">{errors.costRateHourly[0]}</p>
-        ) : null}
+        <FieldError messages={errors.costRateHourly} />
       </div>
 
       <Button type="submit" disabled={pending}>

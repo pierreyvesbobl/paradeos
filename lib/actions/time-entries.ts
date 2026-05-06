@@ -25,12 +25,15 @@ export const createTimeEntry = action(createTimeEntrySchema, async ({ input, use
       description: input.description ?? null,
       taskId: input.taskId ?? null,
       projectId: input.projectId ?? null,
+      opportunityId: input.opportunityId ?? null,
       contactId: input.contactId ?? null,
       color: input.color ?? null,
     })
     .returning({ id: timeEntries.id });
 
   revalidatePath("/planning");
+  if (input.opportunityId) revalidatePath(`/opportunites/${input.opportunityId}`);
+  if (input.projectId) revalidatePath(`/projets/${input.projectId}`);
   return { id: row?.id };
 });
 
@@ -46,12 +49,15 @@ export const updateTimeEntry = action(updateTimeEntrySchema, async ({ input, use
       description: input.description ?? null,
       taskId: input.taskId ?? null,
       projectId: input.projectId ?? null,
+      opportunityId: input.opportunityId ?? null,
       contactId: input.contactId ?? null,
       color: input.color ?? null,
     })
     .where(and(eq(timeEntries.id, input.id), eq(timeEntries.userId, user.id)));
 
   revalidatePath("/planning");
+  if (input.opportunityId) revalidatePath(`/opportunites/${input.opportunityId}`);
+  if (input.projectId) revalidatePath(`/projets/${input.projectId}`);
   return { id: input.id };
 });
 

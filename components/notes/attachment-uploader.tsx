@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   attachToNote,
   deleteAttachment,
@@ -38,6 +39,11 @@ export function AttachmentUploader({ noteId, attachments }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  const pendingDeleteAttachment = pendingDeleteId
+    ? attachments.find((a) => a.id === pendingDeleteId)
+    : null;
 
   async function onUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -84,14 +90,16 @@ export function AttachmentUploader({ noteId, attachments }: Props) {
     }
   }
 
-  function onDelete(id: string) {
-    if (!confirm("Supprimer cette pièce jointe ?")) return;
+  function confirmDelete() {
+    const id = pendingDeleteId;
+    if (!id) return;
     startTransition(async () => {
       const result = await deleteAttachment({ id });
       if (!result.ok) {
         toast.error(result.message);
         return;
       }
+      setPendingDeleteId(null);
       toast.success("Pièce jointe supprimée.");
       router.refresh();
     });
@@ -129,7 +137,7 @@ export function AttachmentUploader({ noteId, attachments }: Props) {
                 variant="ghost"
                 size="icon"
                 className="size-6 shrink-0"
-                onClick={() => onDelete(a.id)}
+                onClick={() => setPendingDeleteId(a.id)}
                 disabled={pending}
                 aria-label="Supprimer"
               >
@@ -152,6 +160,20 @@ export function AttachmentUploader({ noteId, attachments }: Props) {
           {uploading ? "Upload…" : "+ Ajouter une pièce jointe"}
         </span>
       </label>
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(o) => {
+          if (!o) setPendingDeleteId(null);
+        }}
+        title="Supprimer cette pièce jointe ?"
+        description={
+          pendingDeleteAttachment ? `« ${pendingDeleteAttachment.fileName} »` : undefined
+        }
+        confirmLabel="Supprimer"
+        variant="destructive"
+        onConfirm={confirmDelete}
+        pending={pending}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { entities } from "@/db/schema/entities";
 import { opportunities } from "@/db/schema/opportunities";
 import { db } from "@/lib/db/server";
@@ -23,6 +24,7 @@ import {
   opportunityStatusEnum,
   opportunityStatusLabels,
 } from "@/lib/schemas/opportunities";
+import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
 import { type SQL, and, asc, desc, ilike, or, sql } from "drizzle-orm";
 import { LayoutGrid, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
@@ -65,6 +67,8 @@ const SORT_FIELDS = [
   "followUpDate",
 ] as const;
 
+const PERSISTED_KEYS = ["q", "f", "sort"] as const;
+
 function orderByFor(sort: SortState): SQL[] {
   if (!sort) return [desc(opportunities.updatedAt), asc(opportunities.title)];
   const dir = sort.dir === "asc" ? asc : desc;
@@ -92,6 +96,12 @@ export default async function OpportunitiesListPage({
   searchParams: SearchParams;
 }) {
   const params = await searchParams;
+  await applyViewPrefRedirect({
+    pageKey: "opportunites/liste",
+    pathname: "/opportunites/liste",
+    searchParams: params,
+    relevantKeys: PERSISTED_KEYS,
+  });
   const query = typeof params.q === "string" ? params.q.trim() : "";
   const sortRaw = typeof params.sort === "string" ? params.sort : undefined;
   const sortState = parseSort(sortRaw, SORT_FIELDS);
@@ -161,6 +171,7 @@ export default async function OpportunitiesListPage({
         filterDefs={FILTER_DEFS}
         activeFilters={filters.map((f) => ({ key: f.key, op: f.op, value: f.value }))}
       />
+      <PersistViewParams pageKey="opportunites/liste" relevantKeys={PERSISTED_KEYS} />
 
       <form className="max-w-sm">
         <Input

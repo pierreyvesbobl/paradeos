@@ -6,6 +6,7 @@ import { TaskStatusEditor } from "@/app/(app)/taches/inline-editors/status-edito
 import { QuickAddTask } from "@/app/(app)/taches/quick-add-task";
 import { TaskToggle } from "@/app/(app)/taches/task-toggle";
 import { DeleteButton } from "@/components/delete-button";
+import { EmptyState } from "@/components/empty-state";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +22,7 @@ import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/not
 import { getProjectProfitability } from "@/lib/db/queries/profitability";
 import { getProjectTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
-import { formatDuration, formatEuro } from "@/lib/format";
+import { formatDate, formatDuration, formatEuro } from "@/lib/format";
 import { opportunityStatusLabels } from "@/lib/schemas/opportunities";
 import { projectBillingTypeLabels } from "@/lib/schemas/projects";
 import { asc, desc, eq } from "drizzle-orm";
@@ -87,6 +88,10 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         title: opportunities.title,
         status: opportunities.status,
         valueAmount: opportunities.valueAmount,
+        probability: opportunities.probability,
+        source: opportunities.source,
+        firstContactDate: opportunities.firstContactDate,
+        expectedCloseDate: opportunities.expectedCloseDate,
       })
       .from(opportunities)
       .where(eq(opportunities.projectId, id))
@@ -210,9 +215,16 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
           </div>
 
           <div>
-            <h2 className="font-medium text-sm">Opportunités ({linkedOpportunities.length})</h2>
+            <h2 className="font-medium text-sm">
+              Origine commerciale{" "}
+              <span className="text-muted-foreground text-xs">({linkedOpportunities.length})</span>
+            </h2>
             {linkedOpportunities.length === 0 ? (
-              <p className="mt-2 text-muted-foreground text-sm">Aucune opportunité liée.</p>
+              <EmptyState
+                compact
+                title="Aucune opportunité liée."
+                description="Quand une opportunité est convertie en projet, elle apparaît ici avec son contexte commercial (montant proposé, source, dates)."
+              />
             ) : (
               <ul className="mt-2 space-y-2">
                 {linkedOpportunities.map((o) => (
@@ -222,10 +234,22 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
                       className="block rounded-md border bg-background px-3 py-2 hover:bg-muted"
                     >
                       <p className="font-medium text-sm">{o.title}</p>
-                      <p className="text-muted-foreground text-xs">
+                      <p className="mt-0.5 text-muted-foreground text-xs">
                         {opportunityStatusLabels[o.status]}
                         {o.valueAmount ? ` · ${formatEuro(Number(o.valueAmount))}` : ""}
+                        {o.probability != null ? ` · ${o.probability}%` : ""}
                       </p>
+                      {o.source || o.firstContactDate || o.expectedCloseDate ? (
+                        <p className="mt-1 text-muted-foreground text-[11px]">
+                          {o.source ? `via ${o.source}` : null}
+                          {o.firstContactDate
+                            ? ` · 1er contact ${formatDate(o.firstContactDate)}`
+                            : null}
+                          {o.expectedCloseDate
+                            ? ` · closing prévu ${formatDate(o.expectedCloseDate)}`
+                            : null}
+                        </p>
+                      ) : null}
                     </Link>
                   </li>
                 ))}
@@ -259,6 +283,13 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
             tone="muted"
           />
         </div>
+        {timeStats.presale.actualMinutes > 0 || timeStats.presale.plannedMinutes > 0 ? (
+          <p className="text-muted-foreground text-xs">
+            Dont avant-vente : {formatDuration(timeStats.presale.actualMinutes)} réalisé ·{" "}
+            {formatDuration(timeStats.presale.plannedMinutes)} planifié (depuis les opportunités
+            converties).
+          </p>
+        ) : null}
 
         {timeStats.byUser.length > 0 ? (
           <div>
@@ -305,13 +336,19 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         ) : null}
 
         {timeStats.totals.actualMinutes === 0 && timeStats.totals.plannedMinutes === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            Aucun créneau enregistré sur ce projet. Crée-en depuis le{" "}
-            <Link href="/planning" className="underline">
-              calendrier
-            </Link>
-            .
-          </p>
+          <EmptyState
+            compact
+            title="Aucun créneau enregistré sur ce projet."
+            description={
+              <>
+                Crée-en depuis le{" "}
+                <Link href="/planning" className="underline">
+                  calendrier
+                </Link>
+                .
+              </>
+            }
+          />
         ) : null}
       </section>
 
@@ -366,9 +403,11 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
             ) : null}
 
             {profitability.actualMinutes === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Aucun temps réalisé pour l'instant — la marge est égale au revenu prévu.
-              </p>
+              <EmptyState
+                compact
+                title="Aucun temps réalisé pour l'instant."
+                description="La marge est égale au revenu prévu."
+              />
             ) : null}
           </>
         )}

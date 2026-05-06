@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
@@ -28,6 +29,7 @@ import {
   projectStatusEnum,
   projectStatusLabels,
 } from "@/lib/schemas/projects";
+import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
 import { type SQL, and, asc, desc, ilike, or, sql } from "drizzle-orm";
 import { ArrowRight, Briefcase, Plus } from "lucide-react";
 import Link from "next/link";
@@ -68,6 +70,8 @@ const FILTER_DEFS = [
 
 const SORT_FIELDS = ["name", "kind", "status", "entity", "startDate"] as const;
 
+const PERSISTED_KEYS = ["q", "f", "sort"] as const;
+
 function orderByFor(sort: SortState): SQL[] {
   if (!sort) return [desc(projects.updatedAt), asc(projects.name)];
   const dir = sort.dir === "asc" ? asc : desc;
@@ -89,6 +93,12 @@ function orderByFor(sort: SortState): SQL[] {
 
 export default async function ProjectsPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
+  await applyViewPrefRedirect({
+    pageKey: "projets",
+    pathname: "/projets",
+    searchParams: params,
+    relevantKeys: PERSISTED_KEYS,
+  });
   const query = typeof params.q === "string" ? params.q.trim() : "";
   const sortRaw = typeof params.sort === "string" ? params.sort : undefined;
   const sortState = parseSort(sortRaw, SORT_FIELDS);
@@ -176,6 +186,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
         filterDefs={[...FILTER_DEFS]}
         activeFilters={filters.map((f) => ({ key: f.key, op: f.op, value: f.value }))}
       />
+      <PersistViewParams pageKey="projets" relevantKeys={PERSISTED_KEYS} />
 
       <form className="max-w-sm">
         <Input
