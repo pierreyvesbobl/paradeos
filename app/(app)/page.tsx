@@ -1,13 +1,12 @@
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
-import { opportunities } from "@/db/schema/opportunities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
 import { formatDate, formatEuro } from "@/lib/format";
-import { opportunityStatusLabels } from "@/lib/schemas/opportunities";
+import { COMMERCIAL_STATUSES, projectStatusLabels } from "@/lib/schemas/projects";
 import { and, count, desc, eq, gte, inArray, isNotNull, lte, ne, sql } from "drizzle-orm";
 import { ArrowUpRight, Briefcase, CheckSquare, Sparkles, Trophy } from "lucide-react";
 import Link from "next/link";
@@ -45,26 +44,25 @@ export default async function DashboardPage() {
   const today = todayIso();
   const weekEnd = endOfWeek();
 
-  // Pipeline pondéré : Σ valeur × proba/100 sur les opps non clôturées.
+  // Pipeline pondéré : Σ valeur × proba/100 sur les projets en phase commerciale ouverte.
+  const openCommercialStatuses = COMMERCIAL_STATUSES.filter((s) => s !== "won" && s !== "lost");
   const [pipelineRow] = await conn
     .select({
-      weighted: sql<string>`coalesce(sum(${opportunities.valueAmount} * ${opportunities.probability} / 100), 0)`,
-      total: sql<string>`coalesce(sum(${opportunities.valueAmount}), 0)`,
+      weighted: sql<string>`coalesce(sum(${projects.valueAmount} * ${projects.probability} / 100), 0)`,
+      total: sql<string>`coalesce(sum(${projects.valueAmount}), 0)`,
       openCount: sql<number>`count(*)::int`,
     })
-    .from(opportunities)
-    .where(
-      sql`${opportunities.status} not in ('won', 'lost') and ${opportunities.valueAmount} is not null`,
-    );
+    .from(projects)
+    .where(and(inArray(projects.status, openCommercialStatuses), isNotNull(projects.valueAmount)));
 
-  // Deals signés ce mois.
+  // Deals signés ce mois (projets passés en `won`).
   const [wonRow] = await conn
     .select({
       count: sql<number>`count(*)::int`,
-      total: sql<string>`coalesce(sum(${opportunities.valueAmount}), 0)`,
+      total: sql<string>`coalesce(sum(${projects.valueAmount}), 0)`,
     })
-    .from(opportunities)
-    .where(and(eq(opportunities.status, "won"), gte(opportunities.lastContactDate, monthStart)));
+    .from(projects)
+    .where(and(eq(projects.status, "won"), gte(projects.lastContactDate, monthStart)));
 
   // Tâches ouvertes (toutes / les miennes).
   const [openTasksRow] = await conn
@@ -92,23 +90,23 @@ export default async function DashboardPage() {
   // Relances cette semaine (follow_up_date entre today et today+7).
   const followUps = await conn
     .select({
-      id: opportunities.id,
-      title: opportunities.title,
-      followUpDate: opportunities.followUpDate,
-      status: opportunities.status,
+      id: projects.id,
+      title: projects.name,
+      followUpDate: projects.followUpDate,
+      status: projects.status,
       entityName: entities.name,
     })
-    .from(opportunities)
-    .leftJoin(entities, eq(opportunities.entityId, entities.id))
+    .from(projects)
+    .leftJoin(entities, eq(projects.entityId, entities.id))
     .where(
       and(
-        isNotNull(opportunities.followUpDate),
-        gte(opportunities.followUpDate, today),
-        lte(opportunities.followUpDate, weekEnd),
-        ne(opportunities.status, "lost"),
+        isNotNull(projects.followUpDate),
+        gte(projects.followUpDate, today),
+        lte(projects.followUpDate, weekEnd),
+        ne(projects.status, "lost"),
       ),
     )
-    .orderBy(opportunities.followUpDate)
+    .orderBy(projects.followUpDate)
     .limit(8);
 
   // Tâches en retard (échues dans le passé, non terminées).
@@ -133,18 +131,18 @@ export default async function DashboardPage() {
     .orderBy(tasks.dueDate)
     .limit(5);
 
-  // Activité récente : 5 opportunités les plus récemment modifiées.
+  // Activité récente : 5 projets les plus récemment modifiés.
   const recent = await conn
     .select({
-      id: opportunities.id,
-      title: opportunities.title,
-      status: opportunities.status,
-      updatedAt: opportunities.updatedAt,
+      id: projects.id,
+      title: projects.name,
+      status: projects.status,
+      updatedAt: projects.updatedAt,
       entityName: entities.name,
     })
-    .from(opportunities)
-    .leftJoin(entities, eq(opportunities.entityId, entities.id))
-    .orderBy(desc(opportunities.updatedAt))
+    .from(projects)
+    .leftJoin(entities, eq(projects.entityId, entities.id))
+    .orderBy(desc(projects.updatedAt))
     .limit(5);
 
   const weighted = Number(pipelineRow?.weighted ?? 0);
@@ -164,14 +162,14 @@ export default async function DashboardPage() {
           value={formatEuro(weighted)}
           subtitle={`${pipelineRow?.openCount ?? 0} deals · ${formatEuro(totalPipeline)} brut`}
           icon={Sparkles}
-          href="/opportunites"
+          href="/projets"
         />
         <KpiCard
           title="Signés ce mois"
           value={formatEuro(wonTotal)}
           subtitle={`${wonRow?.count ?? 0} deal${(wonRow?.count ?? 0) > 1 ? "s" : ""}`}
           icon={Trophy}
-          href="/opportunites?status=won"
+          href="/projets?status=won"
         />
         <KpiCard
           title="Mes tâches ouvertes"
@@ -199,13 +197,13 @@ export default async function DashboardPage() {
               {followUps.map((f) => (
                 <li key={f.id} className="py-2.5">
                   <Link
-                    href={`/opportunites/${f.id}`}
+                    href={`/projets/${f.id}`}
                     className="flex items-center justify-between gap-3 hover:underline"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-sm">{f.title}</p>
                       <p className="text-muted-foreground text-xs">
-                        {f.entityName ?? "—"} · {opportunityStatusLabels[f.status]}
+                        {f.entityName ?? "—"} · {projectStatusLabels[f.status]}
                       </p>
                     </div>
                     <span className="text-muted-foreground text-xs">
@@ -249,13 +247,13 @@ export default async function DashboardPage() {
           {recent.map((r) => (
             <li key={r.id} className="py-2.5">
               <Link
-                href={`/opportunites/${r.id}`}
+                href={`/projets/${r.id}`}
                 className="flex items-center justify-between gap-3 hover:underline"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-sm">{r.title}</p>
                   <p className="text-muted-foreground text-xs">
-                    {r.entityName ?? "—"} · {opportunityStatusLabels[r.status]}
+                    {r.entityName ?? "—"} · {projectStatusLabels[r.status]}
                   </p>
                 </div>
                 <span className="text-muted-foreground text-xs">{formatDate(r.updatedAt)}</span>

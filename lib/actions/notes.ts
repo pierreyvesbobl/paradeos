@@ -4,7 +4,6 @@ import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { mentions } from "@/db/schema/mentions";
 import { notes } from "@/db/schema/notes";
-import { opportunities } from "@/db/schema/opportunities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
@@ -47,14 +46,6 @@ async function fetchSubjectName(type: NoteSubjectType, id: string): Promise<stri
         .where(eq(contacts.id, id))
         .limit(1);
       return r ? `${r.first} ${r.last}` : null;
-    }
-    case "opportunity": {
-      const [r] = await conn
-        .select({ title: opportunities.title })
-        .from(opportunities)
-        .where(eq(opportunities.id, id))
-        .limit(1);
-      return r?.title ?? null;
     }
     case "project": {
       const [r] = await conn
@@ -158,18 +149,17 @@ async function reindexMentions(
 const SUBJECT_PATHS: Record<NoteSubjectType, (id: string) => string[]> = {
   entity: (id) => [`/entites/${id}`],
   contact: (id) => [`/contacts/${id}`],
-  opportunity: (id) => [`/opportunites/${id}`],
   project: (id) => [`/projets/${id}`],
   task: (id) => [`/taches/${id}`],
 };
 
 function revalidateForSubject(
-  subjectType: NoteSubjectType | null | undefined,
+  subjectType: string | null | undefined,
   subjectId: string | null | undefined,
 ) {
   revalidatePath("/notes");
-  if (subjectType && subjectId) {
-    for (const path of SUBJECT_PATHS[subjectType](subjectId)) {
+  if (subjectType && subjectId && subjectType in SUBJECT_PATHS) {
+    for (const path of SUBJECT_PATHS[subjectType as NoteSubjectType](subjectId)) {
       revalidatePath(path);
     }
   }

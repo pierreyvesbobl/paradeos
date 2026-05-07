@@ -37,7 +37,6 @@ export const timeEntryBaseSchema = z
     description: optionalText(2000),
     taskId: optionalUuid,
     projectId: optionalUuid,
-    opportunityId: optionalUuid,
     contactId: optionalUuid,
     color: optionalText(20),
   })

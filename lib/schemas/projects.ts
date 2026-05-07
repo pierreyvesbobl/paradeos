@@ -9,15 +9,59 @@ export const projectKindLabels: Record<ProjectKind, string> = {
   transverse: "Transverse",
 };
 
-export const projectStatusEnum = z.enum(["planning", "active", "on_hold", "completed", "archived"]);
+export const projectStatusEnum = z.enum([
+  // Phases commerciales (kind=client)
+  "not_started",
+  "to_follow_up",
+  "awaiting_response",
+  "won",
+  "lost",
+  // Phases delivery
+  "planning",
+  "active",
+  "on_hold",
+  "completed",
+  "archived",
+]);
 export type ProjectStatus = z.infer<typeof projectStatusEnum>;
 
 export const projectStatusLabels: Record<ProjectStatus, string> = {
+  not_started: "Non démarré",
+  to_follow_up: "À relancer",
+  awaiting_response: "En attente",
+  won: "Signé",
+  lost: "Perdu",
   planning: "Planification",
   active: "Actif",
   on_hold: "En pause",
   completed: "Terminé",
   archived: "Archivé",
+};
+
+/** Statuts pré-delivery (commercial). `lost` est terminal. */
+export const COMMERCIAL_STATUSES: ProjectStatus[] = [
+  "not_started",
+  "to_follow_up",
+  "awaiting_response",
+  "won",
+  "lost",
+];
+
+export const DELIVERY_STATUSES: ProjectStatus[] = [
+  "planning",
+  "active",
+  "on_hold",
+  "completed",
+  "archived",
+];
+
+/** Probabilités par défaut pour les statuts commerciaux. */
+export const projectDefaultProbability: Partial<Record<ProjectStatus, number>> = {
+  not_started: 10,
+  to_follow_up: 30,
+  awaiting_response: 60,
+  won: 100,
+  lost: 0,
 };
 
 export const projectBillingTypeEnum = z.enum(["none", "fixed", "hourly"]);
@@ -78,12 +122,31 @@ const optionalAmount = z
   ])
   .optional();
 
+const optionalProbability = z
+  .union([
+    z.number().int().min(0).max(100),
+    z
+      .string()
+      .trim()
+      .transform((raw, ctx) => {
+        if (!raw) return undefined;
+        const num = Number.parseInt(raw, 10);
+        if (!Number.isFinite(num) || num < 0 || num > 100) {
+          ctx.addIssue({ code: "custom", message: "Probabilité 0-100." });
+          return z.NEVER;
+        }
+        return num;
+      }),
+  ])
+  .optional();
+
 export const projectBaseSchema = z
   .object({
     name: z.string().trim().min(1, "Le nom est requis.").max(200),
     kind: projectKindEnum,
     status: projectStatusEnum.default("planning"),
     entityId: optionalUuid,
+    contactId: optionalUuid,
     color: optionalHexColor,
     icon: optionalText(80),
     description: optionalText(5000),
@@ -93,6 +156,14 @@ export const projectBaseSchema = z
     billingType: projectBillingTypeEnum.default("none"),
     budgetAmount: optionalAmount,
     hourlyRate: optionalAmount,
+    // Champs commerciaux (kind=client, statuts pré-won).
+    valueAmount: optionalAmount,
+    probability: optionalProbability,
+    source: optionalText(200),
+    firstContactDate: optionalDate,
+    lastContactDate: optionalDate,
+    followUpDate: optionalDate,
+    expectedCloseDate: optionalDate,
   })
   .superRefine((data, ctx) => {
     if (data.kind === "client" && !data.entityId) {
@@ -139,12 +210,15 @@ const nullableText = (max: number) => z.union([z.string().trim().max(max), z.nul
  * champ à la fois ; les contraintes complexes restent sur les forms
  * `create/update`.
  */
+const nullableProbability = z.union([z.number().int().min(0).max(100), z.null()]);
+
 export const patchProjectSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(200).optional(),
   kind: projectKindEnum.optional(),
   status: projectStatusEnum.optional(),
   entityId: nullableUuid.optional(),
+  contactId: nullableUuid.optional(),
   color: z
     .union([
       z
@@ -162,6 +236,13 @@ export const patchProjectSchema = z.object({
   billingType: projectBillingTypeEnum.optional(),
   budgetAmount: nullableNumeric.optional(),
   hourlyRate: nullableNumeric.optional(),
+  valueAmount: nullableNumeric.optional(),
+  probability: nullableProbability.optional(),
+  source: nullableText(200).optional(),
+  firstContactDate: nullableDate.optional(),
+  lastContactDate: nullableDate.optional(),
+  followUpDate: nullableDate.optional(),
+  expectedCloseDate: nullableDate.optional(),
 });
 
 export const quickCreateProjectSchema = z.object({

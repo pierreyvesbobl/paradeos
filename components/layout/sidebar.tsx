@@ -23,7 +23,7 @@ const items: NavItem[] = [
   { label: "Dashboard", href: "/", icon: Home },
   { label: "Contacts", href: "/contacts", icon: Users },
   { label: "Entités", href: "/entites", icon: Building2 },
-  { label: "Opportunités", href: "/opportunites", icon: Sparkles },
+  { label: "Pipeline", href: "/projets/pipeline", icon: Sparkles },
   { label: "Projets", href: "/projets", icon: Briefcase },
   { label: "Tâches", href: "/taches", icon: CheckSquare },
   { label: "Planning", href: "/planning", icon: Calendar },

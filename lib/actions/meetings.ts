@@ -3,7 +3,6 @@
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
-import { opportunities } from "@/db/schema/opportunities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
@@ -14,7 +13,6 @@ import {
   extractMeeting,
   fuzzyMatchContact,
   fuzzyMatchEntity,
-  fuzzyMatchOpportunity,
   fuzzyMatchProject,
   fuzzyMatchUser,
 } from "@/lib/meetings/extract";
@@ -25,6 +23,7 @@ import {
   extractMeetingSchema,
   revertProposalSchema,
   updateAcceptedProposalSchema,
+  updateMeetingSubjectSchema,
   updateMeetingSummarySchema,
 } from "@/lib/schemas/meetings";
 import { eq, ilike } from "drizzle-orm";
@@ -41,11 +40,30 @@ export const createMeeting = action(createMeetingSchema, async ({ input, user })
       transcript: input.transcript,
       occurredAt,
       sourceLabel: input.sourceLabel ?? null,
+      projectId: input.projectId ?? null,
       createdBy: user.id,
     })
     .returning({ id: meetings.id });
   revalidatePath("/meetings");
   return { id: row?.id };
+});
+
+/**
+ * Met à jour le rattachement d'un meeting à un projet (couvre les phases
+ * commerciales et delivery). Passer `null` pour détacher.
+ */
+export const updateMeetingSubject = action(updateMeetingSubjectSchema, async ({ input }) => {
+  const conn = await db();
+  await conn
+    .update(meetings)
+    .set({
+      projectId: input.projectId,
+      updatedAt: new Date(),
+    })
+    .where(eq(meetings.id, input.meetingId));
+  revalidatePath(`/meetings/${input.meetingId}`);
+  revalidatePath("/meetings");
+  return {};
 });
 
 /**
@@ -100,39 +118,12 @@ export const extractMeetingProposals = action(extractMeetingSchema, async ({ inp
   }
   for (const p of result.proposedProjects) {
     const match = await fuzzyMatchProject(p.name);
-    // Cross-kind : ce projet ressemble-t-il à une opportunité existante ?
-    // Si oui, on le signale dans le payload pour que l'UI propose la
-    // conversion plutôt qu'un doublon.
-    const oppMatch = await fuzzyMatchOpportunity(p.name);
     proposalsRows.push({
       meetingId: meeting.id,
       kind: "project",
-      payload: {
-        ...p,
-        relatedOpportunityId: oppMatch?.id ?? null,
-        relatedOpportunityTitle: oppMatch?.name ?? null,
-        relatedOpportunityConfidence: oppMatch ? oppMatch.confidence : null,
-      },
+      payload: p,
       matchedId: match?.id ?? null,
       matchConfidence: match ? match.confidence.toFixed(3) : null,
-    });
-  }
-  for (const o of result.proposedOpportunities) {
-    const oppMatch = await fuzzyMatchOpportunity(o.title);
-    // Cross-kind : cette opportunité correspond-elle à un projet déjà
-    // démarré ? Si oui, on évite le doublon.
-    const projMatch = await fuzzyMatchProject(o.title);
-    proposalsRows.push({
-      meetingId: meeting.id,
-      kind: "opportunity",
-      payload: {
-        ...o,
-        relatedProjectId: projMatch?.id ?? null,
-        relatedProjectName: projMatch?.name ?? null,
-        relatedProjectConfidence: projMatch ? projMatch.confidence : null,
-      },
-      matchedId: oppMatch?.id ?? null,
-      matchConfidence: oppMatch ? oppMatch.confidence.toFixed(3) : null,
     });
   }
   for (const t of result.proposedTasks) {
@@ -256,7 +247,7 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
   revalidatePath("/contacts");
   revalidatePath("/entites");
   revalidatePath("/projets");
-  revalidatePath("/opportunites");
+  revalidatePath("/projets");
   revalidatePath("/taches");
   return { ok: true as const, createdEntityId };
 });
@@ -301,7 +292,7 @@ export const updateAcceptedProposal = action(updateAcceptedProposalSchema, async
   revalidatePath("/contacts");
   revalidatePath("/entites");
   revalidatePath("/projets");
-  revalidatePath("/opportunites");
+  revalidatePath("/projets");
   revalidatePath("/taches");
   return { ok: true as const };
 });
@@ -380,9 +371,9 @@ async function createForKind(
     }
     case "contact": {
       // Si entityName fourni → tente de le lier à une entité existante.
-      let entityId: string | null = null;
+      let entityId: string | null = (payload.entityId as string | null | undefined) ?? null;
       const entityName = payload.entityName as string | null | undefined;
-      if (entityName) {
+      if (!entityId && entityName) {
         const [matched] = await conn
           .select({ id: entities.id })
           .from(entities)
@@ -404,34 +395,15 @@ async function createForKind(
         .returning({ id: contacts.id });
       return row?.id ?? "";
     }
-    case "project": {
-      let entityId: string | null = null;
-      const entityName = payload.entityName as string | null | undefined;
-      if (entityName) {
-        const [matched] = await conn
-          .select({ id: entities.id })
-          .from(entities)
-          .where(ilike(entities.name, entityName))
-          .limit(1);
-        entityId = matched?.id ?? null;
-      }
-      const [row] = await conn
-        .insert(projects)
-        .values({
-          name: String(payload.name ?? "Sans nom"),
-          kind: (payload.kind as "client" | "product" | "transverse") ?? "transverse",
-          status: "planning",
-          entityId,
-          createdBy: userId,
-          ownerId: userId,
-        })
-        .returning({ id: projects.id });
-      return row?.id ?? "";
-    }
+    case "project":
     case "opportunity": {
-      let entityId: string | null = null;
+      // Avec la fusion opps → projects, les deux kinds créent un project.
+      // Le payload peut porter `status` (depuis le LLM) — `not_started` etc
+      // pour les phases commerciales, `active`/`planning` pour delivery.
+      // Backward-compat : kind="opportunity" force status=not_started si absent.
+      let entityId: string | null = (payload.entityId as string | null | undefined) ?? null;
       const entityName = payload.entityName as string | null | undefined;
-      if (entityName) {
+      if (!entityId && entityName) {
         const [matched] = await conn
           .select({ id: entities.id })
           .from(entities)
@@ -440,17 +412,39 @@ async function createForKind(
         entityId = matched?.id ?? null;
       }
       const valueAmount = payload.valueAmount as number | null | undefined;
+      const rawStatus = payload.status as string | null | undefined;
+      const allowedStatuses = [
+        "not_started",
+        "to_follow_up",
+        "awaiting_response",
+        "won",
+        "lost",
+        "planning",
+        "active",
+        "on_hold",
+        "completed",
+        "archived",
+      ] as const;
+      const status: (typeof allowedStatuses)[number] =
+        rawStatus && (allowedStatuses as readonly string[]).includes(rawStatus)
+          ? (rawStatus as (typeof allowedStatuses)[number])
+          : kind === "opportunity"
+            ? "not_started"
+            : "planning";
+      // Le LLM propose `title` pour une opp et `name` pour un projet — on supporte les deux.
+      const projectName = String(payload.name ?? payload.title ?? "Sans nom");
       const [row] = await conn
-        .insert(opportunities)
+        .insert(projects)
         .values({
-          title: String(payload.title ?? "Sans titre"),
-          status: "not_started",
+          name: projectName,
+          kind: (payload.kind as "client" | "product" | "transverse") ?? "transverse",
+          status,
           entityId,
           valueAmount: valueAmount != null ? valueAmount.toString() : null,
           createdBy: userId,
           ownerId: userId,
         })
-        .returning({ id: opportunities.id });
+        .returning({ id: projects.id });
       return row?.id ?? "";
     }
     case "task": {
@@ -530,9 +524,9 @@ async function applyUpdateForKind(
       return;
     }
     case "contact": {
-      let entityId: string | null = null;
+      let entityId: string | null = (payload.entityId as string | null | undefined) ?? null;
       const entityName = payload.entityName as string | null | undefined;
-      if (entityName) {
+      if (!entityId && entityName) {
         const [matched] = await conn
           .select({ id: entities.id })
           .from(entities)
@@ -553,9 +547,9 @@ async function applyUpdateForKind(
       return;
     }
     case "project": {
-      let entityId: string | null = null;
+      let entityId: string | null = (payload.entityId as string | null | undefined) ?? null;
       const entityName = payload.entityName as string | null | undefined;
-      if (entityName) {
+      if (!entityId && entityName) {
         const [matched] = await conn
           .select({ id: entities.id })
           .from(entities)
@@ -574,9 +568,11 @@ async function applyUpdateForKind(
       return;
     }
     case "opportunity": {
-      let entityId: string | null = null;
+      // Backward-compat : un proposal kind=opportunity accepté pointe
+      // maintenant sur un project (fusion). On met à jour le project lié.
+      let entityId: string | null = (payload.entityId as string | null | undefined) ?? null;
       const entityName = payload.entityName as string | null | undefined;
-      if (entityName) {
+      if (!entityId && entityName) {
         const [matched] = await conn
           .select({ id: entities.id })
           .from(entities)
@@ -586,13 +582,13 @@ async function applyUpdateForKind(
       }
       const valueAmount = payload.valueAmount as number | null | undefined;
       await conn
-        .update(opportunities)
+        .update(projects)
         .set({
-          title: String(payload.title ?? "Sans titre"),
+          name: String(payload.name ?? payload.title ?? "Sans nom"),
           entityId,
           valueAmount: valueAmount != null ? valueAmount.toString() : null,
         })
-        .where(eq(opportunities.id, recordId));
+        .where(eq(projects.id, recordId));
       return;
     }
     case "task": {

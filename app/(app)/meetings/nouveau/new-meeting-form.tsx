@@ -1,5 +1,6 @@
 "use client";
 
+import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
@@ -9,12 +10,17 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-export function NewMeetingForm() {
+type Props = {
+  projects: { id: string; name: string }[];
+};
+
+export function NewMeetingForm({ projects }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [occurredAt, setOccurredAt] = useState("");
   const [sourceLabel, setSourceLabel] = useState("");
   const [transcript, setTranscript] = useState("");
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   async function readFile(f: File): Promise<string> {
@@ -43,6 +49,7 @@ export function NewMeetingForm() {
         transcript: transcript.trim(),
         occurredAt: occurredAt || undefined,
         sourceLabel: sourceLabel.trim() || undefined,
+        projectId: projectId ?? undefined,
       });
       if (!created.ok) {
         toast.error(created.message);
@@ -98,6 +105,21 @@ export function NewMeetingForm() {
             placeholder="Drive, Granola, Otter…"
             disabled={pending}
           />
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label htmlFor="projectId">Projet / deal lié (optionnel)</Label>
+          <FkCombobox
+            id="projectId"
+            value={projectId}
+            onValueChange={setProjectId}
+            options={projects.map((p) => ({ id: p.id, label: p.name }))}
+            searchPlaceholder="Rechercher un projet ou deal…"
+            disabled={pending}
+          />
+          <p className="text-muted-foreground text-xs">
+            Le projet couvre tout le cycle (deal commercial → delivery). Le rattachement aide à
+            retrouver le transcript depuis la fiche correspondante.
+          </p>
         </div>
       </div>
 

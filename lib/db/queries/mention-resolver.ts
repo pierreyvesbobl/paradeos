@@ -1,6 +1,5 @@
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
-import { opportunities } from "@/db/schema/opportunities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
@@ -23,7 +22,7 @@ function slug(s: string): string {
  */
 export async function buildMarkdownResolver() {
   const conn = await db();
-  const [userList, entityRows, contactRows, projectRows, oppRows, taskRows] = await Promise.all([
+  const [userList, entityRows, contactRows, projectRows, taskRows] = await Promise.all([
     conn
       .select({ id: users.id, fullName: users.fullName })
       .from(users)
@@ -37,7 +36,6 @@ export async function buildMarkdownResolver() {
       })
       .from(contacts),
     conn.select({ id: projects.id, name: projects.name }).from(projects),
-    conn.select({ id: opportunities.id, title: opportunities.title }).from(opportunities),
     conn.select({ id: tasks.id, title: tasks.title }).from(tasks),
   ]);
 
@@ -70,7 +68,6 @@ export async function buildMarkdownResolver() {
     entities: asHrefMap(entityRows, (e) => e.name, "/entites"),
     contacts: asHrefMap(contactRows, (c) => `${c.firstName} ${c.lastName}`, "/contacts"),
     projects: asHrefMap(projectRows, (p) => p.name, "/projets"),
-    opportunities: asHrefMap(oppRows, (o) => o.title, "/opportunites"),
     tasks: asHrefMap(taskRows, (t) => t.title, "/taches"),
   } as const;
 }

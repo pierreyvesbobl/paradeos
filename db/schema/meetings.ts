@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { index, jsonb, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { projects } from "./projects";
 import { users } from "./users";
 
 export const meetingStatus = pgEnum("meeting_status", [
@@ -42,6 +43,8 @@ export const meetings = pgTable(
     status: meetingStatus("status").notNull().default("ingested"),
     /** Source d'origine si fournie (Drive, upload local, copier-coller…). */
     sourceLabel: text("source_label"),
+    /** Lien optionnel vers un projet (couvre aussi les anciens deals/opps). */
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
@@ -49,6 +52,7 @@ export const meetings = pgTable(
   (table) => ({
     statusIdx: index("meetings_status_idx").on(table.status),
     occurredAtIdx: index("meetings_occurred_at_idx").on(table.occurredAt),
+    projectIdx: index("meetings_project_idx").on(table.projectId),
   }),
 );
 

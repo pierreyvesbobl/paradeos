@@ -1,9 +1,11 @@
 "use client";
 
+import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { MeetingProposal } from "@/db/schema/meetings";
+import { quickCreateEntity } from "@/lib/actions/entities";
 import { decideProposal, revertProposal, updateAcceptedProposal } from "@/lib/actions/meetings";
 import { Check, Pencil, RotateCcw, X } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -37,7 +39,6 @@ type LinkOptions = {
   users: UserOption[];
   entities: NamedOption[];
   contacts: ContactOption[];
-  opportunities: TitledOption[];
   existingTasks: TitledOption[];
 };
 
@@ -47,7 +48,6 @@ export function ProposalsPanel({
   users,
   entities,
   contacts,
-  opportunities,
   existingTasks,
 }: {
   proposals: MeetingProposal[];
@@ -72,7 +72,6 @@ export function ProposalsPanel({
     users,
     entities,
     contacts,
-    opportunities,
     existingTasks,
   };
   if (proposals.length === 0) {
@@ -494,9 +493,10 @@ function getLinkOptionsForKind(
     case "contact":
       return options.contacts.map((c) => ({ id: c.id, label: c.fullName || "(sans nom)" }));
     case "project":
-      return options.projects.map((p) => ({ id: p.id, label: p.name }));
     case "opportunity":
-      return options.opportunities.map((o) => ({ id: o.id, label: o.title }));
+      // Backward-compat : un proposal kind=opportunity (issu d'anciens
+      // meetings) se lie maintenant à un project.
+      return options.projects.map((p) => ({ id: p.id, label: p.name }));
     case "task":
       return options.existingTasks.map((t) => ({ id: t.id, label: t.title }));
   }
@@ -508,6 +508,14 @@ const LINK_LABEL: Record<LinkPickerKind, string> = {
   project: "Lier à un projet existant",
   opportunity: "Lier à une opportunité existante",
   task: "Lier à une tâche existante",
+};
+
+const LINK_SEARCH_PLACEHOLDER: Record<LinkPickerKind, string> = {
+  entity: "Rechercher une entité…",
+  contact: "Rechercher un contact…",
+  project: "Rechercher un projet…",
+  opportunity: "Rechercher une opportunité…",
+  task: "Rechercher une tâche…",
 };
 
 function ProposalEditor({
@@ -543,23 +551,19 @@ function ProposalEditor({
   const isLinking = currentLinkId !== "";
 
   const linkPicker = (
-    <div className="space-y-1 rounded border bg-muted/30 p-3">
+    <div className="space-y-1.5 rounded border bg-muted/30 p-3">
       <Label htmlFor="_linkExistingId" className="text-xs">
         {LINK_LABEL[kind]} (optionnel)
       </Label>
-      <select
+      <FkCombobox
         id="_linkExistingId"
-        value={currentLinkId}
-        onChange={(e) => patch({ _linkExistingId: e.target.value || null })}
-        className="block h-9 w-full rounded-md border bg-background px-2 text-sm"
-      >
-        <option value="">— Créer un nouveau —</option>
-        {linkOptions.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        value={currentLinkId || null}
+        onValueChange={(v) => patch({ _linkExistingId: v })}
+        options={linkOptions.map((o) => ({ id: o.id, label: o.label }))}
+        placeholder="— Créer un nouveau —"
+        searchPlaceholder={LINK_SEARCH_PLACEHOLDER[kind]}
+        clearLabel="Créer un nouveau"
+      />
       {isLinking ? (
         <p className="text-emerald-700 text-xs dark:text-emerald-400">
           Cette proposition sera liée au record existant. Aucun nouveau record ne sera créé. Les
@@ -597,26 +601,24 @@ function ProposalEditor({
               />
             </Field>
             <Field label="Assignée" htmlFor="assigneeId">
-              <select
+              <FkCombobox
                 id="assigneeId"
-                value={val("assigneeId")}
-                onChange={(e) => {
-                  const id = e.target.value || null;
+                value={val("assigneeId") || null}
+                onValueChange={(id) => {
                   const user = id ? options.users.find((u) => u.id === id) : null;
                   patch({
                     assigneeId: id,
                     assigneeName: user?.fullName ?? null,
                   });
                 }}
-                className="h-9 rounded-md border bg-background px-2 text-sm"
-              >
-                <option value="">— Personne —</option>
-                {options.users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.fullName ?? "(sans nom)"}
-                  </option>
-                ))}
-              </select>
+                options={options.users.map((u) => ({
+                  id: u.id,
+                  label: u.fullName ?? "(sans nom)",
+                }))}
+                placeholder="— Personne —"
+                searchPlaceholder="Rechercher un membre…"
+                clearLabel="Personne"
+              />
               {draft.assigneeName && !draft.assigneeId ? (
                 <p className="mt-1 text-amber-700 text-xs dark:text-amber-400">
                   LLM avait suggéré « {String(draft.assigneeName)} » — non trouvé en base.
@@ -632,26 +634,21 @@ function ProposalEditor({
               />
             </Field>
             <Field label="Projet" htmlFor="projectId">
-              <select
+              <FkCombobox
                 id="projectId"
-                value={val("projectId")}
-                onChange={(e) => {
-                  const id = e.target.value || null;
+                value={val("projectId") || null}
+                onValueChange={(id) => {
                   const proj = id ? options.projects.find((p) => p.id === id) : null;
                   patch({
                     projectId: id,
                     projectName: proj?.name ?? null,
                   });
                 }}
-                className="h-9 rounded-md border bg-background px-2 text-sm"
-              >
-                <option value="">— Aucun projet —</option>
-                {options.projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                options={options.projects.map((p) => ({ id: p.id, label: p.name }))}
+                placeholder="— Aucun projet —"
+                searchPlaceholder="Rechercher un projet…"
+                clearLabel="Aucun projet"
+              />
               {draft.projectName && !draft.projectId ? (
                 <p className="mt-1 text-amber-700 text-xs dark:text-amber-400">
                   LLM avait suggéré « {String(draft.projectName)} » — non trouvé en base.
@@ -695,12 +692,32 @@ function ProposalEditor({
                 <option value="transverse">Transverse</option>
               </select>
             </Field>
-            <Field label="Entité (nom)" htmlFor="entityName">
-              <Input
-                id="entityName"
-                value={val("entityName")}
-                onChange={(e) => patch({ entityName: e.target.value || null })}
+            <Field className="sm:col-span-2" label="Entité" htmlFor="entityId">
+              <FkCombobox
+                id="entityId"
+                value={val("entityId") || null}
+                onValueChange={(id) => {
+                  const ent = id ? options.entities.find((e) => e.id === id) : null;
+                  patch({ entityId: id, entityName: ent?.name ?? null });
+                }}
+                onCreate={async (name) => {
+                  const res = await quickCreateEntity({ name });
+                  if (!res.ok) return null;
+                  patch({ entityId: res.data.id, entityName: res.data.name });
+                  return { id: res.data.id, label: res.data.name };
+                }}
+                options={options.entities.map((e) => ({ id: e.id, label: e.name }))}
+                placeholder="— Aucune —"
+                searchPlaceholder="Rechercher ou créer une entité…"
+                clearLabel="Aucune"
+                createLabel="Créer l'entité"
               />
+              {draft.entityName && !draft.entityId ? (
+                <p className="mt-1 text-amber-700 text-xs dark:text-amber-400">
+                  LLM avait suggéré « {String(draft.entityName)} » — non trouvée. Tape pour la
+                  créer.
+                </p>
+              ) : null}
             </Field>
           </div>
         );
@@ -715,12 +732,32 @@ function ProposalEditor({
                 onChange={(e) => patch({ title: e.target.value })}
               />
             </Field>
-            <Field label="Entité (nom)" htmlFor="entityName">
-              <Input
-                id="entityName"
-                value={val("entityName")}
-                onChange={(e) => patch({ entityName: e.target.value || null })}
+            <Field className="sm:col-span-2" label="Entité" htmlFor="entityId">
+              <FkCombobox
+                id="entityId"
+                value={val("entityId") || null}
+                onValueChange={(id) => {
+                  const ent = id ? options.entities.find((e) => e.id === id) : null;
+                  patch({ entityId: id, entityName: ent?.name ?? null });
+                }}
+                onCreate={async (name) => {
+                  const res = await quickCreateEntity({ name });
+                  if (!res.ok) return null;
+                  patch({ entityId: res.data.id, entityName: res.data.name });
+                  return { id: res.data.id, label: res.data.name };
+                }}
+                options={options.entities.map((e) => ({ id: e.id, label: e.name }))}
+                placeholder="— Aucune —"
+                searchPlaceholder="Rechercher ou créer une entité…"
+                clearLabel="Aucune"
+                createLabel="Créer l'entité"
               />
+              {draft.entityName && !draft.entityId ? (
+                <p className="mt-1 text-amber-700 text-xs dark:text-amber-400">
+                  LLM avait suggéré « {String(draft.entityName)} » — non trouvée. Tape pour la
+                  créer.
+                </p>
+              ) : null}
             </Field>
             <Field label="Montant (€)" htmlFor="valueAmount">
               <Input
@@ -769,12 +806,32 @@ function ProposalEditor({
                 onChange={(e) => patch({ jobTitle: e.target.value || null })}
               />
             </Field>
-            <Field className="sm:col-span-2" label="Entité (nom)" htmlFor="entityName">
-              <Input
-                id="entityName"
-                value={val("entityName")}
-                onChange={(e) => patch({ entityName: e.target.value || null })}
+            <Field className="sm:col-span-2" label="Entité" htmlFor="entityId">
+              <FkCombobox
+                id="entityId"
+                value={val("entityId") || null}
+                onValueChange={(id) => {
+                  const ent = id ? options.entities.find((e) => e.id === id) : null;
+                  patch({ entityId: id, entityName: ent?.name ?? null });
+                }}
+                onCreate={async (name) => {
+                  const res = await quickCreateEntity({ name });
+                  if (!res.ok) return null;
+                  patch({ entityId: res.data.id, entityName: res.data.name });
+                  return { id: res.data.id, label: res.data.name };
+                }}
+                options={options.entities.map((e) => ({ id: e.id, label: e.name }))}
+                placeholder="— Aucune —"
+                searchPlaceholder="Rechercher ou créer une entité…"
+                clearLabel="Aucune"
+                createLabel="Créer l'entité"
               />
+              {draft.entityName && !draft.entityId ? (
+                <p className="mt-1 text-amber-700 text-xs dark:text-amber-400">
+                  LLM avait suggéré « {String(draft.entityName)} » — non trouvée. Tape pour la
+                  créer.
+                </p>
+              ) : null}
             </Field>
           </div>
         );

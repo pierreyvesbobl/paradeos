@@ -23,6 +23,7 @@ export const createProject = action(createProjectSchema, async ({ input, user })
       kind: input.kind,
       status: input.status,
       entityId: input.entityId ?? null,
+      contactId: input.contactId ?? null,
       color: input.color ?? null,
       icon: input.icon ?? null,
       description: input.description ?? null,
@@ -33,6 +34,13 @@ export const createProject = action(createProjectSchema, async ({ input, user })
       billingType: input.billingType,
       budgetAmount: input.budgetAmount != null ? input.budgetAmount.toString() : null,
       hourlyRate: input.hourlyRate != null ? input.hourlyRate.toString() : null,
+      valueAmount: input.valueAmount != null ? input.valueAmount.toString() : null,
+      probability: input.probability ?? null,
+      source: input.source ?? null,
+      firstContactDate: input.firstContactDate ?? null,
+      lastContactDate: input.lastContactDate ?? null,
+      followUpDate: input.followUpDate ?? null,
+      expectedCloseDate: input.expectedCloseDate ?? null,
     })
     .returning({ id: projects.id });
 
@@ -49,6 +57,7 @@ export const updateProject = action(updateProjectSchema, async ({ input }) => {
       kind: input.kind,
       status: input.status,
       entityId: input.entityId ?? null,
+      contactId: input.contactId ?? null,
       color: input.color ?? null,
       icon: input.icon ?? null,
       description: input.description ?? null,
@@ -58,6 +67,13 @@ export const updateProject = action(updateProjectSchema, async ({ input }) => {
       billingType: input.billingType,
       budgetAmount: input.budgetAmount != null ? input.budgetAmount.toString() : null,
       hourlyRate: input.hourlyRate != null ? input.hourlyRate.toString() : null,
+      valueAmount: input.valueAmount != null ? input.valueAmount.toString() : null,
+      probability: input.probability ?? null,
+      source: input.source ?? null,
+      firstContactDate: input.firstContactDate ?? null,
+      lastContactDate: input.lastContactDate ?? null,
+      followUpDate: input.followUpDate ?? null,
+      expectedCloseDate: input.expectedCloseDate ?? null,
     })
     .where(eq(projects.id, input.id));
 
@@ -111,6 +127,16 @@ export const patchProject = action(patchProjectSchema, async ({ input }) => {
   if (input.hourlyRate !== undefined) {
     updates.hourlyRate = input.hourlyRate != null ? input.hourlyRate.toString() : null;
   }
+  if (input.contactId !== undefined) updates.contactId = input.contactId;
+  if (input.valueAmount !== undefined) {
+    updates.valueAmount = input.valueAmount != null ? input.valueAmount.toString() : null;
+  }
+  if (input.probability !== undefined) updates.probability = input.probability;
+  if (input.source !== undefined) updates.source = input.source;
+  if (input.firstContactDate !== undefined) updates.firstContactDate = input.firstContactDate;
+  if (input.lastContactDate !== undefined) updates.lastContactDate = input.lastContactDate;
+  if (input.followUpDate !== undefined) updates.followUpDate = input.followUpDate;
+  if (input.expectedCloseDate !== undefined) updates.expectedCloseDate = input.expectedCloseDate;
 
   await conn.update(projects).set(updates).where(eq(projects.id, input.id));
 

@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/page-header";
+import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
@@ -15,11 +16,19 @@ export default async function EditProjectPage({ params }: { params: Params }) {
   const [project] = await conn.select().from(projects).where(eq(projects.id, id)).limit(1);
   if (!project) notFound();
 
-  const [entityList, userList] = await Promise.all([
+  const [entityList, contactList, userList] = await Promise.all([
     conn
       .select({ id: entities.id, name: entities.name })
       .from(entities)
       .orderBy(asc(entities.name)),
+    conn
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+      })
+      .from(contacts)
+      .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
     conn
       .select({ id: users.id, fullName: users.fullName })
       .from(users)
@@ -32,6 +41,7 @@ export default async function EditProjectPage({ params }: { params: Params }) {
       <ProjectForm
         mode="edit"
         entities={entityList}
+        contacts={contactList}
         users={userList}
         defaultValues={{
           id: project.id,
@@ -39,6 +49,7 @@ export default async function EditProjectPage({ params }: { params: Params }) {
           kind: project.kind,
           status: project.status,
           entityId: project.entityId ?? "",
+          contactId: project.contactId ?? "",
           color: project.color ?? "",
           icon: project.icon ?? "",
           description: project.description ?? "",
@@ -48,6 +59,13 @@ export default async function EditProjectPage({ params }: { params: Params }) {
           billingType: project.billingType,
           budgetAmount: project.budgetAmount ?? "",
           hourlyRate: project.hourlyRate ?? "",
+          valueAmount: project.valueAmount ?? "",
+          probability: project.probability != null ? String(project.probability) : "",
+          source: project.source ?? "",
+          firstContactDate: project.firstContactDate ?? "",
+          lastContactDate: project.lastContactDate ?? "",
+          followUpDate: project.followUpDate ?? "",
+          expectedCloseDate: project.expectedCloseDate ?? "",
         }}
       />
     </div>

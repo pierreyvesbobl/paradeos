@@ -2,28 +2,32 @@ import "server-only";
 
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
-import { opportunities } from "@/db/schema/opportunities";
 import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { asc, desc, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 const MODEL_ID = "gpt-4.1";
 
 // Limite la taille du vocabulaire injecté pour ne pas exploser le prompt
-// si la base devient très grande. On priorise les records les plus
-// récents — on peut affiner plus tard (par dernier contact, etc.).
+// si la base devient très grande.
 const VOCAB_LIMIT_PER_KIND = 200;
 
 /**
- * Note : OpenAI Structured Outputs exigent que **chaque** propriété soit
+ * OpenAI Structured Outputs exigent que **chaque** propriété soit
  * marquée `required`. Pas de `.optional()` ni `.default()` ici — on
  * accepte explicitement `null` pour les champs vides, et on demande des
  * tableaux vides plutôt qu'absents pour les listes.
+ *
+ * Avec la fusion opportunities → projects, le LLM ne propose plus
+ * d'opportunités séparées : un deal commercial est un projet en statut
+ * pré-won. Le champ `proposedCommercialStatus` indique si le projet
+ * proposé est encore au stade commercial.
  */
 const extractionSchema = z.object({
   summary: z.string(),
@@ -56,12 +60,15 @@ const extractionSchema = z.object({
       name: z.string(),
       kind: z.enum(["client", "product", "transverse"]).nullable(),
       entityName: z.string().nullable(),
-    }),
-  ),
-  proposedOpportunities: z.array(
-    z.object({
-      title: z.string(),
-      entityName: z.string().nullable(),
+      /**
+       * Statut suggéré par le LLM. `not_started`/`to_follow_up`/`awaiting_response`
+       * = phase commerciale ; `active`/`planning` = delivery démarré ;
+       * `won` = signé et delivery imminente.
+       */
+      status: z
+        .enum(["not_started", "to_follow_up", "awaiting_response", "won", "planning", "active"])
+        .nullable(),
+      /** Montant prévisionnel (€HT) si mentionné — pertinent en phase commerciale. */
       valueAmount: z.number().nullable(),
     }),
   ),
@@ -81,13 +88,7 @@ export type MeetingExtraction = z.infer<typeof extractionSchema>;
 type Vocabulary = {
   entities: { name: string; kind: string }[];
   contacts: { fullName: string; entityName: string | null; jobTitle: string | null }[];
-  projects: { name: string; kind: string; linkedOpportunityTitle: string | null }[];
-  opportunities: {
-    title: string;
-    entityName: string | null;
-    status: string;
-    linkedProjectName: string | null;
-  }[];
+  projects: { name: string; kind: string; status: string; entityName: string | null }[];
   users: string[];
 };
 
@@ -99,7 +100,7 @@ type Vocabulary = {
 async function getKnownVocabulary(): Promise<Vocabulary> {
   const conn = await db();
 
-  const [entityRows, contactRows, projectRows, oppRows, userRows] = await Promise.all([
+  const [entityRows, contactRows, projectRows, userRows] = await Promise.all([
     conn
       .select({ name: entities.name, kind: entities.kind, updatedAt: entities.updatedAt })
       .from(entities)
@@ -121,25 +122,13 @@ async function getKnownVocabulary(): Promise<Vocabulary> {
       .select({
         name: projects.name,
         kind: projects.kind,
-        linkedOpportunityTitle: opportunities.title,
+        status: projects.status,
+        entityName: entities.name,
         updatedAt: projects.updatedAt,
       })
       .from(projects)
-      .leftJoin(opportunities, eq(opportunities.projectId, projects.id))
+      .leftJoin(entities, eq(projects.entityId, entities.id))
       .orderBy(desc(projects.updatedAt))
-      .limit(VOCAB_LIMIT_PER_KIND),
-    conn
-      .select({
-        title: opportunities.title,
-        entityName: entities.name,
-        status: opportunities.status,
-        linkedProjectName: projects.name,
-        updatedAt: opportunities.updatedAt,
-      })
-      .from(opportunities)
-      .leftJoin(entities, eq(opportunities.entityId, entities.id))
-      .leftJoin(projects, eq(opportunities.projectId, projects.id))
-      .orderBy(desc(opportunities.updatedAt))
       .limit(VOCAB_LIMIT_PER_KIND),
     conn.select({ fullName: users.fullName }).from(users).orderBy(asc(users.fullName)),
   ]);
@@ -154,13 +143,8 @@ async function getKnownVocabulary(): Promise<Vocabulary> {
     projects: projectRows.map((r) => ({
       name: r.name,
       kind: r.kind,
-      linkedOpportunityTitle: r.linkedOpportunityTitle ?? null,
-    })),
-    opportunities: oppRows.map((r) => ({
-      title: r.title,
-      entityName: r.entityName ?? null,
       status: r.status,
-      linkedProjectName: r.linkedProjectName ?? null,
+      entityName: r.entityName ?? null,
     })),
     users: userRows.map((u) => u.fullName).filter((n): n is string => !!n),
   };
@@ -198,26 +182,10 @@ function formatVocabulary(v: Vocabulary): string {
 
   if (v.projects.length > 0) {
     sections.push(
-      `Projets (missions engagées) :\n${v.projects
+      `Projets / deals (couvre tout le cycle commercial → delivery) :\n${v.projects
         .map((p) => {
-          const bits = [`${p.name} (${p.kind})`];
-          if (p.linkedOpportunityTitle)
-            bits.push(`← issu de l'opportunité « ${p.linkedOpportunityTitle} »`);
-          return `- ${bits.join(" ")}`;
-        })
-        .join("\n")}`,
-    );
-  }
-
-  if (v.opportunities.length > 0) {
-    sections.push(
-      `Opportunités (ventes, à différents stades) :\n${v.opportunities
-        .map((o) => {
-          const bits = [o.title];
-          if (o.entityName) bits.push(`(${o.entityName})`);
-          bits.push(`statut: ${o.status}`);
-          if (o.linkedProjectName)
-            bits.push(`→ déjà convertie en projet « ${o.linkedProjectName} »`);
+          const bits = [`${p.name} (${p.kind}, ${p.status})`];
+          if (p.entityName) bits.push(`pour ${p.entityName}`);
           return `- ${bits.join(" ")}`;
         })
         .join("\n")}`,
@@ -232,7 +200,7 @@ function buildSystemPrompt(vocab: Vocabulary): string {
 et en extrait :
 - un résumé concis en français (markdown, 5 à 10 lignes max),
 - les décisions prises,
-- les entités, contacts, projets et opportunités évoqués,
+- les entités, contacts et projets/deals évoqués,
 - les tâches à faire avec leur assigné·e si mentionné·e.
 
 Règles générales :
@@ -241,37 +209,31 @@ Règles générales :
   retourne un tableau vide [], jamais omis.
 - Pour les contacts, sépare clairement firstName / lastName.
 - Pour les tâches, dueDate au format YYYY-MM-DD si une date est mentionnée.
-- Pour les opportunités, valueAmount en euros, sans symbole.
+- Pour les projets, valueAmount en euros (sans symbole) si mentionné.
 - Reste factuel et neutre dans le résumé.
 
-# Distinction CRUCIALE : opportunité vs projet
+# Projet (objet unique couvrant tout le cycle)
 
-Le système distingue deux objets liés mais différents :
+Un projet/deal couvre **tout le cycle**, de la prospection commerciale à la
+delivery, dans une seule entité. Le \`status\` indique où on en est :
 
-- **Opportunité** = une vente / un deal commercial à différents stades
-  (prospection, proposition envoyée, à relancer, signée, perdue). Elle
-  a une probabilité, un montant prévisionnel.
-- **Projet** = une mission engagée, après signature ou décision interne
-  d'allouer des ressources. Il a un budget, une période, des tâches.
+- **not_started** : prospection en cours, pas encore relancé.
+- **to_follow_up** : à relancer côté commercial.
+- **awaiting_response** : proposition envoyée, en attente de réponse.
+- **won** : deal signé, delivery imminente.
+- **planning** / **active** : delivery démarrée.
 
-Une opportunité gagnée donne lieu à un projet (cycle naturel). C'est
-donc **deux objets pour la même affaire à des stades différents**.
-
-Règles d'extraction :
-1. **Ne propose PAS les deux** pour la même affaire. Choisis le bon
-   stade selon le transcript :
-   - "on bosse sur X pour le client Y", "tâches X", "deadline X" → **projet**
-   - "on essaie de signer X", "proposition envoyée", "relance" → **opportunité**
-   - "on a signé X", "X est lancé" → **projet** (avec mention dans le résumé
-     que ça vient d'une opportunité gagnée)
-2. **Si une opportunité du vocabulaire est marquée "→ déjà convertie en
-   projet"** : ne propose ni l'opportunité ni un nouveau projet pour la
-   même affaire — tout existe déjà. Mentionne juste le projet existant
-   dans le résumé.
-3. **Si un projet du vocabulaire est marqué "← issu de l'opportunité X"** :
-   pareil, ne re-propose pas l'opportunité X.
-4. Quand il y a doute, **préfère l'opportunité** (un humain peut la
-   convertir en projet ; l'inverse est plus coûteux).`;
+Règles :
+1. **Un seul projet par affaire**, quel que soit le stade. Ne propose pas
+   un "projet" et un "deal" séparés.
+2. Choisis le \`status\` selon le langage du transcript :
+   - "on essaie de signer X", "proposition envoyée à X" → **awaiting_response**
+   - "on a signé X" → **won**
+   - "on bosse sur X", "tâches X", "deadline X" → **active**
+3. Pour les projets internes (kind=product/transverse), \`status\` est
+   normalement \`active\` directement.
+4. **Si un projet du vocabulaire correspond** : ne re-propose pas, mentionne
+   juste l'avancée dans le résumé.`;
 
   const vocabBlock = formatVocabulary(vocab);
   if (vocabBlock.length === 0) return baseRules;
@@ -285,18 +247,7 @@ Règles d'extraction :
 Voici les noms canoniques déjà en base. Si le transcript mentionne quelque
 chose qui leur ressemble — orthographe phonétique, acronyme, prénom seul,
 nom de famille seul, abréviation, faute de transcription — alors retourne
-**l'orthographe exacte de la liste**, pas celle du transcript. Cela permet
-la résolution automatique côté serveur.
-
-Exemples :
-- transcript "Pierre Yves" → retourne "Pierre-Yves Sage" (s'il est listé)
-- transcript "Acmé" → retourne "Acme Corp" (s'il est listé)
-- transcript "le projet Refonte" → retourne le nom complet du projet listé
-  qui contient "Refonte"
-
-Si le transcript parle d'une entité/contact/projet **clairement absent**
-de la liste, retourne le nom du transcript tel quel (la proposition
-restera marquée "à créer").
+**l'orthographe exacte de la liste**, pas celle du transcript.
 
 ${vocabBlock}`;
 }
@@ -384,22 +335,6 @@ export async function fuzzyMatchProject(name: string, threshold = 0.4): Promise<
     .limit(1);
   const top = rows[0];
   return top ? { id: top.id, name: top.name, confidence: Number(top.sim) } : null;
-}
-
-export async function fuzzyMatchOpportunity(title: string, threshold = 0.4): Promise<Match> {
-  const conn = await db();
-  const rows = await conn
-    .select({
-      id: opportunities.id,
-      title: opportunities.title,
-      sim: sql<number>`similarity(${opportunities.title}, ${title})`,
-    })
-    .from(opportunities)
-    .where(sql`similarity(${opportunities.title}, ${title}) > ${threshold}`)
-    .orderBy(sql`similarity(${opportunities.title}, ${title}) desc`)
-    .limit(1);
-  const top = rows[0];
-  return top ? { id: top.id, name: top.title, confidence: Number(top.sim) } : null;
 }
 
 export async function fuzzyMatchUser(name: string, threshold = 0.35): Promise<Match> {

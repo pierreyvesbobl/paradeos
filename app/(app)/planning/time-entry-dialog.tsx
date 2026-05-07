@@ -41,7 +41,6 @@ type Defaults = {
   description: string;
   taskId: string;
   projectId: string;
-  opportunityId: string;
   contactId: string;
 };
 
@@ -52,7 +51,6 @@ type Props = {
   defaults: Defaults;
   tasks: { id: string; title: string }[];
   projects: { id: string; name: string }[];
-  opportunities: { id: string; title: string }[];
   contacts: { id: string; label: string }[];
 };
 
@@ -63,7 +61,6 @@ export function TimeEntryDialog({
   defaults,
   tasks,
   projects,
-  opportunities,
   contacts,
 }: Props) {
   const router = useRouter();
@@ -78,7 +75,6 @@ export function TimeEntryDialog({
   const [description, setDescription] = useState(defaults.description);
   const [taskId, setTaskId] = useState<string | null>(defaults.taskId || null);
   const [projectId, setProjectId] = useState<string | null>(defaults.projectId || null);
-  const [opportunityId, setOpportunityId] = useState<string | null>(defaults.opportunityId || null);
   const [contactId, setContactId] = useState<string | null>(defaults.contactId || null);
 
   function buildPayload() {
@@ -90,7 +86,6 @@ export function TimeEntryDialog({
       description: description || undefined,
       taskId: taskId ?? undefined,
       projectId: projectId ?? undefined,
-      opportunityId: opportunityId ?? undefined,
       contactId: contactId ?? undefined,
     };
   }
@@ -222,17 +217,6 @@ export function TimeEntryDialog({
                 onValueChange={setProjectId}
                 options={projects.map((p) => ({ id: p.id, label: p.name }))}
                 searchPlaceholder="Rechercher un projet…"
-                disabled={pending}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="opportunityId">Opportunité (avant-vente)</Label>
-              <FkCombobox
-                id="opportunityId"
-                value={opportunityId}
-                onValueChange={setOpportunityId}
-                options={opportunities.map((o) => ({ id: o.id, label: o.title }))}
-                searchPlaceholder="Rechercher une opportunité…"
                 disabled={pending}
               />
             </div>

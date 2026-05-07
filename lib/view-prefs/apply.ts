@@ -26,13 +26,11 @@ export async function applyViewPrefRedirect({
   searchParams: Record<string, string | string[] | undefined>;
   relevantKeys: readonly string[];
 }): Promise<void> {
-  // Si l'URL contient déjà un param pertinent, on respecte le choix
-  // explicite (lien partagé, navigation manuelle).
-  const hasRelevant = relevantKeys.some((k) => {
-    const v = searchParams[k];
-    if (Array.isArray(v)) return v.length > 0;
-    return typeof v === "string" && v.length > 0;
-  });
+  // Si l'URL contient déjà un param pertinent (même avec une valeur vide,
+  // ex. `?q=` après un clear), on respecte le choix explicite et on n'écrase
+  // pas avec la pref sauvée — sinon l'utilisateur ne peut jamais sortir d'un
+  // filtre mémorisé.
+  const hasRelevant = relevantKeys.some((k) => searchParams[k] !== undefined);
   if (hasRelevant) return;
 
   const user = await requireUser();

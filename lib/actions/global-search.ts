@@ -2,7 +2,6 @@
 
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
-import { opportunities } from "@/db/schema/opportunities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { requireUser } from "@/lib/auth/server";
@@ -10,7 +9,6 @@ import { db } from "@/lib/db/server";
 import { asc, ilike, or } from "drizzle-orm";
 
 export type SearchResults = {
-  opportunities: { id: string; title: string }[];
   contacts: { id: string; firstName: string; lastName: string }[];
   projects: { id: string; name: string }[];
   entities: { id: string; name: string }[];
@@ -18,7 +16,6 @@ export type SearchResults = {
 };
 
 const EMPTY: SearchResults = {
-  opportunities: [],
   contacts: [],
   projects: [],
   entities: [],
@@ -35,13 +32,7 @@ export async function globalSearch(query: string): Promise<SearchResults> {
   const conn = await db();
   const pattern = `%${trimmed}%`;
 
-  const [opps, cnts, prjs, ents, tks] = await Promise.all([
-    conn
-      .select({ id: opportunities.id, title: opportunities.title })
-      .from(opportunities)
-      .where(ilike(opportunities.title, pattern))
-      .orderBy(asc(opportunities.title))
-      .limit(LIMIT),
+  const [cnts, prjs, ents, tks] = await Promise.all([
     conn
       .select({
         id: contacts.id,
@@ -79,7 +70,6 @@ export async function globalSearch(query: string): Promise<SearchResults> {
   ]);
 
   return {
-    opportunities: opps,
     contacts: cnts,
     projects: prjs,
     entities: ents,

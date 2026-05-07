@@ -10,7 +10,6 @@ type MentionResolver = {
   entities: Record<string, string>;
   projects: Record<string, string>;
   contacts: Record<string, string>;
-  opportunities: Record<string, string>;
   tasks: Record<string, string>;
 };
 
@@ -53,11 +52,13 @@ function inlineLinkify(content: string, resolver?: MentionResolver): string {
     const kind = m[1]?.toLowerCase() ?? "";
     const slug = (m[2] ?? "").toLowerCase();
     const map: Record<string, Record<string, string>> = {
+      // `#opp:` est maintenu en alias vers project (compat ascendante après
+      // fusion opportunities → projects).
       project: resolver.projects,
       projet: resolver.projects,
-      opp: resolver.opportunities,
-      opportunite: resolver.opportunities,
-      opportunité: resolver.opportunities,
+      opp: resolver.projects,
+      opportunite: resolver.projects,
+      opportunité: resolver.projects,
       contact: resolver.contacts,
       entity: resolver.entities,
       entite: resolver.entities,

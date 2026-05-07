@@ -14,6 +14,12 @@ export const createMeetingSchema = z.object({
     .max(200)
     .optional()
     .or(z.literal("").transform(() => undefined)),
+  projectId: z.string().uuid().optional(),
+});
+
+export const updateMeetingSubjectSchema = z.object({
+  meetingId: z.string().uuid(),
+  projectId: z.string().uuid().nullable(),
 });
 
 export const extractMeetingSchema = z.object({
@@ -46,3 +52,4 @@ export const deleteMeetingSchema = z.object({ id: z.string().uuid() });
 export type CreateMeetingInput = z.infer<typeof createMeetingSchema>;
 export type ExtractMeetingInput = z.infer<typeof extractMeetingSchema>;
 export type DecideProposalInput = z.infer<typeof decideProposalSchema>;
+export type UpdateMeetingSubjectInput = z.infer<typeof updateMeetingSubjectSchema>;

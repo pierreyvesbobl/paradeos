@@ -1,10 +1,9 @@
-import { opportunities } from "@/db/schema/opportunities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { timeEntries } from "@/db/schema/time-entries";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
-import { and, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 const durationMin = sql<number>`(extract(epoch from (${timeEntries.endAt} - ${timeEntries.startAt})) / 60)::int`;
 const sumActualMin = sql<number>`coalesce(sum((extract(epoch from (${timeEntries.endAt} - ${timeEntries.startAt})) / 60))
@@ -33,74 +32,25 @@ export type ByProjectRow = TimeBreakdown & {
   projectKind: string | null;
 };
 
-/** Stats pour une opportunité : totaux du temps avant-vente. */
-export async function getOpportunityTimeStats(opportunityId: string): Promise<TimeBreakdown> {
-  const conn = await db();
-  const [row] = await conn
-    .select({
-      actualMinutes: sumActualMin,
-      plannedMinutes: sumPlannedMin,
-    })
-    .from(timeEntries)
-    .where(eq(timeEntries.opportunityId, opportunityId));
-  return {
-    actualMinutes: row?.actualMinutes ?? 0,
-    plannedMinutes: row?.plannedMinutes ?? 0,
-  };
-}
-
-/** Stats pour un projet : totaux + breakdown par tâche et par utilisateur.
- *
- * Inclut le temps avant-vente : tous les `time_entries` rattachés aux
- * opportunités liées à ce projet (`opportunities.projectId = projectId`).
- * Renvoie aussi le découpage avant-vente / delivery dans `presale`. */
+/**
+ * Stats pour un projet : totaux + breakdown par tâche et par utilisateur.
+ * Avec la fusion opportunities → projects, le temps avant-vente (statuts
+ * commerciaux) et delivery sont agrégés sur la même row projet.
+ */
 export async function getProjectTimeStats(projectId: string): Promise<{
   totals: TimeBreakdown;
-  presale: TimeBreakdown;
-  delivery: TimeBreakdown;
   byTask: ByTaskRow[];
   byUser: ByUserRow[];
 }> {
   const conn = await db();
 
-  // 1. Trouve les ids d'opportunités converties en ce projet — leur
-  //    temps avant-vente sera agrégé.
-  const linkedOppRows = await conn
-    .select({ id: opportunities.id })
-    .from(opportunities)
-    .where(eq(opportunities.projectId, projectId));
-  const linkedOppIds = linkedOppRows.map((r) => r.id);
-
-  const projectOnly = eq(timeEntries.projectId, projectId);
-  const presaleOnly =
-    linkedOppIds.length > 0 ? inArray(timeEntries.opportunityId, linkedOppIds) : undefined;
-  const allTimeForProject = presaleOnly ? or(projectOnly, presaleOnly) : projectOnly;
-
-  const [deliveryRow] = await conn
+  const [totalsRow] = await conn
     .select({
       actualMinutes: sumActualMin,
       plannedMinutes: sumPlannedMin,
     })
     .from(timeEntries)
-    .where(projectOnly);
-
-  const presale: TimeBreakdown = presaleOnly
-    ? ((
-        await conn
-          .select({
-            actualMinutes: sumActualMin,
-            plannedMinutes: sumPlannedMin,
-          })
-          .from(timeEntries)
-          .where(presaleOnly)
-      )[0] ?? { actualMinutes: 0, plannedMinutes: 0 })
-    : { actualMinutes: 0, plannedMinutes: 0 };
-
-  const delivery = deliveryRow ?? { actualMinutes: 0, plannedMinutes: 0 };
-  const totals: TimeBreakdown = {
-    actualMinutes: presale.actualMinutes + delivery.actualMinutes,
-    plannedMinutes: presale.plannedMinutes + delivery.plannedMinutes,
-  };
+    .where(eq(timeEntries.projectId, projectId));
 
   const byTask = await conn
     .select({
@@ -111,7 +61,7 @@ export async function getProjectTimeStats(projectId: string): Promise<{
     })
     .from(timeEntries)
     .leftJoin(tasks, eq(timeEntries.taskId, tasks.id))
-    .where(allTimeForProject)
+    .where(eq(timeEntries.projectId, projectId))
     .groupBy(tasks.id, tasks.title)
     .orderBy(desc(sumActualMin));
 
@@ -124,14 +74,12 @@ export async function getProjectTimeStats(projectId: string): Promise<{
     })
     .from(timeEntries)
     .innerJoin(users, eq(timeEntries.userId, users.id))
-    .where(allTimeForProject)
+    .where(eq(timeEntries.projectId, projectId))
     .groupBy(users.id, users.fullName)
     .orderBy(desc(sumActualMin));
 
   return {
-    totals,
-    presale,
-    delivery,
+    totals: totalsRow ?? { actualMinutes: 0, plannedMinutes: 0 },
     byTask,
     byUser,
   };

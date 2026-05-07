@@ -1,12 +1,14 @@
 import { z } from "zod";
 
-export const noteSubjectTypeEnum = z.enum(["entity", "contact", "opportunity", "project", "task"]);
+// "opportunity" est volontairement retiré (fusion avec project). La valeur
+// reste dans le pg_enum pour rétro-compat mais aucune nouvelle note n'est
+// créée avec ce type ; les anciennes ont été migrées vers `project`.
+export const noteSubjectTypeEnum = z.enum(["entity", "contact", "project", "task"]);
 export type NoteSubjectType = z.infer<typeof noteSubjectTypeEnum>;
 
 export const noteSubjectTypeLabels: Record<NoteSubjectType, string> = {
   entity: "Entité",
   contact: "Contact",
-  opportunity: "Opportunité",
   project: "Projet",
   task: "Tâche",
 };

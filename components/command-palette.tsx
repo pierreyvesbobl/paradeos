@@ -9,30 +9,20 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { type SearchResults, globalSearch } from "@/lib/actions/global-search";
-import {
-  ArrowRight,
-  Briefcase,
-  Building2,
-  CheckSquare,
-  FolderKanban,
-  Plus,
-  User,
-} from "lucide-react";
+import { ArrowRight, Building2, CheckSquare, FolderKanban, Plus, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const QUICK_ACTIONS = [
-  { label: "Nouvelle opportunité", href: "/opportunites/nouveau" },
+  { label: "Nouveau projet / deal", href: "/projets/nouveau" },
   { label: "Nouveau contact", href: "/contacts/nouveau" },
   { label: "Nouvelle entité", href: "/entites/nouveau" },
-  { label: "Nouveau projet", href: "/projets/nouveau" },
   { label: "Nouvelle tâche", href: "/taches/nouveau" },
 ];
 
 const NAV = [
   { label: "Tableau de bord", href: "/" },
-  { label: "Opportunités", href: "/opportunites" },
-  { label: "Projets", href: "/projets" },
+  { label: "Projets / Pipeline", href: "/projets" },
   { label: "Contacts", href: "/contacts" },
   { label: "Entités", href: "/entites" },
   { label: "Tâches", href: "/taches" },
@@ -81,7 +71,6 @@ export function CommandPalette() {
         setResults(r);
       } catch {
         setResults({
-          opportunities: [],
           contacts: [],
           projects: [],
           entities: [],
@@ -104,7 +93,6 @@ export function CommandPalette() {
     hasQuery &&
     !pending &&
     results !== null &&
-    results.opportunities.length === 0 &&
     results.contacts.length === 0 &&
     results.projects.length === 0 &&
     results.entities.length === 0 &&
@@ -143,20 +131,6 @@ export function CommandPalette() {
           <CommandEmpty>Aucun résultat pour « {search.trim()} ».</CommandEmpty>
         ) : results ? (
           <>
-            {results.opportunities.length > 0 ? (
-              <CommandGroup heading="Opportunités">
-                {results.opportunities.map((o) => (
-                  <CommandItem
-                    key={o.id}
-                    value={`opp-${o.id}`}
-                    onSelect={() => go(`/opportunites/${o.id}`)}
-                  >
-                    <Briefcase className="size-4" />
-                    {o.title}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
             {results.contacts.length > 0 ? (
               <CommandGroup heading="Contacts">
                 {results.contacts.map((c) => (

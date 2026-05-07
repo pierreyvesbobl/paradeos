@@ -14,12 +14,13 @@ import {
 } from "@/components/ui/table";
 import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { meetings } from "@/db/schema/meetings";
+import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
-import { type SQL, and, asc, desc, ilike, sql } from "drizzle-orm";
-import { Mic, Plus } from "lucide-react";
+import { type SQL, and, asc, desc, eq, ilike, sql } from "drizzle-orm";
+import { FolderKanban, Mic, Plus } from "lucide-react";
 import Link from "next/link";
 
 const STATUS_LABEL = {
@@ -113,6 +114,8 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
       occurredAt: meetings.occurredAt,
       createdAt: meetings.createdAt,
       status: meetings.status,
+      projectId: meetings.projectId,
+      projectName: projects.name,
       pendingCount: sql<number>`(
         select count(*) from meeting_proposals
         where meeting_proposals.meeting_id = meetings.id
@@ -120,6 +123,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
       )`.as("pending_count"),
     })
     .from(meetings)
+    .leftJoin(projects, eq(meetings.projectId, projects.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(...orderByFor(sortState));
 
@@ -204,6 +208,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
                     buildHref={(next) => buildSortHref("/meetings", params, next)}
                   />
                 </TableHead>
+                <TableHead>Lié à</TableHead>
                 <TableHead>
                   <SortableHeader
                     label="Statut"
@@ -233,6 +238,19 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {row.occurredAt ? new Date(row.occurredAt).toLocaleDateString("fr-FR") : "—"}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {row.projectId && row.projectName ? (
+                      <Link
+                        href={`/projets/${row.projectId}`}
+                        className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted"
+                      >
+                        <FolderKanban className="size-3.5 text-muted-foreground" />
+                        <span className="truncate font-medium">{row.projectName}</span>
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <span

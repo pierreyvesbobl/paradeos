@@ -1,5 +1,4 @@
 import { entities } from "@/db/schema/entities";
-import { opportunities } from "@/db/schema/opportunities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
@@ -61,26 +60,26 @@ export async function GET(request: Request) {
       continue;
     }
 
-    // Relances dans les 3 prochains jours, opportunités dont user est owner.
+    // Relances dans les 3 prochains jours, projets en phase commerciale dont user est owner.
     const followUps = await conn
       .select({
-        id: opportunities.id,
-        title: opportunities.title,
-        followUpDate: opportunities.followUpDate,
+        id: projects.id,
+        title: projects.name,
+        followUpDate: projects.followUpDate,
         entityName: entities.name,
       })
-      .from(opportunities)
-      .leftJoin(entities, eq(opportunities.entityId, entities.id))
+      .from(projects)
+      .leftJoin(entities, eq(projects.entityId, entities.id))
       .where(
         and(
-          eq(opportunities.ownerId, user.id),
-          isNotNull(opportunities.followUpDate),
-          gte(opportunities.followUpDate, todayIso),
-          lt(opportunities.followUpDate, horizonIso),
-          sql`${opportunities.status} not in ('won', 'lost')`,
+          eq(projects.ownerId, user.id),
+          isNotNull(projects.followUpDate),
+          gte(projects.followUpDate, todayIso),
+          lt(projects.followUpDate, horizonIso),
+          sql`${projects.status} in ('not_started', 'to_follow_up', 'awaiting_response')`,
         ),
       )
-      .orderBy(asc(opportunities.followUpDate));
+      .orderBy(asc(projects.followUpDate));
 
     // Tâches en retard.
     const overdue = await conn
@@ -114,7 +113,7 @@ export async function GET(request: Request) {
         title: f.title,
         entityName: f.entityName,
         followUpDate: f.followUpDate ?? "",
-        href: `${appUrl}/opportunites/${f.id}`,
+        href: `${appUrl}/projets/${f.id}`,
       })),
       overdueTasks: overdue.map((t) => ({
         title: t.title,

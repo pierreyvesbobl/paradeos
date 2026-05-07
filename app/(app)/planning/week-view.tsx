@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { moveTimeEntry } from "@/lib/actions/time-entries";
 import { DAY_LABELS, addDays, formatWeekRange, startOfIsoWeek } from "@/lib/calendar";
+import { formatDuration } from "@/lib/format";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { TimeEntryDialog } from "./time-entry-dialog";
@@ -24,7 +25,6 @@ type EntrySerialized = {
   description: string | null;
   taskId: string | null;
   projectId: string | null;
-  opportunityId: string | null;
   contactId: string | null;
   color: string | null;
 };
@@ -34,7 +34,6 @@ type Props = {
   entries: EntrySerialized[];
   tasks: { id: string; title: string }[];
   projects: { id: string; name: string }[];
-  opportunities: { id: string; title: string }[];
   contacts: { id: string; label: string }[];
 };
 
@@ -58,14 +57,7 @@ type CreateDrag = {
   currentMinutes: number;
 };
 
-export function WeekView({
-  weekStartIso,
-  entries,
-  tasks,
-  projects,
-  opportunities,
-  contacts,
-}: Props) {
+export function WeekView({ weekStartIso, entries, tasks, projects, contacts }: Props) {
   const weekStart = startOfIsoWeek(new Date(`${weekStartIso}T00:00:00`));
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -275,16 +267,27 @@ export function WeekView({
           <div className="border-r border-b bg-muted/30" />
           {days.map((d, i) => {
             const today = isSameDay(d, new Date());
+            const minutes = dayActualMinutes(d, optimistic);
             return (
               <div
                 key={d.toISOString()}
-                className={`border-r border-b px-2 py-2 text-xs ${today ? "bg-primary/5" : "bg-muted/30"}`}
+                className={`space-y-0.5 border-r border-b px-2 py-2 text-xs ${today ? "bg-primary/5" : "bg-muted/30"}`}
               >
                 <p className="font-medium">{DAY_LABELS[i]}</p>
                 <p
                   className={`text-muted-foreground ${today ? "font-medium text-foreground" : ""}`}
                 >
                   {d.getDate()}/{String(d.getMonth() + 1).padStart(2, "0")}
+                </p>
+                <p
+                  className={`tabular-nums ${
+                    minutes > 0
+                      ? "font-medium text-emerald-600 dark:text-emerald-400"
+                      : "text-muted-foreground/50"
+                  }`}
+                  title="Temps réalisé sur la journée"
+                >
+                  {minutes > 0 ? formatDuration(minutes) : "—"}
                 </p>
               </div>
             );
@@ -333,19 +336,17 @@ export function WeekView({
           mode={dialogState.mode}
           tasks={tasks}
           projects={projects}
-          opportunities={opportunities}
           contacts={contacts}
           defaults={
             dialogState.mode === "create"
               ? {
-                  kind: "planned",
+                  kind: "actual",
                   startAt: dialogState.defaults.startAt,
                   endAt: dialogState.defaults.endAt,
                   title: "",
                   description: "",
                   taskId: "",
                   projectId: "",
-                  opportunityId: "",
                   contactId: "",
                 }
               : {
@@ -357,7 +358,6 @@ export function WeekView({
                   description: dialogState.entry.description ?? "",
                   taskId: dialogState.entry.taskId ?? "",
                   projectId: dialogState.entry.projectId ?? "",
-                  opportunityId: dialogState.entry.opportunityId ?? "",
                   contactId: dialogState.entry.contactId ?? "",
                 }
           }
@@ -560,6 +560,16 @@ function layoutDayEntries(
 }
 
 // ---------- helpers ----------
+
+function dayActualMinutes(day: Date, entries: EntrySerialized[]): number {
+  return entries
+    .filter((e) => e.kind === "actual" && isSameDay(new Date(e.startAt), day))
+    .reduce((acc, e) => {
+      const start = new Date(e.startAt).getTime();
+      const end = new Date(e.endAt).getTime();
+      return acc + Math.max(0, (end - start) / 60000);
+    }, 0);
+}
 
 function isSameDay(a: Date, b: Date): boolean {
   return (

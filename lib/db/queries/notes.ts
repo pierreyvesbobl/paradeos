@@ -1,9 +1,13 @@
+import { contacts } from "@/db/schema/contacts";
+import { entities } from "@/db/schema/entities";
 import { noteAttachments } from "@/db/schema/note-attachments";
 import { notes } from "@/db/schema/notes";
+import { projects } from "@/db/schema/projects";
+import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
-import type { NoteKind, NoteSubjectType } from "@/lib/schemas/notes";
-import { type SQL, and, asc, desc, eq, gte, ilike, inArray, lt, or } from "drizzle-orm";
+import type { NoteSubjectType } from "@/lib/schemas/notes";
+import { type SQL, and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
 export type AttachmentRow = {
   id: string;
@@ -66,35 +70,62 @@ export async function getNotesForSubject(
     .orderBy(desc(notes.occurredAt));
 }
 
-export type NotesFilter = {
+export type NoteSortField = "occurredAt" | "subject" | "kind" | "author";
+
+export type NotesQuery = {
+  /** Conditions SQL arbitraires (issues d'`applyFilters` côté page). */
+  conditions?: SQL[];
+  /** Recherche full-text (titre + contenu). */
   query?: string;
-  kind?: NoteKind;
-  subjectType?: NoteSubjectType;
-  authorId?: string;
-  /** Date métier ≥ start (inclus). */
-  start?: Date;
-  /** Date métier < end (exclus). */
-  end?: Date;
   limit?: number;
-  /** Tri sur `occurredAt`. Default: desc (récents en premier). */
-  order?: "asc" | "desc";
+  /** Champ de tri. Default: occurredAt. */
+  sortField?: NoteSortField;
+  /** Direction de tri. Default: desc. */
+  sortDir?: "asc" | "desc";
 };
 
-export async function getRecentNotes(filter: NotesFilter = {}) {
+/**
+ * Expression SQL `subject_label` réutilisée pour SELECT et ORDER BY.
+ * Drizzle ne sait pas réutiliser un alias dans ORDER BY, donc on duplique
+ * la logique CASE.
+ */
+const subjectLabelExpr = sql<string | null>`
+  CASE ${notes.subjectType}
+    WHEN 'project' THEN ${projects.name}
+    WHEN 'contact' THEN trim(${contacts.firstName} || ' ' || ${contacts.lastName})
+    WHEN 'entity' THEN ${entities.name}
+    WHEN 'task' THEN ${tasks.title}
+    ELSE NULL
+  END
+`;
+
+function orderByFor(field: NoteSortField, dir: "asc" | "desc"): SQL[] {
+  const apply = dir === "asc" ? asc : desc;
+  switch (field) {
+    case "occurredAt":
+      return [apply(notes.occurredAt)];
+    case "kind":
+      return [apply(notes.kind), desc(notes.occurredAt)];
+    case "subject":
+      return [apply(subjectLabelExpr), desc(notes.occurredAt)];
+    case "author":
+      return [apply(users.fullName), desc(notes.occurredAt)];
+    default:
+      return [desc(notes.occurredAt)];
+  }
+}
+
+export async function getRecentNotes(input: NotesQuery = {}) {
   const conn = await db();
-  const conditions: SQL[] = [];
-  if (filter.kind) conditions.push(eq(notes.kind, filter.kind));
-  if (filter.subjectType) conditions.push(eq(notes.subjectType, filter.subjectType));
-  if (filter.authorId) conditions.push(eq(notes.authorId, filter.authorId));
-  if (filter.start) conditions.push(gte(notes.occurredAt, filter.start));
-  if (filter.end) conditions.push(lt(notes.occurredAt, filter.end));
-  if (filter.query) {
-    const pattern = `%${filter.query}%`;
+  const conditions: SQL[] = [...(input.conditions ?? [])];
+  if (input.query) {
+    const pattern = `%${input.query}%`;
     const orCond = or(ilike(notes.title, pattern), ilike(notes.content, pattern));
     if (orCond) conditions.push(orCond);
   }
 
-  const dir = filter.order === "asc" ? asc : desc;
+  const sortField = input.sortField ?? "occurredAt";
+  const sortDir = input.sortDir ?? "desc";
   return conn
     .select({
       id: notes.id,
@@ -103,13 +134,19 @@ export async function getRecentNotes(filter: NotesFilter = {}) {
       kind: notes.kind,
       subjectType: notes.subjectType,
       subjectId: notes.subjectId,
+      /** Nom lisible du sujet (Refonte Acme, Pierre Dupont…). NULL si note libre. */
+      subjectLabel: subjectLabelExpr.as("subject_label"),
       occurredAt: notes.occurredAt,
       authorId: users.id,
       authorName: users.fullName,
     })
     .from(notes)
     .innerJoin(users, eq(notes.authorId, users.id))
+    .leftJoin(projects, and(eq(notes.subjectType, "project"), eq(notes.subjectId, projects.id)))
+    .leftJoin(contacts, and(eq(notes.subjectType, "contact"), eq(notes.subjectId, contacts.id)))
+    .leftJoin(entities, and(eq(notes.subjectType, "entity"), eq(notes.subjectId, entities.id)))
+    .leftJoin(tasks, and(eq(notes.subjectType, "task"), eq(notes.subjectId, tasks.id)))
     .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(dir(notes.occurredAt))
-    .limit(filter.limit ?? 100);
+    .orderBy(...orderByFor(sortField, sortDir))
+    .limit(input.limit ?? 100);
 }

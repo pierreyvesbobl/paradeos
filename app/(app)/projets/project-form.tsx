@@ -18,11 +18,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { createProject, updateProject } from "@/lib/actions/projects";
 import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import {
+  COMMERCIAL_STATUSES,
   type ProjectBillingType,
   type ProjectKind,
   type ProjectStatus,
   projectBillingTypeEnum,
   projectBillingTypeLabels,
+  projectDefaultProbability,
   projectKindEnum,
   projectKindLabels,
   projectStatusEnum,
@@ -33,11 +35,13 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 type EntityOption = { id: string; name: string };
+type ContactOption = { id: string; firstName: string; lastName: string };
 type UserOption = { id: string; fullName: string | null };
 
 type Props = {
   mode: "create" | "edit";
   entities: EntityOption[];
+  contacts: ContactOption[];
   users: UserOption[];
   defaultValues: {
     id?: string;
@@ -45,6 +49,7 @@ type Props = {
     kind: ProjectKind;
     status: ProjectStatus;
     entityId: string;
+    contactId: string;
     color: string;
     icon: string;
     description: string;
@@ -54,10 +59,17 @@ type Props = {
     billingType: ProjectBillingType;
     budgetAmount: string;
     hourlyRate: string;
+    valueAmount: string;
+    probability: string;
+    source: string;
+    firstContactDate: string;
+    lastContactDate: string;
+    followUpDate: string;
+    expectedCloseDate: string;
   };
 };
 
-export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
+export function ProjectForm({ mode, entities, contacts, users, defaultValues }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
@@ -66,6 +78,7 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
   const [kind, setKind] = useState<ProjectKind>(defaultValues.kind);
   const [status, setStatus] = useState<ProjectStatus>(defaultValues.status);
   const [entityId, setEntityId] = useState<string | null>(defaultValues.entityId || null);
+  const [contactId, setContactId] = useState<string | null>(defaultValues.contactId || null);
   const [color, setColor] = useState(defaultValues.color);
   const [icon, setIcon] = useState(defaultValues.icon);
   const [description, setDescription] = useState(defaultValues.description);
@@ -75,6 +88,26 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
   const [billingType, setBillingType] = useState<ProjectBillingType>(defaultValues.billingType);
   const [budgetAmount, setBudgetAmount] = useState(defaultValues.budgetAmount);
   const [hourlyRate, setHourlyRate] = useState(defaultValues.hourlyRate);
+  const [valueAmount, setValueAmount] = useState(defaultValues.valueAmount);
+  const [probability, setProbability] = useState(defaultValues.probability);
+  const [probaTouched, setProbaTouched] = useState(Boolean(defaultValues.probability));
+  const [source, setSource] = useState(defaultValues.source);
+  const [firstContactDate, setFirstContactDate] = useState(defaultValues.firstContactDate);
+  const [lastContactDate, setLastContactDate] = useState(defaultValues.lastContactDate);
+  const [followUpDate, setFollowUpDate] = useState(defaultValues.followUpDate);
+  const [expectedCloseDate, setExpectedCloseDate] = useState(defaultValues.expectedCloseDate);
+
+  // Champs commerciaux pertinents pour kind=client en phase pré-won.
+  const showCommercial =
+    kind === "client" && (COMMERCIAL_STATUSES as readonly string[]).includes(status);
+
+  function onStatusChange(s: ProjectStatus) {
+    setStatus(s);
+    if (!probaTouched) {
+      const p = projectDefaultProbability[s];
+      if (p != null) setProbability(String(p));
+    }
+  }
 
   function buildPayload() {
     return {
@@ -82,6 +115,7 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
       kind,
       status,
       entityId: entityId ?? undefined,
+      contactId: contactId ?? undefined,
       color: color || undefined,
       icon: icon || undefined,
       description: description || undefined,
@@ -91,6 +125,13 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
       billingType,
       budgetAmount: billingType === "fixed" ? budgetAmount || undefined : undefined,
       hourlyRate: billingType === "hourly" ? hourlyRate || undefined : undefined,
+      valueAmount: showCommercial && valueAmount ? valueAmount : undefined,
+      probability: showCommercial && probability ? probability : undefined,
+      source: showCommercial && source ? source : undefined,
+      firstContactDate: showCommercial && firstContactDate ? firstContactDate : undefined,
+      lastContactDate: showCommercial && lastContactDate ? lastContactDate : undefined,
+      followUpDate: showCommercial && followUpDate ? followUpDate : undefined,
+      expectedCloseDate: showCommercial && expectedCloseDate ? expectedCloseDate : undefined,
     };
   }
 
@@ -158,7 +199,7 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
             <Label htmlFor="status">Statut</Label>
             <Select
               value={status}
-              onValueChange={(v) => setStatus(v as ProjectStatus)}
+              onValueChange={(v) => onStatusChange(v as ProjectStatus)}
               disabled={pending}
             >
               <SelectTrigger id="status">
@@ -181,17 +222,115 @@ export function ProjectForm({ mode, entities, users, defaultValues }: Props) {
           <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
             Client
           </h2>
-          <div className="space-y-2">
-            <Label htmlFor="entityId">Entité *</Label>
-            <FkCombobox
-              id="entityId"
-              value={entityId}
-              onValueChange={setEntityId}
-              options={entities.map((e) => ({ id: e.id, label: e.name }))}
-              searchPlaceholder="Rechercher une entité…"
-              disabled={pending}
-            />
-            <FieldError messages={errors.entityId} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="entityId">Entité *</Label>
+              <FkCombobox
+                id="entityId"
+                value={entityId}
+                onValueChange={setEntityId}
+                options={entities.map((e) => ({ id: e.id, label: e.name }))}
+                searchPlaceholder="Rechercher une entité…"
+                disabled={pending}
+              />
+              <FieldError messages={errors.entityId} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contactId">Contact principal</Label>
+              <FkCombobox
+                id="contactId"
+                value={contactId}
+                onValueChange={setContactId}
+                options={contacts.map((c) => ({
+                  id: c.id,
+                  label: `${c.firstName} ${c.lastName}`.trim(),
+                }))}
+                searchPlaceholder="Rechercher un contact…"
+                disabled={pending}
+              />
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {showCommercial ? (
+        <section className="space-y-4">
+          <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+            Commercial (avant signature)
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="valueAmount">Montant prévisionnel (HT)</Label>
+              <MoneyInput
+                id="valueAmount"
+                value={valueAmount}
+                onValueChange={setValueAmount}
+                placeholder="12 500"
+                disabled={pending}
+              />
+              <FieldError messages={errors.valueAmount} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="probability">Probabilité (%)</Label>
+              <Input
+                id="probability"
+                type="number"
+                min={0}
+                max={100}
+                value={probability}
+                onChange={(e) => {
+                  setProbability(e.target.value);
+                  setProbaTouched(true);
+                }}
+                disabled={pending}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="source">Source</Label>
+              <Input
+                id="source"
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+                placeholder="Apporteur, channel…"
+                disabled={pending}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="firstContactDate">Premier contact</Label>
+              <DateInput
+                id="firstContactDate"
+                value={firstContactDate}
+                onValueChange={setFirstContactDate}
+                disabled={pending}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lastContactDate">Dernier contact</Label>
+              <DateInput
+                id="lastContactDate"
+                value={lastContactDate}
+                onValueChange={setLastContactDate}
+                disabled={pending}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="followUpDate">Relance prévue</Label>
+              <DateInput
+                id="followUpDate"
+                value={followUpDate}
+                onValueChange={setFollowUpDate}
+                disabled={pending}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="expectedCloseDate">Closing estimé</Label>
+              <DateInput
+                id="expectedCloseDate"
+                value={expectedCloseDate}
+                onValueChange={setExpectedCloseDate}
+                disabled={pending}
+              />
+            </div>
           </div>
         </section>
       ) : null}
