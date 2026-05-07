@@ -247,6 +247,10 @@ export const patchProjectSchema = z.object({
 
 export const quickCreateProjectSchema = z.object({
   name: z.string().trim().min(1, "Le nom est requis.").max(200),
+  /** Permet de créer en client (deal) ou autre kind. Default: transverse. */
+  kind: projectKindEnum.optional(),
+  /** Statut initial. Default: planning. Utile pour le pipeline (not_started, etc.). */
+  status: projectStatusEnum.optional(),
 });
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;

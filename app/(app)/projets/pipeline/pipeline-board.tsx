@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { patchProject } from "@/lib/actions/projects";
+import { patchProject, quickCreateProject } from "@/lib/actions/projects";
 import { formatDate, formatEuro } from "@/lib/format";
 import { type ProjectStatus, projectStatusLabels } from "@/lib/schemas/projects";
 import {
@@ -21,10 +21,10 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { Building2, Clock } from "lucide-react";
+import { Building2, Clock, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useOptimistic, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 export type PipelineItem = {
@@ -67,11 +67,14 @@ export function PipelineBoard({ items }: { items: PipelineItem[] }) {
     state.map((it) => (it.id === payload.id ? { ...it, status: payload.status } : it)),
   );
   const [, startTransition] = useTransition();
-  // Quand un drop atteint "won" sur un projet en phase commerciale, on
-  // propose tout de suite de basculer en delivery.
   const [deliveryCandidate, setDeliveryCandidate] = useState<PipelineItem | null>(null);
-
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  // @dnd-kit utilise un compteur module-level pour ses `aria-describedby`,
+  // ce qui crée des mismatches d'hydratation SSR/client. On monte le DnD
+  // uniquement après hydratation.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   function onDragEnd(event: DragEndEvent) {
     const id = String(event.active.id);
@@ -89,11 +92,14 @@ export function PipelineBoard({ items }: { items: PipelineItem[] }) {
         applyMove({ id, status: current.status });
         return;
       }
-      // Drop sur "won" et phase commerciale → propose la delivery.
       if (nextStatus === "won" && current.status !== "won") {
         queueMicrotask(() => setDeliveryCandidate({ ...current, status: "won" }));
       }
     });
+  }
+
+  if (!mounted) {
+    return <StaticBoard items={optimisticItems} />;
   }
 
   return (
@@ -120,37 +126,38 @@ export function PipelineBoard({ items }: { items: PipelineItem[] }) {
       ) : null}
     </>
   );
+}
 
-  function Column({ status, items }: { status: ProjectStatus; items: PipelineItem[] }) {
-    const { setNodeRef, isOver } = useDroppable({ id: status });
-    const total = items.reduce((acc, it) => acc + Number(it.valueAmount ?? 0), 0);
-    return (
-      <section
-        ref={setNodeRef}
-        className={`flex w-72 shrink-0 flex-col gap-2 rounded-lg border p-2 transition-colors ${
-          isOver ? "border-foreground/30 bg-muted/70" : "bg-muted/40"
-        }`}
-      >
-        <header className="flex items-center justify-between px-2 py-1">
-          <div className="flex items-center gap-2">
-            <span className={`inline-block size-2 rounded-full ${STATUS_DOT[status]}`} />
-            <h2 className="font-medium text-sm">{projectStatusLabels[status]}</h2>
-            <span className="text-muted-foreground text-xs">{items.length}</span>
-          </div>
-          {total > 0 ? (
-            <span className="font-medium text-muted-foreground text-xs tabular-nums">
-              {formatEuro(total)}
-            </span>
-          ) : null}
-        </header>
-        <ul className="flex flex-col gap-2">
-          {items.map((it) => (
-            <Card key={it.id} item={it} />
-          ))}
-        </ul>
-      </section>
-    );
-  }
+function Column({ status, items }: { status: ProjectStatus; items: PipelineItem[] }) {
+  const { setNodeRef, isOver } = useDroppable({ id: status });
+  const total = items.reduce((acc, it) => acc + Number(it.valueAmount ?? 0), 0);
+  return (
+    <section
+      ref={setNodeRef}
+      className={`flex w-72 shrink-0 flex-col gap-2 rounded-lg border p-2 transition-colors ${
+        isOver ? "border-foreground/30 bg-muted/70" : "bg-muted/40"
+      }`}
+    >
+      <header className="flex items-center justify-between px-2 py-1">
+        <div className="flex items-center gap-2">
+          <span className={`inline-block size-2 rounded-full ${STATUS_DOT[status]}`} />
+          <h2 className="font-medium text-sm">{projectStatusLabels[status]}</h2>
+          <span className="text-muted-foreground text-xs">{items.length}</span>
+        </div>
+        {total > 0 ? (
+          <span className="font-medium text-muted-foreground text-xs tabular-nums">
+            {formatEuro(total)}
+          </span>
+        ) : null}
+      </header>
+      <ul className="flex flex-col gap-2">
+        {items.map((it) => (
+          <Card key={it.id} item={it} />
+        ))}
+      </ul>
+      <ColumnAddForm status={status} />
+    </section>
+  );
 }
 
 function Card({ item }: { item: PipelineItem }) {
@@ -214,6 +221,145 @@ function Card({ item }: { item: PipelineItem }) {
         </div>
       </Link>
     </li>
+  );
+}
+
+/**
+ * Rendu statique non-DnD pour le pré-hydratation. Mêmes colonnes / cartes
+ * mais sans `useDraggable`/`useDroppable` (qui génèrent des IDs aria
+ * non-déterministes en SSR).
+ */
+function StaticBoard({ items }: { items: PipelineItem[] }) {
+  return (
+    <div className="-mx-6 overflow-x-auto px-6 pb-2">
+      <div className="flex items-start gap-3">
+        {COLUMNS.map((status) => {
+          const colItems = items.filter((it) => it.status === status);
+          const total = colItems.reduce((acc, it) => acc + Number(it.valueAmount ?? 0), 0);
+          return (
+            <section
+              key={status}
+              className="flex w-72 shrink-0 flex-col gap-2 rounded-lg border bg-muted/40 p-2"
+            >
+              <header className="flex items-center justify-between px-2 py-1">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block size-2 rounded-full ${STATUS_DOT[status]}`} />
+                  <h2 className="font-medium text-sm">{projectStatusLabels[status]}</h2>
+                  <span className="text-muted-foreground text-xs">{colItems.length}</span>
+                </div>
+                {total > 0 ? (
+                  <span className="font-medium text-muted-foreground text-xs tabular-nums">
+                    {formatEuro(total)}
+                  </span>
+                ) : null}
+              </header>
+              <ul className="flex flex-col gap-2">
+                {colItems.map((it) => (
+                  <li
+                    key={it.id}
+                    className="rounded-lg border border-border/60 bg-background px-3 py-2.5 shadow-sm"
+                  >
+                    <p className="font-medium text-foreground text-sm leading-snug">{it.name}</p>
+                    {it.entityName ? (
+                      <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <Building2 className="size-3" />
+                        <span className="truncate">{it.entityName}</span>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ColumnAddForm({ status }: { status: ProjectStatus }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  function submit() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    startTransition(async () => {
+      const res = await quickCreateProject({ name: trimmed, kind: "client", status });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(`« ${res.data.name} » créé.`);
+      setName("");
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <Plus className="size-3.5" />
+        Ajouter un deal
+      </button>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      className="space-y-1.5 rounded-md border bg-background p-1.5"
+    >
+      <input
+        type="text"
+        // biome-ignore lint/a11y/noAutofocus: focus voulu après ouverture du form
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setName("");
+            setOpen(false);
+          }
+        }}
+        onBlur={() => {
+          if (!name.trim()) setOpen(false);
+        }}
+        placeholder="Titre du deal…"
+        disabled={pending}
+        className="w-full rounded-sm bg-transparent px-1.5 py-0.5 text-sm outline-none focus-visible:bg-muted/50"
+      />
+      <div className="flex items-center justify-end gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            setName("");
+            setOpen(false);
+          }}
+          disabled={pending}
+          className="rounded-sm px-2 py-0.5 text-muted-foreground text-xs hover:bg-muted"
+        >
+          Annuler
+        </button>
+        <button
+          type="submit"
+          disabled={pending || !name.trim()}
+          className="rounded-sm bg-foreground px-2 py-0.5 text-background text-xs disabled:opacity-50"
+        >
+          {pending ? "…" : "Ajouter"}
+        </button>
+      </div>
+    </form>
   );
 }
 

@@ -9,6 +9,7 @@ import type { SaveResult, Saver } from "@/components/inline/types";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
 import { UserAvatar } from "@/components/user/user-avatar";
 import { quickCreateEntity } from "@/lib/actions/entities";
 import { patchProject } from "@/lib/actions/projects";
@@ -38,7 +39,14 @@ type FieldId =
   | "ownerId"
   | "billingType"
   | "budgetAmount"
-  | "hourlyRate";
+  | "hourlyRate"
+  | "valueAmount"
+  | "probability"
+  | "source"
+  | "firstContactDate"
+  | "lastContactDate"
+  | "followUpDate"
+  | "expectedCloseDate";
 
 function makeSaver<T>(id: string, field: FieldId): Saver<T> {
   return async (value): Promise<SaveResult> => {
@@ -142,7 +150,13 @@ export function ProjDate({
   value,
 }: {
   id: string;
-  field: "startDate" | "endDate";
+  field:
+    | "startDate"
+    | "endDate"
+    | "firstContactDate"
+    | "lastContactDate"
+    | "followUpDate"
+    | "expectedCloseDate";
   value: string | null;
 }) {
   return <InlineDate value={value} onSave={makeSaver<string | null>(id, field)} />;
@@ -204,6 +218,154 @@ export function ProjEntity({
       }}
       createLabel="Créer l'entité"
     />
+  );
+}
+
+export function ProjValueAmount({ id, value }: { id: string; value: string | null }) {
+  const numeric = value != null ? Number(value) : null;
+  return (
+    <InlineText
+      value={numeric != null ? String(numeric) : null}
+      inputMode="decimal"
+      maxLength={20}
+      format={(raw) => (raw != null ? formatEuro(Number(raw)) : "—")}
+      onSave={async (raw): Promise<SaveResult> => {
+        if (raw === null) {
+          const res = await patchProject({ id, valueAmount: null });
+          return res.ok ? { ok: true } : { ok: false, message: res.message };
+        }
+        const num = Number.parseFloat(raw.replace(/\s/g, "").replace(",", "."));
+        if (!Number.isFinite(num) || num < 0) {
+          return { ok: false, message: "Montant invalide." };
+        }
+        const res = await patchProject({ id, valueAmount: num });
+        return res.ok ? { ok: true } : { ok: false, message: res.message };
+      }}
+    />
+  );
+}
+
+export function ProjSource({ id, value }: { id: string; value: string | null }) {
+  return (
+    <InlineText
+      value={value}
+      maxLength={200}
+      placeholder="Apporteur, channel…"
+      onSave={makeSaver<string | null>(id, "source")}
+    />
+  );
+}
+
+/** Slider de probabilité (0-100), édité via popover, save eager au release. */
+export function ProjProbability({ id, value }: { id: string; value: number | null }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<number>(value ?? 0);
+  const [pending, startTransition] = useTransition();
+
+  function commit(next: number) {
+    if (next === (value ?? 0)) {
+      setOpen(false);
+      return;
+    }
+    startTransition(async () => {
+      const res = await patchProject({ id, probability: next });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
+  function clear() {
+    if (value === null) {
+      setOpen(false);
+      return;
+    }
+    startTransition(async () => {
+      const res = await patchProject({ id, probability: null });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) setDraft(value ?? 0);
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={pending}
+          className="-mx-1.5 inline-flex items-center gap-2 rounded-sm px-1.5 py-0.5 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          title="Probabilité de gain"
+        >
+          {value != null ? (
+            <>
+              <span className="relative inline-block h-1.5 w-12 overflow-hidden rounded-full bg-muted">
+                <span
+                  className="absolute inset-y-0 left-0 bg-foreground/70"
+                  style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+                />
+              </span>
+              <span className="font-medium tabular-nums">{value}%</span>
+            </>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 space-y-3 p-3">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground text-xs uppercase tracking-wide">Probabilité</span>
+          <span className="font-medium text-sm tabular-nums">{draft}%</span>
+        </div>
+        <Slider
+          value={[draft]}
+          onValueChange={(v) => setDraft(v[0] ?? 0)}
+          onValueCommit={(v) => commit(v[0] ?? 0)}
+          min={0}
+          max={100}
+          step={5}
+        />
+        <div className="flex flex-wrap gap-1 pt-1">
+          {[0, 25, 50, 75, 100].map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setDraft(preset);
+                commit(preset);
+              }}
+              className="rounded-md border px-2 py-0.5 text-xs hover:bg-muted"
+            >
+              {preset}%
+            </button>
+          ))}
+          {value !== null ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={clear}
+              className="ml-auto rounded-md px-2 py-0.5 text-muted-foreground text-xs hover:bg-muted"
+            >
+              Effacer
+            </button>
+          ) : null}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

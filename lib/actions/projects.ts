@@ -87,8 +87,9 @@ export const updateProject = action(updateProjectSchema, async ({ input }) => {
  * fournis sont mis à jour. `null` = effacer.
  */
 /**
- * Création rapide depuis un picker FK : juste un nom (kind=transverse,
- * status=planning par défaut).
+ * Création rapide : nom requis, kind/status optionnels.
+ *  - Picker FK depuis un autre form → defaults transverse + planning
+ *  - Bottom de colonne pipeline → kind=client + status commercial
  */
 export const quickCreateProject = action(quickCreateProjectSchema, async ({ input, user }) => {
   const conn = await db();
@@ -96,14 +97,15 @@ export const quickCreateProject = action(quickCreateProjectSchema, async ({ inpu
     .insert(projects)
     .values({
       name: input.name,
-      kind: "transverse",
-      status: "planning",
+      kind: input.kind ?? "transverse",
+      status: input.status ?? "planning",
       ownerId: user.id,
       createdBy: user.id,
     })
     .returning({ id: projects.id, name: projects.name });
   if (!row) throw new Error("Création échouée.");
   revalidatePath("/projets");
+  revalidatePath("/projets/pipeline");
   return { id: row.id, name: row.name };
 });
 

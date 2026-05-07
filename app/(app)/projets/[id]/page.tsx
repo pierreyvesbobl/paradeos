@@ -40,7 +40,10 @@ import {
   ProjKind,
   ProjName,
   ProjOwner,
+  ProjProbability,
+  ProjSource,
   ProjStatus,
+  ProjValueAmount,
 } from "./inline-fields";
 import { ProjectTransitionButtons } from "./transition-button";
 
@@ -241,6 +244,36 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
           </Link>
         ) : null}
       </SidebarSection>
+
+      {project.kind === "client" ? (
+        <SidebarSection title="Commercial">
+          <dl className="space-y-3">
+            <ProjField label="Montant prévisionnel">
+              <ProjValueAmount id={id} value={project.valueAmount} />
+            </ProjField>
+            <ProjField label="Probabilité">
+              <ProjProbability id={id} value={project.probability} />
+            </ProjField>
+            <ProjField label="Source">
+              <ProjSource id={id} value={project.source} />
+            </ProjField>
+            <div className="grid grid-cols-2 gap-3">
+              <ProjField label="1er contact">
+                <ProjDate id={id} field="firstContactDate" value={project.firstContactDate} />
+              </ProjField>
+              <ProjField label="Dernier contact">
+                <ProjDate id={id} field="lastContactDate" value={project.lastContactDate} />
+              </ProjField>
+              <ProjField label="Relance prévue">
+                <ProjDate id={id} field="followUpDate" value={project.followUpDate} />
+              </ProjField>
+              <ProjField label="Closing estimé">
+                <ProjDate id={id} field="expectedCloseDate" value={project.expectedCloseDate} />
+              </ProjField>
+            </div>
+          </dl>
+        </SidebarSection>
+      ) : null}
 
       <SidebarSection title="Temps passé">
         {timeStats.totals.actualMinutes === 0 && timeStats.totals.plannedMinutes === 0 ? (
