@@ -45,9 +45,7 @@ export const REQUIRED_DRIVE_SCOPES = [
   "https://www.googleapis.com/auth/drive.readonly",
 ];
 
-export const REQUIRED_CALENDAR_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.readonly",
-];
+export const REQUIRED_CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
 
 export function hasRequiredDriveScopes(grantedScopes: string[]): boolean {
   return REQUIRED_DRIVE_SCOPES.every((s) => grantedScopes.includes(s));
