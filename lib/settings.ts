@@ -5,7 +5,26 @@ import { db } from "@/lib/db/server";
 import { eq } from "drizzle-orm";
 
 export const SETTING_KEYS = {
+  /**
+   * Clé API OpenRouter (https://openrouter.ai). Donne accès à Claude /
+   * GPT / Gemini / Llama / etc. via une API OpenAI-compatible.
+   */
+  OPENROUTER_API_KEY: "OPENROUTER_API_KEY",
+  /**
+   * Identifiant du modèle OpenRouter à utiliser, ex.
+   * `anthropic/claude-sonnet-4`, `openai/gpt-4.1`, `google/gemini-2.0-flash-exp`.
+   * Si non défini, fallback sur `DEFAULT_LLM_MODEL` (cf. lib/schemas/integrations.ts).
+   */
+  LLM_MODEL: "LLM_MODEL",
+  /** @deprecated remplacé par OPENROUTER_API_KEY. Lu pour migration douce. */
   OPENAI_API_KEY: "OPENAI_API_KEY",
+  /**
+   * ID du dossier Google Drive surveillé pour ingestion automatique
+   * des transcripts de meeting. Le cron (cf. /api/cron/ingest-drive-transcripts)
+   * liste ce dossier toutes les 30 min et ingère les nouveaux fichiers
+   * (Google Docs ou texte) → meeting + extraction LLM auto.
+   */
+  MEETINGS_DRIVE_FOLDER_ID: "MEETINGS_DRIVE_FOLDER_ID",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

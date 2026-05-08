@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { contacts } from "./contacts";
+import { googleCalendars } from "./google-calendars";
 import { projects } from "./projects";
 import { tasks } from "./tasks";
 import { users } from "./users";
@@ -32,6 +33,14 @@ export const timeEntries = pgTable(
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
     color: text("color"),
+    /** Si non-null, ce time_entry mirror un event Google Calendar attribué
+     * à un projet (cf. `attributeCalendarEvent`). Permet de dédupliquer
+     * l'affichage dans /planning et de tracer la provenance. Snapshot —
+     * pas de re-sync si l'event Google bouge ensuite. */
+    googleEventId: text("google_event_id"),
+    googleCalendarId: uuid("google_calendar_id").references(() => googleCalendars.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },

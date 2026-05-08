@@ -43,6 +43,10 @@ export const meetings = pgTable(
     status: meetingStatus("status").notNull().default("ingested"),
     /** Source d'origine si fournie (Drive, upload local, copier-coller…). */
     sourceLabel: text("source_label"),
+    /** Si ingéré depuis le watch d'un dossier Drive, ID du fichier source.
+     * Utilisé pour l'idempotence (cf. unique index partiel). */
+    sourceDriveFileId: text("source_drive_file_id"),
+    sourceDriveFileModifiedAt: timestamp("source_drive_file_modified_at", { withTimezone: true }),
     /** Lien optionnel vers un projet (couvre aussi les anciens deals/opps). */
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),

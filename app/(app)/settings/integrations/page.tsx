@@ -1,36 +1,60 @@
 import { PageHeader } from "@/components/page-header";
-import { requireAdmin } from "@/lib/auth/admin";
+import { getCurrentUserRole } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/server";
-import { SETTING_KEYS, getSettingStatus } from "@/lib/settings";
-import { OpenAiKeyForm } from "./openai-key-form";
+import { SETTING_KEYS, getSetting, getSettingStatus } from "@/lib/settings";
+import { DriveTranscriptsSection } from "./drive-transcripts-section";
+import { GoogleCalendarSection } from "./google-calendar-section";
+import { GoogleDriveSection } from "./google-drive-section";
+import { LlmConfigForm } from "./llm-config-form";
+import { OauthCallbackToast } from "./oauth-callback-toast";
 
-export default async function IntegrationsSettingsPage() {
+export default async function IntegrationsSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ google?: string }>;
+}) {
   const user = await requireUser();
-  await requireAdmin(user);
+  const role = await getCurrentUserRole(user);
+  const isAdmin = role === "admin";
 
-  const openAi = await getSettingStatus(SETTING_KEYS.OPENAI_API_KEY);
+  const [llmKey, llmModel, params] = await Promise.all([
+    isAdmin ? getSettingStatus(SETTING_KEYS.OPENROUTER_API_KEY) : Promise.resolve(null),
+    isAdmin ? getSetting(SETTING_KEYS.LLM_MODEL) : Promise.resolve(null),
+    searchParams,
+  ]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Réglages"
         title="Intégrations"
-        description="Clés API utilisées par les pipelines automatisés (résumés de meetings, extractions…)."
+        description="Connexions personnelles (Google Drive…) et clés API partagées des pipelines automatisés."
       />
 
-      <section className="rounded-lg border bg-card p-6">
-        <header className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h2 className="font-medium text-sm">OpenAI</h2>
-            <p className="mt-1 text-muted-foreground text-xs">
-              Utilisée pour les résumés de meetings et l'extraction de tâches / contacts /
-              opportunités. Stockée chiffrée côté Postgres avec accès admin uniquement.
-            </p>
-          </div>
-          <Status status={openAi} />
-        </header>
-        <OpenAiKeyForm currentPreview={openAi.preview} />
-      </section>
+      {params.google ? <OauthCallbackToast status={params.google} /> : null}
+
+      <GoogleDriveSection userId={user.id} />
+
+      <GoogleCalendarSection userId={user.id} />
+
+      {isAdmin ? <DriveTranscriptsSection /> : null}
+
+      {isAdmin && llmKey ? (
+        <section className="rounded-lg border bg-card p-6">
+          <header className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-medium text-sm">LLM (OpenRouter)</h2>
+              <p className="mt-1 text-muted-foreground text-xs">
+                OpenRouter expose 200+ modèles (Claude, GPT, Gemini, Llama…) via une API unique.
+                Utilisé pour les résumés de meetings et l'extraction de tâches / contacts /
+                opportunités. Accès admin uniquement.
+              </p>
+            </div>
+            <Status status={llmKey} />
+          </header>
+          <LlmConfigForm currentKeyPreview={llmKey.preview} currentModel={llmModel} />
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -38,7 +62,7 @@ export default async function IntegrationsSettingsPage() {
 function Status({
   status,
 }: {
-  status: Awaited<ReturnType<typeof getSettingStatus>>;
+  status: NonNullable<Awaited<ReturnType<typeof getSettingStatus>>>;
 }) {
   if (!status.set) {
     return (

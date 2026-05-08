@@ -4,6 +4,14 @@
     {
       "path": "/api/cron/daily-digest",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-calendar-events",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/ingest-drive-transcripts",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

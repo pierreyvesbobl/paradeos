@@ -6,6 +6,7 @@ import { tasks } from "@/db/schema/tasks";
 import { timeEntries } from "@/db/schema/time-entries";
 import { requireUser } from "@/lib/auth/server";
 import { addDays, startOfIsoWeek } from "@/lib/calendar";
+import { getCalendarEventsForRange } from "@/lib/db/queries/calendar";
 import { db } from "@/lib/db/server";
 import { and, asc, eq, gte, lt } from "drizzle-orm";
 import Link from "next/link";
@@ -35,7 +36,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Sea
   const weekEnd = addDays(weekStart, 7);
 
   const conn = await db();
-  const [entries, taskList, projectList, contactList] = await Promise.all([
+  const [entries, taskList, projectList, contactList, googleEvents] = await Promise.all([
     conn
       .select({
         id: timeEntries.id,
@@ -48,6 +49,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Sea
         projectId: timeEntries.projectId,
         contactId: timeEntries.contactId,
         color: timeEntries.color,
+        googleEventId: timeEntries.googleEventId,
       })
       .from(timeEntries)
       .where(
@@ -67,6 +69,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Sea
       .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
       .from(contacts)
       .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
+    getCalendarEventsForRange(user.id, weekStart, weekEnd),
   ]);
 
   const prevWeek = addDays(weekStart, -7);
@@ -106,7 +109,25 @@ export default async function PlanningPage({ searchParams }: { searchParams: Sea
           projectId: e.projectId,
           contactId: e.contactId,
           color: e.color,
+          googleEventId: e.googleEventId,
         }))}
+        googleEvents={(() => {
+          const trackedEventIds = new Set(
+            entries.map((e) => e.googleEventId).filter((v): v is string => !!v),
+          );
+          return googleEvents
+            .filter((e) => !e.allDay && !trackedEventIds.has(e.googleEventId))
+            .map((e) => ({
+              id: e.id,
+              startAt: e.startAt.toISOString(),
+              endAt: e.endAt.toISOString(),
+              summary: e.summary,
+              location: e.location,
+              htmlLink: e.htmlLink,
+              calendarSummary: e.calendarSummary,
+              backgroundColor: e.calendarBackgroundColor,
+            }));
+        })()}
         tasks={taskList}
         projects={projectList}
         contacts={contactList.map((c) => ({

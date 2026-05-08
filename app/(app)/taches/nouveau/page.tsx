@@ -38,6 +38,7 @@ export default async function NewTaskPage({ searchParams }: { searchParams: Sear
           projectId: projectId ?? "",
           assigneeId: assigneeId ?? "",
           dueDate: "",
+          startDate: "",
         }}
       />
     </div>

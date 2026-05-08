@@ -44,6 +44,7 @@ type Props = {
     projectId: string;
     assigneeId: string;
     dueDate: string;
+    startDate: string;
   };
 };
 
@@ -59,6 +60,7 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
   const [projectId, setProjectId] = useState<string | null>(defaultValues.projectId || null);
   const [assigneeId, setAssigneeId] = useState<string | null>(defaultValues.assigneeId || null);
   const [dueDate, setDueDate] = useState(defaultValues.dueDate);
+  const [startDate, setStartDate] = useState(defaultValues.startDate);
 
   function buildPayload() {
     return {
@@ -69,6 +71,7 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
       projectId: projectId ?? undefined,
       assigneeId: assigneeId ?? undefined,
       dueDate: dueDate || undefined,
+      startDate: startDate || undefined,
     };
   }
 
@@ -197,7 +200,16 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
               disabled={pending}
             />
           </div>
-          <div className="space-y-2 sm:col-span-2">
+          <div className="space-y-2">
+            <Label htmlFor="startDate">Début (Gantt)</Label>
+            <DateInput
+              id="startDate"
+              value={startDate}
+              onValueChange={setStartDate}
+              disabled={pending}
+            />
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="dueDate">Échéance</Label>
             <DateInput id="dueDate" value={dueDate} onValueChange={setDueDate} disabled={pending} />
           </div>

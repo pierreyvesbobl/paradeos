@@ -6,11 +6,16 @@ import { TaskStatusEditor } from "@/app/(app)/taches/inline-editors/status-edito
 import { QuickAddTask } from "@/app/(app)/taches/quick-add-task";
 import { TaskToggle } from "@/app/(app)/taches/task-toggle";
 import { DeleteButton } from "@/components/delete-button";
+import { DriveFolderSection } from "@/components/drive/drive-folder-section";
 import { EmptyState } from "@/components/empty-state";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
+import { ProjectContactsField } from "@/components/projects/project-contacts-field";
+import { ProjectMembersField } from "@/components/projects/project-members-field";
 import { ProjectDetailLayout } from "@/components/projets/project-detail-layout";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { contacts as contactsTable } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
@@ -19,6 +24,7 @@ import { deleteProjectAndRedirect } from "@/lib/actions/projects";
 import { buildMarkdownResolver } from "@/lib/db/queries/mention-resolver";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { getProjectProfitability } from "@/lib/db/queries/profitability";
+import { getProjectContacts, getProjectMembers } from "@/lib/db/queries/project-members";
 import { getProjectTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
 import { formatDuration, formatEuro } from "@/lib/format";
@@ -84,27 +90,39 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   }
   const mdResolver = await buildMarkdownResolver();
 
-  const [projectTasks, userOptions] = await Promise.all([
-    conn
-      .select({
-        id: tasks.id,
-        title: tasks.title,
-        status: tasks.status,
-        priority: tasks.priority,
-        dueDate: tasks.dueDate,
-        assigneeId: tasks.assigneeId,
-        assigneeName: users.fullName,
-        assigneeAvatarUrl: users.avatarUrl,
-      })
-      .from(tasks)
-      .leftJoin(users, eq(tasks.assigneeId, users.id))
-      .where(eq(tasks.projectId, id))
-      .orderBy(asc(tasks.dueDate), asc(tasks.title)),
-    conn
-      .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
-      .from(users)
-      .orderBy(asc(users.fullName)),
-  ]);
+  const [projectTasks, userOptions, contactOptions, projectMemberRows, projectContactRows] =
+    await Promise.all([
+      conn
+        .select({
+          id: tasks.id,
+          title: tasks.title,
+          status: tasks.status,
+          priority: tasks.priority,
+          dueDate: tasks.dueDate,
+          assigneeId: tasks.assigneeId,
+          assigneeName: users.fullName,
+          assigneeAvatarUrl: users.avatarUrl,
+        })
+        .from(tasks)
+        .leftJoin(users, eq(tasks.assigneeId, users.id))
+        .where(eq(tasks.projectId, id))
+        .orderBy(asc(tasks.dueDate), asc(tasks.title)),
+      conn
+        .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
+        .from(users)
+        .orderBy(asc(users.fullName)),
+      conn
+        .select({
+          id: contactsTable.id,
+          firstName: contactsTable.firstName,
+          lastName: contactsTable.lastName,
+          email: contactsTable.email,
+        })
+        .from(contactsTable)
+        .orderBy(asc(contactsTable.lastName), asc(contactsTable.firstName)),
+      getProjectMembers(id),
+      getProjectContacts(id),
+    ]);
 
   const openTasks = projectTasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
   const doneTasks = projectTasks.filter((t) => t.status === "done");
@@ -170,6 +188,8 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         resolver={mdResolver}
         attachmentsByNote={attachmentsByNote}
       />
+
+      <DriveFolderSection subjectType="project" subjectId={id} defaultFolderName={project.name} />
     </>
   );
 
@@ -243,6 +263,24 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
             Voir la fiche <ExternalLink className="size-3" />
           </Link>
         ) : null}
+      </SidebarSection>
+
+      <SidebarSection title="Membres">
+        <ProjectMembersField
+          projectId={id}
+          members={projectMemberRows}
+          options={userOptions}
+          ownerId={ownerId}
+        />
+      </SidebarSection>
+
+      <SidebarSection title="Contacts liés">
+        <ProjectContactsField
+          projectId={id}
+          contacts={projectContactRows}
+          options={contactOptions}
+          primaryContactId={project.contactId ?? null}
+        />
       </SidebarSection>
 
       {project.kind === "client" ? (
@@ -418,12 +456,17 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
           </span>
         }
         actions={
-          <DeleteButton
-            action={deleteProjectAndRedirect}
-            id={id}
-            label="Supprimer"
-            confirmTitle={`Supprimer "${project.name}" ?`}
-          />
+          <>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/taches/gantt?project=${id}`}>Gantt</Link>
+            </Button>
+            <DeleteButton
+              action={deleteProjectAndRedirect}
+              id={id}
+              label="Supprimer"
+              confirmTitle={`Supprimer "${project.name}" ?`}
+            />
+          </>
         }
       />
       <ProjectDetailLayout main={main} sidebar={sidebar} />

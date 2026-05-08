@@ -5,6 +5,7 @@ import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
+import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
@@ -12,7 +13,7 @@ import { asc, desc, sql } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-const MODEL_ID = "gpt-4.1";
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 // Limite la taille du vocabulaire injecté pour ne pas exploser le prompt
 // si la base devient très grande.
@@ -253,17 +254,30 @@ ${vocabBlock}`;
 }
 
 export async function extractMeeting(transcript: string): Promise<MeetingExtraction> {
-  const apiKey = await getSetting(SETTING_KEYS.OPENAI_API_KEY);
+  const apiKey = await getSetting(SETTING_KEYS.OPENROUTER_API_KEY);
   if (!apiKey) {
-    throw new Error("Clé OpenAI non configurée. Ajoute-la dans /settings/integrations.");
+    throw new Error("Clé OpenRouter non configurée. Ajoute-la dans /settings/integrations.");
   }
+  const modelId = (await getSetting(SETTING_KEYS.LLM_MODEL)) ?? DEFAULT_LLM_MODEL;
 
   const vocab = await getKnownVocabulary();
   const systemPrompt = buildSystemPrompt(vocab);
-  const openai = createOpenAI({ apiKey });
+
+  // OpenRouter expose une API OpenAI-compatible : on réutilise le
+  // provider `@ai-sdk/openai` avec un baseURL custom. Les headers
+  // `HTTP-Referer` et `X-Title` sont recommandés par OpenRouter pour
+  // l'analytique et la priorisation des requêtes free-tier.
+  const openrouter = createOpenAI({
+    apiKey,
+    baseURL: OPENROUTER_BASE_URL,
+    headers: {
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://paradeos.app",
+      "X-Title": "Paradeos",
+    },
+  });
 
   const { object } = await generateObject({
-    model: openai(MODEL_ID),
+    model: openrouter(modelId),
     schema: extractionSchema,
     system: systemPrompt,
     prompt: `Transcript :\n\n${transcript}`,

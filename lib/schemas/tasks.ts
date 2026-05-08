@@ -50,6 +50,7 @@ export const taskBaseSchema = z.object({
   projectId: optionalUuid,
   assigneeId: optionalUuid,
   dueDate: optionalDate,
+  startDate: optionalDate,
 });
 
 export const createTaskSchema = taskBaseSchema;
@@ -73,6 +74,9 @@ export const patchTaskSchema = z.object({
   projectId: z.union([z.string().uuid(), z.null()]).optional(),
   assigneeId: z.union([z.string().uuid(), z.null()]).optional(),
   dueDate: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD."), z.null()])
+    .optional(),
+  startDate: z
     .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD."), z.null()])
     .optional(),
   title: z.string().trim().min(1).max(300).optional(),

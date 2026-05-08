@@ -29,6 +29,9 @@ export const tasks = pgTable(
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
     dueDate: date("due_date"),
+    /** Date de début pour la vue Gantt et la planification. Optionnel —
+     * une tâche peut être seulement deadline-driven (`due_date` seul). */
+    startDate: date("start_date"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),

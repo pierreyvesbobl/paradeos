@@ -219,12 +219,17 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
         title="Tâches"
         description="Toutes les tâches actives, par défaut."
         actions={
-          <Button asChild>
-            <Link href="/taches/nouveau">
-              <Plus className="size-4" />
-              Nouvelle tâche
-            </Link>
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link href="/taches/gantt">Gantt</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/taches/nouveau">
+                <Plus className="size-4" />
+                Nouvelle tâche
+              </Link>
+            </Button>
+          </>
         }
       />
 

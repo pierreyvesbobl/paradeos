@@ -42,6 +42,7 @@ export default async function EditTaskPage({ params }: { params: Params }) {
           projectId: task.projectId ?? "",
           assigneeId: task.assigneeId ?? "",
           dueDate: task.dueDate ?? "",
+          startDate: task.startDate ?? "",
         }}
       />
     </div>

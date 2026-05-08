@@ -6,6 +6,10 @@ import { DAY_LABELS, addDays, formatWeekRange, startOfIsoWeek } from "@/lib/cale
 import { formatDuration } from "@/lib/format";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import {
+  type AttributionDialogEvent,
+  CalendarEventAttributionDialog,
+} from "./calendar-event-attribution-dialog";
 import { TimeEntryDialog } from "./time-entry-dialog";
 
 const HOUR_HEIGHT = 48; // px par heure
@@ -27,11 +31,26 @@ type EntrySerialized = {
   projectId: string | null;
   contactId: string | null;
   color: string | null;
+  /** Si non-null, ce time_entry mirror un event Google Calendar. */
+  googleEventId: string | null;
+};
+
+export type GoogleEventSerialized = {
+  /** db UUID du calendar_events row (utilisé par attributeCalendarEvent) */
+  id: string;
+  startAt: string;
+  endAt: string;
+  summary: string | null;
+  location: string | null;
+  htmlLink: string | null;
+  calendarSummary: string | null;
+  backgroundColor: string | null;
 };
 
 type Props = {
   weekStartIso: string;
   entries: EntrySerialized[];
+  googleEvents: GoogleEventSerialized[];
   tasks: { id: string; title: string }[];
   projects: { id: string; name: string }[];
   contacts: { id: string; label: string }[];
@@ -57,7 +76,14 @@ type CreateDrag = {
   currentMinutes: number;
 };
 
-export function WeekView({ weekStartIso, entries, tasks, projects, contacts }: Props) {
+export function WeekView({
+  weekStartIso,
+  entries,
+  googleEvents,
+  tasks,
+  projects,
+  contacts,
+}: Props) {
   const weekStart = startOfIsoWeek(new Date(`${weekStartIso}T00:00:00`));
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -79,6 +105,7 @@ export function WeekView({ weekStartIso, entries, tasks, projects, contacts }: P
     | { mode: "edit"; entry: EntrySerialized }
     | null
   >(null);
+  const [attributionEvent, setAttributionEvent] = useState<AttributionDialogEvent | null>(null);
 
   function onEntryClick(entry: EntrySerialized) {
     setDialogState({ mode: "edit", entry });
@@ -315,9 +342,20 @@ export function WeekView({ weekStartIso, entries, tasks, projects, contacts }: P
               day={day}
               dayIndex={dayIndex}
               entries={optimistic}
+              googleEvents={googleEvents}
               entryDragId={entryDrag?.id ?? null}
               createDrag={createDrag?.dayIndex === dayIndex ? createDrag : null}
               onEntryClick={onEntryClick}
+              onGoogleEventClick={(g) =>
+                setAttributionEvent({
+                  calendarEventId: g.id,
+                  summary: g.summary,
+                  startAt: g.startAt,
+                  endAt: g.endAt,
+                  location: g.location,
+                  htmlLink: g.htmlLink,
+                })
+              }
               startEntryDrag={startEntryDrag}
               startCreateDrag={startCreateDrag}
             />
@@ -328,6 +366,14 @@ export function WeekView({ weekStartIso, entries, tasks, projects, contacts }: P
       <Button onClick={() => setDialogState({ mode: "create", defaults: defaultRange() })}>
         Nouveau créneau
       </Button>
+
+      {attributionEvent ? (
+        <CalendarEventAttributionDialog
+          event={attributionEvent}
+          projects={projects}
+          onClose={() => setAttributionEvent(null)}
+        />
+      ) : null}
 
       {dialogState ? (
         <TimeEntryDialog
@@ -371,18 +417,22 @@ function DayColumn({
   day,
   dayIndex,
   entries,
+  googleEvents,
   entryDragId,
   createDrag,
   onEntryClick,
+  onGoogleEventClick,
   startEntryDrag,
   startCreateDrag,
 }: {
   day: Date;
   dayIndex: number;
   entries: EntrySerialized[];
+  googleEvents: GoogleEventSerialized[];
   entryDragId: string | null;
   createDrag: CreateDrag | null;
   onEntryClick: (entry: EntrySerialized) => void;
+  onGoogleEventClick: (event: GoogleEventSerialized) => void;
   startEntryDrag: (
     e: React.PointerEvent<HTMLElement>,
     entry: EntrySerialized,
@@ -391,6 +441,7 @@ function DayColumn({
   startCreateDrag: (e: React.PointerEvent<HTMLDivElement>, day: Date, dayIndex: number) => void;
 }) {
   const dayEntries = entries.filter((e) => isSameDay(new Date(e.startAt), day));
+  const dayGoogleEvents = googleEvents.filter((e) => isSameDay(new Date(e.startAt), day));
 
   return (
     <div
@@ -432,68 +483,142 @@ function DayColumn({
       ) : null}
 
       {(() => {
-        const layout = layoutDayEntries(dayEntries);
-        return dayEntries.map((e) => {
-          const start = new Date(e.startAt);
-          const end = new Date(e.endAt);
-          const startMinutes = (start.getHours() - HOURS_START) * 60 + start.getMinutes();
-          const durationMinutes = Math.max(
-            15,
-            Math.round((end.getTime() - start.getTime()) / 60_000),
-          );
-          const top = (startMinutes / 60) * HOUR_HEIGHT;
-          const height = (durationMinutes / 60) * HOUR_HEIGHT - 2;
-          const isPlanned = e.kind === "planned";
-          const bg = e.color ?? (isPlanned ? "rgb(79 70 229 / 0.12)" : "rgb(34 197 94 / 0.16)");
-          const border = isPlanned ? "border-primary/40" : "border-emerald-500/40";
-          const isDragging = entryDragId === e.id;
+        // Layout combiné : time_entries + events Google partagent les
+        // lanes pour s'empiler horizontalement quand ils se chevauchent
+        // (au lieu d'être superposés en z-stack).
+        const layoutItems = [
+          ...dayEntries.map((e) => ({ id: e.id, startAt: e.startAt, endAt: e.endAt })),
+          ...dayGoogleEvents.map((g) => ({ id: g.id, startAt: g.startAt, endAt: g.endAt })),
+        ];
+        const layout = layoutDayEntries(layoutItems);
+        const gutter = 2;
 
-          const slot = layout.get(e.id) ?? { lane: 0, lanes: 1 };
-          const gutter = 2; // px entre colonnes
-          const widthPct = 100 / slot.lanes;
-          const leftPct = slot.lane * widthPct;
+        return (
+          <>
+            {/* Events Google Calendar — lecture seule, partagent les lanes */}
+            {dayGoogleEvents.map((g) => {
+              const start = new Date(g.startAt);
+              const end = new Date(g.endAt);
+              const startMinutes = (start.getHours() - HOURS_START) * 60 + start.getMinutes();
+              const durationMinutes = Math.max(
+                15,
+                Math.round((end.getTime() - start.getTime()) / 60_000),
+              );
+              const visibleStart = Math.max(0, startMinutes);
+              const visibleEnd = Math.min(
+                (HOURS_END - HOURS_START) * 60,
+                startMinutes + durationMinutes,
+              );
+              if (visibleEnd <= visibleStart) return null;
+              const top = (visibleStart / 60) * HOUR_HEIGHT;
+              const height = ((visibleEnd - visibleStart) / 60) * HOUR_HEIGHT - 2;
+              const bg = g.backgroundColor ?? "#94a3b8";
+              const slot = layout.get(g.id) ?? { lane: 0, lanes: 1 };
+              const widthPct = 100 / slot.lanes;
+              const leftPct = slot.lane * widthPct;
+              return (
+                <button
+                  type="button"
+                  key={g.id}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onGoogleEventClick(g);
+                  }}
+                  className="absolute z-[1] cursor-pointer overflow-hidden rounded border-l-4 px-1.5 py-1 text-left text-[10px] leading-tight opacity-80 transition-opacity hover:opacity-100"
+                  style={{
+                    top,
+                    height,
+                    backgroundColor: `${bg}20`,
+                    borderLeftColor: bg,
+                    left: `calc(${leftPct}% + 2px)`,
+                    width: `calc(${widthPct}% - ${gutter + 2}px)`,
+                  }}
+                  title={`${g.summary ?? "Sans titre"} — clic pour attribuer à un projet`}
+                >
+                  <p className="truncate font-medium text-foreground/80">
+                    {g.summary ?? "Sans titre"}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground">
+                    {formatHm(start)}–{formatHm(end)}
+                    {g.location ? ` · ${g.location}` : ""}
+                  </p>
+                </button>
+              );
+            })}
 
-          return (
-            <div
-              key={e.id}
-              className={`absolute rounded border ${border} text-left text-[11px] leading-tight shadow-sm ${
-                isDragging ? "z-10 opacity-90 shadow-lg ring-2 ring-primary/50" : ""
-              }`}
-              style={{
-                top,
-                height,
-                backgroundColor: bg,
-                left: `calc(${leftPct}% + 2px)`,
-                width: `calc(${widthPct}% - ${gutter + 2}px)`,
-              }}
-            >
-              <button
-                type="button"
-                className="block h-full w-full cursor-grab overflow-hidden px-1.5 py-1 text-left active:cursor-grabbing"
-                onPointerDown={(ev) => startEntryDrag(ev, e, "move")}
-                onClick={(ev) => {
-                  if (isDragging) {
-                    ev.preventDefault();
-                    return;
-                  }
-                  onEntryClick(e);
-                }}
-              >
-                <p className="truncate font-medium">{e.title ?? "Sans titre"}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  {formatHm(start)}–{formatHm(end)}
-                </p>
-              </button>
-              <div
-                className="absolute right-0 bottom-0 left-0 h-2 cursor-ns-resize bg-foreground/0 hover:bg-foreground/10"
-                onPointerDown={(ev) => startEntryDrag(ev, e, "resize")}
-                role="separator"
-                tabIndex={0}
-                aria-label="Redimensionner"
-              />
-            </div>
-          );
-        });
+            {dayEntries.map((e) => {
+              const start = new Date(e.startAt);
+              const end = new Date(e.endAt);
+              const startMinutes = (start.getHours() - HOURS_START) * 60 + start.getMinutes();
+              const durationMinutes = Math.max(
+                15,
+                Math.round((end.getTime() - start.getTime()) / 60_000),
+              );
+              const top = (startMinutes / 60) * HOUR_HEIGHT;
+              const height = (durationMinutes / 60) * HOUR_HEIGHT - 2;
+              const isPlanned = e.kind === "planned";
+              const bg = e.color ?? (isPlanned ? "rgb(79 70 229 / 0.12)" : "rgb(34 197 94 / 0.16)");
+              const border = isPlanned ? "border-primary/40" : "border-emerald-500/40";
+              const isDragging = entryDragId === e.id;
+
+              const slot = layout.get(e.id) ?? { lane: 0, lanes: 1 };
+              const widthPct = 100 / slot.lanes;
+              const leftPct = slot.lane * widthPct;
+
+              return (
+                <div
+                  key={e.id}
+                  className={`absolute z-[1] rounded border ${border} text-left text-[11px] leading-tight shadow-sm ${
+                    isDragging ? "z-10 opacity-90 shadow-lg ring-2 ring-primary/50" : ""
+                  }`}
+                  style={{
+                    top,
+                    height,
+                    backgroundColor: bg,
+                    left: `calc(${leftPct}% + 2px)`,
+                    width: `calc(${widthPct}% - ${gutter + 2}px)`,
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="block h-full w-full cursor-grab overflow-hidden px-1.5 py-1 text-left active:cursor-grabbing"
+                    onPointerDown={(ev) => startEntryDrag(ev, e, "move")}
+                    onClick={(ev) => {
+                      if (isDragging) {
+                        ev.preventDefault();
+                        return;
+                      }
+                      onEntryClick(e);
+                    }}
+                  >
+                    <p className="flex items-center gap-1 truncate font-medium">
+                      {e.googleEventId ? (
+                        <span
+                          className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm bg-foreground/10 font-semibold text-[8px] text-foreground/70"
+                          title="Importé depuis Google Calendar"
+                        >
+                          G
+                        </span>
+                      ) : null}
+                      <span className="truncate">{e.title ?? "Sans titre"}</span>
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {formatHm(start)}–{formatHm(end)}
+                    </p>
+                  </button>
+                  <div
+                    className="absolute right-0 bottom-0 left-0 h-2 cursor-ns-resize bg-foreground/0 hover:bg-foreground/10"
+                    onPointerDown={(ev) => startEntryDrag(ev, e, "resize")}
+                    role="separator"
+                    tabIndex={0}
+                    aria-label="Redimensionner"
+                  />
+                </div>
+              );
+            })}
+          </>
+        );
       })()}
     </div>
   );
@@ -514,7 +639,7 @@ function DayColumn({
  *     reçoivent comme `lanes` la taille max atteinte par `columnsEnd`.
  */
 function layoutDayEntries(
-  entries: EntrySerialized[],
+  entries: { id: string; startAt: string; endAt: string }[],
 ): Map<string, { lane: number; lanes: number }> {
   const out = new Map<string, { lane: number; lanes: number }>();
   if (entries.length === 0) return out;

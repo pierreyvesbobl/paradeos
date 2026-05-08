@@ -17,6 +17,7 @@ import { redirect } from "next/navigation";
 
 function revalidateTaskPaths(projectId: string | null | undefined) {
   revalidatePath("/taches");
+  revalidatePath("/taches/gantt");
   if (projectId) revalidatePath(`/projets/${projectId}`);
 }
 
@@ -34,6 +35,7 @@ export const createTask = action(createTaskSchema, async ({ input, user }) => {
       projectId: input.projectId ?? null,
       assigneeId: input.assigneeId ?? null,
       dueDate: input.dueDate ?? null,
+      startDate: input.startDate ?? null,
       completedAt,
       ownerId: user.id,
       createdBy: user.id,
@@ -88,6 +90,7 @@ export const updateTask = action(updateTaskSchema, async ({ input }) => {
       projectId: input.projectId ?? null,
       assigneeId: input.assigneeId ?? null,
       dueDate: input.dueDate ?? null,
+      startDate: input.startDate ?? null,
       completedAt,
     })
     .where(eq(tasks.id, input.id));
@@ -177,6 +180,7 @@ export const patchTask = action(patchTaskSchema, async ({ input }) => {
   if (input.projectId !== undefined) updates.projectId = input.projectId;
   if (input.assigneeId !== undefined) updates.assigneeId = input.assigneeId;
   if (input.dueDate !== undefined) updates.dueDate = input.dueDate;
+  if (input.startDate !== undefined) updates.startDate = input.startDate;
   if (input.status !== undefined) {
     updates.status = input.status;
     updates.completedAt = computeCompletedAt(input.status, previous.completedAt);

@@ -1,3 +1,4 @@
+import { TaskScheduleEditor } from "@/app/(app)/taches/inline-editors/schedule-editor";
 import { DeleteButton } from "@/components/delete-button";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
@@ -12,7 +13,7 @@ import { buildMarkdownResolver } from "@/lib/db/queries/mention-resolver";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { getTaskTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
-import { formatDate, formatDateTime, formatDuration } from "@/lib/format";
+import { formatDateTime, formatDuration } from "@/lib/format";
 import { taskPriorityLabels, taskStatusLabels } from "@/lib/schemas/tasks";
 import { timeEntryKindLabels } from "@/lib/schemas/time-entries";
 import { eq } from "drizzle-orm";
@@ -90,8 +91,17 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground text-xs uppercase tracking-wide">Échéance</dt>
-              <dd className="mt-1 text-sm">{task.dueDate ? formatDate(task.dueDate) : "—"}</dd>
+              <dt className="text-muted-foreground text-xs uppercase tracking-wide">
+                Période (Gantt)
+              </dt>
+              <dd className="mt-1">
+                <TaskScheduleEditor
+                  id={id}
+                  startDate={task.startDate}
+                  dueDate={task.dueDate}
+                  variant="labeled"
+                />
+              </dd>
             </div>
             <div>
               <dt className="text-muted-foreground text-xs uppercase tracking-wide">Terminée le</dt>
