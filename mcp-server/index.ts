@@ -13,7 +13,6 @@
  *     }
  *   }
  */
-import "dotenv/config";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { config as loadEnv } from "dotenv";
@@ -53,9 +52,12 @@ import {
 } from "./tools";
 
 // Si lancé en standalone (pas via Next), charge .env.local pour récupérer
-// DATABASE_URL et autres. Pas d'effet si déjà set par Claude Desktop.
-loadEnv({ path: ".env.local" });
-loadEnv({ path: ".env" });
+// DATABASE_URL et autres. On skippe quand Claude Desktop a déjà injecté
+// l'env (sinon les "tips" stdout de dotenv cassent le canal JSON-RPC).
+if (!process.env.DATABASE_URL) {
+  loadEnv({ path: ".env.local", quiet: true });
+  loadEnv({ path: ".env", quiet: true });
+}
 
 const ctx = getStdioContext();
 
