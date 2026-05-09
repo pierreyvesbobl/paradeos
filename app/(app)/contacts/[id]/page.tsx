@@ -4,7 +4,6 @@ import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { deleteContactAndRedirect } from "@/lib/actions/contacts";
-import { buildMarkdownResolver } from "@/lib/db/queries/mention-resolver";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { db } from "@/lib/db/server";
 import { asc, eq } from "drizzle-orm";
@@ -51,7 +50,6 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
     if (!attachmentsByNote[a.noteId]) attachmentsByNote[a.noteId] = [];
     attachmentsByNote[a.noteId]?.push(a);
   }
-  const mdResolver = await buildMarkdownResolver();
 
   return (
     <div className="space-y-8">
@@ -153,7 +151,6 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
         subjectType="contact"
         subjectId={id}
         notes={notesList}
-        resolver={mdResolver}
         attachmentsByNote={attachmentsByNote}
       />
     </div>

@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { deleteEntityAndRedirect } from "@/lib/actions/entities";
-import { buildMarkdownResolver } from "@/lib/db/queries/mention-resolver";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { db } from "@/lib/db/server";
 import { asc, eq } from "drizzle-orm";
@@ -38,7 +37,6 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
     if (!attachmentsByNote[a.noteId]) attachmentsByNote[a.noteId] = [];
     attachmentsByNote[a.noteId]?.push(a);
   }
-  const mdResolver = await buildMarkdownResolver();
 
   const linkedContacts = await conn
     .select({
@@ -165,7 +163,6 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
         subjectType="entity"
         subjectId={id}
         notes={notesList}
-        resolver={mdResolver}
         attachmentsByNote={attachmentsByNote}
       />
     </div>

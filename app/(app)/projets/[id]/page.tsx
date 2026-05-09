@@ -12,8 +12,8 @@ import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { ProjectContactsField } from "@/components/projects/project-contacts-field";
 import { ProjectMembersField } from "@/components/projects/project-members-field";
-import { ProjectDetailLayout } from "@/components/projets/project-detail-layout";
 import { ProjectMeetingsSection } from "@/components/projets/project-meetings-section";
+import { ProjectTabs } from "@/components/projets/project-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { contacts as contactsTable } from "@/db/schema/contacts";
@@ -22,7 +22,6 @@ import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { deleteProjectAndRedirect } from "@/lib/actions/projects";
-import { buildMarkdownResolver } from "@/lib/db/queries/mention-resolver";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { getProjectProfitability } from "@/lib/db/queries/profitability";
 import { getProjectContacts, getProjectMembers } from "@/lib/db/queries/project-members";
@@ -90,7 +89,6 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     if (!attachmentsByNote[a.noteId]) attachmentsByNote[a.noteId] = [];
     attachmentsByNote[a.noteId]?.push(a);
   }
-  const mdResolver = await buildMarkdownResolver();
 
   const [projectTasks, userOptions, contactOptions, projectMemberRows, projectContactRows] =
     await Promise.all([
@@ -129,76 +127,77 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   const openTasks = projectTasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
   const doneTasks = projectTasks.filter((t) => t.status === "done");
 
-  const main = (
-    <>
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-medium text-sm">
-            Tâches ({openTasks.length} ouverte{openTasks.length > 1 ? "s" : ""}
-            {doneTasks.length > 0
-              ? ` · ${doneTasks.length} terminée${doneTasks.length > 1 ? "s" : ""}`
-              : ""}
-            )
-          </h2>
+  const tasksContent = (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="font-medium text-sm">
+          Tâches ({openTasks.length} ouverte{openTasks.length > 1 ? "s" : ""}
+          {doneTasks.length > 0
+            ? ` · ${doneTasks.length} terminée${doneTasks.length > 1 ? "s" : ""}`
+            : ""}
+          )
+        </h2>
+      </div>
+
+      <div className="rounded-md border bg-card">
+        {projectTasks.length > 0 ? (
+          <ul className="divide-y">
+            {[...openTasks, ...doneTasks].map((t) => (
+              <li key={t.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40">
+                <TaskToggle id={t.id} done={t.status === "done"} />
+                <Link
+                  href={`/taches/${t.id}`}
+                  className={`flex-1 text-sm hover:underline ${
+                    t.status === "done" ? "text-muted-foreground line-through" : ""
+                  }`}
+                >
+                  {t.title}
+                </Link>
+                <TaskStatusEditor id={t.id} value={t.status} />
+                <TaskPriorityEditor id={t.id} value={t.priority} />
+                <TaskAssigneeEditor
+                  id={t.id}
+                  value={
+                    t.assigneeId
+                      ? {
+                          id: t.assigneeId,
+                          fullName: t.assigneeName,
+                          avatarUrl: t.assigneeAvatarUrl,
+                        }
+                      : null
+                  }
+                  options={userOptions}
+                />
+                <TaskDueDateEditor id={t.id} value={t.dueDate} />
+                <TaskRowActions id={t.id} title={t.title} />
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <div className={projectTasks.length > 0 ? "border-t" : ""}>
+          <QuickAddTask projectId={id} variant="inline" placeholder="+ Ajouter une tâche…" />
         </div>
-
-        <div className="rounded-md border bg-card">
-          {projectTasks.length > 0 ? (
-            <ul className="divide-y">
-              {[...openTasks, ...doneTasks].map((t) => (
-                <li key={t.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40">
-                  <TaskToggle id={t.id} done={t.status === "done"} />
-                  <Link
-                    href={`/taches/${t.id}`}
-                    className={`flex-1 text-sm hover:underline ${
-                      t.status === "done" ? "text-muted-foreground line-through" : ""
-                    }`}
-                  >
-                    {t.title}
-                  </Link>
-                  <TaskStatusEditor id={t.id} value={t.status} />
-                  <TaskPriorityEditor id={t.id} value={t.priority} />
-                  <TaskAssigneeEditor
-                    id={t.id}
-                    value={
-                      t.assigneeId
-                        ? {
-                            id: t.assigneeId,
-                            fullName: t.assigneeName,
-                            avatarUrl: t.assigneeAvatarUrl,
-                          }
-                        : null
-                    }
-                    options={userOptions}
-                  />
-                  <TaskDueDateEditor id={t.id} value={t.dueDate} />
-                  <TaskRowActions id={t.id} title={t.title} />
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <div className={projectTasks.length > 0 ? "border-t" : ""}>
-            <QuickAddTask projectId={id} variant="inline" placeholder="+ Ajouter une tâche…" />
-          </div>
-        </div>
-      </section>
-
-      <NoteList
-        subjectType="project"
-        subjectId={id}
-        notes={notesList}
-        resolver={mdResolver}
-        attachmentsByNote={attachmentsByNote}
-      />
-
-      <ProjectMeetingsSection projectId={id} />
-
-      <DriveFolderSection subjectType="project" subjectId={id} defaultFolderName={project.name} />
-    </>
+      </div>
+    </section>
   );
 
-  const sidebar = (
-    <>
+  const notesContent = (
+    <NoteList
+      subjectType="project"
+      subjectId={id}
+      notes={notesList}
+      attachmentsByNote={attachmentsByNote}
+    />
+  );
+
+  const meetingsContent = <ProjectMeetingsSection projectId={id} />;
+
+  const filesContent = (
+    <DriveFolderSection subjectType="project" subjectId={id} defaultFolderName={project.name} />
+  );
+
+  const overviewContent = (
+    <div className="grid gap-6 lg:grid-cols-2">
       <SidebarSection title="Transition">
         <ProjectTransitionButtons projectId={id} status={project.status} />
       </SidebarSection>
@@ -311,7 +310,11 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
           </dl>
         </SidebarSection>
       ) : null}
+    </div>
+  );
 
+  const timeContent = (
+    <div className="grid gap-6 lg:grid-cols-2">
       <SidebarSection title="Temps passé">
         {timeStats.totals.actualMinutes === 0 && timeStats.totals.plannedMinutes === 0 ? (
           <EmptyState
@@ -440,7 +443,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
           </>
         )}
       </SidebarSection>
-    </>
+    </div>
   );
 
   return (
@@ -468,7 +471,23 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
           </>
         }
       />
-      <ProjectDetailLayout main={main} sidebar={sidebar} />
+      <ProjectTabs
+        defaultTab={
+          project.kind === "client" &&
+          (project.status === "not_started" ||
+            project.status === "to_follow_up" ||
+            project.status === "awaiting_response" ||
+            project.status === "lost")
+            ? "overview"
+            : "tasks"
+        }
+        overview={overviewContent}
+        tasks={tasksContent}
+        notes={notesContent}
+        meetings={meetingsContent}
+        files={filesContent}
+        time={timeContent}
+      />
     </div>
   );
 }

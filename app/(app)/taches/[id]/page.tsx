@@ -9,7 +9,6 @@ import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { deleteTaskAndRedirect } from "@/lib/actions/tasks";
-import { buildMarkdownResolver } from "@/lib/db/queries/mention-resolver";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { getTaskTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
@@ -49,7 +48,6 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
     if (!attachmentsByNote[a.noteId]) attachmentsByNote[a.noteId] = [];
     attachmentsByNote[a.noteId]?.push(a);
   }
-  const mdResolver = await buildMarkdownResolver();
 
   return (
     <div className="space-y-8">
@@ -209,7 +207,6 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
         subjectType="task"
         subjectId={id}
         notes={notesList}
-        resolver={mdResolver}
         attachmentsByNote={attachmentsByNote}
       />
     </div>

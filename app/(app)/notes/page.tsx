@@ -1,6 +1,5 @@
 import { EmptyState } from "@/components/empty-state";
-import { DeleteNoteButton } from "@/components/notes/delete-note-button";
-import { InlineNoteEditor } from "@/components/notes/inline-note-editor";
+import { NoteCard } from "@/components/notes/note-card";
 import { NoteSortMenu } from "@/components/notes/note-sort-menu";
 import { SubjectPill } from "@/components/notes/subject-pill";
 import { PageHeader } from "@/components/page-header";
@@ -10,24 +9,20 @@ import { Input } from "@/components/ui/input";
 import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { notes as notesTable } from "@/db/schema/notes";
 import { users as usersTable } from "@/db/schema/users";
-import { buildMarkdownResolver } from "@/lib/db/queries/mention-resolver";
-import { type NoteSortField, getRecentNotes } from "@/lib/db/queries/notes";
+import { type NoteSortField, getAttachmentsForNotes, getRecentNotes } from "@/lib/db/queries/notes";
 import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
-import { formatDateTime } from "@/lib/format";
 import { NOTE_SORT_OPTIONS } from "@/lib/notes/sort-options";
 import {
-  type NoteKind,
   noteKindEnum,
   noteKindLabels,
   noteSubjectTypeEnum,
   noteSubjectTypeLabels,
 } from "@/lib/schemas/notes";
-import { cn } from "@/lib/utils";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
 import { asc } from "drizzle-orm";
-import { MessageCircle, Phone, StickyNote, Users } from "lucide-react";
+import { StickyNote } from "lucide-react";
 import Link from "next/link";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -35,20 +30,6 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const PERSISTED_KEYS = ["q", "f", "sort"] as const;
 
 const SORT_FIELDS: readonly NoteSortField[] = ["occurredAt", "subject", "kind", "author"] as const;
-
-const KIND_ICON: Record<NoteKind, React.ComponentType<{ className?: string }>> = {
-  memo: StickyNote,
-  call: Phone,
-  meeting: Users,
-  message: MessageCircle,
-};
-
-const KIND_COLOR: Record<NoteKind, string> = {
-  memo: "text-muted-foreground",
-  call: "text-blue-600 dark:text-blue-400",
-  meeting: "text-violet-600 dark:text-violet-400",
-  message: "text-amber-600 dark:text-amber-400",
-};
 
 export default async function NotesPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
@@ -108,16 +89,20 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
   ];
   const filterConditions = applyFilters(filters, filterColumns);
 
-  const [notesList, mdResolver] = await Promise.all([
-    getRecentNotes({
-      conditions: filterConditions,
-      query: query || undefined,
-      limit: 200,
-      sortField,
-      sortDir,
-    }),
-    buildMarkdownResolver(),
-  ]);
+  const notesList = await getRecentNotes({
+    conditions: filterConditions,
+    query: query || undefined,
+    limit: 200,
+    sortField,
+    sortDir,
+  });
+
+  const attachmentRows = await getAttachmentsForNotes(notesList.map((n) => n.id));
+  const attachmentsByNote: Record<string, typeof attachmentRows> = {};
+  for (const a of attachmentRows) {
+    if (!attachmentsByNote[a.noteId]) attachmentsByNote[a.noteId] = [];
+    attachmentsByNote[a.noteId]?.push(a);
+  }
 
   return (
     <div className="space-y-6">
@@ -184,58 +169,26 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
           );
         })()
       ) : (
-        <ul className="space-y-3">
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {notesList.map((note) => {
-            const Icon = KIND_ICON[note.kind];
-            const colorClass = KIND_COLOR[note.kind];
+            const subjectType =
+              note.subjectType === "opportunity" ? null : (note.subjectType ?? null);
             return (
-              <li
-                key={note.id}
-                className="group space-y-2.5 rounded-lg border bg-card p-4 transition-shadow hover:shadow-sm"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  {note.subjectType && note.subjectId && note.subjectType !== "opportunity" ? (
-                    <SubjectPill
-                      type={note.subjectType}
-                      id={note.subjectId}
-                      label={note.subjectLabel}
-                    />
-                  ) : null}
-                  <span
-                    className={cn("inline-flex items-center gap-1 text-xs", colorClass)}
-                    title={noteKindLabels[note.kind]}
-                  >
-                    <Icon className="size-3.5" />
-                    <span className="font-medium">{noteKindLabels[note.kind]}</span>
-                  </span>
-                  {note.authorName ? (
-                    <span className="text-muted-foreground text-xs">· {note.authorName}</span>
-                  ) : null}
-                  <span className="ml-auto text-muted-foreground text-xs tabular-nums">
-                    {formatDateTime(note.occurredAt)}
-                  </span>
-                  <DeleteNoteButton
-                    noteId={note.id}
-                    label={note.title ?? note.content.slice(0, 60)}
-                  />
-                </div>
-
-                {note.title ? (
-                  <h3 className="font-semibold text-base leading-snug">{note.title}</h3>
-                ) : null}
-
-                <InlineNoteEditor
-                  note={{
-                    id: note.id,
-                    title: note.title,
-                    content: note.content,
-                    kind: note.kind,
-                    occurredAt: note.occurredAt,
-                    subjectType:
-                      note.subjectType === "opportunity" ? null : (note.subjectType ?? null),
-                    subjectId: note.subjectId,
-                  }}
-                  resolver={mdResolver}
+              <li key={note.id}>
+                <NoteCard
+                  note={note}
+                  attachments={attachmentsByNote[note.id] ?? []}
+                  subjectType={subjectType}
+                  subjectId={note.subjectId}
+                  subjectPill={
+                    note.subjectType && note.subjectId && note.subjectType !== "opportunity" ? (
+                      <SubjectPill
+                        type={note.subjectType}
+                        id={note.subjectId}
+                        label={note.subjectLabel}
+                      />
+                    ) : null
+                  }
                 />
               </li>
             );
