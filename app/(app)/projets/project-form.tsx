@@ -3,6 +3,7 @@
 import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
+import { DateRangePicker, formatIsoDate, parseIsoDate } from "@/components/ui/date-range-picker";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -448,20 +449,26 @@ export function ProjectForm({ mode, entities, contacts, users, defaultValues }: 
         <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
           Calendrier
         </h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="startDate">Début</Label>
-            <DateInput
-              id="startDate"
-              value={startDate}
-              onValueChange={setStartDate}
-              disabled={pending}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="endDate">Fin</Label>
-            <DateInput id="endDate" value={endDate} onValueChange={setEndDate} disabled={pending} />
-          </div>
+        <div className="space-y-2">
+          <Label>Période du projet (début & fin)</Label>
+          <DateRangePicker
+            value={
+              startDate || endDate
+                ? { start: parseIsoDate(startDate), end: parseIsoDate(endDate) }
+                : null
+            }
+            onChange={(r) => {
+              setStartDate(r?.start ? formatIsoDate(r.start) : "");
+              setEndDate(r?.end ? formatIsoDate(r.end) : "");
+            }}
+            disabled={pending}
+            placeholder="Définir la période"
+            triggerSize="default"
+            className="w-full"
+          />
+          <p className="text-muted-foreground text-xs">
+            Glisse pour sélectionner l'intervalle d'un coup, ou clique sur un preset à gauche.
+          </p>
         </div>
       </section>
 

@@ -32,10 +32,12 @@
     "import:automato": "tsx scripts/import-automato.ts",
     "import:opportunities": "tsx scripts/import-opportunities.ts",
     "import:notion-full": "tsx scripts/import-notion-full.ts",
-    "magic-link": "tsx scripts/generate-magic-link.ts"
+    "magic-link": "tsx scripts/generate-magic-link.ts",
+    "mcp:dev": "tsx mcp-server/index.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.58",
+    "@modelcontextprotocol/sdk": "^1.0.4",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@radix-ui/react-alert-dialog": "^1.1.15",

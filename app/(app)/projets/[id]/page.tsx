@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/page-header";
 import { ProjectContactsField } from "@/components/projects/project-contacts-field";
 import { ProjectMembersField } from "@/components/projects/project-members-field";
 import { ProjectDetailLayout } from "@/components/projets/project-detail-layout";
+import { ProjectMeetingsSection } from "@/components/projets/project-meetings-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { contacts as contactsTable } from "@/db/schema/contacts";
@@ -46,6 +47,7 @@ import {
   ProjKind,
   ProjName,
   ProjOwner,
+  ProjPeriod,
   ProjProbability,
   ProjSource,
   ProjStatus,
@@ -189,6 +191,8 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         attachmentsByNote={attachmentsByNote}
       />
 
+      <ProjectMeetingsSection projectId={id} />
+
       <DriveFolderSection subjectType="project" subjectId={id} defaultFolderName={project.name} />
     </>
   );
@@ -222,14 +226,9 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
               options={userOptions}
             />
           </ProjField>
-          <div className="grid grid-cols-2 gap-3">
-            <ProjField label="Début">
-              <ProjDate id={id} field="startDate" value={project.startDate} />
-            </ProjField>
-            <ProjField label="Fin">
-              <ProjDate id={id} field="endDate" value={project.endDate} />
-            </ProjField>
-          </div>
+          <ProjField label="Période">
+            <ProjPeriod id={id} startValue={project.startDate} endValue={project.endDate} />
+          </ProjField>
           <ProjField label="Facturation">
             <ProjBilling id={id} value={project.billingType} />
           </ProjField>

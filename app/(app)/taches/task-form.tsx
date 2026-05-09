@@ -2,7 +2,7 @@
 
 import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
-import { DateInput } from "@/components/ui/date-input";
+import { DateRangePicker, formatIsoDate, parseIsoDate } from "@/components/ui/date-range-picker";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -200,18 +200,27 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
               disabled={pending}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="startDate">Début (Gantt)</Label>
-            <DateInput
-              id="startDate"
-              value={startDate}
-              onValueChange={setStartDate}
+          <div className="space-y-2 sm:col-span-2">
+            <Label>Période (début & échéance)</Label>
+            <DateRangePicker
+              value={
+                startDate || dueDate
+                  ? { start: parseIsoDate(startDate), end: parseIsoDate(dueDate) }
+                  : null
+              }
+              onChange={(r) => {
+                setStartDate(r?.start ? formatIsoDate(r.start) : "");
+                setDueDate(r?.end ? formatIsoDate(r.end) : "");
+              }}
               disabled={pending}
+              placeholder="Définir la période"
+              triggerVariant="outline"
+              triggerSize="default"
+              className="w-full"
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="dueDate">Échéance</Label>
-            <DateInput id="dueDate" value={dueDate} onValueChange={setDueDate} disabled={pending} />
+            <p className="text-muted-foreground text-xs">
+              Glisse pour sélectionner l'intervalle d'un coup, ou clique sur un preset à gauche.
+            </p>
           </div>
         </div>
       </section>

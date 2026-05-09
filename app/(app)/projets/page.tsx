@@ -37,10 +37,10 @@ import { ArrowRight, Briefcase, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 import {
   ProjColor,
-  ProjDate,
   ProjEntity,
   ProjKind,
   ProjName,
+  ProjPeriod,
   ProjStatus,
 } from "./[id]/inline-fields";
 
@@ -369,7 +369,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
                 </TableHead>
                 <TableHead>
                   <SortableHeader
-                    label="Début"
+                    label="Période"
                     field="startDate"
                     current={sortState}
                     buildHref={buildSortHref}
@@ -427,11 +427,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
                       />
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
-                        <ProjDate id={row.id} field="startDate" value={row.startDate} />
-                        <span aria-hidden="true">→</span>
-                        <ProjDate id={row.id} field="endDate" value={row.endDate} />
-                      </div>
+                      <ProjPeriod id={row.id} startValue={row.startDate} endValue={row.endDate} />
                     </TableCell>
                   </TableRow>
                 );

@@ -2,6 +2,7 @@
 
 import { projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
+import { getDefaultProjectEntityId } from "@/lib/db/queries/entities";
 import { db } from "@/lib/db/server";
 import {
   createProjectSchema,
@@ -16,13 +17,16 @@ import { redirect } from "next/navigation";
 
 export const createProject = action(createProjectSchema, async ({ input, user }) => {
   const conn = await db();
+  // Auto-rattachement à l'entité Parade pour les projets internes
+  // (product / transverse) si aucune entité n'a été choisie explicitement.
+  const entityId = input.entityId ?? (await getDefaultProjectEntityId(input.kind));
   const [row] = await conn
     .insert(projects)
     .values({
       name: input.name,
       kind: input.kind,
       status: input.status,
-      entityId: input.entityId ?? null,
+      entityId: entityId ?? null,
       contactId: input.contactId ?? null,
       color: input.color ?? null,
       icon: input.icon ?? null,
@@ -93,12 +97,16 @@ export const updateProject = action(updateProjectSchema, async ({ input }) => {
  */
 export const quickCreateProject = action(quickCreateProjectSchema, async ({ input, user }) => {
   const conn = await db();
+  const kind = input.kind ?? "transverse";
+  // Idem createProject : product/transverse → entity Parade par défaut.
+  const entityId = await getDefaultProjectEntityId(kind);
   const [row] = await conn
     .insert(projects)
     .values({
       name: input.name,
-      kind: input.kind ?? "transverse",
+      kind,
       status: input.status ?? "planning",
+      entityId,
       ownerId: user.id,
       createdBy: user.id,
     })
@@ -116,6 +124,20 @@ export const patchProject = action(patchProjectSchema, async ({ input }) => {
   if (input.kind !== undefined) updates.kind = input.kind;
   if (input.status !== undefined) updates.status = input.status;
   if (input.entityId !== undefined) updates.entityId = input.entityId;
+  // Switch de kind vers product/transverse SANS toucher à entityId :
+  // si aucune entity n'est définie sur le projet, on rattache à Parade
+  // par défaut (cohérent avec la règle de création).
+  if (input.kind !== undefined && input.entityId === undefined) {
+    const [current] = await conn
+      .select({ entityId: projects.entityId })
+      .from(projects)
+      .where(eq(projects.id, input.id))
+      .limit(1);
+    if (current && !current.entityId) {
+      const defaultEntity = await getDefaultProjectEntityId(input.kind);
+      if (defaultEntity) updates.entityId = defaultEntity;
+    }
+  }
   if (input.color !== undefined) updates.color = input.color;
   if (input.icon !== undefined) updates.icon = input.icon;
   if (input.description !== undefined) updates.description = input.description;

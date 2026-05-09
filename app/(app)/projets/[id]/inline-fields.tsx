@@ -1,6 +1,7 @@
 "use client";
 
 import { InlineDate } from "@/components/inline/inline-date";
+import { InlineDateRange } from "@/components/inline/inline-date-range";
 import { InlineFk } from "@/components/inline/inline-fk";
 import { InlineMultiline } from "@/components/inline/inline-multiline";
 import { InlineSelect } from "@/components/inline/inline-select";
@@ -160,6 +161,33 @@ export function ProjDate({
   value: string | null;
 }) {
   return <InlineDate value={value} onSave={makeSaver<string | null>(id, field)} />;
+}
+
+/**
+ * Éditeur d'intervalle [startDate, endDate] pour la fiche projet.
+ * Persiste les deux dates en une seule mutation `patchProject` —
+ * cohérent avec le drag-to-select du `DateRangePicker`.
+ */
+export function ProjPeriod({
+  id,
+  startValue,
+  endValue,
+}: {
+  id: string;
+  startValue: string | null;
+  endValue: string | null;
+}) {
+  return (
+    <InlineDateRange
+      startValue={startValue}
+      endValue={endValue}
+      onSave={async (startIso, endIso) => {
+        const res = await patchProject({ id, startDate: startIso, endDate: endIso });
+        return res.ok ? { ok: true } : { ok: false, message: res.message };
+      }}
+      placeholder="Définir la période"
+    />
+  );
 }
 
 export function ProjOwner({

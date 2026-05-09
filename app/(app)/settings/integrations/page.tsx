@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/page-header";
 import { getCurrentUserRole } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/server";
 import { SETTING_KEYS, getSetting, getSettingStatus } from "@/lib/settings";
+import { ApiTokensSection } from "./api-tokens-section";
 import { DriveTranscriptsSection } from "./drive-transcripts-section";
 import { GoogleCalendarSection } from "./google-calendar-section";
 import { GoogleDriveSection } from "./google-drive-section";
@@ -36,6 +37,8 @@ export default async function IntegrationsSettingsPage({
       <GoogleDriveSection userId={user.id} />
 
       <GoogleCalendarSection userId={user.id} />
+
+      <ApiTokensSection userId={user.id} />
 
       {isAdmin ? <DriveTranscriptsSection /> : null}
 
