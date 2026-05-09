@@ -16,8 +16,8 @@ import { timeEntries } from "@/db/schema/time-entries";
 import { users } from "@/db/schema/users";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { UserContext } from "./context.js";
-import { db } from "./db.js";
+import type { UserContext } from "./context";
+import { db } from "./db";
 
 /** Helper : limite par défaut sur les listes pour ne pas saturer. */
 const DEFAULT_LIMIT = 50;

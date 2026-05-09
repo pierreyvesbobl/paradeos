@@ -6,8 +6,8 @@ import { meetings } from "@/db/schema/meetings";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { and, asc, desc, eq, isNotNull, lte, sql } from "drizzle-orm";
-import type { UserContext } from "./context.js";
-import { db } from "./db.js";
+import type { UserContext } from "./context";
+import { db } from "./db";
 
 export const RESOURCE_TEMPLATES = [
   {

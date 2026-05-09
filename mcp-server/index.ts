@@ -18,10 +18,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
-import { getStdioContext } from "./context.js";
-import { closeDb } from "./db.js";
-import { PROMPTS, getPromptMessages } from "./prompts.js";
-import { RESOURCE_TEMPLATES, readResource } from "./resources.js";
+import { getStdioContext } from "./context";
+import { closeDb } from "./db";
+import { PROMPTS, getPromptMessages } from "./prompts";
+import { RESOURCE_TEMPLATES, readResource } from "./resources";
 import {
   addNote,
   addNoteSchema,
@@ -50,7 +50,7 @@ import {
   logTimeSchema,
   searchAll,
   searchAllSchema,
-} from "./tools.js";
+} from "./tools";
 
 // Si lancé en standalone (pas via Next), charge .env.local pour récupérer
 // DATABASE_URL et autres. Pas d'effet si déjà set par Claude Desktop.
