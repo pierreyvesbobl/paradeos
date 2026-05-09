@@ -6,14 +6,14 @@
  * (préfixés `my_*`) filtrent par ctx.userId ; les tools "team"
  * exposent les données partagées.
  */
-import { contacts } from "@/db/schema/contacts";
-import { entities } from "@/db/schema/entities";
-import { meetingProposals, meetings } from "@/db/schema/meetings";
-import { notes } from "@/db/schema/notes";
-import { projects } from "@/db/schema/projects";
-import { tasks } from "@/db/schema/tasks";
-import { timeEntries } from "@/db/schema/time-entries";
-import { users } from "@/db/schema/users";
+import { contacts } from "../db/schema/contacts";
+import { entities } from "../db/schema/entities";
+import { meetingProposals, meetings } from "../db/schema/meetings";
+import { notes } from "../db/schema/notes";
+import { projects } from "../db/schema/projects";
+import { tasks } from "../db/schema/tasks";
+import { timeEntries } from "../db/schema/time-entries";
+import { users } from "../db/schema/users";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { UserContext } from "./context";

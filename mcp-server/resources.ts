@@ -2,9 +2,9 @@
  * Resources MCP : URIs lecture seule exposant les données pour
  * consommation directe par Claude (pas besoin d'appeler un tool).
  */
-import { meetings } from "@/db/schema/meetings";
-import { projects } from "@/db/schema/projects";
-import { tasks } from "@/db/schema/tasks";
+import { meetings } from "../db/schema/meetings";
+import { projects } from "../db/schema/projects";
+import { tasks } from "../db/schema/tasks";
 import { and, asc, desc, eq, isNotNull, lte, sql } from "drizzle-orm";
 import type { UserContext } from "./context";
 import { db } from "./db";
