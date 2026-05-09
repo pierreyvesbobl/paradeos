@@ -59,10 +59,15 @@ loadEnv({ path: ".env" });
 
 const ctx = getStdioContext();
 
-const server = new McpServer({
-  name: "paradeos",
-  version: "0.4.0",
-});
+const server = new McpServer(
+  { name: "paradeos", version: "0.4.0" },
+  {
+    // `tools` est auto-déclaré quand on appelle `server.tool(...)`.
+    // `resources` / `prompts` doivent être posés à la main puisqu'on
+    // utilise les handlers bas-niveau (server.server.setRequestHandler).
+    capabilities: { tools: {}, resources: {}, prompts: {} },
+  },
+);
 
 // ---------- READ TOOLS ----------
 
