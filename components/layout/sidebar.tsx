@@ -6,6 +6,7 @@ import {
   Clock,
   Home,
   Mic,
+  School,
   Sparkles,
   StickyNote,
   Users,
@@ -30,6 +31,7 @@ const items: NavItem[] = [
   { label: "Temps", href: "/temps", icon: Clock },
   { label: "Notes", href: "/notes", icon: StickyNote },
   { label: "Meetings", href: "/meetings", icon: Mic },
+  { label: "Coworking", href: "/coworking", icon: School },
 ];
 
 export function Sidebar() {

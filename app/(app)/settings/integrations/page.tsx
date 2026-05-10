@@ -1,8 +1,12 @@
 import { PageHeader } from "@/components/page-header";
+import { dougsSessions } from "@/db/schema/dougs";
 import { getCurrentUserRole } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/server";
+import { db } from "@/lib/db/server";
 import { SETTING_KEYS, getSetting, getSettingStatus } from "@/lib/settings";
+import { eq } from "drizzle-orm";
 import { ApiTokensSection } from "./api-tokens-section";
+import { DougsSection } from "./dougs-section";
 import { DriveTranscriptsSection } from "./drive-transcripts-section";
 import { GoogleCalendarSection } from "./google-calendar-section";
 import { GoogleDriveSection } from "./google-drive-section";
@@ -18,11 +22,22 @@ export default async function IntegrationsSettingsPage({
   const role = await getCurrentUserRole(user);
   const isAdmin = role === "admin";
 
-  const [llmKey, llmModel, params] = await Promise.all([
+  const [llmKey, llmModel, params, conn] = await Promise.all([
     isAdmin ? getSettingStatus(SETTING_KEYS.OPENROUTER_API_KEY) : Promise.resolve(null),
     isAdmin ? getSetting(SETTING_KEYS.LLM_MODEL) : Promise.resolve(null),
     searchParams,
+    db(),
   ]);
+
+  const [dougsSession] = await conn
+    .select({
+      companyId: dougsSessions.companyId,
+      lastUsedAt: dougsSessions.lastUsedAt,
+      expiresAt: dougsSessions.expiresAt,
+    })
+    .from(dougsSessions)
+    .where(eq(dougsSessions.userId, user.id))
+    .limit(1);
 
   return (
     <div className="space-y-6">
@@ -33,6 +48,13 @@ export default async function IntegrationsSettingsPage({
       />
 
       {params.google ? <OauthCallbackToast status={params.google} /> : null}
+
+      <DougsSection
+        connected={Boolean(dougsSession)}
+        companyId={dougsSession?.companyId ?? null}
+        lastUsedAt={dougsSession?.lastUsedAt?.toISOString() ?? null}
+        expiresAt={dougsSession?.expiresAt?.toISOString() ?? null}
+      />
 
       <GoogleDriveSection userId={user.id} />
 

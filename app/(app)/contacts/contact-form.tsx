@@ -5,9 +5,21 @@ import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createContact, updateContact } from "@/lib/actions/contacts";
 import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
+import {
+  type ContactQualification,
+  contactQualificationEnum,
+  contactQualificationLabels,
+} from "@/lib/schemas/coworking";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -26,6 +38,7 @@ type Props = {
     jobTitle: string;
     linkedinUrl: string;
     entityId: string;
+    qualification: ContactQualification | "";
     notes: string;
   };
 };
@@ -42,6 +55,9 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
   const [jobTitle, setJobTitle] = useState(defaultValues.jobTitle);
   const [linkedinUrl, setLinkedinUrl] = useState(defaultValues.linkedinUrl);
   const [entityId, setEntityId] = useState<string | null>(defaultValues.entityId || null);
+  const [qualification, setQualification] = useState<ContactQualification | "">(
+    defaultValues.qualification,
+  );
   const [notes, setNotes] = useState(defaultValues.notes);
 
   function buildPayload() {
@@ -53,6 +69,7 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
       jobTitle: jobTitle || undefined,
       linkedinUrl: linkedinUrl || undefined,
       entityId: entityId ?? undefined,
+      qualification: qualification || undefined,
       notes: notes || undefined,
     };
   }
@@ -129,6 +146,28 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
               searchPlaceholder="Rechercher une entité…"
               disabled={pending}
             />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="qualification">Qualification</Label>
+            <Select
+              value={qualification || "_none"}
+              onValueChange={(v) =>
+                setQualification(v === "_none" ? "" : (v as ContactQualification))
+              }
+              disabled={pending}
+            >
+              <SelectTrigger id="qualification">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">— Aucune —</SelectItem>
+                {contactQualificationEnum.options.map((q) => (
+                  <SelectItem key={q} value={q}>
+                    {contactQualificationLabels[q]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </section>

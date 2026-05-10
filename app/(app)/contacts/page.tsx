@@ -18,6 +18,7 @@ import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
+import { contactQualificationEnum, contactQualificationLabels } from "@/lib/schemas/coworking";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
 import { type SQL, and, asc, desc, ilike, or, sql } from "drizzle-orm";
 import { ArrowRight, Plus, Users } from "lucide-react";
@@ -81,6 +82,15 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
       type: "enum" as const,
       options: entityList.map((e) => ({ value: e.id, label: e.name })),
     },
+    {
+      key: "qualification",
+      label: "Qualification",
+      type: "enum" as const,
+      options: contactQualificationEnum.options.map((q) => ({
+        value: q,
+        label: contactQualificationLabels[q],
+      })),
+    },
     { key: "firstName", label: "Prénom", type: "text" as const },
     { key: "lastName", label: "Nom", type: "text" as const },
     { key: "email", label: "E-mail", type: "text" as const },
@@ -93,6 +103,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
   );
   const filterColumns = [
     { key: "entity", column: contacts.entityId, kind: "enum" as const },
+    { key: "qualification", column: contacts.qualification, kind: "enum" as const },
     { key: "firstName", column: contacts.firstName, kind: "text" as const },
     { key: "lastName", column: contacts.lastName, kind: "text" as const },
     { key: "email", column: contacts.email, kind: "text" as const },

@@ -37,6 +37,7 @@ export default async function EditContactPage({ params }: { params: Params }) {
           jobTitle: contact.jobTitle ?? "",
           linkedinUrl: contact.linkedinUrl ?? "",
           entityId: contact.entityId ?? "",
+          qualification: contact.qualification ?? "",
           notes: contact.notes ?? "",
         }}
       />

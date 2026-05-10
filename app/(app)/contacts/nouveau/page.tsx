@@ -1,13 +1,19 @@
 import { PageHeader } from "@/components/page-header";
 import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
+import { type ContactQualification, contactQualificationEnum } from "@/lib/schemas/coworking";
 import { asc } from "drizzle-orm";
 import { ContactForm } from "../contact-form";
 
-type SearchParams = Promise<{ entityId?: string }>;
+type SearchParams = Promise<{ entityId?: string; qualification?: string }>;
 
 export default async function NewContactPage({ searchParams }: { searchParams: SearchParams }) {
-  const { entityId } = await searchParams;
+  const { entityId, qualification: rawQualif } = await searchParams;
+  const qualification: ContactQualification | "" =
+    rawQualif && (contactQualificationEnum.options as readonly string[]).includes(rawQualif)
+      ? (rawQualif as ContactQualification)
+      : "";
+
   const conn = await db();
   const entityList = await conn
     .select({ id: entities.id, name: entities.name })
@@ -28,6 +34,7 @@ export default async function NewContactPage({ searchParams }: { searchParams: S
           jobTitle: "",
           linkedinUrl: "",
           entityId: entityId ?? "",
+          qualification,
           notes: "",
         }}
       />

@@ -27,6 +27,7 @@ export const createContact = action(createContactSchema, async ({ input, user })
       linkedinUrl: input.linkedinUrl ?? null,
       entityId: input.entityId ?? null,
       ownerId: input.ownerId ?? user.id,
+      qualification: input.qualification ?? null,
       notes: input.notes ?? null,
       createdBy: user.id,
     })
@@ -50,6 +51,7 @@ export const updateContact = action(updateContactSchema, async ({ input }) => {
       linkedinUrl: input.linkedinUrl ?? null,
       entityId: input.entityId ?? null,
       ownerId: input.ownerId ?? null,
+      qualification: input.qualification ?? null,
       notes: input.notes ?? null,
     })
     .where(eq(contacts.id, input.id));

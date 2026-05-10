@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contactQualificationEnum } from "./coworking";
 
 const optionalEmail = z
   .string()
@@ -31,6 +32,10 @@ const optionalUuid = z
   .optional()
   .or(z.literal("").transform(() => undefined));
 
+const optionalQualification = contactQualificationEnum
+  .optional()
+  .or(z.literal("").transform(() => undefined));
+
 export const contactBaseSchema = z.object({
   firstName: z.string().trim().min(1, "Le prénom est requis.").max(120),
   lastName: z.string().trim().min(1, "Le nom est requis.").max(120),
@@ -40,6 +45,7 @@ export const contactBaseSchema = z.object({
   linkedinUrl: optionalUrl,
   entityId: optionalUuid,
   ownerId: optionalUuid,
+  qualification: optionalQualification,
   notes: optionalText(5000),
 });
 
@@ -72,6 +78,7 @@ export const patchContactSchema = z.object({
   linkedinUrl: nullableUrl.optional(),
   entityId: nullableUuid.optional(),
   ownerId: nullableUuid.optional(),
+  qualification: z.union([contactQualificationEnum, z.null()]).optional(),
   notes: nullableText(5000).optional(),
 });
 

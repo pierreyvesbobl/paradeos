@@ -1,0 +1,12 @@
+import { readFileSync } from "node:fs";
+import { config } from "dotenv";
+import postgres from "postgres";
+config({ path: "/Users/pierre-yvessage/Dev/paradeos/.env.local", quiet: true });
+const dbUrl = process.env.DATABASE_URL;
+if (!dbUrl) throw new Error("no DATABASE_URL");
+const file = process.argv[2];
+const sqlText = readFileSync(file, "utf8");
+const sql = postgres(dbUrl, { prepare: false, max: 1, onnotice: () => {} });
+await sql.unsafe(sqlText);
+await sql.end({ timeout: 5 });
+console.log("OK", file);

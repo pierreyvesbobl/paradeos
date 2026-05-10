@@ -1,7 +1,20 @@
 import { sql } from "drizzle-orm";
-import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { entities } from "./entities";
 import { users } from "./users";
+
+/**
+ * Qualifie un contact dans le pipeline. Sert à filtrer rapidement
+ * (ex: vue Coworkers, vue Fournisseurs) sans toucher à `entityId`.
+ */
+export const contactQualification = pgEnum("contact_qualification", [
+  "lead",
+  "client",
+  "coworker",
+  "partner",
+  "supplier",
+  "other",
+]);
 
 /**
  * Personnes physiques. Un contact peut être rattaché à 0 ou 1 entité.
@@ -19,6 +32,7 @@ export const contacts = pgTable(
     jobTitle: text("job_title"),
     linkedinUrl: text("linkedin_url"),
     entityId: uuid("entity_id").references(() => entities.id, { onDelete: "set null" }),
+    qualification: contactQualification("qualification"),
     notes: text("notes"),
     ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
@@ -30,6 +44,7 @@ export const contacts = pgTable(
     emailLowerIdx: index("contacts_email_lower_idx").on(sql`lower(${table.email})`),
     entityIdx: index("contacts_entity_idx").on(table.entityId),
     ownerIdx: index("contacts_owner_idx").on(table.ownerId),
+    qualificationIdx: index("contacts_qualification_idx").on(table.qualification),
   }),
 );
 
