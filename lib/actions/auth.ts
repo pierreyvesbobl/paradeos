@@ -1,7 +1,13 @@
 "use server";
 
 import { action } from "@/lib/actions/action";
-import { setPasswordSchema, signInPasswordSchema, signUpPasswordSchema } from "@/lib/schemas/auth";
+import { getAppUrl } from "@/lib/app-url";
+import {
+  requestPasswordResetSchema,
+  setPasswordSchema,
+  signInPasswordSchema,
+  signUpPasswordSchema,
+} from "@/lib/schemas/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
@@ -70,6 +76,28 @@ export const setPassword = action(setPasswordSchema, async ({ input }) => {
   if (error) throw new Error(error.message);
   return { ok: true as const };
 });
+
+/**
+ * Envoie un lien de réinitialisation par e-mail. Le lien renvoie vers
+ * `/auth/confirm?type=recovery&next=/reset-password` — la route confirm
+ * vérifie l'OTP et établit une session "recovery" temporaire, puis
+ * redirige sur `/reset-password` où l'user choisit son nouveau mot de
+ * passe (via `setPassword`).
+ *
+ * On retourne toujours `ok: true` même si l'e-mail n'existe pas
+ * (anti-énumération).
+ */
+export const requestPasswordReset = action(
+  requestPasswordResetSchema,
+  async ({ input }) => {
+    const appUrl = await getAppUrl();
+    const supabase = await createClient();
+    const redirectTo = `${appUrl}/auth/confirm?type=recovery&next=/reset-password`;
+    await supabase.auth.resetPasswordForEmail(input.email, { redirectTo });
+    return { ok: true as const };
+  },
+  { requireAuth: false },
+);
 
 export async function signOut() {
   const supabase = await createClient();

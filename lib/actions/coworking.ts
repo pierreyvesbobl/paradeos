@@ -12,7 +12,7 @@ import {
   createDougsSalesInvoiceDraft,
   getDougsDraftUrl,
   searchDougsClients,
-  updateDougsSalesInvoiceDraftFields,
+  updateDougsSalesInvoice,
 } from "@/lib/dougs/client";
 import {
   createCoworkingContractSchema,
@@ -38,6 +38,7 @@ export const createCoworkingContract = action(
       .values({
         name: input.name,
         contactId: input.contactId ?? null,
+        billToEntityId: input.billToEntityId ?? null,
         startDate: input.startDate,
         endDate: input.endDate ?? null,
         desks: input.desks,
@@ -81,6 +82,7 @@ export const updateCoworkingContract = action(updateCoworkingContractSchema, asy
   const update: Record<string, unknown> = { updatedAt: new Date() };
   if (input.name !== undefined) update.name = input.name;
   if (input.contactId !== undefined) update.contactId = input.contactId;
+  if (input.billToEntityId !== undefined) update.billToEntityId = input.billToEntityId;
   if (input.startDate !== undefined) update.startDate = input.startDate;
   if (input.endDate !== undefined) update.endDate = input.endDate;
   if (input.desks !== undefined) update.desks = input.desks;
@@ -177,33 +179,38 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
     .select({
       invoice: coworkingInvoices,
       contract: coworkingContracts,
-      contactId: contactsTable.id,
       contactFirstName: contactsTable.firstName,
       contactLastName: contactsTable.lastName,
       contactEmail: contactsTable.email,
-      contactEntityId: contactsTable.entityId,
-      entityName: entitiesTable.name,
-      entitySiren: entitiesTable.siren,
-      entityVatNumber: entitiesTable.vatNumber,
-      entityAddress: entitiesTable.address,
+      // Entité de facturation (B2B) — pilote isBtoB + clientData.
+      billToEntityName: entitiesTable.name,
+      billToEntitySiren: entitiesTable.siren,
+      billToEntityVatNumber: entitiesTable.vatNumber,
+      billToEntityAddress: entitiesTable.address,
     })
     .from(coworkingInvoices)
     .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
     .leftJoin(contactsTable, eq(contactsTable.id, coworkingContracts.contactId))
-    .leftJoin(entitiesTable, eq(entitiesTable.id, contactsTable.entityId))
+    .leftJoin(entitiesTable, eq(entitiesTable.id, coworkingContracts.billToEntityId))
     .where(eq(coworkingInvoices.id, input.id))
     .limit(1);
 
   if (!row || !row.contract) throw new Error("Facture introuvable.");
   const { invoice, contract } = row;
 
-  const isBtoB = Boolean(row.contactEntityId);
+  // B2B si le contrat pointe sur une entité de facturation, sinon B2C
+  // (au nom du contact qui occupe le poste).
+  const isBtoB = Boolean(contract.billToEntityId);
   const searchName = isBtoB
-    ? (row.entityName ?? "")
+    ? (row.billToEntityName ?? "")
     : `${row.contactFirstName ?? ""} ${row.contactLastName ?? ""}`.trim();
 
   if (!searchName) {
-    throw new Error("Pas de nom de client à rechercher (contact ou entité manquant).");
+    throw new Error(
+      isBtoB
+        ? "Entité de facturation manquante ou supprimée."
+        : "Contact manquant (impossible de générer la facture au nom du particulier).",
+    );
   }
 
   let clientData: Record<string, unknown>;
@@ -222,13 +229,13 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
         lastName: best.lastName,
         address: best.address
           ? {
-              street: best.address.street ?? null,
-              zipCode: best.address.zipcode ?? null,
-              city: best.address.city ?? null,
+              street: best.address.street ?? "",
+              zipCode: best.address.zipcode ?? "",
+              city: best.address.city ?? "",
               country: "France",
             }
-          : { street: null, zipCode: null, city: null, country: "France" },
-        deliveryAddress: { street: null, zipCode: null, city: null, country: null },
+          : { street: "", zipCode: "", city: "", country: "France" },
+        deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
         others: [],
         email: best.email ?? row.contactEmail ?? null,
         phone: best.phone ?? null,
@@ -236,7 +243,7 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
       };
     } else {
       // Pas de match — payload minimal depuis nos données locales.
-      const addr = row.entityAddress as {
+      const addr = row.billToEntityAddress as {
         street?: string;
         postalCode?: string;
         city?: string;
@@ -244,19 +251,19 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
       } | null;
       clientData = {
         isBToB: isBtoB,
-        legalName: isBtoB ? row.entityName : null,
-        siren: row.entitySiren ?? null,
+        legalName: isBtoB ? row.billToEntityName : null,
+        siren: row.billToEntitySiren ?? null,
         siret: null,
-        vatNumber: row.entityVatNumber ?? null,
+        vatNumber: row.billToEntityVatNumber ?? null,
         firstName: isBtoB ? null : row.contactFirstName,
         lastName: isBtoB ? null : row.contactLastName,
         address: {
-          street: addr?.street ?? null,
-          zipCode: addr?.postalCode ?? null,
-          city: addr?.city ?? null,
+          street: addr?.street ?? "",
+          zipCode: addr?.postalCode ?? "",
+          city: addr?.city ?? "",
           country: addr?.country ?? "France",
         },
-        deliveryAddress: { street: null, zipCode: null, city: null, country: null },
+        deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
         others: [],
         email: row.contactEmail ?? null,
         phone: null,
@@ -296,7 +303,7 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
   let draft: Awaited<ReturnType<typeof createDougsSalesInvoiceDraft>>;
   try {
     draft = await createDougsSalesInvoiceDraft(user.id);
-    await updateDougsSalesInvoiceDraftFields(user.id, draft.id, {
+    await updateDougsSalesInvoice(user.id, draft.id, {
       ...draft,
       clientData,
       lines,

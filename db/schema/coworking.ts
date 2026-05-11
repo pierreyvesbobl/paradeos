@@ -11,6 +11,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { contacts } from "./contacts";
+import { entities } from "./entities";
 import { users } from "./users";
 
 export const coworkingContractStatus = pgEnum("coworking_contract_status", ["en_cours", "termine"]);
@@ -42,6 +43,11 @@ export const coworkingContracts = pgTable(
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     name: text("name").notNull(),
     contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    /** Si défini, la facture est éditée au nom de l'entité (B2B). Sinon
+     *  au nom du contact (B2C). */
+    billToEntityId: uuid("bill_to_entity_id").references(() => entities.id, {
+      onDelete: "set null",
+    }),
     startDate: date("start_date").notNull(),
     endDate: date("end_date"),
     desks: integer("desks").notNull().default(1),
@@ -55,6 +61,7 @@ export const coworkingContracts = pgTable(
   },
   (table) => ({
     contactIdx: index("coworking_contracts_contact_idx").on(table.contactId),
+    billToEntityIdx: index("coworking_contracts_bill_to_entity_idx").on(table.billToEntityId),
     statusIdx: index("coworking_contracts_status_idx").on(table.status),
   }),
 );

@@ -56,6 +56,8 @@ const decimalString = z.union([z.string(), z.number()]).transform((v) => String(
 export const createCoworkingContractSchema = z.object({
   name: z.string().min(1, "Nom requis."),
   contactId: z.string().uuid().nullable().optional(),
+  /** Quand défini → facturer au nom de l'entité (B2B). Sinon → contact (B2C). */
+  billToEntityId: z.string().uuid().nullable().optional(),
   startDate: z.string().min(1, "Date de début requise."),
   endDate: z.string().nullable().optional(),
   desks: z.number().int().positive(),

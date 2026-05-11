@@ -85,8 +85,9 @@ async function dougsFetch(
   }
   if (!res.ok) {
     const body = await res.text();
+    console.error(`[dougs] ${init?.method ?? "GET"} ${path} → ${res.status}`, body.slice(0, 500));
     throw new DougsApiError(
-      `Dougs ${res.status} ${res.statusText}`,
+      `Dougs ${res.status} ${res.statusText} (${init?.method ?? "GET"} ${path})`,
       res.status,
       body.slice(0, 500),
     );
@@ -151,19 +152,25 @@ export async function createDougsSalesInvoiceDraft(
 }
 
 /**
- * Update partiel d'un draft (clientData, lignes, etc.). Préféré au PUT
- * global qui exigerait de re-fournir tout l'objet.
+ * Update d'un draft via PUT sur la ressource "stable" `/sales-invoices/{id}`.
+ *
+ * Pattern Dougs counter-intuitif : on POST sur `/sales-invoices-drafts`
+ * pour créer, mais on PUT sur `/sales-invoices/{id}` pour mettre à jour
+ * (même pattern que pour les devis : POST `/quote-drafts`, PUT `/quotes/{id}`).
+ *
+ * Le payload doit contenir tous les champs : on spread le `draft`
+ * renvoyé par createDraft (qui contient déjà invoicerOthers, legalData,
+ * date, etc.) puis on overwrite clientData/lines.
  */
-export async function updateDougsSalesInvoiceDraftFields(
+export async function updateDougsSalesInvoice(
   userId: string,
   draftId: string,
   payload: Record<string, unknown>,
 ): Promise<DougsSalesInvoiceDraft> {
-  const res = await dougsFetch(
-    userId,
-    `/companies/{companyId}/sales-invoices-drafts/${draftId}/fields`,
-    { method: "POST", body: JSON.stringify(payload) },
-  );
+  const res = await dougsFetch(userId, `/companies/{companyId}/sales-invoices-drafts/${draftId}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
   return res.json();
 }
 

@@ -1,5 +1,6 @@
 import { contacts } from "@/db/schema/contacts";
 import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
+import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
 import { asc, desc, eq } from "drizzle-orm";
 
@@ -133,12 +134,15 @@ export async function getCoworkingContractWithInvoices(id: string) {
       unitPriceHt: coworkingContracts.unitPriceHt,
       status: coworkingContracts.status,
       billingFrequency: coworkingContracts.billingFrequency,
+      billToEntityId: coworkingContracts.billToEntityId,
+      billToEntityName: entities.name,
       notes: coworkingContracts.notes,
       createdAt: coworkingContracts.createdAt,
       updatedAt: coworkingContracts.updatedAt,
     })
     .from(coworkingContracts)
     .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId))
+    .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
     .where(eq(coworkingContracts.id, id))
     .limit(1);
 

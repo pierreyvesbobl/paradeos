@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signInWithPassword, signUpWithPassword } from "@/lib/actions/auth";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -52,7 +53,17 @@ export function LoginForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="password">Mot de passe</Label>
+        <div className="flex items-baseline justify-between">
+          <Label htmlFor="password">Mot de passe</Label>
+          {mode === "signin" ? (
+            <Link
+              href="/login/forgot"
+              className="text-muted-foreground text-xs underline-offset-4 hover:underline"
+            >
+              Oublié ?
+            </Link>
+          ) : null}
+        </div>
         <Input
           id="password"
           type="password"

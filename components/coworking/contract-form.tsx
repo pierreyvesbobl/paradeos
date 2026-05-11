@@ -27,21 +27,24 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-type ContactOption = { id: string; label: string };
+type Option = { id: string; label: string };
 
 type Props =
   | {
       mode: "create";
-      contactOptions: ContactOption[];
+      contactOptions: Option[];
+      entityOptions: Option[];
       defaultValues?: undefined;
     }
   | {
       mode: "edit";
-      contactOptions: ContactOption[];
+      contactOptions: Option[];
+      entityOptions: Option[];
       defaultValues: {
         id: string;
         name: string;
         contactId: string | null;
+        billToEntityId: string | null;
         startDate: string;
         endDate: string;
         desks: number;
@@ -60,6 +63,7 @@ export function ContractForm(props: Props) {
   const seed = props.mode === "edit" ? props.defaultValues : null;
   const [name, setName] = useState(seed?.name ?? "");
   const [contactId, setContactId] = useState<string | null>(seed?.contactId ?? null);
+  const [billToEntityId, setBillToEntityId] = useState<string | null>(seed?.billToEntityId ?? null);
   const [startDate, setStartDate] = useState(seed?.startDate ?? "");
   const [endDate, setEndDate] = useState(seed?.endDate ?? "");
   const [desks, setDesks] = useState(seed?.desks ?? 1);
@@ -77,6 +81,7 @@ export function ContractForm(props: Props) {
       const payload = {
         name,
         contactId: contactId ?? null,
+        billToEntityId: billToEntityId ?? null,
         startDate,
         endDate: endDate || null,
         desks,
@@ -118,20 +123,35 @@ export function ContractForm(props: Props) {
         <FieldError messages={errors.name} />
       </div>
 
-      <div className="space-y-2">
-        <Label>Coworker</Label>
-        <FkCombobox
-          value={contactId}
-          onValueChange={setContactId}
-          options={props.contactOptions.map((c) => ({ id: c.id, label: c.label }))}
-          placeholder="Choisir un contact…"
-          searchPlaceholder="Rechercher un contact…"
-          clearLabel="Aucun"
-          disabled={pending}
-        />
-        <p className="text-muted-foreground text-xs">
-          Le coworker doit déjà être un contact. Pense à le qualifier "Coworker" sur sa fiche.
-        </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Coworker (qui occupe)</Label>
+          <FkCombobox
+            value={contactId}
+            onValueChange={setContactId}
+            options={props.contactOptions.map((c) => ({ id: c.id, label: c.label }))}
+            placeholder="Choisir un contact…"
+            searchPlaceholder="Rechercher un contact…"
+            clearLabel="Aucun"
+            disabled={pending}
+          />
+          <p className="text-muted-foreground text-xs">Doit être un contact qualifié "Coworker".</p>
+        </div>
+        <div className="space-y-2">
+          <Label>Facturer au nom de</Label>
+          <FkCombobox
+            value={billToEntityId}
+            onValueChange={setBillToEntityId}
+            options={props.entityOptions.map((e) => ({ id: e.id, label: e.label }))}
+            placeholder="Particulier (au nom du contact)…"
+            searchPlaceholder="Rechercher une entité…"
+            clearLabel="Particulier (au nom du contact)"
+            disabled={pending}
+          />
+          <p className="text-muted-foreground text-xs">
+            B2B : choisis l'entité. B2C : laisse vide → facture au nom du contact.
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
