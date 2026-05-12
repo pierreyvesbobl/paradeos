@@ -26,6 +26,10 @@ import {
   addNoteSchema,
   completeTask,
   completeTaskSchema,
+  createContact,
+  createContactSchema,
+  createEntity,
+  createEntitySchema,
   createTask,
   createTaskSchema,
   getMeeting,
@@ -49,6 +53,10 @@ import {
   logTimeSchema,
   searchAll,
   searchAllSchema,
+  updateContact,
+  updateContactSchema,
+  updateEntity,
+  updateEntitySchema,
 } from "./tools";
 
 // Si lancé en standalone (pas via Next), charge .env.local pour récupérer
@@ -189,6 +197,42 @@ server.tool(
   addNoteSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await addNote(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "create_contact",
+  "Crée un contact CRM. Ownership = current user.",
+  createContactSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await createContact(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "update_contact",
+  "Met à jour un contact (champs fournis seulement). `id` requis.",
+  updateContactSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await updateContact(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "create_entity",
+  "Crée une entité CRM (société). Ownership = current user.",
+  createEntitySchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await createEntity(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "update_entity",
+  "Met à jour une entité (champs fournis seulement). `id` requis.",
+  updateEntitySchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await updateEntity(args), null, 2) }],
   }),
 );
 

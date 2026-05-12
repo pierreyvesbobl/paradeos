@@ -506,5 +506,156 @@ export async function searchAll(args: z.infer<typeof searchAllSchema>) {
   };
 }
 
+// ---------- WRITE : Contacts ----------
+
+export const createContactSchema = z.object({
+  firstName: z.string().trim().min(1).max(120),
+  lastName: z.string().trim().min(1).max(120),
+  email: z.string().email().optional(),
+  phone: z.string().max(40).optional(),
+  jobTitle: z.string().max(160).optional(),
+  linkedinUrl: z.string().url().optional(),
+  entityId: z.string().uuid().optional(),
+  qualification: z.enum(["lead", "client", "coworker", "partner", "supplier", "other"]).optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+export async function createContact(args: z.infer<typeof createContactSchema>, ctx: UserContext) {
+  const conn = db();
+  const [row] = await conn
+    .insert(contacts)
+    .values({
+      firstName: args.firstName,
+      lastName: args.lastName,
+      email: args.email ?? null,
+      phone: args.phone ?? null,
+      jobTitle: args.jobTitle ?? null,
+      linkedinUrl: args.linkedinUrl ?? null,
+      entityId: args.entityId ?? null,
+      qualification: args.qualification ?? null,
+      notes: args.notes ?? null,
+      ownerId: ctx.userId,
+      createdBy: ctx.userId,
+    })
+    .returning({
+      id: contacts.id,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+    });
+  return row;
+}
+
+export const updateContactSchema = z.object({
+  id: z.string().uuid(),
+  firstName: z.string().trim().min(1).max(120).optional(),
+  lastName: z.string().trim().min(1).max(120).optional(),
+  email: z.string().email().nullable().optional(),
+  phone: z.string().max(40).nullable().optional(),
+  jobTitle: z.string().max(160).nullable().optional(),
+  linkedinUrl: z.string().url().nullable().optional(),
+  entityId: z.string().uuid().nullable().optional(),
+  qualification: z
+    .enum(["lead", "client", "coworker", "partner", "supplier", "other"])
+    .nullable()
+    .optional(),
+  notes: z.string().max(5000).nullable().optional(),
+});
+
+export async function updateContact(args: z.infer<typeof updateContactSchema>) {
+  const conn = db();
+  const update: Record<string, unknown> = { updatedAt: new Date() };
+  if (args.firstName !== undefined) update.firstName = args.firstName;
+  if (args.lastName !== undefined) update.lastName = args.lastName;
+  if (args.email !== undefined) update.email = args.email;
+  if (args.phone !== undefined) update.phone = args.phone;
+  if (args.jobTitle !== undefined) update.jobTitle = args.jobTitle;
+  if (args.linkedinUrl !== undefined) update.linkedinUrl = args.linkedinUrl;
+  if (args.entityId !== undefined) update.entityId = args.entityId;
+  if (args.qualification !== undefined) update.qualification = args.qualification;
+  if (args.notes !== undefined) update.notes = args.notes;
+
+  await conn.update(contacts).set(update).where(eq(contacts.id, args.id));
+  return { id: args.id };
+}
+
+// ---------- WRITE : Entités ----------
+
+export const createEntitySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  kind: z.enum(["client", "prospect", "partner", "supplier", "other"]).optional(),
+  website: z.string().url().optional(),
+  siren: z
+    .string()
+    .regex(/^\d{9}$/)
+    .optional(),
+  vatNumber: z.string().max(40).optional(),
+  address: z
+    .object({
+      street: z.string().optional(),
+      postalCode: z.string().optional(),
+      city: z.string().optional(),
+      country: z.string().optional(),
+    })
+    .optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+export async function createEntity(args: z.infer<typeof createEntitySchema>, ctx: UserContext) {
+  const conn = db();
+  const [row] = await conn
+    .insert(entities)
+    .values({
+      name: args.name,
+      kind: args.kind ?? "prospect",
+      website: args.website ?? null,
+      siren: args.siren ?? null,
+      vatNumber: args.vatNumber ?? null,
+      address: args.address ?? null,
+      notes: args.notes ?? null,
+      ownerId: ctx.userId,
+      createdBy: ctx.userId,
+    })
+    .returning({ id: entities.id, name: entities.name, kind: entities.kind });
+  return row;
+}
+
+export const updateEntitySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(200).optional(),
+  kind: z.enum(["client", "prospect", "partner", "supplier", "other"]).optional(),
+  website: z.string().url().nullable().optional(),
+  siren: z
+    .string()
+    .regex(/^\d{9}$/)
+    .nullable()
+    .optional(),
+  vatNumber: z.string().max(40).nullable().optional(),
+  address: z
+    .object({
+      street: z.string().optional(),
+      postalCode: z.string().optional(),
+      city: z.string().optional(),
+      country: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+  notes: z.string().max(5000).nullable().optional(),
+});
+
+export async function updateEntity(args: z.infer<typeof updateEntitySchema>) {
+  const conn = db();
+  const update: Record<string, unknown> = { updatedAt: new Date() };
+  if (args.name !== undefined) update.name = args.name;
+  if (args.kind !== undefined) update.kind = args.kind;
+  if (args.website !== undefined) update.website = args.website;
+  if (args.siren !== undefined) update.siren = args.siren;
+  if (args.vatNumber !== undefined) update.vatNumber = args.vatNumber;
+  if (args.address !== undefined) update.address = args.address;
+  if (args.notes !== undefined) update.notes = args.notes;
+
+  await conn.update(entities).set(update).where(eq(entities.id, args.id));
+  return { id: args.id };
+}
+
 // Re-export for `inArray` not used in this file but available pour les callers
 export const _internal = { inArray };
