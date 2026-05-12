@@ -7,7 +7,7 @@ import { deleteContactAndRedirect } from "@/lib/actions/contacts";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { db } from "@/lib/db/server";
 import { asc, eq } from "drizzle-orm";
-import { ExternalLink, Mail, Phone } from "lucide-react";
+import { ExternalLink, Mail, MapPin, Phone } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -120,6 +120,16 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
                 <ContLinkedin id={id} value={contact.linkedinUrl} />
               </dd>
             </div>
+            <div className="sm:col-span-2">
+              <dt className="text-muted-foreground text-xs uppercase tracking-wide">
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="size-3" /> Adresse
+                </span>
+              </dt>
+              <dd className="mt-1 whitespace-pre-line text-sm">
+                {formatContactAddress(contact.address)}
+              </dd>
+            </div>
           </dl>
           <div>
             <p className="text-muted-foreground text-xs uppercase tracking-wide">Notes</p>
@@ -155,4 +165,16 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
       />
     </div>
   );
+}
+
+function formatContactAddress(
+  addr: { street?: string; postalCode?: string; city?: string; country?: string } | null,
+): React.ReactNode {
+  if (!addr) return <span className="text-muted-foreground italic">—</span>;
+  const line1 = addr.street ?? "";
+  const line2 = [addr.postalCode, addr.city].filter(Boolean).join(" ");
+  const line3 = addr.country ?? "";
+  const lines = [line1, line2, line3].filter(Boolean);
+  if (lines.length === 0) return <span className="text-muted-foreground italic">—</span>;
+  return lines.join("\n");
 }

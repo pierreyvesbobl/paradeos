@@ -39,6 +39,10 @@ type Props = {
     linkedinUrl: string;
     entityId: string;
     qualification: ContactQualification | "";
+    addressStreet: string;
+    addressPostalCode: string;
+    addressCity: string;
+    addressCountry: string;
     notes: string;
   };
 };
@@ -58,9 +62,18 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
   const [qualification, setQualification] = useState<ContactQualification | "">(
     defaultValues.qualification,
   );
+  const [addressStreet, setAddressStreet] = useState(defaultValues.addressStreet);
+  const [addressPostalCode, setAddressPostalCode] = useState(defaultValues.addressPostalCode);
+  const [addressCity, setAddressCity] = useState(defaultValues.addressCity);
+  const [addressCountry, setAddressCountry] = useState(defaultValues.addressCountry);
   const [notes, setNotes] = useState(defaultValues.notes);
 
   function buildPayload() {
+    const street = addressStreet.trim();
+    const postalCode = addressPostalCode.trim();
+    const city = addressCity.trim();
+    const country = addressCountry.trim();
+    const hasAddress = street || postalCode || city || country;
     return {
       firstName,
       lastName,
@@ -70,6 +83,14 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
       linkedinUrl: linkedinUrl || undefined,
       entityId: entityId ?? undefined,
       qualification: qualification || undefined,
+      address: hasAddress
+        ? {
+            street: street || undefined,
+            postalCode: postalCode || undefined,
+            city: city || undefined,
+            country: country || undefined,
+          }
+        : undefined,
       notes: notes || undefined,
     };
   }
@@ -209,6 +230,58 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
               disabled={pending}
             />
             <FieldError messages={errors.linkedinUrl} />
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Adresse
+        </h2>
+        <p className="text-muted-foreground text-xs">
+          Optionnelle. Utile pour facturer le contact en B2C (sans entité) — Dougs exige une adresse
+          pour finaliser un brouillon.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="addressStreet">Rue</Label>
+            <Input
+              id="addressStreet"
+              value={addressStreet}
+              onChange={(e) => setAddressStreet(e.target.value)}
+              placeholder="12 rue de la Paix"
+              disabled={pending}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="addressPostalCode">Code postal</Label>
+            <Input
+              id="addressPostalCode"
+              value={addressPostalCode}
+              onChange={(e) => setAddressPostalCode(e.target.value)}
+              placeholder="75002"
+              disabled={pending}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="addressCity">Ville</Label>
+            <Input
+              id="addressCity"
+              value={addressCity}
+              onChange={(e) => setAddressCity(e.target.value)}
+              placeholder="Paris"
+              disabled={pending}
+            />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="addressCountry">Pays</Label>
+            <Input
+              id="addressCountry"
+              value={addressCountry}
+              onChange={(e) => setAddressCountry(e.target.value)}
+              placeholder="France"
+              disabled={pending}
+            />
           </div>
         </div>
       </section>

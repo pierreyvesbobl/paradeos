@@ -61,11 +61,14 @@ export function ContractForm(props: Props) {
   const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
 
   const seed = props.mode === "edit" ? props.defaultValues : null;
+  // En création, on pré-remplit avec le mois courant : 1er → dernier jour.
+  const defaultMonthStart = seed ? "" : firstOfCurrentMonth();
+  const defaultMonthEnd = seed ? "" : lastOfCurrentMonth();
   const [name, setName] = useState(seed?.name ?? "");
   const [contactId, setContactId] = useState<string | null>(seed?.contactId ?? null);
   const [billToEntityId, setBillToEntityId] = useState<string | null>(seed?.billToEntityId ?? null);
-  const [startDate, setStartDate] = useState(seed?.startDate ?? "");
-  const [endDate, setEndDate] = useState(seed?.endDate ?? "");
+  const [startDate, setStartDate] = useState(seed?.startDate ?? defaultMonthStart);
+  const [endDate, setEndDate] = useState(seed?.endDate ?? defaultMonthEnd);
   const [desks, setDesks] = useState(seed?.desks ?? 1);
   const [unitPriceHt, setUnitPriceHt] = useState(seed?.unitPriceHt ?? "");
   const [status, setStatus] = useState<CoworkingContractStatus>(seed?.status ?? "en_cours");
@@ -271,4 +274,19 @@ export function ContractForm(props: Props) {
       </div>
     </form>
   );
+}
+
+function fmtDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function firstOfCurrentMonth(): string {
+  const now = new Date();
+  return fmtDate(new Date(now.getFullYear(), now.getMonth(), 1));
+}
+function lastOfCurrentMonth(): string {
+  const now = new Date();
+  return fmtDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 }

@@ -35,6 +35,10 @@ export default async function NewContactPage({ searchParams }: { searchParams: S
           linkedinUrl: "",
           entityId: entityId ?? "",
           qualification,
+          addressStreet: "",
+          addressPostalCode: "",
+          addressCity: "",
+          addressCountry: "",
           notes: "",
         }}
       />

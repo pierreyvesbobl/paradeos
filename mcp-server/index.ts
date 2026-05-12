@@ -28,16 +28,28 @@ import {
   completeTaskSchema,
   createContact,
   createContactSchema,
+  createCoworkingContract,
+  createCoworkingContractSchema,
+  createCoworkingInvoice,
+  createCoworkingInvoiceSchema,
   createEntity,
   createEntitySchema,
   createTask,
   createTaskSchema,
+  generateNextCoworkingInvoice,
+  generateNextCoworkingInvoiceSchema,
+  getCoworkingContract,
+  getCoworkingContractSchema,
   getMeeting,
   getMeetingSchema,
   getProject,
   getProjectSchema,
   listContacts,
   listContactsSchema,
+  listCoworkingContracts,
+  listCoworkingContractsSchema,
+  listCoworkingInvoices,
+  listCoworkingInvoicesSchema,
   listEntities,
   listEntitiesSchema,
   listMeetings,
@@ -55,6 +67,10 @@ import {
   searchAllSchema,
   updateContact,
   updateContactSchema,
+  updateCoworkingContract,
+  updateCoworkingContractSchema,
+  updateCoworkingInvoice,
+  updateCoworkingInvoiceSchema,
   updateEntity,
   updateEntitySchema,
 } from "./tools";
@@ -233,6 +249,89 @@ server.tool(
   updateEntitySchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await updateEntity(args), null, 2) }],
+  }),
+);
+
+// ---------- COWORKING ----------
+
+server.tool(
+  "list_coworking_contracts",
+  "Liste les contrats coworking avec filtres (status en_cours/termine, contactId).",
+  listCoworkingContractsSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await listCoworkingContracts(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "get_coworking_contract",
+  "Détail d'un contrat coworking (avec ses factures liées).",
+  getCoworkingContractSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await getCoworkingContract(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "create_coworking_contract",
+  "Crée un contrat coworking. `contactId` = occupant ; `billToEntityId` = facturé à l'entité (B2B, optionnel — sinon B2C au nom du contact).",
+  createCoworkingContractSchema.shape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await createCoworkingContract(args, ctx), null, 2) },
+    ],
+  }),
+);
+
+server.tool(
+  "update_coworking_contract",
+  "Met à jour un contrat coworking (champs fournis seulement).",
+  updateCoworkingContractSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await updateCoworkingContract(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "list_coworking_invoices",
+  "Liste les factures coworking avec filtres (contractId, status).",
+  listCoworkingInvoicesSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await listCoworkingInvoices(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "create_coworking_invoice",
+  "Crée une facture coworking. Postes et prix sont snapshotés depuis le contrat.",
+  createCoworkingInvoiceSchema.shape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await createCoworkingInvoice(args, ctx), null, 2) },
+    ],
+  }),
+);
+
+server.tool(
+  "update_coworking_invoice",
+  "Met à jour une facture coworking (statut, période, notes…).",
+  updateCoworkingInvoiceSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await updateCoworkingInvoice(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "generate_next_coworking_invoice",
+  "Génère la facture suivante d'un contrat. Période auto = lendemain de la dernière facture (ou contract.startDate si aucune) + N mois selon billing_frequency. Statut a_facturer.",
+  generateNextCoworkingInvoiceSchema.shape,
+  async (args) => ({
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(await generateNextCoworkingInvoice(args, ctx), null, 2),
+      },
+    ],
   }),
 );
 

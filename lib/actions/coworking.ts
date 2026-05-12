@@ -182,6 +182,7 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
       contactFirstName: contactsTable.firstName,
       contactLastName: contactsTable.lastName,
       contactEmail: contactsTable.email,
+      contactAddress: contactsTable.address,
       // Entité de facturation (B2B) — pilote isBtoB + clientData.
       billToEntityName: entitiesTable.name,
       billToEntitySiren: entitiesTable.siren,
@@ -243,7 +244,8 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
       };
     } else {
       // Pas de match — payload minimal depuis nos données locales.
-      const addr = row.billToEntityAddress as {
+      // B2B : adresse de l'entité. B2C : adresse du contact.
+      const localAddr = (isBtoB ? row.billToEntityAddress : row.contactAddress) as {
         street?: string;
         postalCode?: string;
         city?: string;
@@ -258,10 +260,10 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
         firstName: isBtoB ? null : row.contactFirstName,
         lastName: isBtoB ? null : row.contactLastName,
         address: {
-          street: addr?.street ?? "",
-          zipCode: addr?.postalCode ?? "",
-          city: addr?.city ?? "",
-          country: addr?.country ?? "France",
+          street: localAddr?.street ?? "",
+          zipCode: localAddr?.postalCode ?? "",
+          city: localAddr?.city ?? "",
+          country: localAddr?.country ?? "France",
         },
         deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
         others: [],
@@ -285,7 +287,7 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
 
   const lines = [
     {
-      title: `Location coworking — ${invoice.name}`,
+      title: "Prestation d'hébergement",
       description: `${desks} poste${desks > 1 ? "s" : ""} × ${monthlyHt.toLocaleString("fr-FR")} €/mois × ${months} mois (${invoice.periodStart} → ${invoice.periodEnd})`,
       unit: "mois",
       quantity: months,

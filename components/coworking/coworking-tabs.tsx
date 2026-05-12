@@ -7,8 +7,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 
 const TABS = [
-  { value: "contracts", label: "Contrats", icon: FileText },
   { value: "invoices", label: "Factures", icon: Receipt },
+  { value: "contracts", label: "Contrats", icon: FileText },
   { value: "coworkers", label: "Coworkers", icon: Users },
 ] as const;
 type TabValue = (typeof TABS)[number]["value"];
@@ -36,12 +36,12 @@ export function CoworkingTabs({
   const tabParam = params.get("tab");
   const value: TabValue = TABS.some((t) => t.value === tabParam)
     ? (tabParam as TabValue)
-    : "contracts";
+    : "invoices";
 
   const handleChange = useCallback(
     (next: string) => {
       const sp = new URLSearchParams(params.toString());
-      if (next === "contracts") sp.delete("tab");
+      if (next === "invoices") sp.delete("tab");
       else sp.set("tab", next);
       const qs = sp.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });

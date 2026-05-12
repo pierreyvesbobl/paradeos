@@ -38,6 +38,10 @@ export default async function EditContactPage({ params }: { params: Params }) {
           linkedinUrl: contact.linkedinUrl ?? "",
           entityId: contact.entityId ?? "",
           qualification: contact.qualification ?? "",
+          addressStreet: contact.address?.street ?? "",
+          addressPostalCode: contact.address?.postalCode ?? "",
+          addressCity: contact.address?.city ?? "",
+          addressCountry: contact.address?.country ?? "",
           notes: contact.notes ?? "",
         }}
       />

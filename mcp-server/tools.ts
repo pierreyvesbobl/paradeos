@@ -9,6 +9,7 @@ import { z } from "zod";
  * exposent les données partagées.
  */
 import { contacts } from "../db/schema/contacts";
+import { coworkingContracts, coworkingInvoices } from "../db/schema/coworking";
 import { entities } from "../db/schema/entities";
 import { meetingProposals, meetings } from "../db/schema/meetings";
 import { notes } from "../db/schema/notes";
@@ -655,6 +656,393 @@ export async function updateEntity(args: z.infer<typeof updateEntitySchema>) {
 
   await conn.update(entities).set(update).where(eq(entities.id, args.id));
   return { id: args.id };
+}
+
+// ---------- COWORKING ----------
+
+const contractStatusEnum = z.enum(["en_cours", "termine"]);
+const billingFrequencyEnum = z.enum(["monthly", "quarterly"]);
+const invoiceStatusEnum = z.enum(["a_facturer", "envoyee", "payee"]);
+const invoiceBilledByEnum = z.enum(["parade", "g_and_o"]);
+
+export const listCoworkingContractsSchema = z.object({
+  status: contractStatusEnum.optional(),
+  contactId: z.string().uuid().optional(),
+  limit: z.number().int().positive().max(200).optional(),
+});
+
+export async function listCoworkingContracts(args: z.infer<typeof listCoworkingContractsSchema>) {
+  const conn = db();
+  const conds = [];
+  if (args.status) conds.push(eq(coworkingContracts.status, args.status));
+  if (args.contactId) conds.push(eq(coworkingContracts.contactId, args.contactId));
+  return conn
+    .select({
+      id: coworkingContracts.id,
+      name: coworkingContracts.name,
+      contactId: coworkingContracts.contactId,
+      billToEntityId: coworkingContracts.billToEntityId,
+      startDate: coworkingContracts.startDate,
+      endDate: coworkingContracts.endDate,
+      desks: coworkingContracts.desks,
+      unitPriceHt: coworkingContracts.unitPriceHt,
+      status: coworkingContracts.status,
+      billingFrequency: coworkingContracts.billingFrequency,
+    })
+    .from(coworkingContracts)
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(desc(coworkingContracts.startDate))
+    .limit(args.limit ?? DEFAULT_LIMIT);
+}
+
+export const getCoworkingContractSchema = z.object({ id: z.string().uuid() });
+
+export async function getCoworkingContract(args: z.infer<typeof getCoworkingContractSchema>) {
+  const conn = db();
+  const [contract] = await conn
+    .select()
+    .from(coworkingContracts)
+    .where(eq(coworkingContracts.id, args.id))
+    .limit(1);
+  if (!contract) return null;
+
+  const invoiceRows = await conn
+    .select({
+      id: coworkingInvoices.id,
+      name: coworkingInvoices.name,
+      periodStart: coworkingInvoices.periodStart,
+      periodEnd: coworkingInvoices.periodEnd,
+      invoiceDate: coworkingInvoices.invoiceDate,
+      status: coworkingInvoices.status,
+      billedBy: coworkingInvoices.billedBy,
+      desks: coworkingInvoices.desks,
+      unitPriceHt: coworkingInvoices.unitPriceHt,
+      vatRate: coworkingInvoices.vatRate,
+      dougsInvoiceId: coworkingInvoices.dougsInvoiceId,
+    })
+    .from(coworkingInvoices)
+    .where(eq(coworkingInvoices.contractId, args.id))
+    .orderBy(asc(coworkingInvoices.periodStart));
+
+  return { contract, invoices: invoiceRows };
+}
+
+export const createCoworkingContractSchema = z.object({
+  name: z.string().min(1).max(200),
+  contactId: z.string().uuid().optional(),
+  billToEntityId: z.string().uuid().optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD."),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD.")
+    .optional(),
+  desks: z.number().int().positive(),
+  unitPriceHt: z.union([z.number(), z.string()]).transform((v) => String(v)),
+  status: contractStatusEnum.optional(),
+  billingFrequency: billingFrequencyEnum.optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+export async function createCoworkingContract(
+  args: z.infer<typeof createCoworkingContractSchema>,
+  ctx: UserContext,
+) {
+  const conn = db();
+  const [row] = await conn
+    .insert(coworkingContracts)
+    .values({
+      name: args.name,
+      contactId: args.contactId ?? null,
+      billToEntityId: args.billToEntityId ?? null,
+      startDate: args.startDate,
+      endDate: args.endDate ?? null,
+      desks: args.desks,
+      unitPriceHt: args.unitPriceHt,
+      status: args.status ?? "en_cours",
+      billingFrequency: args.billingFrequency ?? "quarterly",
+      notes: args.notes ?? null,
+      createdBy: ctx.userId,
+    })
+    .returning({ id: coworkingContracts.id, name: coworkingContracts.name });
+  return row;
+}
+
+export const updateCoworkingContractSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(200).optional(),
+  contactId: z.string().uuid().nullable().optional(),
+  billToEntityId: z.string().uuid().nullable().optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD.")
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD.")
+    .nullable()
+    .optional(),
+  desks: z.number().int().positive().optional(),
+  unitPriceHt: z
+    .union([z.number(), z.string()])
+    .transform((v) => String(v))
+    .optional(),
+  status: contractStatusEnum.optional(),
+  billingFrequency: billingFrequencyEnum.optional(),
+  notes: z.string().max(5000).nullable().optional(),
+});
+
+export async function updateCoworkingContract(args: z.infer<typeof updateCoworkingContractSchema>) {
+  const conn = db();
+  const update: Record<string, unknown> = { updatedAt: new Date() };
+  for (const key of [
+    "name",
+    "contactId",
+    "billToEntityId",
+    "startDate",
+    "endDate",
+    "desks",
+    "unitPriceHt",
+    "status",
+    "billingFrequency",
+    "notes",
+  ] as const) {
+    const v = (args as Record<string, unknown>)[key];
+    if (v !== undefined) update[key] = v;
+  }
+  await conn.update(coworkingContracts).set(update).where(eq(coworkingContracts.id, args.id));
+  return { id: args.id };
+}
+
+export const listCoworkingInvoicesSchema = z.object({
+  contractId: z.string().uuid().optional(),
+  status: invoiceStatusEnum.optional(),
+  limit: z.number().int().positive().max(200).optional(),
+});
+
+export async function listCoworkingInvoices(args: z.infer<typeof listCoworkingInvoicesSchema>) {
+  const conn = db();
+  const conds = [];
+  if (args.contractId) conds.push(eq(coworkingInvoices.contractId, args.contractId));
+  if (args.status) conds.push(eq(coworkingInvoices.status, args.status));
+  return conn
+    .select({
+      id: coworkingInvoices.id,
+      contractId: coworkingInvoices.contractId,
+      contractName: coworkingContracts.name,
+      name: coworkingInvoices.name,
+      periodStart: coworkingInvoices.periodStart,
+      periodEnd: coworkingInvoices.periodEnd,
+      invoiceDate: coworkingInvoices.invoiceDate,
+      status: coworkingInvoices.status,
+      billedBy: coworkingInvoices.billedBy,
+      desks: coworkingInvoices.desks,
+      unitPriceHt: coworkingInvoices.unitPriceHt,
+      vatRate: coworkingInvoices.vatRate,
+      dougsInvoiceId: coworkingInvoices.dougsInvoiceId,
+    })
+    .from(coworkingInvoices)
+    .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(desc(coworkingInvoices.periodStart))
+    .limit(args.limit ?? DEFAULT_LIMIT);
+}
+
+export const createCoworkingInvoiceSchema = z.object({
+  contractId: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  invoiceDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD.")
+    .optional(),
+  periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD."),
+  periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD."),
+  status: invoiceStatusEnum.optional(),
+  billedBy: invoiceBilledByEnum.optional(),
+  vatRate: z
+    .union([z.number(), z.string()])
+    .transform((v) => String(v))
+    .optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+export async function createCoworkingInvoice(
+  args: z.infer<typeof createCoworkingInvoiceSchema>,
+  ctx: UserContext,
+) {
+  const conn = db();
+  // Snapshot des valeurs du contrat (desks + prix). Si ces valeurs
+  // changent ensuite, la query d'affichage côté Next pull live depuis
+  // le contrat, mais on garde le snapshot en fallback DB.
+  const [contract] = await conn
+    .select({ desks: coworkingContracts.desks, unitPriceHt: coworkingContracts.unitPriceHt })
+    .from(coworkingContracts)
+    .where(eq(coworkingContracts.id, args.contractId))
+    .limit(1);
+  if (!contract) throw new Error("Contrat introuvable.");
+
+  const [row] = await conn
+    .insert(coworkingInvoices)
+    .values({
+      contractId: args.contractId,
+      name: args.name,
+      invoiceDate: args.invoiceDate ?? null,
+      periodStart: args.periodStart,
+      periodEnd: args.periodEnd,
+      status: args.status ?? "a_facturer",
+      billedBy: args.billedBy ?? "parade",
+      desks: contract.desks,
+      unitPriceHt: contract.unitPriceHt,
+      vatRate: args.vatRate ?? "0.2",
+      notes: args.notes ?? null,
+      createdBy: ctx.userId,
+    })
+    .returning({ id: coworkingInvoices.id, name: coworkingInvoices.name });
+  return row;
+}
+
+export const updateCoworkingInvoiceSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(200).optional(),
+  invoiceDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD.")
+    .nullable()
+    .optional(),
+  periodStart: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD.")
+    .optional(),
+  periodEnd: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD.")
+    .optional(),
+  status: invoiceStatusEnum.optional(),
+  billedBy: invoiceBilledByEnum.optional(),
+  vatRate: z
+    .union([z.number(), z.string()])
+    .transform((v) => String(v))
+    .optional(),
+  notes: z.string().max(5000).nullable().optional(),
+});
+
+export async function updateCoworkingInvoice(args: z.infer<typeof updateCoworkingInvoiceSchema>) {
+  const conn = db();
+  const update: Record<string, unknown> = { updatedAt: new Date() };
+  for (const key of [
+    "name",
+    "invoiceDate",
+    "periodStart",
+    "periodEnd",
+    "status",
+    "billedBy",
+    "vatRate",
+    "notes",
+  ] as const) {
+    const v = (args as Record<string, unknown>)[key];
+    if (v !== undefined) update[key] = v;
+  }
+  await conn.update(coworkingInvoices).set(update).where(eq(coworkingInvoices.id, args.id));
+  return { id: args.id };
+}
+
+/**
+ * Génère la facture suivante pour un contrat. Période = lendemain de
+ * la dernière facture (ou contrat.startDate si aucune) + N mois selon
+ * billing_frequency. Statut initial `a_facturer`.
+ *
+ * Implémentation inlinée (le helper `lib/coworking/generate-invoice.ts`
+ * dépend de Next via `server-only` et des path aliases — incompatible
+ * avec le runtime tsx standalone du MCP stdio).
+ */
+export const generateNextCoworkingInvoiceSchema = z.object({
+  contractId: z.string().uuid(),
+});
+
+export async function generateNextCoworkingInvoice(
+  args: z.infer<typeof generateNextCoworkingInvoiceSchema>,
+  ctx: UserContext,
+) {
+  const conn = db();
+  const [contract] = await conn
+    .select()
+    .from(coworkingContracts)
+    .where(eq(coworkingContracts.id, args.contractId))
+    .limit(1);
+  if (!contract) throw new Error("Contrat introuvable.");
+  if (contract.status === "termine") throw new Error("Contrat terminé — pas de facture suivante.");
+
+  const months = contract.billingFrequency === "monthly" ? 1 : 3;
+
+  const [last] = await conn
+    .select({ periodEnd: coworkingInvoices.periodEnd })
+    .from(coworkingInvoices)
+    .where(eq(coworkingInvoices.contractId, args.contractId))
+    .orderBy(desc(coworkingInvoices.periodStart))
+    .limit(1);
+
+  const refDate = last ? addDays(parseDate(last.periodEnd), 1) : parseDate(contract.startDate);
+  const periodStart = firstOfMonth(refDate);
+  const periodEnd = lastOfMonth(addMonths(periodStart, months - 1));
+  const label = periodLabel(periodStart, contract.billingFrequency);
+
+  const [row] = await conn
+    .insert(coworkingInvoices)
+    .values({
+      contractId: args.contractId,
+      name: label,
+      invoiceDate: null,
+      periodStart: fmtDate(periodStart),
+      periodEnd: fmtDate(periodEnd),
+      status: "a_facturer",
+      billedBy: "parade",
+      desks: contract.desks,
+      unitPriceHt: contract.unitPriceHt,
+      vatRate: "0.2",
+      createdBy: ctx.userId,
+    })
+    .returning({ id: coworkingInvoices.id, name: coworkingInvoices.name });
+  return {
+    ...row,
+    periodStart: fmtDate(periodStart),
+    periodEnd: fmtDate(periodEnd),
+  };
+}
+
+// ---------- Helpers de date (locaux) ----------
+
+function parseDate(s: string): Date {
+  return new Date(`${s}T00:00:00`);
+}
+function fmtDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function addDays(d: Date, n: number): Date {
+  const out = new Date(d);
+  out.setDate(out.getDate() + n);
+  return out;
+}
+function addMonths(d: Date, n: number): Date {
+  const out = new Date(d);
+  out.setMonth(out.getMonth() + n);
+  return out;
+}
+function firstOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+function lastOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+function periodLabel(start: Date, freq: "monthly" | "quarterly"): string {
+  const year = start.getFullYear();
+  if (freq === "monthly") {
+    const monthName = start.toLocaleDateString("fr-FR", { month: "long" });
+    return `${monthName} ${year}`;
+  }
+  const q = Math.floor(start.getMonth() / 3) + 1;
+  return `T${q} ${year}`;
 }
 
 // Re-export for `inArray` not used in this file but available pour les callers

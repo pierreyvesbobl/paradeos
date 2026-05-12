@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { entities } from "./entities";
 import { users } from "./users";
 
@@ -33,6 +33,13 @@ export const contacts = pgTable(
     linkedinUrl: text("linkedin_url"),
     entityId: uuid("entity_id").references(() => entities.id, { onDelete: "set null" }),
     qualification: contactQualification("qualification"),
+    /** Adresse postale (utile pour la facturation B2C via Dougs). */
+    address: jsonb("address").$type<{
+      street?: string;
+      postalCode?: string;
+      city?: string;
+      country?: string;
+    } | null>(),
     notes: text("notes"),
     ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),

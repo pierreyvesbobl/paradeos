@@ -36,6 +36,17 @@ const optionalQualification = contactQualificationEnum
   .optional()
   .or(z.literal("").transform(() => undefined));
 
+const addressSchema = z
+  .object({
+    street: z.string().trim().max(200).optional(),
+    postalCode: z.string().trim().max(20).optional(),
+    city: z.string().trim().max(100).optional(),
+    country: z.string().trim().max(100).optional(),
+  })
+  .partial()
+  .nullable()
+  .optional();
+
 export const contactBaseSchema = z.object({
   firstName: z.string().trim().min(1, "Le prénom est requis.").max(120),
   lastName: z.string().trim().min(1, "Le nom est requis.").max(120),
@@ -46,6 +57,7 @@ export const contactBaseSchema = z.object({
   entityId: optionalUuid,
   ownerId: optionalUuid,
   qualification: optionalQualification,
+  address: addressSchema,
   notes: optionalText(5000),
 });
 
@@ -79,6 +91,7 @@ export const patchContactSchema = z.object({
   entityId: nullableUuid.optional(),
   ownerId: nullableUuid.optional(),
   qualification: z.union([contactQualificationEnum, z.null()]).optional(),
+  address: addressSchema,
   notes: nullableText(5000).optional(),
 });
 
