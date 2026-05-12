@@ -5,6 +5,7 @@ import { TaskRowActions } from "@/app/(app)/taches/inline-editors/row-actions";
 import { TaskStatusEditor } from "@/app/(app)/taches/inline-editors/status-editor";
 import { QuickAddTask } from "@/app/(app)/taches/quick-add-task";
 import { TaskToggle } from "@/app/(app)/taches/task-toggle";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { DriveFolderSection } from "@/components/drive/drive-folder-section";
 import { EmptyState } from "@/components/empty-state";
@@ -449,7 +450,15 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Projet"
+        eyebrow={
+          <Breadcrumbs
+            items={[
+              { label: "Projets", href: "/projets" },
+              ...(entity ? [{ label: entity.name, href: `/entites/${entity.id}` }] : []),
+              { label: project.name },
+            ]}
+          />
+        }
         title={
           <span className="inline-flex items-center gap-2">
             <ProjColor id={id} value={project.color} />

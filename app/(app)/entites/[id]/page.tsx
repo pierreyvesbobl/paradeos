@@ -1,3 +1,4 @@
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
@@ -55,7 +56,9 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Entité"
+        eyebrow={
+          <Breadcrumbs items={[{ label: "Entités", href: "/entites" }, { label: entity.name }]} />
+        }
         title={<EntName id={id} value={entity.name} />}
         description={
           <EntWebsite id={id} value={entity.website} placeholder="Ajouter un site web" />

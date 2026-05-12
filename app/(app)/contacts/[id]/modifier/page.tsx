@@ -1,3 +1,4 @@
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
@@ -22,7 +23,18 @@ export default async function EditContactPage({ params }: { params: Params }) {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
-        eyebrow="Contacts"
+        eyebrow={
+          <Breadcrumbs
+            items={[
+              { label: "Contacts", href: "/contacts" },
+              {
+                label: `${contact.firstName} ${contact.lastName}`,
+                href: `/contacts/${contact.id}`,
+              },
+              { label: "Modifier" },
+            ]}
+          />
+        }
         title={`Modifier — ${contact.firstName} ${contact.lastName}`}
       />
       <ContactForm

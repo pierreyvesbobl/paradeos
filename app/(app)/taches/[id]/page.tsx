@@ -1,4 +1,5 @@
 import { TaskScheduleEditor } from "@/app/(app)/taches/inline-editors/schedule-editor";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
@@ -52,7 +53,15 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={project ? project.name : "Tâche"}
+        eyebrow={
+          <Breadcrumbs
+            items={[
+              { label: "Tâches", href: "/taches" },
+              ...(project ? [{ label: project.name, href: `/projets/${project.id}` }] : []),
+              { label: task.title },
+            ]}
+          />
+        }
         title={task.title}
         actions={
           <>

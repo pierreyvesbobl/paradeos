@@ -1,3 +1,4 @@
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
@@ -11,6 +12,7 @@ import { ExternalLink, Mail, MapPin, Phone } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  ContAddress,
   ContEmail,
   ContEntity,
   ContFirstName,
@@ -54,7 +56,15 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={entity ? entity.name : "Contact"}
+        eyebrow={
+          <Breadcrumbs
+            items={[
+              { label: "Contacts", href: "/contacts" },
+              ...(entity ? [{ label: entity.name, href: `/entites/${entity.id}` }] : []),
+              { label: `${contact.firstName} ${contact.lastName}` },
+            ]}
+          />
+        }
         title={
           <span className="inline-flex flex-wrap items-center gap-x-2">
             <ContFirstName
@@ -126,8 +136,8 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
                   <MapPin className="size-3" /> Adresse
                 </span>
               </dt>
-              <dd className="mt-1 whitespace-pre-line text-sm">
-                {formatContactAddress(contact.address)}
+              <dd className="mt-1 text-sm">
+                <ContAddress id={id} value={contact.address} />
               </dd>
             </div>
           </dl>
@@ -165,16 +175,4 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
       />
     </div>
   );
-}
-
-function formatContactAddress(
-  addr: { street?: string; postalCode?: string; city?: string; country?: string } | null,
-): React.ReactNode {
-  if (!addr) return <span className="text-muted-foreground italic">—</span>;
-  const line1 = addr.street ?? "";
-  const line2 = [addr.postalCode, addr.city].filter(Boolean).join(" ");
-  const line3 = addr.country ?? "";
-  const lines = [line1, line2, line3].filter(Boolean);
-  if (lines.length === 0) return <span className="text-muted-foreground italic">—</span>;
-  return lines.join("\n");
 }

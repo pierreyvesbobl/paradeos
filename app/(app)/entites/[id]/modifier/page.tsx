@@ -1,3 +1,4 @@
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { PageHeader } from "@/components/page-header";
 import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
@@ -15,7 +16,18 @@ export default async function EditEntityPage({ params }: { params: Params }) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader eyebrow="Entités" title={`Modifier — ${entity.name}`} />
+      <PageHeader
+        eyebrow={
+          <Breadcrumbs
+            items={[
+              { label: "Entités", href: "/entites" },
+              { label: entity.name, href: `/entites/${entity.id}` },
+              { label: "Modifier" },
+            ]}
+          />
+        }
+        title={`Modifier — ${entity.name}`}
+      />
       <EntityForm
         mode="edit"
         defaultValues={{

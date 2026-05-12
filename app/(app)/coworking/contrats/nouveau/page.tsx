@@ -1,3 +1,4 @@
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ContractForm } from "@/components/coworking/contract-form";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
@@ -20,7 +21,18 @@ export default async function NewContractPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Coworking" title="Nouveau contrat" />
+      <PageHeader
+        eyebrow={
+          <Breadcrumbs
+            items={[
+              { label: "Coworking", href: "/coworking" },
+              { label: "Contrats", href: "/coworking?tab=contracts" },
+              { label: "Nouveau" },
+            ]}
+          />
+        }
+        title="Nouveau contrat"
+      />
       <div className="max-w-2xl">
         <ContractForm
           mode="create"

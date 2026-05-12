@@ -1,3 +1,4 @@
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { PageHeader } from "@/components/page-header";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
@@ -28,7 +29,18 @@ export default async function EditTaskPage({ params }: { params: Params }) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader eyebrow="Tâches" title={`Modifier — ${task.title}`} />
+      <PageHeader
+        eyebrow={
+          <Breadcrumbs
+            items={[
+              { label: "Tâches", href: "/taches" },
+              { label: task.title, href: `/taches/${task.id}` },
+              { label: "Modifier" },
+            ]}
+          />
+        }
+        title={`Modifier — ${task.title}`}
+      />
       <TaskForm
         mode="edit"
         projects={projectList}

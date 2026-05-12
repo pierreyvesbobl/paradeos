@@ -1,7 +1,8 @@
 import { cn } from "@/lib/utils";
 
 type Props = {
-  eyebrow?: string;
+  /** Texte ou ReactNode (ex: <Breadcrumbs />) au-dessus du titre. */
+  eyebrow?: React.ReactNode;
   title: React.ReactNode;
   description?: React.ReactNode;
   actions?: React.ReactNode;
@@ -13,7 +14,11 @@ export function PageHeader({ eyebrow, title, description, actions, className }: 
     <header className={cn("flex flex-wrap items-end justify-between gap-4", className)}>
       <div className="space-y-1">
         {eyebrow ? (
-          <p className="text-muted-foreground text-xs uppercase tracking-wider">{eyebrow}</p>
+          typeof eyebrow === "string" ? (
+            <p className="text-muted-foreground text-xs uppercase tracking-wider">{eyebrow}</p>
+          ) : (
+            eyebrow
+          )
         ) : null}
         <h1 className="font-semibold text-2xl tracking-tight">{title}</h1>
         {description ? <div className="text-muted-foreground text-sm">{description}</div> : null}

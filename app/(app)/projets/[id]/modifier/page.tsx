@@ -1,3 +1,4 @@
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
@@ -37,7 +38,18 @@ export default async function EditProjectPage({ params }: { params: Params }) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader eyebrow="Projets" title={`Modifier — ${project.name}`} />
+      <PageHeader
+        eyebrow={
+          <Breadcrumbs
+            items={[
+              { label: "Projets", href: "/projets" },
+              { label: project.name, href: `/projets/${project.id}` },
+              { label: "Modifier" },
+            ]}
+          />
+        }
+        title={`Modifier — ${project.name}`}
+      />
       <ProjectForm
         mode="edit"
         entities={entityList}

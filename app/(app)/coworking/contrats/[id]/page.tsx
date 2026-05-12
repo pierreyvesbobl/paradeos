@@ -1,3 +1,4 @@
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ContractForm } from "@/components/coworking/contract-form";
 import { NewInvoiceButton } from "@/components/coworking/new-invoice-button";
 import { NextInvoiceButton } from "@/components/coworking/next-invoice-button";
@@ -72,7 +73,15 @@ export default async function ContractDetailPage({ params }: { params: Params })
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Coworking"
+        eyebrow={
+          <Breadcrumbs
+            items={[
+              { label: "Coworking", href: "/coworking" },
+              { label: "Contrats", href: "/coworking?tab=contracts" },
+              { label: contract.name },
+            ]}
+          />
+        }
         title={contract.name}
         description={contract.contactName ? `Coworker : ${contract.contactName}` : undefined}
         actions={
