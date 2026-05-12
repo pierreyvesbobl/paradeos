@@ -8,7 +8,7 @@ import {
   sortToParam,
 } from "@/components/table/sortable-header";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInputWithClear } from "@/components/ui/search-input";
 import {
   Table,
   TableBody,
@@ -252,11 +252,10 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
       <PersistViewParams pageKey="taches" relevantKeys={PERSISTED_KEYS} />
 
       <form className="max-w-sm">
-        <Input
+        <SearchInputWithClear
           name="q"
           defaultValue={query}
           placeholder="Rechercher par titre, projet…"
-          className="h-9"
         />
         {activeStatus ? <input type="hidden" name="status" value={activeStatus} /> : null}
         {onlyMine ? <input type="hidden" name="scope" value="mine" /> : null}

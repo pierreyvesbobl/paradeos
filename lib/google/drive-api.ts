@@ -41,9 +41,16 @@ async function driveFetch<T>(path: string, accessToken: string, init?: RequestIn
   return (await res.json()) as T;
 }
 
+/**
+ * Paramètres communs à ajouter sur tout call Drive qui peut toucher un
+ * Shared Drive / Team Drive. Sans ces flags, l'API ne renvoie que les
+ * fichiers de My Drive (= dossiers persos), même si l'utilisateur a accès.
+ */
+const SHARED_DRIVE_PARAMS = "supportsAllDrives=true&includeItemsFromAllDrives=true";
+
 export async function getFolderMetadata(folderId: string, accessToken: string): Promise<DriveFile> {
   return driveFetch<DriveFile>(
-    `/files/${encodeURIComponent(folderId)}?fields=id,name,mimeType,webViewLink,iconLink,parents`,
+    `/files/${encodeURIComponent(folderId)}?fields=id,name,mimeType,webViewLink,iconLink,parents&${SHARED_DRIVE_PARAMS}`,
     accessToken,
   );
 }
@@ -58,7 +65,7 @@ export async function listFolderChildren(
     "files(id,name,mimeType,iconLink,webViewLink,modifiedTime,size)",
   );
   const data = await driveFetch<{ files?: DriveFile[] }>(
-    `/files?q=${q}&fields=${fields}&orderBy=folder,modifiedTime desc&pageSize=${limit}`,
+    `/files?q=${q}&fields=${fields}&orderBy=folder,modifiedTime desc&pageSize=${limit}&${SHARED_DRIVE_PARAMS}&corpora=allDrives`,
     accessToken,
   );
   return data.files ?? [];
@@ -97,7 +104,7 @@ async function findShortcutToFolder(
   const fields = encodeURIComponent("files(id,name)");
   try {
     const data = await driveFetch<{ files?: Array<{ id: string; name: string }> }>(
-      `/files?q=${q}&fields=${fields}&pageSize=1`,
+      `/files?q=${q}&fields=${fields}&pageSize=1&${SHARED_DRIVE_PARAMS}&corpora=allDrives`,
       accessToken,
     );
     const f = data.files?.[0];
@@ -139,7 +146,7 @@ export async function resolveFolderPath(
     let meta: DriveFile;
     try {
       meta = await driveFetch(
-        `/files/${encodeURIComponent(currentId)}?fields=id,name,parents`,
+        `/files/${encodeURIComponent(currentId)}?fields=id,name,parents&${SHARED_DRIVE_PARAMS}`,
         accessToken,
       );
     } catch {

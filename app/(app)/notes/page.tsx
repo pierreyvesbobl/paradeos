@@ -5,7 +5,7 @@ import { SubjectPill } from "@/components/notes/subject-pill";
 import { PageHeader } from "@/components/page-header";
 import { NotionFilters } from "@/components/table/notion-filters";
 import { parseSort } from "@/components/table/sortable-header";
-import { Input } from "@/components/ui/input";
+import { SearchInputWithClear } from "@/components/ui/search-input";
 import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { notes as notesTable } from "@/db/schema/notes";
 import { users as usersTable } from "@/db/schema/users";
@@ -121,11 +121,10 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
 
       <div className="flex flex-wrap items-center gap-3">
         <form className="max-w-sm flex-1">
-          <Input
+          <SearchInputWithClear
             name="q"
             defaultValue={query}
             placeholder="Rechercher dans le contenu…"
-            className="h-9"
           />
           {collectF(params).map((f, i) => (
             <input key={`f-${i}-${f}`} type="hidden" name="f" value={f} />

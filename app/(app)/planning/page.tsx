@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth/server";
 import { addDays, startOfIsoWeek } from "@/lib/calendar";
 import { getCalendarEventsForRange } from "@/lib/db/queries/calendar";
 import { db } from "@/lib/db/server";
+import { formatDuration } from "@/lib/format";
 import { and, asc, eq, gte, lt } from "drizzle-orm";
 import Link from "next/link";
 import { WeekView } from "./week-view";
@@ -75,12 +76,35 @@ export default async function PlanningPage({ searchParams }: { searchParams: Sea
   const prevWeek = addDays(weekStart, -7);
   const nextWeek = addDays(weekStart, 7);
 
+  // Totaux de la semaine (en minutes) — planifié vs réalisé.
+  const { plannedMinutes, actualMinutes } = entries.reduce(
+    (acc, e) => {
+      const minutes = Math.max(0, (e.endAt.getTime() - e.startAt.getTime()) / 60_000);
+      if (e.kind === "actual") acc.actualMinutes += minutes;
+      else acc.plannedMinutes += minutes;
+      return acc;
+    },
+    { plannedMinutes: 0, actualMinutes: 0 },
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Planning"
         title="Calendrier"
-        description="Planification a priori (planifié) et suivi a posteriori (réalisé)."
+        description={
+          <span className="inline-flex items-center gap-3">
+            <span>Planification a priori (planifié) et suivi a posteriori (réalisé).</span>
+            <span className="inline-flex items-center gap-2 text-xs">
+              <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 tabular-nums dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                Réalisé : {formatDuration(actualMinutes)}
+              </span>
+              <span className="rounded-full border bg-muted/30 px-2 py-0.5 tabular-nums">
+                Planifié : {formatDuration(plannedMinutes)}
+              </span>
+            </span>
+          </span>
+        }
         actions={
           <>
             <Button variant="outline" size="sm" asChild>

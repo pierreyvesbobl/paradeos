@@ -8,7 +8,7 @@ import {
   sortToParam,
 } from "@/components/table/sortable-header";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInputWithClear } from "@/components/ui/search-input";
 import {
   Table,
   TableBody,
@@ -287,11 +287,10 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
 
       <div className="flex flex-wrap items-center gap-3">
         <form className="max-w-sm flex-1">
-          <Input
+          <SearchInputWithClear
             name="q"
             defaultValue={query}
             placeholder="Rechercher par nom, entité…"
-            className="h-9"
           />
           {/* Conserve les filtres et le tri à la soumission de la recherche. */}
           {(typeof params.f === "string"

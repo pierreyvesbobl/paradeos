@@ -10,13 +10,14 @@ import { DougsSection } from "./dougs-section";
 import { DriveTranscriptsSection } from "./drive-transcripts-section";
 import { GoogleCalendarSection } from "./google-calendar-section";
 import { GoogleDriveSection } from "./google-drive-section";
+import { IntegrationsTabs } from "./integrations-tabs";
 import { LlmConfigForm } from "./llm-config-form";
 import { OauthCallbackToast } from "./oauth-callback-toast";
 
 export default async function IntegrationsSettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ google?: string }>;
+  searchParams: Promise<{ google?: string; tab?: string }>;
 }) {
   const user = await requireUser();
   const role = await getCurrentUserRole(user);
@@ -39,31 +40,26 @@ export default async function IntegrationsSettingsPage({
     .where(eq(dougsSessions.userId, user.id))
     .limit(1);
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Réglages"
-        title="Intégrations"
-        description="Connexions personnelles (Google Drive…) et clés API partagées des pipelines automatisés."
-      />
+  const comptaTab = (
+    <DougsSection
+      connected={Boolean(dougsSession)}
+      companyId={dougsSession?.companyId ?? null}
+      lastUsedAt={dougsSession?.lastUsedAt?.toISOString() ?? null}
+      expiresAt={dougsSession?.expiresAt?.toISOString() ?? null}
+    />
+  );
 
-      {params.google ? <OauthCallbackToast status={params.google} /> : null}
-
-      <DougsSection
-        connected={Boolean(dougsSession)}
-        companyId={dougsSession?.companyId ?? null}
-        lastUsedAt={dougsSession?.lastUsedAt?.toISOString() ?? null}
-        expiresAt={dougsSession?.expiresAt?.toISOString() ?? null}
-      />
-
+  const googleTab = (
+    <>
       <GoogleDriveSection userId={user.id} />
-
       <GoogleCalendarSection userId={user.id} />
-
-      <ApiTokensSection userId={user.id} />
-
       {isAdmin ? <DriveTranscriptsSection /> : null}
+    </>
+  );
 
+  const apiTab = (
+    <>
+      <ApiTokensSection userId={user.id} />
       {isAdmin && llmKey ? (
         <section className="rounded-lg border bg-card p-6">
           <header className="mb-4 flex items-start justify-between gap-4">
@@ -80,6 +76,20 @@ export default async function IntegrationsSettingsPage({
           <LlmConfigForm currentKeyPreview={llmKey.preview} currentModel={llmModel} />
         </section>
       ) : null}
+    </>
+  );
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Réglages"
+        title="Intégrations"
+        description="Connexions personnelles (Google Drive…) et clés API partagées des pipelines automatisés."
+      />
+
+      {params.google ? <OauthCallbackToast status={params.google} /> : null}
+
+      <IntegrationsTabs compta={comptaTab} google={googleTab} api={apiTab} />
     </div>
   );
 }

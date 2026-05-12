@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { NotionFilters } from "@/components/table/notion-filters";
 import { type SortState, SortableHeader, parseSort } from "@/components/table/sortable-header";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInputWithClear } from "@/components/ui/search-input";
 import {
   Table,
   TableBody,
@@ -124,11 +124,10 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Sea
       <PersistViewParams pageKey="entites" relevantKeys={PERSISTED_KEYS} />
 
       <form className="max-w-sm">
-        <Input
+        <SearchInputWithClear
           name="q"
           defaultValue={query}
           placeholder="Rechercher par nom, site web…"
-          className="h-9"
         />
         {collectF(params).map((f, i) => (
           <input key={`f-${i}-${f}`} type="hidden" name="f" value={f} />
