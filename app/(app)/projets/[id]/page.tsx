@@ -36,6 +36,7 @@ import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BillingMilestonesSection } from "./billing-milestones-section";
+import { BillingSummary } from "./billing-summary";
 import { DougsQuoteSection } from "./dougs-quote-section";
 import {
   ProjBilling,
@@ -287,8 +288,26 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       {project.kind === "client" ? (
         <SidebarSection title="Commercial">
           <dl className="space-y-3">
-            <ProjField label="Montant prévisionnel">
-              <ProjValueAmount id={id} value={project.valueAmount} />
+            <ProjField
+              label={
+                project.dougsQuoteTotalHt != null
+                  ? "Montant prévisionnel (manuel)"
+                  : "Montant prévisionnel"
+              }
+            >
+              <div className="space-y-1">
+                <ProjValueAmount id={id} value={project.valueAmount} />
+                {project.dougsQuoteTotalHt != null ? (
+                  <p className="text-[10px] text-muted-foreground">
+                    ⓘ Source de vérité : devis Dougs (
+                    {Number(project.dougsQuoteTotalHt).toLocaleString("fr-FR", {
+                      style: "currency",
+                      currency: "EUR",
+                    })}
+                    )
+                  </p>
+                ) : null}
+              </div>
             </ProjField>
             <ProjField label="Probabilité">
               <ProjProbability id={id} value={project.probability} />
@@ -318,25 +337,44 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
 
   const billingContent =
     project.kind === "client" ? (
-      <div className="grid gap-6 lg:grid-cols-2">
-        <SidebarSection title="Devis Dougs">
-          <DougsQuoteSection
-            projectId={id}
-            defaultUnitAmount={Number(project.valueAmount ?? project.budgetAmount ?? 0)}
-            defaultTitle={project.name}
-            dougsQuoteId={project.dougsQuoteId}
-            dougsQuoteReference={project.dougsQuoteReference}
-            dougsQuoteStatus={project.dougsQuoteStatus}
-            dougsQuotePushedAt={project.dougsQuotePushedAt?.toISOString() ?? null}
-          />
-        </SidebarSection>
-        <SidebarSection title="Jalons de facturation">
-          <BillingMilestonesSection
-            projectId={id}
-            projectValueHt={Number(project.valueAmount ?? project.budgetAmount ?? 0)}
-            milestones={project.billingMilestones ?? []}
-          />
-        </SidebarSection>
+      <div className="space-y-6">
+        <BillingSummary
+          projectValueHt={Number(project.valueAmount ?? project.budgetAmount ?? 0)}
+          dougsQuoteTotalHt={
+            project.dougsQuoteTotalHt != null ? Number(project.dougsQuoteTotalHt) : null
+          }
+          dougsQuoteReference={project.dougsQuoteReference}
+          dougsQuoteId={project.dougsQuoteId}
+          milestones={project.billingMilestones ?? []}
+        />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <SidebarSection title="Devis Dougs">
+            <DougsQuoteSection
+              projectId={id}
+              dougsQuoteId={project.dougsQuoteId}
+              dougsQuoteReference={project.dougsQuoteReference}
+              dougsQuoteStatus={project.dougsQuoteStatus}
+              dougsQuotePushedAt={project.dougsQuotePushedAt?.toISOString() ?? null}
+              dougsQuoteTotalHt={
+                project.dougsQuoteTotalHt != null ? Number(project.dougsQuoteTotalHt) : null
+              }
+              dougsQuoteTotalTtc={
+                project.dougsQuoteTotalTtc != null ? Number(project.dougsQuoteTotalTtc) : null
+              }
+            />
+          </SidebarSection>
+          <SidebarSection title="Jalons de facturation">
+            <BillingMilestonesSection
+              projectId={id}
+              projectValueHt={
+                project.dougsQuoteTotalHt != null
+                  ? Number(project.dougsQuoteTotalHt)
+                  : Number(project.valueAmount ?? project.budgetAmount ?? 0)
+              }
+              milestones={project.billingMilestones ?? []}
+            />
+          </SidebarSection>
+        </div>
       </div>
     ) : null;
 

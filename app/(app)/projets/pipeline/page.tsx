@@ -18,6 +18,9 @@ export default async function PipelinePage() {
       name: projects.name,
       status: projects.status,
       valueAmount: projects.valueAmount,
+      // Source de vérité quand un devis Dougs est lié — prévaut sur valueAmount.
+      dougsQuoteTotalHt: projects.dougsQuoteTotalHt,
+      dougsQuoteReference: projects.dougsQuoteReference,
       probability: projects.probability,
       followUpDate: projects.followUpDate,
       entityName: entities.name,
@@ -31,7 +34,10 @@ export default async function PipelinePage() {
     id: r.id,
     name: r.name,
     status: r.status,
-    valueAmount: r.valueAmount,
+    // Si un devis Dougs est lié, son montant écrase la saisie manuelle.
+    valueAmount: r.dougsQuoteTotalHt ?? r.valueAmount,
+    valueSource: r.dougsQuoteTotalHt != null ? "dougs" : "manual",
+    dougsQuoteReference: r.dougsQuoteReference,
     probability: r.probability,
     followUpDate: r.followUpDate,
     entityName: r.entityName,

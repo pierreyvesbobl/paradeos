@@ -31,7 +31,11 @@ export type PipelineItem = {
   id: string;
   name: string;
   status: ProjectStatus;
+  /** Montant à afficher (Dougs prend le pas sur la saisie manuelle). */
   valueAmount: string | null;
+  /** "dougs" si le montant vient d'un devis Dougs lié, sinon "manual". */
+  valueSource: "dougs" | "manual";
+  dougsQuoteReference: string | null;
   probability: number | null;
   followUpDate: string | null;
   entityName: string | null;
@@ -197,8 +201,20 @@ function Card({ item }: { item: PipelineItem }) {
         ) : null}
         <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px] text-muted-foreground">
           {item.valueAmount ? (
-            <span className="rounded bg-muted px-1.5 py-0.5 font-medium">
+            <span
+              className={
+                item.valueSource === "dougs"
+                  ? "rounded border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
+                  : "rounded bg-muted px-1.5 py-0.5 font-medium"
+              }
+              title={
+                item.valueSource === "dougs"
+                  ? `Depuis Dougs ${item.dougsQuoteReference ?? ""}`
+                  : "Montant manuel"
+              }
+            >
               {formatEuro(Number(item.valueAmount))}
+              {item.valueSource === "dougs" ? " ⓘ" : ""}
             </span>
           ) : null}
           {item.probability != null ? (

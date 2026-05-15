@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BillingMilestone, BillingMilestoneType } from "@/db/schema/projects";
 import {
-  pushProjectMilestoneToDougs,
   removeProjectBillingMilestone,
   seedDefaultBillingMilestones,
   setProjectBillingMilestoneStatus,
@@ -23,7 +22,6 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Send,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -150,19 +148,6 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
       }
       toast.success("Jalon supprimé.");
       setConfirmDelete(null);
-      router.refresh();
-    });
-  }
-
-  function pushDougs(id: string) {
-    startTransition(async () => {
-      const res = await pushProjectMilestoneToDougs({ projectId, milestoneId: id });
-      if (!res.ok) {
-        toast.error(res.message);
-        return;
-      }
-      toast.success(`Brouillon Dougs ${res.data.reference} créé.`);
-      window.open(res.data.url, "_blank", "noopener,noreferrer");
       router.refresh();
     });
   }
@@ -298,34 +283,21 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   {m.status === "todo" && !m.dougsInvoiceId ? (
-                    <>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => pushDougs(m.id)}
-                        disabled={pending}
-                        className="h-7 gap-1 px-2 text-[11px]"
-                        title="Créer brouillon facture Dougs"
-                      >
-                        <Send className="size-3" />
-                        Pousser
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setLinkingId(m.id);
-                          setLinkInput("");
-                        }}
-                        disabled={pending}
-                        className="h-7 gap-1 px-2 text-[11px]"
-                        title="Lier une facture Dougs existante"
-                      >
-                        <Link2 className="size-3" />
-                      </Button>
-                    </>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setLinkingId(m.id);
+                        setLinkInput("");
+                      }}
+                      disabled={pending}
+                      className="h-7 gap-1 px-2 text-[11px]"
+                      title="Lier une facture Dougs existante"
+                    >
+                      <Link2 className="size-3" />
+                      Lier
+                    </Button>
                   ) : null}
                   {m.status === "invoiced" ? (
                     <Button
