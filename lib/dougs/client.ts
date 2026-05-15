@@ -58,9 +58,6 @@ async function touchUsed(userId: string): Promise<void> {
  * Wrapper fetch authentifié. `pathTemplate` peut contenir
  * `{companyId}` qui sera substitué automatiquement.
  */
-const BROWSER_UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-
 async function dougsFetch(
   userId: string,
   pathTemplate: string,
@@ -73,38 +70,24 @@ async function dougsFetch(
     );
   }
   const path = pathTemplate.replace("{companyId}", session.companyId);
-  const method = init?.method ?? "GET";
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      Accept: "application/json, text/plain, */*",
-      "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
-      "User-Agent": BROWSER_UA,
-      Origin: BASE,
-      Referer: `${BASE}/app/`,
-      "Sec-Fetch-Site": "same-origin",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Dest": "empty",
-      "Sec-Ch-Ua": '"Chromium";v="131", "Not_A Brand";v="24", "Google Chrome";v="131"',
-      "Sec-Ch-Ua-Mobile": "?0",
-      "Sec-Ch-Ua-Platform": '"macOS"',
       ...(init?.headers ?? {}),
       Cookie: session.cookie,
     },
   });
   if (res.status === 401 || res.status === 403) {
-    const body = await res.text().catch(() => "");
-    console.error(`[dougs auth] ${method} ${path} → ${res.status}`, body.slice(0, 500));
     throw new DougsAuthError(
-      `Dougs ${res.status}${body ? ` (${body.slice(0, 200)})` : ""} — cookie invalide ou Cloudflare a refusé la requête. Rafraîchis dans /settings/integrations.`,
+      "Cookie Dougs expiré ou invalide. Va dans /settings/integrations le rafraîchir.",
     );
   }
   if (!res.ok) {
     const body = await res.text();
-    console.error(`[dougs] ${method} ${path} → ${res.status}`, body.slice(0, 500));
+    console.error(`[dougs] ${init?.method ?? "GET"} ${path} → ${res.status}`, body.slice(0, 500));
     throw new DougsApiError(
-      `Dougs ${res.status} ${res.statusText} (${method} ${path})`,
+      `Dougs ${res.status} ${res.statusText} (${init?.method ?? "GET"} ${path})`,
       res.status,
       body.slice(0, 500),
     );
