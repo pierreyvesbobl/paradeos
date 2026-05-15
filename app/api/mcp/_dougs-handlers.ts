@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { contacts as contactsTable } from "@/db/schema/contacts";
-import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
-import { entities as entitiesTable } from "@/db/schema/entities";
-import { type BillingMilestone, projects } from "@/db/schema/projects";
-import { db } from "@/lib/db/server";
+import { contacts as contactsTable } from "../../../db/schema/contacts";
+import { coworkingContracts, coworkingInvoices } from "../../../db/schema/coworking";
+import { entities as entitiesTable } from "../../../db/schema/entities";
+import { type BillingMilestone, projects } from "../../../db/schema/projects";
+import { db } from "../../../lib/db/server";
 import {
   DougsApiError,
   DougsAuthError,
@@ -14,7 +14,7 @@ import {
   searchDougsClients,
   updateDougsQuote,
   updateDougsSalesInvoice,
-} from "@/lib/dougs/client";
+} from "../../../lib/dougs/client";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 

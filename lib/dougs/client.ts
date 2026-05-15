@@ -1,5 +1,5 @@
-import { dougsSessions } from "@/db/schema/dougs";
-import { db } from "@/lib/db/server";
+import { dougsSessions } from "../../db/schema/dougs";
+import { db } from "../db/server";
 import { eq } from "drizzle-orm";
 import { decryptCookie } from "./crypto";
 
