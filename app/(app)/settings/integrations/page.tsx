@@ -1,8 +1,10 @@
 import { PageHeader } from "@/components/page-header";
 import { dougsSessions } from "@/db/schema/dougs";
+import { getAppUrl } from "@/lib/app-url";
 import { getCurrentUserRole } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
+import { getSyncTokensForUser } from "@/lib/dougs/sync-tokens";
 import { SETTING_KEYS, getSetting, getSettingStatus } from "@/lib/settings";
 import { eq } from "drizzle-orm";
 import { ApiTokensSection } from "./api-tokens-section";
@@ -30,15 +32,19 @@ export default async function IntegrationsSettingsPage({
     db(),
   ]);
 
-  const [dougsSession] = await conn
-    .select({
-      companyId: dougsSessions.companyId,
-      lastUsedAt: dougsSessions.lastUsedAt,
-      expiresAt: dougsSessions.expiresAt,
-    })
-    .from(dougsSessions)
-    .where(eq(dougsSessions.userId, user.id))
-    .limit(1);
+  const [[dougsSession], syncTokensRaw, appUrl] = await Promise.all([
+    conn
+      .select({
+        companyId: dougsSessions.companyId,
+        lastUsedAt: dougsSessions.lastUsedAt,
+        expiresAt: dougsSessions.expiresAt,
+      })
+      .from(dougsSessions)
+      .where(eq(dougsSessions.userId, user.id))
+      .limit(1),
+    getSyncTokensForUser(user.id),
+    getAppUrl(),
+  ]);
 
   const comptaTab = (
     <DougsSection
@@ -46,6 +52,15 @@ export default async function IntegrationsSettingsPage({
       companyId={dougsSession?.companyId ?? null}
       lastUsedAt={dougsSession?.lastUsedAt?.toISOString() ?? null}
       expiresAt={dougsSession?.expiresAt?.toISOString() ?? null}
+      appUrl={appUrl}
+      syncTokens={syncTokensRaw
+        .filter((t) => !t.revokedAt)
+        .map((t) => ({
+          id: t.id,
+          label: t.label,
+          createdAt: t.createdAt.toISOString(),
+          lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
+        }))}
     />
   );
 

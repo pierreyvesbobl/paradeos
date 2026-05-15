@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sync Dougs → Paradeos</title>
+    <style>
+      :root {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 13px;
+      }
+      body {
+        width: 340px;
+        margin: 0;
+        padding: 14px;
+        background: #fafafa;
+        color: #111;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 12px;
+      }
+      label {
+        display: block;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #666;
+        margin-bottom: 3px;
+      }
+      input, button {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 7px 9px;
+        font-size: 12px;
+        border: 1px solid #d4d4d4;
+        border-radius: 5px;
+        background: white;
+      }
+      input {
+        font-family: ui-monospace, monospace;
+        margin-bottom: 10px;
+      }
+      button {
+        cursor: pointer;
+        background: #111;
+        color: white;
+        border-color: #111;
+        font-weight: 500;
+      }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      button.secondary { background: white; color: #111; }
+      .row { display: flex; gap: 6px; }
+      .row button { flex: 1; }
+      .status {
+        margin-top: 12px;
+        padding: 9px;
+        border-radius: 5px;
+        font-size: 11px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .status.ok { background: #d1fae5; color: #065f46; }
+      .status.err { background: #fee2e2; color: #991b1b; }
+      .status.info { background: #e0e7ff; color: #3730a3; }
+      .help {
+        font-size: 11px;
+        color: #666;
+        margin: 6px 0 12px;
+        line-height: 1.4;
+      }
+      code {
+        background: #f0f0f0;
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>⚡ Sync Dougs → Paradeos</h1>
+
+    <label for="endpoint">Endpoint Paradeos</label>
+    <input
+      type="text"
+      id="endpoint"
+      placeholder="https://paradeos.app/api/dougs/sync-cookie"
+    />
+
+    <label for="token">Token de synchro</label>
+    <input
+      type="password"
+      id="token"
+      placeholder="paradeos_dougs_sync_…"
+    />
+
+    <p class="help">
+      Génère ces deux valeurs dans Paradeos → Réglages → Intégrations →
+      Dougs → bouton <strong>« Générer un token »</strong>. L'endpoint
+      est <code>{ton-domaine}/api/dougs/sync-cookie</code>.
+    </p>
+
+    <div class="row">
+      <button id="save" class="secondary">Enregistrer</button>
+      <button id="sync">Sync maintenant</button>
+    </div>
+
+    <div id="status" class="status info" style="display: none"></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -6,24 +6,83 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { connectDougsSession, disconnectDougsSession } from "@/lib/actions/dougs";
-import { Banknote, Check, Copy, ExternalLink, Trash2 } from "lucide-react";
+import { createDougsSyncToken, revokeDougsSyncToken } from "@/lib/actions/dougs-sync-tokens";
+import { formatDate } from "@/lib/format";
+import { Banknote, Check, Copy, ExternalLink, KeyRound, Trash2, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+
+type SyncToken = {
+  id: string;
+  label: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+};
 
 type Props = {
   connected: boolean;
   companyId: string | null;
   lastUsedAt: string | null;
   expiresAt: string | null;
+  appUrl: string;
+  syncTokens: SyncToken[];
 };
 
 const BOOKMARKLET_JS = `(()=>{const c=document.cookie;navigator.clipboard.writeText(c).then(()=>alert('Cookie Dougs copié dans le presse-papier ('+c.length+' chars). Colle-le dans Paradeos.'));})()`;
 
-export function DougsSection({ connected, companyId, lastUsedAt, expiresAt }: Props) {
+export function DougsSection({
+  connected,
+  companyId,
+  lastUsedAt,
+  expiresAt,
+  appUrl,
+  syncTokens,
+}: Props) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [cookie, setCookie] = useState("");
   const [companyIdInput, setCompanyIdInput] = useState(companyId ?? "107610");
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [tokenLabel, setTokenLabel] = useState("");
+  const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const syncEndpoint = `${appUrl.replace(/\/+$/, "")}/api/dougs/sync-cookie`;
+
+  function createToken(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const label = tokenLabel.trim();
+    if (!label) return;
+    startTransition(async () => {
+      const res = await createDougsSyncToken({ label });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      setCreatedToken(res.data.token);
+      setTokenLabel("");
+      router.refresh();
+    });
+  }
+
+  function revokeToken(id: string, label: string) {
+    if (!window.confirm(`Révoquer le token « ${label} » ?`)) return;
+    startTransition(async () => {
+      const res = await revokeDougsSyncToken({ id });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Token révoqué.");
+      router.refresh();
+    });
+  }
+
+  function copyText(text: string, label: string) {
+    navigator.clipboard.writeText(text).then(
+      () => toast.success(`${label} copié.`),
+      () => toast.error("Copie impossible."),
+    );
+  }
 
   function handleConnect(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -118,9 +177,122 @@ export function DougsSection({ connected, companyId, lastUsedAt, expiresAt }: Pr
         </p>
       )}
 
+      {/* Extension Chrome — auto-sync HttpOnly */}
+      <div className="mt-5 rounded-md border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+        <div className="mb-2 flex items-center gap-2">
+          <Zap className="size-4 text-emerald-700 dark:text-emerald-400" />
+          <h3 className="font-medium text-sm">Auto-sync via extension Chrome (recommandé)</h3>
+        </div>
+        <p className="mb-3 text-muted-foreground text-xs">
+          Installe l'extension Chrome <code>chrome-extension/</code> (à la racine du repo Paradeos),
+          génère un token ci-dessous, colle endpoint + token dans la popup de l'extension. Ensuite :
+          1 clic sur l'icône → cookie Dougs (HttpOnly compris) synchro. Détails dans le README de
+          l'extension.
+        </p>
+
+        {createdToken ? (
+          <div className="mb-3 space-y-2 rounded-md border border-emerald-300 bg-background p-3 dark:border-emerald-800">
+            <p className="font-medium text-xs">
+              Token créé — copie ces deux valeurs dans la popup de l'extension.
+            </p>
+            <div>
+              <p className="text-muted-foreground text-[11px]">Endpoint :</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 break-all rounded bg-muted/60 p-1.5 font-mono text-[11px]">
+                  {syncEndpoint}
+                </code>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => copyText(syncEndpoint, "Endpoint")}
+                  className="h-7 px-2 text-xs"
+                >
+                  <Copy className="size-3" />
+                </Button>
+              </div>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-[11px]">Token (affiché une seule fois) :</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 break-all rounded bg-muted/60 p-1.5 font-mono text-[11px]">
+                  {createdToken}
+                </code>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => copyText(createdToken, "Token")}
+                  className="h-7 px-2 text-xs"
+                >
+                  <Copy className="size-3" />
+                </Button>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCreatedToken(null)}
+              className="text-[11px] underline hover:no-underline"
+            >
+              J'ai copié, masquer
+            </button>
+          </div>
+        ) : null}
+
+        <form onSubmit={createToken} className="flex items-center gap-2">
+          <Input
+            placeholder="Label (ex. « MacBook »)"
+            value={tokenLabel}
+            onChange={(e) => setTokenLabel(e.target.value)}
+            disabled={pending}
+            maxLength={80}
+            className="h-8"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={pending || !tokenLabel.trim()}
+            className="gap-1.5"
+          >
+            <KeyRound className="size-3.5" />
+            {pending ? "…" : "Générer un token"}
+          </Button>
+        </form>
+
+        {syncTokens.length > 0 ? (
+          <ul className="mt-3 divide-y rounded-md border bg-background">
+            {syncTokens.map((t) => (
+              <li key={t.id} className="flex items-center gap-2 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-xs">{t.label}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Créé le {formatDate(t.createdAt)}
+                    {t.lastUsedAt
+                      ? ` · Dernier sync ${formatDate(t.lastUsedAt)}`
+                      : " · Jamais utilisé"}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => revokeToken(t.id, t.label)}
+                  disabled={pending}
+                  className="text-muted-foreground hover:text-destructive"
+                  title="Révoquer"
+                  aria-label={`Révoquer ${t.label}`}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+
       <details className="mt-4 rounded-md border bg-muted/30 p-3">
         <summary className="cursor-pointer text-sm">
-          Comment récupérer le cookie ? (3 options)
+          Saisie manuelle (fallback — copier le cookie)
         </summary>
         <div className="mt-3 space-y-3 text-xs">
           <div>

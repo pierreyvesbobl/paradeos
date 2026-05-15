@@ -1,7 +1,16 @@
 import { type CookieOptions, createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/confirm", "/api/cron"];
+// `/api/dougs/sync-cookie` est appelé par l'extension Chrome
+// "Paradeos Dougs Sync" depuis l'origine app.dougs.fr — pas de session
+// Supabase, auth via Bearer token (cf. resolveSyncToken).
+const PUBLIC_ROUTES = [
+  "/login",
+  "/auth/callback",
+  "/auth/confirm",
+  "/api/cron",
+  "/api/dougs/sync-cookie",
+];
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
