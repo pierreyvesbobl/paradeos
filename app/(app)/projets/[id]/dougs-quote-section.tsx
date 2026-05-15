@@ -174,7 +174,16 @@ export function DougsQuoteSection({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <FileText className="size-4 text-muted-foreground" />
-                <span className="font-mono text-sm">{dougsQuoteReference ?? "—"}</span>
+                <a
+                  href={`https://app.dougs.fr/app/c/107610/invoicing/quotes/${dougsQuoteId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 font-mono text-sm hover:underline"
+                  title="Ouvrir sur Dougs"
+                >
+                  {dougsQuoteReference ?? "—"}
+                  <ExternalLink className="size-3" />
+                </a>
                 <span className="rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-indigo-700 text-xs dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
                   {DOUGS_STATUS_LABEL[dougsQuoteStatus ?? "DRAFT"] ?? dougsQuoteStatus ?? "—"}
                 </span>

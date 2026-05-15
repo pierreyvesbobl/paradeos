@@ -1,14 +1,22 @@
 import { PageHeader } from "@/components/page-header";
+import { entities } from "@/db/schema/entities";
+import { projects } from "@/db/schema/projects";
 import { requireUser } from "@/lib/auth/server";
+import { db } from "@/lib/db/server";
 import { DougsAuthError } from "@/lib/dougs/client";
 import { getInvoiceSuggestions, getQuoteSuggestions } from "@/lib/dougs/reconciliation";
-import { FileText, Receipt } from "lucide-react";
+import { asc, eq } from "drizzle-orm";
+import { ExternalLink, FileText, Receipt } from "lucide-react";
 import Link from "next/link";
 import {
   LinkCoworkingInvoiceButton,
   LinkMilestoneButton,
   LinkProjectAsMilestoneButton,
   LinkQuoteButton,
+  ManualLinkInvoice,
+  ManualLinkQuote,
+  type ProjectOption,
+  RefreshAllButton,
 } from "./reconciliation-actions";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +34,28 @@ function scoreTone(score: number): string {
 
 export default async function ReconciliationPage() {
   const user = await requireUser();
+  const conn = await db();
+
+  // Liste de tous les projets client pour le picker manuel.
+  const projectRows = await conn
+    .select({
+      id: projects.id,
+      name: projects.name,
+      valueAmount: projects.valueAmount,
+      budgetAmount: projects.budgetAmount,
+      entityName: entities.name,
+    })
+    .from(projects)
+    .leftJoin(entities, eq(entities.id, projects.entityId))
+    .where(eq(projects.kind, "client"))
+    .orderBy(asc(projects.name));
+
+  const projectOptions: ProjectOption[] = projectRows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    entityName: p.entityName,
+    valueAmount: Number(p.valueAmount ?? p.budgetAmount ?? 0) || null,
+  }));
 
   let quoteSuggestions: Awaited<ReturnType<typeof getQuoteSuggestions>> = [];
   let invoiceSuggestions: Awaited<ReturnType<typeof getInvoiceSuggestions>> = [];
@@ -50,6 +80,7 @@ export default async function ReconciliationPage() {
         eyebrow="Compta"
         title="Rapprochement Dougs"
         description="Propose des liens entre les devis/factures Dougs non encore reliés et les projets / jalons / contrats Paradeos correspondants."
+        actions={<RefreshAllButton />}
       />
 
       {authError ? (
@@ -79,7 +110,15 @@ export default async function ReconciliationPage() {
                 {quoteSuggestions.map((s) => (
                   <li key={s.dougs.id} className="space-y-2 px-6 py-4 text-sm">
                     <div className="flex flex-wrap items-baseline gap-2">
-                      <span className="font-mono text-xs">{s.dougs.reference ?? "—"}</span>
+                      <a
+                        href={`https://app.dougs.fr/app/c/107610/invoicing/quotes/${s.dougs.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 font-mono text-xs hover:underline"
+                      >
+                        {s.dougs.reference ?? "—"}
+                        <ExternalLink className="size-3" />
+                      </a>
                       <span className="rounded-full border bg-muted/50 px-1.5 py-0.5 text-xs">
                         {s.dougs.status ?? "—"}
                       </span>
@@ -129,6 +168,7 @@ export default async function ReconciliationPage() {
                         ))}
                       </ul>
                     )}
+                    <ManualLinkQuote dougsId={s.dougs.id} projects={projectOptions} />
                   </li>
                 ))}
               </ul>
@@ -151,7 +191,15 @@ export default async function ReconciliationPage() {
                 {invoiceSuggestions.map((s) => (
                   <li key={s.dougs.id} className="space-y-2 px-6 py-4 text-sm">
                     <div className="flex flex-wrap items-baseline gap-2">
-                      <span className="font-mono text-xs">{s.dougs.reference ?? "—"}</span>
+                      <a
+                        href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoices/${s.dougs.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 font-mono text-xs hover:underline"
+                      >
+                        {s.dougs.reference ?? "—"}
+                        <ExternalLink className="size-3" />
+                      </a>
                       <span className="rounded-full border bg-muted/50 px-1.5 py-0.5 text-xs">
                         {s.dougs.status ?? "—"}
                       </span>
@@ -288,6 +336,7 @@ export default async function ReconciliationPage() {
                         })}
                       </ul>
                     )}
+                    <ManualLinkInvoice dougsId={s.dougs.id} projects={projectOptions} />
                   </li>
                 ))}
               </ul>

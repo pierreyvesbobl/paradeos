@@ -95,6 +95,73 @@ export default async function InvoiceDetailPage({ params }: { params: Params }) 
           </>
         }
       />
+      {invoice.dougsInvoiceId ? (
+        <section className="max-w-2xl rounded-lg border bg-card p-6">
+          <h2 className="mb-3 font-medium text-sm">Snapshot Dougs</h2>
+          <dl className="grid grid-cols-2 gap-3 text-xs">
+            <dt className="text-muted-foreground">Référence</dt>
+            <dd>
+              {invoice.dougsInvoiceReference && dougsUrl ? (
+                <Link href={dougsUrl} target="_blank" className="font-mono hover:underline">
+                  {invoice.dougsInvoiceReference} ↗
+                </Link>
+              ) : (
+                <span className="text-muted-foreground italic">
+                  Non synchronisé — clique « Rafraîchir »
+                </span>
+              )}
+            </dd>
+            {invoice.dougsInvoiceStatus ? (
+              <>
+                <dt className="text-muted-foreground">Statut Dougs</dt>
+                <dd>{invoice.dougsInvoiceStatus}</dd>
+              </>
+            ) : null}
+            {invoice.dougsInvoiceTotalHt ? (
+              <>
+                <dt className="text-muted-foreground">Total HT</dt>
+                <dd className="tabular-nums">
+                  {Number(invoice.dougsInvoiceTotalHt).toLocaleString("fr-FR", {
+                    style: "currency",
+                    currency: "EUR",
+                  })}
+                </dd>
+              </>
+            ) : null}
+            {invoice.dougsInvoiceTotalTtc ? (
+              <>
+                <dt className="text-muted-foreground">Total TTC</dt>
+                <dd className="tabular-nums">
+                  {Number(invoice.dougsInvoiceTotalTtc).toLocaleString("fr-FR", {
+                    style: "currency",
+                    currency: "EUR",
+                  })}
+                </dd>
+              </>
+            ) : null}
+            {invoice.dougsInvoiceIssuedAt ? (
+              <>
+                <dt className="text-muted-foreground">Émise le</dt>
+                <dd>{new Date(invoice.dougsInvoiceIssuedAt).toLocaleDateString("fr-FR")}</dd>
+              </>
+            ) : null}
+            {invoice.dougsInvoicePaidAt ? (
+              <>
+                <dt className="text-muted-foreground">Payée le</dt>
+                <dd>{new Date(invoice.dougsInvoicePaidAt).toLocaleDateString("fr-FR")}</dd>
+              </>
+            ) : null}
+            {invoice.dougsInvoiceSyncedAt ? (
+              <>
+                <dt className="text-muted-foreground">Dernier sync</dt>
+                <dd className="text-[11px] text-muted-foreground">
+                  {new Date(invoice.dougsInvoiceSyncedAt).toLocaleString("fr-FR")}
+                </dd>
+              </>
+            ) : null}
+          </dl>
+        </section>
+      ) : null}
       <div className="max-w-2xl">
         <InvoiceForm
           mode="edit"

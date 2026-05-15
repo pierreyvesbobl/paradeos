@@ -279,10 +279,19 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
                     <span className="font-medium text-foreground tabular-nums">
                       {formatEur(m.amountHt)} HT
                     </span>
-                    {m.dougsInvoiceReference ? (
+                    {m.dougsInvoiceReference && m.dougsInvoiceId ? (
                       <>
                         {" · "}
-                        <span className="font-mono">{m.dougsInvoiceReference}</span>
+                        <a
+                          href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoices/${m.dougsInvoiceId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-0.5 font-mono hover:underline"
+                          title="Ouvrir sur Dougs"
+                        >
+                          {m.dougsInvoiceReference}
+                          <ExternalLink className="size-2.5" />
+                        </a>
                       </>
                     ) : null}
                   </p>

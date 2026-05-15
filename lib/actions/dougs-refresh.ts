@@ -510,3 +510,126 @@ export const refreshCoworkingInvoiceDougs = action(
     };
   },
 );
+
+/**
+ * Refresh tous les liens Dougs du user courant : devis projet non
+ * REFUSED, jalons facturés non payés, factures coworking non payées.
+ * Réutilise la logique du cron mais déclenchable depuis l'UI.
+ */
+export const refreshAllDougsLinks = action(z.object({}), async ({ user }) => {
+  const conn = await db();
+  let quotesUpdated = 0;
+  let milestonesUpdated = 0;
+  let coworkingUpdated = 0;
+  const errors: string[] = [];
+
+  const projectRows = await conn
+    .select({
+      id: projects.id,
+      dougsQuoteId: projects.dougsQuoteId,
+      dougsQuoteStatus: projects.dougsQuoteStatus,
+      billingMilestones: projects.billingMilestones,
+    })
+    .from(projects);
+
+  for (const p of projectRows) {
+    if (p.dougsQuoteId && p.dougsQuoteStatus !== "REFUSED") {
+      try {
+        const quote = await getDougsQuote(user.id, p.dougsQuoteId);
+        await conn
+          .update(projects)
+          .set({
+            dougsQuoteReference: quote.reference ?? null,
+            dougsQuoteStatus: quote.status ?? null,
+            dougsQuoteTotalHt: toNumeric(quote.totalNetAmount),
+            dougsQuoteTotalVat: toNumeric(quote.totalVatAmount),
+            dougsQuoteTotalTtc: toNumeric(quote.totalAmountWithVat),
+            dougsQuoteIssuedAt: toDate(quote.issuedAt),
+            dougsQuoteSyncedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(projects.id, p.id));
+        quotesUpdated++;
+      } catch (err) {
+        if (err instanceof DougsAuthError) throw err;
+        errors.push(`devis ${p.id}: ${err instanceof Error ? err.message : "?"}`);
+      }
+    }
+
+    const milestones = (p.billingMilestones ?? []) as BillingMilestone[];
+    let changed = false;
+    const next: BillingMilestone[] = [];
+    for (const m of milestones) {
+      if (m.dougsInvoiceId && m.status !== "paid") {
+        try {
+          const inv = await getDougsSalesInvoice(user.id, m.dougsInvoiceId);
+          milestonesUpdated++;
+          changed = true;
+          next.push({
+            ...m,
+            dougsInvoiceReference: inv.reference ?? m.dougsInvoiceReference,
+            dougsStatus: inv.status ?? null,
+            dougsTotalHt: typeof inv.totalNetAmount === "number" ? inv.totalNetAmount : null,
+            dougsTotalVat: typeof inv.totalVatAmount === "number" ? inv.totalVatAmount : null,
+            dougsTotalTtc:
+              typeof inv.totalAmountWithVat === "number" ? inv.totalAmountWithVat : null,
+            dougsIssuedAt: inv.issuedAt ?? null,
+            dougsSyncedAt: new Date().toISOString(),
+            paidAt: inv.paidAt ?? m.paidAt,
+            status: inv.paidAt ? "paid" : m.status,
+          });
+        } catch (err) {
+          if (err instanceof DougsAuthError) throw err;
+          errors.push(`jalon ${m.id}: ${err instanceof Error ? err.message : "?"}`);
+          next.push(m);
+        }
+      } else {
+        next.push(m);
+      }
+    }
+    if (changed) {
+      await conn
+        .update(projects)
+        .set({ billingMilestones: next, updatedAt: new Date() })
+        .where(eq(projects.id, p.id));
+    }
+  }
+
+  const cwRows = await conn
+    .select({
+      id: coworkingInvoices.id,
+      dougsInvoiceId: coworkingInvoices.dougsInvoiceId,
+      status: coworkingInvoices.status,
+    })
+    .from(coworkingInvoices);
+
+  for (const cw of cwRows) {
+    if (!cw.dougsInvoiceId || cw.status === "payee") continue;
+    try {
+      const inv = await getDougsSalesInvoice(user.id, cw.dougsInvoiceId);
+      const localStatus = inv.paidAt ? ("payee" as const) : cw.status;
+      await conn
+        .update(coworkingInvoices)
+        .set({
+          dougsInvoiceReference: inv.reference ?? null,
+          dougsInvoiceStatus: inv.status ?? null,
+          dougsInvoiceTotalHt: toNumeric(inv.totalNetAmount),
+          dougsInvoiceTotalVat: toNumeric(inv.totalVatAmount),
+          dougsInvoiceTotalTtc: toNumeric(inv.totalAmountWithVat),
+          dougsInvoiceIssuedAt: toDate(inv.issuedAt),
+          dougsInvoicePaidAt: toDate(inv.paidAt),
+          dougsInvoiceSyncedAt: new Date(),
+          status: localStatus,
+          updatedAt: new Date(),
+        })
+        .where(eq(coworkingInvoices.id, cw.id));
+      coworkingUpdated++;
+    } catch (err) {
+      if (err instanceof DougsAuthError) throw err;
+      errors.push(`coworking ${cw.id}: ${err instanceof Error ? err.message : "?"}`);
+    }
+  }
+
+  revalidatePath("/rapprochement");
+  return { quotesUpdated, milestonesUpdated, coworkingUpdated, errors };
+});
