@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { pushProjectQuoteToDougs, unlinkProjectDougsQuote } from "@/lib/actions/dougs-quotes";
-import { refreshProjectDougsQuote } from "@/lib/actions/dougs-refresh";
-import { ExternalLink, FileText, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { linkProjectDougsQuote, refreshProjectDougsQuote } from "@/lib/actions/dougs-refresh";
+import { ExternalLink, FileText, Link2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -148,6 +148,24 @@ export function DougsQuoteSection({
     });
   }
 
+  const [linkInput, setLinkInput] = useState("");
+  const [showLink, setShowLink] = useState(false);
+  function link() {
+    const val = linkInput.trim();
+    if (!val) return;
+    startTransition(async () => {
+      const res = await linkProjectDougsQuote({ projectId, dougsIdOrUrl: val });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(`Devis Dougs lié : ${res.data.reference ?? "—"} · ${res.data.status ?? "—"}`);
+      setLinkInput("");
+      setShowLink(false);
+      router.refresh();
+    });
+  }
+
   return (
     <div className="space-y-3">
       {dougsQuoteId ? (
@@ -209,7 +227,50 @@ export function DougsQuoteSection({
             </button>
           ) : null}
         </div>
-      ) : null}
+      ) : (
+        <div className="rounded-md border border-dashed bg-muted/20 p-2.5">
+          {!showLink ? (
+            <button
+              type="button"
+              onClick={() => setShowLink(true)}
+              className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+            >
+              <Link2 className="size-3" />
+              Lier un devis Dougs existant (créé hors Paradeos)
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Input
+                value={linkInput}
+                onChange={(e) => setLinkInput(e.target.value)}
+                placeholder="URL Dougs (/invoicing/quotes/…) ou UUID"
+                disabled={pending}
+                className="h-8 font-mono text-xs"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={link}
+                disabled={pending || !linkInput.trim()}
+              >
+                Lier
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setShowLink(false);
+                  setLinkInput("");
+                }}
+                disabled={pending}
+              >
+                Annuler
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {showForm ? (
         <div className="space-y-3 rounded-md border bg-background p-3">

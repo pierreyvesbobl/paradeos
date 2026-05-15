@@ -12,8 +12,21 @@ import {
   setProjectBillingMilestoneStatus,
   upsertProjectBillingMilestone,
 } from "@/lib/actions/billing-milestones";
-import { refreshProjectMilestoneDougsInvoice } from "@/lib/actions/dougs-refresh";
-import { Check, ExternalLink, Pencil, Plus, RefreshCw, Send, Sparkles, Trash2 } from "lucide-react";
+import {
+  linkProjectMilestoneDougsInvoice,
+  refreshProjectMilestoneDougsInvoice,
+} from "@/lib/actions/dougs-refresh";
+import {
+  Check,
+  ExternalLink,
+  Link2,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Send,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -168,6 +181,28 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
     });
   }
 
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [linkInput, setLinkInput] = useState("");
+  function linkDougs(milestoneId: string) {
+    const val = linkInput.trim();
+    if (!val) return;
+    startTransition(async () => {
+      const res = await linkProjectMilestoneDougsInvoice({
+        projectId,
+        milestoneId,
+        dougsIdOrUrl: val,
+      });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(`Facture Dougs liée : ${res.data.reference ?? "—"}`);
+      setLinkingId(null);
+      setLinkInput("");
+      router.refresh();
+    });
+  }
+
   function setStatus(id: string, status: "todo" | "invoiced" | "paid") {
     startTransition(async () => {
       const res = await setProjectBillingMilestoneStatus({
@@ -253,19 +288,35 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  {m.status === "todo" ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => pushDougs(m.id)}
-                      disabled={pending}
-                      className="h-7 gap-1 px-2 text-[11px]"
-                      title="Créer brouillon facture Dougs"
-                    >
-                      <Send className="size-3" />
-                      Pousser
-                    </Button>
+                  {m.status === "todo" && !m.dougsInvoiceId ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => pushDougs(m.id)}
+                        disabled={pending}
+                        className="h-7 gap-1 px-2 text-[11px]"
+                        title="Créer brouillon facture Dougs"
+                      >
+                        <Send className="size-3" />
+                        Pousser
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setLinkingId(m.id);
+                          setLinkInput("");
+                        }}
+                        disabled={pending}
+                        className="h-7 gap-1 px-2 text-[11px]"
+                        title="Lier une facture Dougs existante"
+                      >
+                        <Link2 className="size-3" />
+                      </Button>
+                    </>
                   ) : null}
                   {m.status === "invoiced" ? (
                     <Button
@@ -350,6 +401,39 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
                   >
                     Revenir à "À facturer"
                   </button>
+                </div>
+              ) : null}
+              {linkingId === m.id ? (
+                <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 p-2">
+                  <Input
+                    value={linkInput}
+                    onChange={(e) => setLinkInput(e.target.value)}
+                    placeholder="URL Dougs (/sales-invoices/…) ou UUID"
+                    disabled={pending}
+                    className="h-7 font-mono text-[11px]"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => linkDougs(m.id)}
+                    disabled={pending || !linkInput.trim()}
+                    className="h-7 text-[11px]"
+                  >
+                    Lier
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setLinkingId(null);
+                      setLinkInput("");
+                    }}
+                    disabled={pending}
+                    className="h-7 text-[11px]"
+                  >
+                    Annuler
+                  </Button>
                 </div>
               ) : null}
             </li>

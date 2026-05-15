@@ -2,9 +2,13 @@
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Input } from "@/components/ui/input";
 import { pushCoworkingInvoiceToDougs } from "@/lib/actions/coworking";
-import { refreshCoworkingInvoiceDougs } from "@/lib/actions/dougs-refresh";
-import { CloudDownload, ExternalLink, RefreshCw, Send } from "lucide-react";
+import {
+  linkCoworkingInvoiceDougs,
+  refreshCoworkingInvoiceDougs,
+} from "@/lib/actions/dougs-refresh";
+import { CloudDownload, ExternalLink, Link2, RefreshCw, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -21,6 +25,8 @@ export function PushToDougsButton({ invoiceId, dougsInvoiceId, dougsUrl }: Props
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [confirmRepush, setConfirmRepush] = useState(false);
+  const [showLink, setShowLink] = useState(false);
+  const [linkInput, setLinkInput] = useState("");
 
   function push() {
     startTransition(async () => {
@@ -47,6 +53,25 @@ export function PushToDougsButton({ invoiceId, dougsInvoiceId, dougsUrl }: Props
       toast.success(
         `Synchro Dougs : ${res.data.reference ?? "—"} · ${res.data.status ?? "—"}${res.data.paidAt ? " · payée" : ""}`,
       );
+      router.refresh();
+    });
+  }
+
+  function link() {
+    const val = linkInput.trim();
+    if (!val) return;
+    startTransition(async () => {
+      const res = await linkCoworkingInvoiceDougs({
+        coworkingInvoiceId: invoiceId,
+        dougsIdOrUrl: val,
+      });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(`Facture Dougs liée : ${res.data.reference ?? "—"}`);
+      setShowLink(false);
+      setLinkInput("");
       router.refresh();
     });
   }
@@ -98,9 +123,49 @@ export function PushToDougsButton({ invoiceId, dougsInvoiceId, dougsUrl }: Props
   }
 
   return (
-    <Button type="button" size="sm" variant="outline" onClick={push} disabled={pending}>
-      <Send className="mr-1 size-4" />
-      {pending ? "Push…" : "Pousser sur Dougs"}
-    </Button>
+    <div className="flex flex-wrap items-center gap-2">
+      <Button type="button" size="sm" variant="outline" onClick={push} disabled={pending}>
+        <Send className="mr-1 size-4" />
+        {pending ? "Push…" : "Pousser sur Dougs"}
+      </Button>
+      {!showLink ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => setShowLink(true)}
+          disabled={pending}
+          title="Lier une facture Dougs déjà existante"
+        >
+          <Link2 className="mr-1 size-3.5" />
+          Lier existant
+        </Button>
+      ) : (
+        <>
+          <Input
+            value={linkInput}
+            onChange={(e) => setLinkInput(e.target.value)}
+            placeholder="URL Dougs (/sales-invoices/…) ou UUID"
+            disabled={pending}
+            className="h-9 max-w-sm font-mono text-xs"
+          />
+          <Button type="button" size="sm" onClick={link} disabled={pending || !linkInput.trim()}>
+            Lier
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setShowLink(false);
+              setLinkInput("");
+            }}
+            disabled={pending}
+          >
+            Annuler
+          </Button>
+        </>
+      )}
+    </div>
   );
 }
