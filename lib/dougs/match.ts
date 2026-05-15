@@ -53,6 +53,51 @@ export function similarityAmount(
 }
 
 /**
+ * Pourcentages "standards" d'une facture par rapport au total projet :
+ * acompte 30/40/50, solde 50/60/70, full 100. Si le ratio facture/projet
+ * tombe près de l'un d'eux (±3 pts), c'est un match probable acompte/solde.
+ */
+const STANDARD_PERCENTS = [30, 40, 50, 60, 70, 100] as const;
+
+/**
+ * Similarité "partielle" entre une facture et le total d'un projet.
+ * Calcule le ratio facture/total et vérifie s'il est proche d'un
+ * pourcentage standard (acompte/solde/full). Renvoie aussi le %
+ * détecté pour pouvoir créer un jalon avec le bon label.
+ *
+ * - 100 % à ±3 pts → score 1
+ * - écart de 10 pts → score ~0.3
+ * - écart ≥ 20 pts → score 0
+ */
+export function similarityAmountPartial(
+  invoiceAmount: number | null | undefined,
+  projectAmount: number | null | undefined,
+): { score: number; percent: number | null } {
+  if (
+    typeof invoiceAmount !== "number" ||
+    typeof projectAmount !== "number" ||
+    invoiceAmount <= 0 ||
+    projectAmount <= 0
+  ) {
+    return { score: 0, percent: null };
+  }
+  const ratio = (invoiceAmount / projectAmount) * 100;
+  // On test contre chaque pourcentage standard, on garde le meilleur.
+  let best = { score: 0, percent: null as number | null };
+  for (const std of STANDARD_PERCENTS) {
+    const gap = Math.abs(ratio - std);
+    let s = 0;
+    if (gap <= 3) s = 1;
+    else if (gap >= 20) s = 0;
+    else s = 1 - (gap - 3) / 17;
+    if (s > best.score) {
+      best = { score: s, percent: std };
+    }
+  }
+  return best;
+}
+
+/**
  * Similarité de dates : 1 si <= 7 jours d'écart, 0 si >= 180 jours.
  */
 export function similarityDate(

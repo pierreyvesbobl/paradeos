@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { coworkingInvoices } from "@/db/schema/coworking";
 import { type BillingMilestone, projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
@@ -205,6 +206,117 @@ export const linkProjectDougsQuote = action(
     return {
       reference: quote.reference ?? null,
       status: quote.status ?? null,
+    };
+  },
+);
+
+/**
+ * Lie une facture Dougs existante à un projet en CRÉANT un nouveau jalon
+ * à la volée. Utilisé quand la facture est probablement un acompte ou
+ * un solde d'un projet sans jalon préexistant.
+ *
+ * Le jalon est créé en statut `invoiced`, avec :
+ *  - amountHt = montant Dougs
+ *  - percent = ratio facture / valueAmount projet (si projet a un montant)
+ *  - type = inférré du % (acompte si < 50, solde si > 50, intermediaire sinon)
+ *  - label = "Acompte XX %" / "Solde XX %" / "Facture"
+ */
+export const linkProjectAsNewMilestone = action(
+  z.object({
+    projectId: z.string().uuid(),
+    dougsIdOrUrl: z.string().trim().min(1),
+    /** % détecté côté UI (optionnel — sinon recalculé serveur). */
+    detectedPercent: z.number().min(0).max(150).nullable().optional(),
+  }),
+  async ({ input, user }) => {
+    const dougsId = extractDougsUuid(input.dougsIdOrUrl);
+    let invoice: Awaited<ReturnType<typeof getDougsSalesInvoice>>;
+    try {
+      invoice = await getDougsSalesInvoice(user.id, dougsId);
+    } catch (err) {
+      if (err instanceof DougsAuthError) throw err;
+      if (err instanceof DougsApiError) {
+        throw new Error(`Facture Dougs introuvable : ${err.message}`);
+      }
+      throw err;
+    }
+
+    const conn = await db();
+    const [project] = await conn
+      .select({
+        id: projects.id,
+        valueAmount: projects.valueAmount,
+        budgetAmount: projects.budgetAmount,
+        billingMilestones: projects.billingMilestones,
+      })
+      .from(projects)
+      .where(eq(projects.id, input.projectId))
+      .limit(1);
+    if (!project) throw new Error("Projet introuvable.");
+
+    const invoiceAmount = invoice.totalNetAmount ?? invoice.totalAmountWithVat ?? 0;
+    if (invoiceAmount <= 0) throw new Error("Montant facture inconnu.");
+
+    const projectValueHt = Number(project.valueAmount ?? project.budgetAmount ?? 0);
+    const computedPercent =
+      input.detectedPercent ??
+      (projectValueHt > 0 ? Math.round((invoiceAmount / projectValueHt) * 100) : null);
+
+    // Type & label inférés.
+    let type: "acompte" | "intermediaire" | "solde";
+    let label: string;
+    if (computedPercent != null) {
+      if (computedPercent < 50) {
+        type = "acompte";
+        label = `Acompte ${computedPercent} %`;
+      } else if (computedPercent >= 95) {
+        type = "solde";
+        label = "Solde 100 %";
+      } else if (computedPercent > 50) {
+        type = "solde";
+        label = `Solde ${computedPercent} %`;
+      } else {
+        type = "intermediaire";
+        label = "Intermédiaire 50 %";
+      }
+    } else {
+      type = "intermediaire";
+      label = invoice.reference ? `Facture ${invoice.reference}` : "Facture";
+    }
+
+    const milestones = (project.billingMilestones ?? []) as BillingMilestone[];
+    const newMilestone: BillingMilestone = {
+      id: randomUUID(),
+      type,
+      label,
+      percent: computedPercent,
+      amountHt: Math.round(invoiceAmount * 100) / 100,
+      vatRate: 0.2,
+      status: invoice.paidAt ? "paid" : "invoiced",
+      dougsInvoiceId: dougsId,
+      dougsInvoiceReference: invoice.reference ?? null,
+      invoicedAt: invoice.issuedAt ?? new Date().toISOString(),
+      paidAt: invoice.paidAt ?? null,
+      dougsStatus: invoice.status ?? null,
+      dougsTotalHt: typeof invoice.totalNetAmount === "number" ? invoice.totalNetAmount : null,
+      dougsTotalVat: typeof invoice.totalVatAmount === "number" ? invoice.totalVatAmount : null,
+      dougsTotalTtc:
+        typeof invoice.totalAmountWithVat === "number" ? invoice.totalAmountWithVat : null,
+      dougsIssuedAt: invoice.issuedAt ?? null,
+      dougsSyncedAt: new Date().toISOString(),
+    };
+
+    await conn
+      .update(projects)
+      .set({ billingMilestones: [...milestones, newMilestone], updatedAt: new Date() })
+      .where(eq(projects.id, input.projectId));
+
+    revalidatePath(`/projets/${input.projectId}`);
+    revalidatePath("/rapprochement");
+    return {
+      reference: invoice.reference ?? null,
+      milestoneLabel: label,
+      milestoneId: newMilestone.id,
     };
   },
 );

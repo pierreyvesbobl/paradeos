@@ -5,7 +5,13 @@ import { entities } from "@/db/schema/entities";
 import { type BillingMilestone, projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
 import { listDougsQuotes, listDougsSalesInvoices } from "@/lib/dougs/client";
-import { type MatchScore, scoreMatch } from "@/lib/dougs/match";
+import {
+  type MatchScore,
+  scoreMatch,
+  similarityAmountPartial,
+  similarityDate,
+  similarityName,
+} from "@/lib/dougs/match";
 import { eq } from "drizzle-orm";
 
 export type DougsClientName = {
@@ -158,6 +164,21 @@ export type InvoiceCandidate =
       name: string;
       amountHt: number;
       score: MatchScore;
+    }
+  | {
+      // Projet client sans jalon correspondant — propose de créer un
+      // nouveau jalon à la volée si le ratio facture/projet ressemble à
+      // un % standard (acompte 30/40/50, solde 50/60/70, full 100).
+      kind: "project";
+      projectId: string;
+      projectName: string;
+      entityName: string | null;
+      projectValueHt: number;
+      /** % détecté entre la facture et le total projet (null si full match). */
+      detectedPercent: number | null;
+      /** Montant qu'aura le nouveau jalon (= montant facture). */
+      amountHt: number;
+      score: MatchScore;
     };
 
 export type InvoiceSuggestion = {
@@ -177,7 +198,9 @@ export type InvoiceSuggestion = {
 export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSuggestion[]> {
   const conn = await db();
 
-  // 1a. Jalons projet sans dougsInvoiceId.
+  // 1a. Jalons projet sans dougsInvoiceId. On charge aussi valueAmount
+  // et budgetAmount pour pouvoir scorer en mode "acompte/solde" plus
+  // bas (un projet 10k€ peut recevoir une facture de 4k€ = acompte 40%).
   const allProjects = await conn
     .select({
       id: projects.id,
@@ -185,6 +208,8 @@ export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSugg
       kind: projects.kind,
       startDate: projects.startDate,
       createdAt: projects.createdAt,
+      valueAmount: projects.valueAmount,
+      budgetAmount: projects.budgetAmount,
       billingMilestones: projects.billingMilestones,
       entityName: entities.name,
     })
@@ -316,9 +341,58 @@ export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSugg
       })
       .filter((x) => x.score.total >= 0.3);
 
-    const all = [...milestoneScored, ...coworkingScored]
+    // Candidats "projet" : projets client dont le montant total tombe
+    // sur un % standard (acompte/solde/full) par rapport à la facture.
+    // Permet de détecter "cette facture est probablement l'acompte 40%
+    // du projet X" même si le total projet ≠ total facture.
+    const projectScored: InvoiceCandidate[] = [];
+    if (typeof dougsAmount === "number" && dougsAmount > 0) {
+      for (const p of allProjects) {
+        if (p.kind !== "client") continue;
+        const projectValueHt = Number(p.valueAmount ?? p.budgetAmount ?? 0);
+        if (projectValueHt <= 0) continue;
+
+        const nameSim = similarityName(
+          inv.clientData?.legalName ??
+            `${inv.clientData?.firstName ?? ""} ${inv.clientData?.lastName ?? ""}`.trim(),
+          p.entityName,
+        );
+        const partial = similarityAmountPartial(dougsAmount, projectValueHt);
+        const dateSim = similarityDate(inv.createdAt ?? null, p.startDate ?? p.createdAt);
+        const total =
+          Math.round((nameSim * 0.5 + partial.score * 0.3 + dateSim * 0.2) * 1000) / 1000;
+        if (total < 0.3) continue;
+
+        projectScored.push({
+          kind: "project",
+          projectId: p.id,
+          projectName: p.name,
+          entityName: p.entityName,
+          projectValueHt,
+          detectedPercent: partial.percent,
+          amountHt: dougsAmount,
+          score: { total, name: nameSim, amount: partial.score, date: dateSim },
+        });
+      }
+    }
+
+    // Filtre les doublons : si un jalon existant déjà candidat couvre
+    // le même projet, on retire le candidat "projet" (le jalon est
+    // toujours préféré, plus précis).
+    const projectsWithMilestoneCandidate = new Set(
+      milestoneScored
+        .filter(
+          (c): c is Extract<InvoiceCandidate, { kind: "milestone" }> => c.kind === "milestone",
+        )
+        .map((c) => c.projectId),
+    );
+    const projectScoredFiltered = projectScored.filter((c) =>
+      c.kind === "project" ? !projectsWithMilestoneCandidate.has(c.projectId) : true,
+    );
+
+    const all = [...milestoneScored, ...coworkingScored, ...projectScoredFiltered]
       .sort((a, b) => b.score.total - a.score.total)
-      .slice(0, 3);
+      .slice(0, 4);
 
     out.push({
       dougs: {

@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
   LinkCoworkingInvoiceButton,
   LinkMilestoneButton,
+  LinkProjectAsMilestoneButton,
   LinkQuoteButton,
 } from "./reconciliation-actions";
 
@@ -176,15 +177,85 @@ export default async function ReconciliationPage() {
                       </p>
                     ) : (
                       <ul className="space-y-1.5">
-                        {s.candidates.map((c) =>
-                          c.kind === "milestone" ? (
+                        {s.candidates.map((c) => {
+                          if (c.kind === "milestone") {
+                            return (
+                              <li
+                                key={`m-${c.milestoneId}`}
+                                className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                                    Jalon
+                                  </span>
+                                  <Link
+                                    href={`/projets/${c.projectId}?tab=billing`}
+                                    className="ml-2 font-medium hover:underline"
+                                  >
+                                    {c.projectName}
+                                  </Link>
+                                  <span className="ml-2 text-muted-foreground">
+                                    {c.label} · {c.entityName ?? "—"} ·{" "}
+                                    <span className="tabular-nums">{formatEur(c.amountHt)}</span>
+                                  </span>
+                                </div>
+                                <span
+                                  className={`rounded-full border px-2 py-0.5 text-[10px] tabular-nums ${scoreTone(c.score.total)}`}
+                                >
+                                  {(c.score.total * 100).toFixed(0)} %
+                                </span>
+                                <LinkMilestoneButton
+                                  projectId={c.projectId}
+                                  milestoneId={c.milestoneId}
+                                  dougsId={s.dougs.id}
+                                />
+                              </li>
+                            );
+                          }
+                          if (c.kind === "coworking") {
+                            return (
+                              <li
+                                key={`c-${c.coworkingInvoiceId}`}
+                                className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                                    Coworking
+                                  </span>
+                                  <Link
+                                    href={`/coworking/factures/${c.coworkingInvoiceId}`}
+                                    className="ml-2 font-medium hover:underline"
+                                  >
+                                    {c.name}
+                                  </Link>
+                                  <span className="ml-2 text-muted-foreground">
+                                    {c.contractName ?? "—"} ·{" "}
+                                    <span className="tabular-nums">{formatEur(c.amountHt)}</span>
+                                  </span>
+                                </div>
+                                <span
+                                  className={`rounded-full border px-2 py-0.5 text-[10px] tabular-nums ${scoreTone(c.score.total)}`}
+                                >
+                                  {(c.score.total * 100).toFixed(0)} %
+                                </span>
+                                <LinkCoworkingInvoiceButton
+                                  coworkingInvoiceId={c.coworkingInvoiceId}
+                                  dougsId={s.dougs.id}
+                                />
+                              </li>
+                            );
+                          }
+                          // kind === "project" : projet sans jalon → on
+                          // crée un jalon à la volée avec le % détecté.
+                          return (
                             <li
-                              key={`m-${c.milestoneId}`}
-                              className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs"
+                              key={`p-${c.projectId}`}
+                              className="flex items-center justify-between gap-2 rounded-md border border-indigo-200 bg-indigo-50/30 px-3 py-2 text-xs dark:border-indigo-900 dark:bg-indigo-950/20"
                             >
                               <div className="min-w-0 flex-1">
-                                <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                                  Jalon
+                                <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] text-indigo-700 uppercase tracking-wide dark:bg-indigo-900 dark:text-indigo-300">
+                                  Projet
+                                  {c.detectedPercent != null ? ` · ${c.detectedPercent} %` : ""}
                                 </span>
                                 <Link
                                   href={`/projets/${c.projectId}?tab=billing`}
@@ -193,53 +264,28 @@ export default async function ReconciliationPage() {
                                   {c.projectName}
                                 </Link>
                                 <span className="ml-2 text-muted-foreground">
-                                  {c.label} · {c.entityName ?? "—"} ·{" "}
+                                  {c.entityName ?? "—"} · total{" "}
+                                  <span className="tabular-nums">
+                                    {formatEur(c.projectValueHt)}
+                                  </span>{" "}
+                                  → facture{" "}
                                   <span className="tabular-nums">{formatEur(c.amountHt)}</span>
                                 </span>
                               </div>
                               <span
                                 className={`rounded-full border px-2 py-0.5 text-[10px] tabular-nums ${scoreTone(c.score.total)}`}
+                                title={`Nom ${(c.score.name * 100).toFixed(0)} % · % standard ${(c.score.amount * 100).toFixed(0)} % · Date ${(c.score.date * 100).toFixed(0)} %`}
                               >
                                 {(c.score.total * 100).toFixed(0)} %
                               </span>
-                              <LinkMilestoneButton
+                              <LinkProjectAsMilestoneButton
                                 projectId={c.projectId}
-                                milestoneId={c.milestoneId}
                                 dougsId={s.dougs.id}
+                                detectedPercent={c.detectedPercent}
                               />
                             </li>
-                          ) : (
-                            <li
-                              key={`c-${c.coworkingInvoiceId}`}
-                              className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs"
-                            >
-                              <div className="min-w-0 flex-1">
-                                <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                                  Coworking
-                                </span>
-                                <Link
-                                  href={`/coworking/factures/${c.coworkingInvoiceId}`}
-                                  className="ml-2 font-medium hover:underline"
-                                >
-                                  {c.name}
-                                </Link>
-                                <span className="ml-2 text-muted-foreground">
-                                  {c.contractName ?? "—"} ·{" "}
-                                  <span className="tabular-nums">{formatEur(c.amountHt)}</span>
-                                </span>
-                              </div>
-                              <span
-                                className={`rounded-full border px-2 py-0.5 text-[10px] tabular-nums ${scoreTone(c.score.total)}`}
-                              >
-                                {(c.score.total * 100).toFixed(0)} %
-                              </span>
-                              <LinkCoworkingInvoiceButton
-                                coworkingInvoiceId={c.coworkingInvoiceId}
-                                dougsId={s.dougs.id}
-                              />
-                            </li>
-                          ),
-                        )}
+                          );
+                        })}
                       </ul>
                     )}
                   </li>
