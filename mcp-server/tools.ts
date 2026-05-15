@@ -658,6 +658,201 @@ export async function updateEntity(args: z.infer<typeof updateEntitySchema>) {
   return { id: args.id };
 }
 
+// ---------- PROJETS ----------
+// Création/édition de projets (= opportunités en phase commerciale).
+// IMPORTANT : `confirmed: true` est OBLIGATOIRE pour create_project,
+// l'agent doit explicitement demander l'avis du user avant — cf.
+// description côté registry MCP.
+
+const projectKindEnum = z.enum(["client", "product", "transverse"]);
+const projectStatusEnum = z.enum([
+  "not_started",
+  "to_follow_up",
+  "awaiting_response",
+  "won",
+  "lost",
+  "planning",
+  "active",
+  "on_hold",
+  "completed",
+  "archived",
+]);
+const projectBillingTypeEnum = z.enum(["none", "fixed", "hourly"]);
+
+export const createProjectSchema = z.object({
+  /**
+   * Garde-fou : l'agent DOIT poser la question à l'utilisateur avant
+   * d'appeler ce tool et obtenir une confirmation explicite. Mettre
+   * `true` uniquement après confirmation. Si false ou absent, le tool
+   * échoue.
+   */
+  confirmed: z.literal(true, {
+    errorMap: () => ({
+      message:
+        "Demande d'abord à l'utilisateur de confirmer la création du projet/opportunité avec tous les champs, puis renseigne confirmed=true.",
+    }),
+  }),
+  name: z.string().trim().min(1).max(200),
+  kind: projectKindEnum.default("client"),
+  status: projectStatusEnum.default("not_started"),
+  entityId: z.string().uuid().nullable().optional(),
+  contactId: z.string().uuid().nullable().optional(),
+  description: z.string().max(5000).nullable().optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  billingType: projectBillingTypeEnum.default("none"),
+  budgetAmount: z.number().nonnegative().nullable().optional(),
+  hourlyRate: z.number().nonnegative().nullable().optional(),
+  valueAmount: z.number().nonnegative().nullable().optional(),
+  probability: z.number().int().min(0).max(100).nullable().optional(),
+  source: z.string().max(200).nullable().optional(),
+  firstContactDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  followUpDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  expectedCloseDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+});
+
+export async function createProject(args: z.infer<typeof createProjectSchema>, ctx: UserContext) {
+  const conn = db();
+  const [row] = await conn
+    .insert(projects)
+    .values({
+      name: args.name,
+      kind: args.kind,
+      status: args.status,
+      entityId: args.entityId ?? null,
+      contactId: args.contactId ?? null,
+      description: args.description ?? null,
+      startDate: args.startDate ?? null,
+      endDate: args.endDate ?? null,
+      billingType: args.billingType,
+      budgetAmount: args.budgetAmount != null ? args.budgetAmount.toString() : null,
+      hourlyRate: args.hourlyRate != null ? args.hourlyRate.toString() : null,
+      valueAmount: args.valueAmount != null ? args.valueAmount.toString() : null,
+      probability: args.probability ?? null,
+      source: args.source ?? null,
+      firstContactDate: args.firstContactDate ?? null,
+      followUpDate: args.followUpDate ?? null,
+      expectedCloseDate: args.expectedCloseDate ?? null,
+      ownerId: ctx.userId,
+      createdBy: ctx.userId,
+    })
+    .returning({
+      id: projects.id,
+      name: projects.name,
+      kind: projects.kind,
+      status: projects.status,
+    });
+  return row ?? null;
+}
+
+export const updateProjectSchema = z.object({
+  id: z.string().uuid(),
+  /** Confirmation requise pour les changements de status structurants
+   * (won/lost/archived) — facultatif pour les autres mises à jour. */
+  confirmed: z.boolean().optional(),
+  name: z.string().trim().min(1).max(200).optional(),
+  kind: projectKindEnum.optional(),
+  status: projectStatusEnum.optional(),
+  entityId: z.string().uuid().nullable().optional(),
+  contactId: z.string().uuid().nullable().optional(),
+  description: z.string().max(5000).nullable().optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  billingType: projectBillingTypeEnum.optional(),
+  budgetAmount: z.number().nonnegative().nullable().optional(),
+  hourlyRate: z.number().nonnegative().nullable().optional(),
+  valueAmount: z.number().nonnegative().nullable().optional(),
+  probability: z.number().int().min(0).max(100).nullable().optional(),
+  source: z.string().max(200).nullable().optional(),
+  firstContactDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  lastContactDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  followUpDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  expectedCloseDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+});
+
+export async function updateProject(args: z.infer<typeof updateProjectSchema>) {
+  // Garde-fou structurant : demander confirmation pour les transitions
+  // commerciales finales (won/lost) et archived.
+  const sensitiveStatus =
+    args.status === "won" || args.status === "lost" || args.status === "archived";
+  if (sensitiveStatus && args.confirmed !== true) {
+    throw new Error(
+      `Transition de statut vers "${args.status}" nécessite une confirmation explicite (confirmed=true). Demande l'avis de l'utilisateur d'abord.`,
+    );
+  }
+
+  const conn = db();
+  const update: Record<string, unknown> = { updatedAt: new Date() };
+  if (args.name !== undefined) update.name = args.name;
+  if (args.kind !== undefined) update.kind = args.kind;
+  if (args.status !== undefined) update.status = args.status;
+  if (args.entityId !== undefined) update.entityId = args.entityId;
+  if (args.contactId !== undefined) update.contactId = args.contactId;
+  if (args.description !== undefined) update.description = args.description;
+  if (args.startDate !== undefined) update.startDate = args.startDate;
+  if (args.endDate !== undefined) update.endDate = args.endDate;
+  if (args.billingType !== undefined) update.billingType = args.billingType;
+  if (args.budgetAmount !== undefined)
+    update.budgetAmount = args.budgetAmount != null ? args.budgetAmount.toString() : null;
+  if (args.hourlyRate !== undefined)
+    update.hourlyRate = args.hourlyRate != null ? args.hourlyRate.toString() : null;
+  if (args.valueAmount !== undefined)
+    update.valueAmount = args.valueAmount != null ? args.valueAmount.toString() : null;
+  if (args.probability !== undefined) update.probability = args.probability;
+  if (args.source !== undefined) update.source = args.source;
+  if (args.firstContactDate !== undefined) update.firstContactDate = args.firstContactDate;
+  if (args.lastContactDate !== undefined) update.lastContactDate = args.lastContactDate;
+  if (args.followUpDate !== undefined) update.followUpDate = args.followUpDate;
+  if (args.expectedCloseDate !== undefined) update.expectedCloseDate = args.expectedCloseDate;
+
+  await conn.update(projects).set(update).where(eq(projects.id, args.id));
+  return { id: args.id };
+}
+
 // ---------- COWORKING ----------
 
 const contractStatusEnum = z.enum(["en_cours", "termine"]);

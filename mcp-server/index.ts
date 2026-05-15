@@ -34,6 +34,8 @@ import {
   createCoworkingInvoiceSchema,
   createEntity,
   createEntitySchema,
+  createProject,
+  createProjectSchema,
   createTask,
   createTaskSchema,
   generateNextCoworkingInvoice,
@@ -73,6 +75,8 @@ import {
   updateCoworkingInvoiceSchema,
   updateEntity,
   updateEntitySchema,
+  updateProject,
+  updateProjectSchema,
 } from "./tools";
 
 // Si lancé en standalone (pas via Next), charge .env.local pour récupérer
@@ -249,6 +253,24 @@ server.tool(
   updateEntitySchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await updateEntity(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "create_project",
+  "Crée un projet/opportunité. **GARDE-FOU** : `confirmed: true` est OBLIGATOIRE. Demande TOUJOURS confirmation à l'utilisateur avec tous les champs (nom, entité, kind, status, valueAmount…) avant d'invoquer. Pour les opportunités commerciales, kind='client' et status dans not_started/to_follow_up/awaiting_response.",
+  createProjectSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await createProject(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "update_project",
+  "Met à jour un projet (champs fournis seulement). `id` requis. Pour les transitions de statut vers won/lost/archived, `confirmed: true` est requis — demande confirmation au user.",
+  updateProjectSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await updateProject(args), null, 2) }],
   }),
 );
 

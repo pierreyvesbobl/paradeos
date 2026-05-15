@@ -26,6 +26,8 @@ import {
   addNoteSchema,
   completeTask,
   completeTaskSchema,
+  createProject,
+  createProjectSchema,
   createTask,
   createTaskSchema,
   getMeeting,
@@ -51,6 +53,8 @@ import {
   readResource,
   searchAll,
   searchAllSchema,
+  updateProject,
+  updateProjectSchema,
 } from "./_handlers";
 
 export const runtime = "nodejs";
@@ -133,6 +137,18 @@ const TOOL_REGISTRY: Record<
     description: "Crée une tâche.",
     schema: createTaskSchema,
     handler: (a, ctx) => createTask(a as never, ctx as never),
+  },
+  create_project: {
+    description:
+      "Crée un projet / opportunité. ⚠️ GARDE-FOU : `confirmed: true` REQUIS. Demande TOUJOURS confirmation à l'utilisateur avec tous les champs (name, kind, status, entityId, valueAmount…) avant d'invoquer ce tool. Pour les opportunités commerciales : kind='client' + status not_started/to_follow_up/awaiting_response.",
+    schema: createProjectSchema,
+    handler: (a, ctx) => createProject(a as never, ctx as never),
+  },
+  update_project: {
+    description:
+      "Met à jour un projet (champs fournis). `id` requis. Pour les transitions de statut sensibles (won/lost/archived), `confirmed: true` requis — demande confirmation au user.",
+    schema: updateProjectSchema,
+    handler: (a) => updateProject(a as never),
   },
   complete_task: {
     description: "Marque une tâche comme terminée.",
