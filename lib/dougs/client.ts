@@ -58,11 +58,81 @@ async function touchUsed(userId: string): Promise<void> {
  * Wrapper fetch authentifié. `pathTemplate` peut contenir
  * `{companyId}` qui sera substitué automatiquement.
  */
-// User-Agent crédible (Chrome stable). Dougs filtre probablement les
-// requêtes sans UA navigateur — sinon les fetch Node.js arrivent avec
-// `node-fetch/x.y` qui peut être rejeté comme bot.
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+const BROWSER_HEADERS: Record<string, string> = {
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+  "User-Agent": BROWSER_UA,
+  Origin: BASE,
+  Referer: `${BASE}/app/`,
+  "Sec-Fetch-Site": "same-origin",
+  "Sec-Fetch-Mode": "cors",
+  "Sec-Fetch-Dest": "empty",
+  "Sec-Ch-Ua": '"Chromium";v="131", "Not_A Brand";v="24", "Google Chrome";v="131"',
+  "Sec-Ch-Ua-Mobile": "?0",
+  "Sec-Ch-Ua-Platform": '"macOS"',
+};
+
+/**
+ * Si `DOUGS_PROXY_URL` est défini, on route via un Apps Script déployé
+ * côté Google. Pourquoi : Cloudflare devant app.dougs.fr bloque les
+ * fetch depuis Vercel/Node.js (fingerprint TLS), même avec un cookie
+ * valide et tous les headers Chrome simulés. Les IPs Google
+ * (UrlFetchApp) passent le filtre Cloudflare proprement.
+ *
+ * Côté Apps Script, l'action attendue est :
+ *   POST { action: 'dougsProxy', method, path, body, cookie, secret }
+ * → renvoie { success, status, body }
+ *
+ * Cf. chrome-extension/README ou docs/dougs-proxy-apps-script.md pour
+ * le code à coller dans le projet Apps Script existant.
+ */
+async function proxyFetch(
+  proxyUrl: string,
+  cookie: string,
+  path: string,
+  method: string,
+  body: BodyInit | null | undefined,
+): Promise<{ status: number; text: string }> {
+  const secret = process.env.DOUGS_PROXY_SECRET;
+  const payload = {
+    action: "dougsProxy",
+    method,
+    path,
+    body: body === undefined || body === null ? null : String(body),
+    cookie,
+    secret,
+  };
+  const res = await fetch(proxyUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    redirect: "follow",
+  });
+  if (!res.ok) {
+    throw new DougsApiError(
+      `Proxy Apps Script ${res.status} ${res.statusText}`,
+      res.status,
+      (await res.text()).slice(0, 500),
+    );
+  }
+  const json = (await res.json()) as {
+    success?: boolean;
+    error?: string;
+    status?: number;
+    body?: string;
+  };
+  if (!json.success) {
+    throw new DougsApiError(
+      `Proxy Apps Script : ${json.error ?? "erreur inconnue"}`,
+      json.status ?? 500,
+      json.body ?? "",
+    );
+  }
+  return { status: json.status ?? 0, text: json.body ?? "" };
+}
 
 async function dougsFetch(
   userId: string,
@@ -77,53 +147,54 @@ async function dougsFetch(
   }
   const path = pathTemplate.replace("{companyId}", session.companyId);
   const method = init?.method ?? "GET";
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json, text/plain, */*",
-      "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
-      "Accept-Encoding": "gzip, deflate, br",
-      "User-Agent": BROWSER_UA,
-      Origin: BASE,
-      Referer: `${BASE}/app/`,
-      // Headers qu'un Chrome récent envoie automatiquement — utile pour
-      // passer le bot management Cloudflare devant app.dougs.fr.
-      "Sec-Fetch-Site": "same-origin",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Dest": "empty",
-      "Sec-Ch-Ua": '"Chromium";v="131", "Not_A Brand";v="24", "Google Chrome";v="131"',
-      "Sec-Ch-Ua-Mobile": "?0",
-      "Sec-Ch-Ua-Platform": '"macOS"',
-      ...(init?.headers ?? {}),
-      Cookie: session.cookie,
-    },
-  });
-  if (res.status === 401 || res.status === 403) {
-    // En dev local, Cloudflare devant app.dougs.fr refuse souvent nos
-    // fetch (fingerprint TLS Node ≠ Chrome) même avec un cookie valide.
-    // Vérif rapide : ouvre la console sur app.dougs.fr et lance le même
-    // fetch — si ça passe en navigateur mais 401 ici, c'est le local.
-    // En prod Vercel le fingerprint est différent et ça passe.
-    const body = await res.text().catch(() => "");
-    console.error(`[dougs auth] ${method} ${path} → ${res.status}`, body.slice(0, 500));
+
+  let status: number;
+  let bodyText: string;
+  let directResponse: Response | null = null;
+
+  const proxyUrl = process.env.DOUGS_PROXY_URL;
+  if (proxyUrl) {
+    const proxied = await proxyFetch(proxyUrl, session.cookie, path, method, init?.body);
+    status = proxied.status;
+    bodyText = proxied.text;
+  } else {
+    directResponse = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...BROWSER_HEADERS,
+        ...(init?.headers ?? {}),
+        Cookie: session.cookie,
+      },
+    });
+    status = directResponse.status;
+    bodyText = "";
+  }
+
+  if (status === 401 || status === 403) {
+    const body = directResponse ? await directResponse.text().catch(() => "") : bodyText;
+    console.error(`[dougs auth] ${method} ${path} → ${status}`, body.slice(0, 500));
     throw new DougsAuthError(
-      `Dougs ${res.status} ${
-        body ? `(${body.slice(0, 200)})` : ""
-      } — en dev local, c'est Cloudflare qui bloque le fingerprint TLS ; déploie sur Vercel pour tester réellement. Sinon, rafraîchis le cookie dans /settings/integrations.`,
+      `Dougs ${status}${body ? ` (${body.slice(0, 200)})` : ""} — ${
+        proxyUrl
+          ? "le cookie est invalide ou Dougs a refusé. Rafraîchis dans /settings/integrations."
+          : "sans DOUGS_PROXY_URL, Cloudflare bloque le fingerprint TLS de Node/Vercel. Configure le proxy Apps Script."
+      }`,
     );
   }
-  if (!res.ok) {
-    const body = await res.text();
-    console.error(`[dougs] ${method} ${path} → ${res.status}`, body.slice(0, 500));
-    throw new DougsApiError(
-      `Dougs ${res.status} ${res.statusText} (${method} ${path})`,
-      res.status,
-      body.slice(0, 500),
-    );
+  if (status < 200 || status >= 300) {
+    const body = directResponse ? await directResponse.text() : bodyText;
+    console.error(`[dougs] ${method} ${path} → ${status}`, body.slice(0, 500));
+    throw new DougsApiError(`Dougs ${status} (${method} ${path})`, status, body.slice(0, 500));
   }
   await touchUsed(userId);
-  return res;
+
+  // Reconstruct a Response from the proxied body so callers can use .json() / .text() uniformly.
+  if (directResponse) return directResponse;
+  return new Response(bodyText, {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 // ---------- Endpoints utilisés ----------
