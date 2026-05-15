@@ -187,6 +187,33 @@ export async function getDougsDraftUrl(userId: string, draftId: string): Promise
   return `${BASE}/app/c/${session.companyId}/invoicing/sales-invoices/${draftId}`;
 }
 
+/**
+ * GET d'une facture de vente (draft ou finalisée). Retourne le payload
+ * complet incluant `status`, `totalNetAmount`, `totalVatAmount`,
+ * `totalAmountWithVat`, `issuedAt`, `paidAt`. Utilisé pour rafraîchir
+ * le snapshot Paradeos après push ou via cron.
+ */
+export type DougsSalesInvoice = {
+  id: string;
+  reference?: string;
+  status?: string;
+  totalNetAmount?: number;
+  totalVatAmount?: number;
+  totalAmountWithVat?: number;
+  issuedAt?: string | null;
+  paidAt?: string | null;
+  [key: string]: unknown;
+};
+
+export async function getDougsSalesInvoice(
+  userId: string,
+  invoiceId: string,
+): Promise<DougsSalesInvoice> {
+  // Endpoint stable (couvre draft + finalisé).
+  const res = await dougsFetch(userId, `/companies/{companyId}/sales-invoices/${invoiceId}`);
+  return res.json();
+}
+
 // ---------- Devis (quotes) ----------
 
 export type DougsQuoteDraft = {
@@ -253,4 +280,26 @@ export async function getDougsQuoteUrl(userId: string, quoteId: string): Promise
   const session = await loadSession(userId);
   if (!session) throw new DougsAuthError("Pas de session Dougs.");
   return `${BASE}/app/c/${session.companyId}/invoicing/quotes/${quoteId}`;
+}
+
+/**
+ * GET d'un devis (draft ou finalisé). Endpoint stable
+ * `/invoicing/quotes/{id}` (le pendant `/quote-drafts/{id}` n'existe
+ * qu'en draft). Retourne `status` (DRAFT/PENDING/ACCEPTED/REFUSED),
+ * `totalNetAmount`, `totalVatAmount`, `totalAmountWithVat`, `issuedAt`.
+ */
+export type DougsQuote = {
+  id: string;
+  reference?: string;
+  status?: string;
+  totalNetAmount?: number;
+  totalVatAmount?: number;
+  totalAmountWithVat?: number;
+  issuedAt?: string | null;
+  [key: string]: unknown;
+};
+
+export async function getDougsQuote(userId: string, quoteId: string): Promise<DougsQuote> {
+  const res = await dougsFetch(userId, `/companies/{companyId}/invoicing/quotes/${quoteId}`);
+  return res.json();
 }

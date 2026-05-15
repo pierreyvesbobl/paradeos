@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { pushProjectQuoteToDougs, unlinkProjectDougsQuote } from "@/lib/actions/dougs-quotes";
-import { ExternalLink, FileText, Plus, Trash2 } from "lucide-react";
+import { refreshProjectDougsQuote } from "@/lib/actions/dougs-refresh";
+import { ExternalLink, FileText, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -135,6 +136,18 @@ export function DougsQuoteSection({
     });
   }
 
+  function refresh() {
+    startTransition(async () => {
+      const res = await refreshProjectDougsQuote({ projectId });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(`Synchro Dougs : ${res.data.reference ?? "—"} · ${res.data.status ?? "—"}`);
+      router.refresh();
+    });
+  }
+
   return (
     <div className="space-y-3">
       {dougsQuoteId ? (
@@ -155,6 +168,17 @@ export function DougsQuoteSection({
               ) : null}
             </div>
             <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={refresh}
+                disabled={pending}
+                className="h-7 gap-1 px-2 text-xs"
+                title="Rafraîchir depuis Dougs (statut, totaux, dates)"
+              >
+                <RefreshCw className="size-3" />
+              </Button>
               {openUrl ? (
                 <Button asChild size="sm" variant="outline" className="h-7 gap-1 text-xs">
                   <a href={openUrl} target="_blank" rel="noreferrer">

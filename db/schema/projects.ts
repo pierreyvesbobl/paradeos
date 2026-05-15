@@ -91,6 +91,14 @@ export const projects = pgTable(
     dougsQuoteReference: text("dougs_quote_reference"),
     dougsQuoteStatus: text("dougs_quote_status"),
     dougsQuotePushedAt: timestamp("dougs_quote_pushed_at", { withTimezone: true }),
+    // Snapshot des champs synchronisés depuis Dougs après push (totaux
+    // recalculés serveur, date d'émission). Voir refreshProjectDougsQuote
+    // pour le rafraîchissement à la demande / via cron.
+    dougsQuoteTotalHt: numeric("dougs_quote_total_ht", { precision: 12, scale: 2 }),
+    dougsQuoteTotalTtc: numeric("dougs_quote_total_ttc", { precision: 12, scale: 2 }),
+    dougsQuoteTotalVat: numeric("dougs_quote_total_vat", { precision: 12, scale: 2 }),
+    dougsQuoteIssuedAt: timestamp("dougs_quote_issued_at", { withTimezone: true }),
+    dougsQuoteSyncedAt: timestamp("dougs_quote_synced_at", { withTimezone: true }),
     // Jalons de facturation (acompte/intermédiaire/solde) — JSON typé
     // côté app via BillingMilestone. Cf. migration 0039.
     billingMilestones: jsonb("billing_milestones")
@@ -126,6 +134,15 @@ export type BillingMilestone = {
   dougsInvoiceReference: string | null;
   invoicedAt: string | null;
   paidAt: string | null;
+  // Champs synchronisés depuis Dougs (refresh à la demande ou cron).
+  // Null tant qu'on n'a pas fait de refresh. Voir
+  // refreshProjectMilestoneDougsInvoice.
+  dougsStatus?: string | null;
+  dougsTotalHt?: number | null;
+  dougsTotalTtc?: number | null;
+  dougsTotalVat?: number | null;
+  dougsIssuedAt?: string | null;
+  dougsSyncedAt?: string | null;
 };
 
 export type Project = typeof projects.$inferSelect;

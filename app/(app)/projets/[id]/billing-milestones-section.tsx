@@ -12,7 +12,8 @@ import {
   setProjectBillingMilestoneStatus,
   upsertProjectBillingMilestone,
 } from "@/lib/actions/billing-milestones";
-import { Check, ExternalLink, Pencil, Plus, Send, Sparkles, Trash2 } from "lucide-react";
+import { refreshProjectMilestoneDougsInvoice } from "@/lib/actions/dougs-refresh";
+import { Check, ExternalLink, Pencil, Plus, RefreshCw, Send, Sparkles, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -153,6 +154,20 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
     });
   }
 
+  function refreshDougs(id: string) {
+    startTransition(async () => {
+      const res = await refreshProjectMilestoneDougsInvoice({ projectId, milestoneId: id });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(
+        `Synchro Dougs : ${res.data.reference ?? "—"} · ${res.data.status ?? "—"}${res.data.paidAt ? " · payée" : ""}`,
+      );
+      router.refresh();
+    });
+  }
+
   function setStatus(id: string, status: "todo" | "invoiced" | "paid") {
     startTransition(async () => {
       const res = await setProjectBillingMilestoneStatus({
@@ -266,21 +281,34 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
                     </Button>
                   ) : null}
                   {m.dougsInvoiceId ? (
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-[11px]"
-                      title="Ouvrir sur Dougs"
-                    >
-                      <a
-                        href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoices/${m.dougsInvoiceId}`}
-                        target="_blank"
-                        rel="noreferrer"
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => refreshDougs(m.id)}
+                        disabled={pending}
+                        className="h-7 px-2 text-[11px]"
+                        title="Rafraîchir depuis Dougs"
                       >
-                        <ExternalLink className="size-3" />
-                      </a>
-                    </Button>
+                        <RefreshCw className="size-3" />
+                      </Button>
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-[11px]"
+                        title="Ouvrir sur Dougs"
+                      >
+                        <a
+                          href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoices/${m.dougsInvoiceId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <ExternalLink className="size-3" />
+                        </a>
+                      </Button>
+                    </>
                   ) : null}
                   <Button
                     type="button"

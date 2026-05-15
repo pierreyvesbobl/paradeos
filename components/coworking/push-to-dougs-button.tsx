@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { pushCoworkingInvoiceToDougs } from "@/lib/actions/coworking";
-import { ExternalLink, RefreshCw, Send } from "lucide-react";
+import { refreshCoworkingInvoiceDougs } from "@/lib/actions/dougs-refresh";
+import { CloudDownload, ExternalLink, RefreshCw, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -36,6 +37,20 @@ export function PushToDougsButton({ invoiceId, dougsInvoiceId, dougsUrl }: Props
     });
   }
 
+  function refresh() {
+    startTransition(async () => {
+      const res = await refreshCoworkingInvoiceDougs({ coworkingInvoiceId: invoiceId });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(
+        `Synchro Dougs : ${res.data.reference ?? "—"} · ${res.data.status ?? "—"}${res.data.paidAt ? " · payée" : ""}`,
+      );
+      router.refresh();
+    });
+  }
+
   if (dougsInvoiceId && dougsUrl) {
     return (
       <>
@@ -48,6 +63,17 @@ export function PushToDougsButton({ invoiceId, dougsInvoiceId, dougsUrl }: Props
           <ExternalLink className="size-3.5" />
           Voir sur Dougs
         </a>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={refresh}
+          disabled={pending}
+          title="Tirer le statut et les montants finaux depuis Dougs"
+        >
+          <CloudDownload className="mr-1 size-4" />
+          Rafraîchir
+        </Button>
         <Button
           type="button"
           size="sm"

@@ -92,6 +92,17 @@ export const coworkingInvoices = pgTable(
     vatRate: numeric("vat_rate", { precision: 5, scale: 4 }).notNull().default("0.2"),
     notes: text("notes"),
     dougsInvoiceId: text("dougs_invoice_id"),
+    // Snapshot Dougs après refresh (manuel ou cron). Permet d'afficher
+    // référence finale, statut, totaux recalculés, dates émission/paiement
+    // sans re-fetch à chaque rendu. Cf. refreshCoworkingInvoiceDougs.
+    dougsInvoiceReference: text("dougs_invoice_reference"),
+    dougsInvoiceStatus: text("dougs_invoice_status"),
+    dougsInvoiceTotalHt: numeric("dougs_invoice_total_ht", { precision: 12, scale: 2 }),
+    dougsInvoiceTotalTtc: numeric("dougs_invoice_total_ttc", { precision: 12, scale: 2 }),
+    dougsInvoiceTotalVat: numeric("dougs_invoice_total_vat", { precision: 12, scale: 2 }),
+    dougsInvoiceIssuedAt: timestamp("dougs_invoice_issued_at", { withTimezone: true }),
+    dougsInvoicePaidAt: timestamp("dougs_invoice_paid_at", { withTimezone: true }),
+    dougsInvoiceSyncedAt: timestamp("dougs_invoice_synced_at", { withTimezone: true }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
