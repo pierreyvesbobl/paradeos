@@ -78,6 +78,14 @@ import {
   updateProject,
   updateProjectSchema,
 } from "./tools";
+import {
+  pushCoworkingInvoiceMcp,
+  pushCoworkingInvoiceMcpSchema,
+  pushProjectMilestoneInvoice,
+  pushProjectMilestoneInvoiceSchema,
+  pushProjectQuote,
+  pushProjectQuoteSchema,
+} from "../app/api/mcp/_dougs-handlers";
 
 // Si lancé en standalone (pas via Next), charge .env.local pour récupérer
 // DATABASE_URL et autres. On skippe quand Claude Desktop a déjà injecté
@@ -271,6 +279,46 @@ server.tool(
   updateProjectSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await updateProject(args), null, 2) }],
+  }),
+);
+
+// ---------- DOUGS (push devis/factures via Paradeos) ----------
+// Atomicité : Paradeos crée le draft Dougs + stocke le lien en une
+// transaction. Si Dougs throw, rien n'est sauvegardé en DB.
+
+server.tool(
+  "push_project_quote",
+  "Crée un devis Dougs depuis un projet Paradeos, stocke le lien atomiquement. Args : projectId, subject?, thankYouNote?, lines[] {title, description?, unit?, quantity, unitAmount, vatRate?}. TVA défaut 0.2. Demande confirmation user avant d'invoquer (création externe sur Dougs).",
+  pushProjectQuoteSchema.shape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await pushProjectQuote(args, ctx), null, 2) },
+    ],
+  }),
+);
+
+server.tool(
+  "push_project_milestone_invoice",
+  "Crée une facture Dougs depuis un jalon de projet (existant via milestoneId OU créé à la volée via percent/amountHt). Args : projectId, milestoneId?, type?, percent?, amountHt?, label?. Demande confirmation user avant d'invoquer.",
+  pushProjectMilestoneInvoiceSchema.shape,
+  async (args) => ({
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(await pushProjectMilestoneInvoice(args, ctx), null, 2),
+      },
+    ],
+  }),
+);
+
+server.tool(
+  "push_coworking_invoice",
+  "Pousse une facture coworking existante sur Dougs (brouillon). Args : coworkingInvoiceId.",
+  pushCoworkingInvoiceMcpSchema.shape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await pushCoworkingInvoiceMcp(args, ctx), null, 2) },
+    ],
   }),
 );
 

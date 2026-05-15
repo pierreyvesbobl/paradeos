@@ -1,5 +1,3 @@
-import "server-only";
-
 import { dougsSessions } from "@/db/schema/dougs";
 import { db } from "@/lib/db/server";
 import { eq } from "drizzle-orm";

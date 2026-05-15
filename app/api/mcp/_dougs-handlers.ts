@@ -1,5 +1,3 @@
-import "server-only";
-
 import { randomUUID } from "node:crypto";
 import { contacts as contactsTable } from "@/db/schema/contacts";
 import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
