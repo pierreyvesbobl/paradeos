@@ -5,7 +5,8 @@
   "description": "Synchronise le cookie de session Dougs (HttpOnly inclus) avec Paradeos en un clic.",
   "permissions": ["cookies", "storage"],
   "host_permissions": [
-    "https://app.dougs.fr/*",
+    "https://*.dougs.fr/*",
+    "https://dougs.fr/*",
     "https://*.paradeos.app/*",
     "https://*.vercel.app/*",
     "http://localhost:3000/*"

@@ -38,19 +38,17 @@ async function saveConfig() {
 }
 
 async function getDougsCookieString() {
-  const cookies = await chrome.cookies.getAll({ domain: "dougs.fr" });
-  const usable = cookies.filter(
-    (c) =>
-      c.domain === "app.dougs.fr" ||
-      c.domain === ".dougs.fr" ||
-      c.domain === "dougs.fr" ||
-      c.domain === ".app.dougs.fr",
-  );
+  // `getAll({ url })` retourne les cookies que le navigateur enverrait
+  // à cette URL — incluant les cookies de domaine parent (.dougs.fr),
+  // sans avoir à matcher les valeurs de `domain` à la main.
+  const cookies = await chrome.cookies.getAll({ url: "https://app.dougs.fr/" });
+  // Debug : affiche ce qu'on voit dans la console de la popup.
+  console.log("[Paradeos Sync] cookies trouvés :", cookies);
   return {
-    cookieString: usable.map((c) => `${c.name}=${c.value}`).join("; "),
-    count: usable.length,
-    names: usable.map((c) => c.name),
-    hasAuthSession: usable.some((c) => c.name === "auth_session"),
+    cookieString: cookies.map((c) => `${c.name}=${c.value}`).join("; "),
+    count: cookies.length,
+    names: cookies.map((c) => c.name),
+    hasAuthSession: cookies.some((c) => c.name === "auth_session"),
   };
 }
 
