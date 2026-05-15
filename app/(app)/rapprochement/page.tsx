@@ -1,0 +1,254 @@
+import { PageHeader } from "@/components/page-header";
+import { requireUser } from "@/lib/auth/server";
+import { DougsAuthError } from "@/lib/dougs/client";
+import { getInvoiceSuggestions, getQuoteSuggestions } from "@/lib/dougs/reconciliation";
+import { FileText, Receipt } from "lucide-react";
+import Link from "next/link";
+import {
+  LinkCoworkingInvoiceButton,
+  LinkMilestoneButton,
+  LinkQuoteButton,
+} from "./reconciliation-actions";
+
+export const dynamic = "force-dynamic";
+
+function formatEur(n: number | null | undefined): string {
+  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
+  return n.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+}
+
+function scoreTone(score: number): string {
+  if (score >= 0.85) return "border-emerald-300 bg-emerald-50 text-emerald-700";
+  if (score >= 0.6) return "border-amber-300 bg-amber-50 text-amber-700";
+  return "border-slate-300 bg-slate-50 text-slate-600";
+}
+
+export default async function ReconciliationPage() {
+  const user = await requireUser();
+
+  let quoteSuggestions: Awaited<ReturnType<typeof getQuoteSuggestions>> = [];
+  let invoiceSuggestions: Awaited<ReturnType<typeof getInvoiceSuggestions>> = [];
+  let authError: string | null = null;
+
+  try {
+    [quoteSuggestions, invoiceSuggestions] = await Promise.all([
+      getQuoteSuggestions(user.id),
+      getInvoiceSuggestions(user.id),
+    ]);
+  } catch (err) {
+    if (err instanceof DougsAuthError) {
+      authError = err.message;
+    } else {
+      throw err;
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Compta"
+        title="Rapprochement Dougs"
+        description="Propose des liens entre les devis/factures Dougs non encore reliés et les projets / jalons / contrats Paradeos correspondants."
+      />
+
+      {authError ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900 text-sm">
+          {authError}{" "}
+          <Link href="/settings/integrations" className="underline">
+            Configurer Dougs
+          </Link>
+        </div>
+      ) : null}
+
+      {!authError ? (
+        <>
+          <section className="rounded-lg border bg-card">
+            <header className="border-b px-6 py-4">
+              <h2 className="flex items-center gap-2 font-medium text-sm">
+                <FileText className="size-4 text-muted-foreground" />
+                Devis Dougs non liés ({quoteSuggestions.length})
+              </h2>
+            </header>
+            {quoteSuggestions.length === 0 ? (
+              <p className="px-6 py-8 text-center text-muted-foreground text-sm">
+                Tous les devis Dougs sont déjà liés à un projet Paradeos. 🎉
+              </p>
+            ) : (
+              <ul className="divide-y">
+                {quoteSuggestions.map((s) => (
+                  <li key={s.dougs.id} className="space-y-2 px-6 py-4 text-sm">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="font-mono text-xs">{s.dougs.reference ?? "—"}</span>
+                      <span className="rounded-full border bg-muted/50 px-1.5 py-0.5 text-xs">
+                        {s.dougs.status ?? "—"}
+                      </span>
+                      <span className="font-medium">{s.dougs.clientName}</span>
+                      <span className="text-muted-foreground tabular-nums">
+                        {formatEur(s.dougs.totalHt)} HT
+                      </span>
+                      {s.dougs.createdAt ? (
+                        <span className="text-[11px] text-muted-foreground">
+                          créé le {new Date(s.dougs.createdAt).toLocaleDateString("fr-FR")}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {s.candidates.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground italic">
+                        Aucun candidat Paradeos pertinent (score ≥ 0.3). Lie manuellement depuis la
+                        fiche projet si besoin.
+                      </p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {s.candidates.map((c) => (
+                          <li
+                            key={c.projectId}
+                            className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <Link
+                                href={`/projets/${c.projectId}`}
+                                className="font-medium hover:underline"
+                              >
+                                {c.projectName}
+                              </Link>
+                              <span className="ml-2 text-muted-foreground">
+                                {c.entityName ?? "—"} ·{" "}
+                                <span className="tabular-nums">{formatEur(c.valueAmount)}</span>
+                              </span>
+                            </div>
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] tabular-nums ${scoreTone(c.score.total)}`}
+                              title={`Nom ${(c.score.name * 100).toFixed(0)} % · Montant ${(c.score.amount * 100).toFixed(0)} % · Date ${(c.score.date * 100).toFixed(0)} %`}
+                            >
+                              {(c.score.total * 100).toFixed(0)} %
+                            </span>
+                            <LinkQuoteButton projectId={c.projectId} dougsId={s.dougs.id} />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="rounded-lg border bg-card">
+            <header className="border-b px-6 py-4">
+              <h2 className="flex items-center gap-2 font-medium text-sm">
+                <Receipt className="size-4 text-muted-foreground" />
+                Factures Dougs non liées ({invoiceSuggestions.length})
+              </h2>
+            </header>
+            {invoiceSuggestions.length === 0 ? (
+              <p className="px-6 py-8 text-center text-muted-foreground text-sm">
+                Toutes les factures Dougs sont déjà liées. 🎉
+              </p>
+            ) : (
+              <ul className="divide-y">
+                {invoiceSuggestions.map((s) => (
+                  <li key={s.dougs.id} className="space-y-2 px-6 py-4 text-sm">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="font-mono text-xs">{s.dougs.reference ?? "—"}</span>
+                      <span className="rounded-full border bg-muted/50 px-1.5 py-0.5 text-xs">
+                        {s.dougs.status ?? "—"}
+                      </span>
+                      {s.dougs.paidAt ? (
+                        <span className="rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">
+                          payée
+                        </span>
+                      ) : null}
+                      <span className="font-medium">{s.dougs.clientName}</span>
+                      <span className="text-muted-foreground tabular-nums">
+                        {formatEur(s.dougs.totalHt)} HT
+                      </span>
+                      {s.dougs.createdAt ? (
+                        <span className="text-[11px] text-muted-foreground">
+                          créée le {new Date(s.dougs.createdAt).toLocaleDateString("fr-FR")}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {s.candidates.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground italic">
+                        Aucun candidat Paradeos pertinent.
+                      </p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {s.candidates.map((c) =>
+                          c.kind === "milestone" ? (
+                            <li
+                              key={`m-${c.milestoneId}`}
+                              className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                                  Jalon
+                                </span>
+                                <Link
+                                  href={`/projets/${c.projectId}?tab=billing`}
+                                  className="ml-2 font-medium hover:underline"
+                                >
+                                  {c.projectName}
+                                </Link>
+                                <span className="ml-2 text-muted-foreground">
+                                  {c.label} · {c.entityName ?? "—"} ·{" "}
+                                  <span className="tabular-nums">{formatEur(c.amountHt)}</span>
+                                </span>
+                              </div>
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[10px] tabular-nums ${scoreTone(c.score.total)}`}
+                              >
+                                {(c.score.total * 100).toFixed(0)} %
+                              </span>
+                              <LinkMilestoneButton
+                                projectId={c.projectId}
+                                milestoneId={c.milestoneId}
+                                dougsId={s.dougs.id}
+                              />
+                            </li>
+                          ) : (
+                            <li
+                              key={`c-${c.coworkingInvoiceId}`}
+                              className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                                  Coworking
+                                </span>
+                                <Link
+                                  href={`/coworking/factures/${c.coworkingInvoiceId}`}
+                                  className="ml-2 font-medium hover:underline"
+                                >
+                                  {c.name}
+                                </Link>
+                                <span className="ml-2 text-muted-foreground">
+                                  {c.contractName ?? "—"} ·{" "}
+                                  <span className="tabular-nums">{formatEur(c.amountHt)}</span>
+                                </span>
+                              </div>
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[10px] tabular-nums ${scoreTone(c.score.total)}`}
+                              >
+                                {(c.score.total * 100).toFixed(0)} %
+                              </span>
+                              <LinkCoworkingInvoiceButton
+                                coworkingInvoiceId={c.coworkingInvoiceId}
+                                dougsId={s.dougs.id}
+                              />
+                            </li>
+                          ),
+                        )}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      ) : null}
+    </div>
+  );
+}

@@ -303,3 +303,71 @@ export async function getDougsQuote(userId: string, quoteId: string): Promise<Do
   const res = await dougsFetch(userId, `/companies/{companyId}/invoicing/quotes/${quoteId}`);
   return res.json();
 }
+
+/**
+ * Liste les devis Dougs (drafts + finalisés). Utilisé par la page de
+ * rapprochement. Pagination simple via limit/offset.
+ */
+export type DougsQuoteListItem = {
+  id: string;
+  reference?: string | null;
+  status?: string | null;
+  totalNetAmount?: number | null;
+  totalAmountWithVat?: number | null;
+  issuedAt?: string | null;
+  createdAt?: string | null;
+  clientData?: {
+    legalName?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    siren?: string | null;
+  } | null;
+  [key: string]: unknown;
+};
+
+export async function listDougsQuotes(
+  userId: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<DougsQuoteListItem[]> {
+  const limit = opts.limit ?? 200;
+  const offset = opts.offset ?? 0;
+  const res = await dougsFetch(
+    userId,
+    `/companies/{companyId}/invoicing/quotes?limit=${limit}&offset=${offset}`,
+  );
+  return res.json();
+}
+
+/**
+ * Liste les factures de vente Dougs (drafts + finalisées).
+ */
+export type DougsSalesInvoiceListItem = {
+  id: string;
+  reference?: string | null;
+  status?: string | null;
+  totalNetAmount?: number | null;
+  totalAmountWithVat?: number | null;
+  issuedAt?: string | null;
+  paidAt?: string | null;
+  createdAt?: string | null;
+  clientData?: {
+    legalName?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    siren?: string | null;
+  } | null;
+  [key: string]: unknown;
+};
+
+export async function listDougsSalesInvoices(
+  userId: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<DougsSalesInvoiceListItem[]> {
+  const limit = opts.limit ?? 200;
+  const offset = opts.offset ?? 0;
+  const res = await dougsFetch(
+    userId,
+    `/companies/{companyId}/sales-invoices?limit=${limit}&offset=${offset}`,
+  );
+  return res.json();
+}

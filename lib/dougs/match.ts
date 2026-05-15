@@ -1,0 +1,100 @@
+/**
+ * Scoring de rapprochement Dougs ↔ Paradeos. Combine 3 signaux :
+ *  - similarité nom client (50 %)
+ *  - proximité montant (30 %)
+ *  - proximité date (20 %)
+ *
+ * Renvoie un score [0, 1]. Au-dessus de 0.6 = candidat proposable ;
+ * 0.85+ = très probablement un match.
+ */
+
+function normalize(s: string | null | undefined): string {
+  if (!s) return "";
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Token-based Jaccard sur les mots normalisés. Robuste aux variations
+ * "ACME SAS" vs "Acme S.A.S." vs "Acme".
+ */
+export function similarityName(a: string | null | undefined, b: string | null | undefined): number {
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  const ta = new Set(na.split(" ").filter((w) => w.length >= 2));
+  const tb = new Set(nb.split(" ").filter((w) => w.length >= 2));
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let inter = 0;
+  for (const w of ta) if (tb.has(w)) inter++;
+  const union = ta.size + tb.size - inter;
+  return inter / union;
+}
+
+/**
+ * Similarité de montants en € HT (tolérance ±5 %). Renvoie 1 si écart
+ * ≤ 1 %, 0 si écart ≥ 20 %, linéaire entre les deux.
+ */
+export function similarityAmount(
+  a: number | null | undefined,
+  b: number | null | undefined,
+): number {
+  if (typeof a !== "number" || typeof b !== "number" || a <= 0 || b <= 0) return 0;
+  const diff = Math.abs(a - b) / Math.max(a, b);
+  if (diff <= 0.01) return 1;
+  if (diff >= 0.2) return 0;
+  return 1 - (diff - 0.01) / 0.19;
+}
+
+/**
+ * Similarité de dates : 1 si <= 7 jours d'écart, 0 si >= 180 jours.
+ */
+export function similarityDate(
+  a: Date | string | null | undefined,
+  b: Date | string | null | undefined,
+): number {
+  if (!a || !b) return 0;
+  const da = a instanceof Date ? a : new Date(a);
+  const db = b instanceof Date ? b : new Date(b);
+  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return 0;
+  const days = Math.abs(da.getTime() - db.getTime()) / (24 * 3600 * 1000);
+  if (days <= 7) return 1;
+  if (days >= 180) return 0;
+  return 1 - (days - 7) / 173;
+}
+
+export type MatchScore = {
+  total: number;
+  name: number;
+  amount: number;
+  date: number;
+};
+
+export function scoreMatch(
+  dougs: {
+    legalName?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    amount?: number | null;
+    createdAt?: string | null;
+  },
+  paradeos: {
+    clientName?: string | null;
+    amount?: number | null;
+    date?: string | Date | null;
+  },
+): MatchScore {
+  const dougsName =
+    dougs.legalName ?? `${dougs.firstName ?? ""} ${dougs.lastName ?? ""}`.trim() ?? null;
+  const name = similarityName(dougsName, paradeos.clientName);
+  const amount = similarityAmount(dougs.amount, paradeos.amount);
+  const date = similarityDate(dougs.createdAt, paradeos.date);
+  const total = name * 0.5 + amount * 0.3 + date * 0.2;
+  return { total: Math.round(total * 1000) / 1000, name, amount, date };
+}
