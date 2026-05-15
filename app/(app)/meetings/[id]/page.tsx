@@ -10,6 +10,7 @@ import { deleteMeetingAndRedirect } from "@/lib/actions/meetings";
 import { db } from "@/lib/db/server";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { CopyTranscriptButton } from "./copy-transcript-button";
 import { MeetingSubjectEditor } from "./meeting-subject-editor";
 import { ProposalsPanel } from "./proposals-panel";
 import { ReExtractButton } from "./re-extract-button";
@@ -146,7 +147,10 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
       />
 
       <details className="rounded-lg border bg-card">
-        <summary className="cursor-pointer px-6 py-3 font-medium text-sm">Transcript brut</summary>
+        <summary className="flex cursor-pointer items-center justify-between gap-2 px-6 py-3 font-medium text-sm">
+          <span>Transcript brut</span>
+          <CopyTranscriptButton transcript={meeting.transcript} />
+        </summary>
         <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap p-6 font-mono text-xs leading-relaxed">
           {meeting.transcript}
         </pre>

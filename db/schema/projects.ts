@@ -3,6 +3,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -84,6 +85,18 @@ export const projects = pgTable(
     expectedCloseDate: date("expected_close_date"),
     ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    // Lien vers le devis Dougs poussé depuis la fiche projet. status =
+    // DRAFT/PENDING/ACCEPTED/REFUSED côté Dougs (snapshot, peut désynchro).
+    dougsQuoteId: text("dougs_quote_id"),
+    dougsQuoteReference: text("dougs_quote_reference"),
+    dougsQuoteStatus: text("dougs_quote_status"),
+    dougsQuotePushedAt: timestamp("dougs_quote_pushed_at", { withTimezone: true }),
+    // Jalons de facturation (acompte/intermédiaire/solde) — JSON typé
+    // côté app via BillingMilestone. Cf. migration 0039.
+    billingMilestones: jsonb("billing_milestones")
+      .$type<BillingMilestone[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
@@ -96,6 +109,24 @@ export const projects = pgTable(
     followUpIdx: index("projects_follow_up_idx").on(table.followUpDate),
   }),
 );
+
+export type BillingMilestoneType = "acompte" | "intermediaire" | "solde";
+export type BillingMilestoneStatus = "todo" | "invoiced" | "paid";
+
+export type BillingMilestone = {
+  id: string;
+  type: BillingMilestoneType;
+  label: string;
+  /** % du montant projet — null si saisie en € absolus. */
+  percent: number | null;
+  amountHt: number;
+  vatRate: number;
+  status: BillingMilestoneStatus;
+  dougsInvoiceId: string | null;
+  dougsInvoiceReference: string | null;
+  invoicedAt: string | null;
+  paidAt: string | null;
+};
 
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;

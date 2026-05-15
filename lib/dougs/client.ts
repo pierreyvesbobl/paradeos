@@ -58,6 +58,12 @@ async function touchUsed(userId: string): Promise<void> {
  * Wrapper fetch authentifié. `pathTemplate` peut contenir
  * `{companyId}` qui sera substitué automatiquement.
  */
+// User-Agent crédible (Chrome stable). Dougs filtre probablement les
+// requêtes sans UA navigateur — sinon les fetch Node.js arrivent avec
+// `node-fetch/x.y` qui peut être rejeté comme bot.
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
 async function dougsFetch(
   userId: string,
   pathTemplate: string,
@@ -70,24 +76,48 @@ async function dougsFetch(
     );
   }
   const path = pathTemplate.replace("{companyId}", session.companyId);
+  const method = init?.method ?? "GET";
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      Accept: "application/json, text/plain, */*",
+      "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+      "Accept-Encoding": "gzip, deflate, br",
+      "User-Agent": BROWSER_UA,
+      Origin: BASE,
+      Referer: `${BASE}/app/`,
+      // Headers qu'un Chrome récent envoie automatiquement — utile pour
+      // passer le bot management Cloudflare devant app.dougs.fr.
+      "Sec-Fetch-Site": "same-origin",
+      "Sec-Fetch-Mode": "cors",
+      "Sec-Fetch-Dest": "empty",
+      "Sec-Ch-Ua": '"Chromium";v="131", "Not_A Brand";v="24", "Google Chrome";v="131"',
+      "Sec-Ch-Ua-Mobile": "?0",
+      "Sec-Ch-Ua-Platform": '"macOS"',
       ...(init?.headers ?? {}),
       Cookie: session.cookie,
     },
   });
   if (res.status === 401 || res.status === 403) {
+    // En dev local, Cloudflare devant app.dougs.fr refuse souvent nos
+    // fetch (fingerprint TLS Node ≠ Chrome) même avec un cookie valide.
+    // Vérif rapide : ouvre la console sur app.dougs.fr et lance le même
+    // fetch — si ça passe en navigateur mais 401 ici, c'est le local.
+    // En prod Vercel le fingerprint est différent et ça passe.
+    const body = await res.text().catch(() => "");
+    console.error(`[dougs auth] ${method} ${path} → ${res.status}`, body.slice(0, 500));
     throw new DougsAuthError(
-      "Cookie Dougs expiré ou invalide. Va dans /settings/integrations le rafraîchir.",
+      `Dougs ${res.status} ${
+        body ? `(${body.slice(0, 200)})` : ""
+      } — en dev local, c'est Cloudflare qui bloque le fingerprint TLS ; déploie sur Vercel pour tester réellement. Sinon, rafraîchis le cookie dans /settings/integrations.`,
     );
   }
   if (!res.ok) {
     const body = await res.text();
-    console.error(`[dougs] ${init?.method ?? "GET"} ${path} → ${res.status}`, body.slice(0, 500));
+    console.error(`[dougs] ${method} ${path} → ${res.status}`, body.slice(0, 500));
     throw new DougsApiError(
-      `Dougs ${res.status} ${res.statusText} (${init?.method ?? "GET"} ${path})`,
+      `Dougs ${res.status} ${res.statusText} (${method} ${path})`,
       res.status,
       body.slice(0, 500),
     );
@@ -185,4 +215,72 @@ export async function getDougsDraftUrl(userId: string, draftId: string): Promise
   const session = await loadSession(userId);
   if (!session) throw new DougsAuthError("Pas de session Dougs.");
   return `${BASE}/app/c/${session.companyId}/invoicing/sales-invoices/${draftId}`;
+}
+
+// ---------- Devis (quotes) ----------
+
+export type DougsQuoteDraft = {
+  id: string;
+  reference: string;
+  status: string;
+  numberPrefix?: string;
+  number?: number;
+  // ... autres champs auto-remplis (invoicerOthers, legalData, dates, etc.)
+  [key: string]: unknown;
+};
+
+/**
+ * Crée un brouillon de devis vide. Référence auto (`numberPrefix` +
+ * `number`), date du jour, expiration 30j, données légales pré-remplies.
+ */
+export async function createDougsQuoteDraft(userId: string): Promise<DougsQuoteDraft> {
+  const res = await dougsFetch(userId, "/companies/{companyId}/invoicing/quote-drafts", {
+    method: "POST",
+    body: "{}",
+  });
+  return res.json();
+}
+
+/**
+ * GET du brouillon courant — utile pour récupérer les champs auto-remplis
+ * (invoicerOthers, legalData) avant un PUT, sans les écraser.
+ */
+export async function getDougsQuoteDraft(
+  userId: string,
+  draftId: string,
+): Promise<DougsQuoteDraft> {
+  const res = await dougsFetch(userId, `/companies/{companyId}/invoicing/quote-drafts/${draftId}`);
+  return res.json();
+}
+
+/**
+ * Update d'un devis via PUT sur la ressource stable `/invoicing/quotes/{id}`
+ * (et non `/quote-drafts/{id}`, qui ne sert qu'à la création/finalize).
+ * Le payload doit contenir tous les champs : spread du draft renvoyé par
+ * `getDougsQuoteDraft` puis overwrite clientData / lines / subject /
+ * thankYouNote. Les totaux sont recalculés côté serveur.
+ */
+export async function updateDougsQuote(
+  userId: string,
+  quoteId: string,
+  payload: Record<string, unknown>,
+): Promise<DougsQuoteDraft> {
+  const res = await dougsFetch(userId, `/companies/{companyId}/invoicing/quotes/${quoteId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+export async function deleteDougsQuoteDraft(userId: string, draftId: string): Promise<void> {
+  await dougsFetch(userId, `/companies/{companyId}/invoicing/quote-drafts/${draftId}`, {
+    method: "DELETE",
+  });
+}
+
+/** URL du devis (draft ou finalisé) dans l'UI Dougs. */
+export async function getDougsQuoteUrl(userId: string, quoteId: string): Promise<string> {
+  const session = await loadSession(userId);
+  if (!session) throw new DougsAuthError("Pas de session Dougs.");
+  return `${BASE}/app/c/${session.companyId}/invoicing/quotes/${quoteId}`;
 }

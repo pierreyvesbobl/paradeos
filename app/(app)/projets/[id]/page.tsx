@@ -35,6 +35,8 @@ import { asc, eq } from "drizzle-orm";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BillingMilestonesSection } from "./billing-milestones-section";
+import { DougsQuoteSection } from "./dougs-quote-section";
 import {
   ProjBilling,
   ProjBudget,
@@ -314,6 +316,30 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     </div>
   );
 
+  const billingContent =
+    project.kind === "client" ? (
+      <div className="grid gap-6 lg:grid-cols-2">
+        <SidebarSection title="Devis Dougs">
+          <DougsQuoteSection
+            projectId={id}
+            defaultUnitAmount={Number(project.valueAmount ?? project.budgetAmount ?? 0)}
+            defaultTitle={project.name}
+            dougsQuoteId={project.dougsQuoteId}
+            dougsQuoteReference={project.dougsQuoteReference}
+            dougsQuoteStatus={project.dougsQuoteStatus}
+            dougsQuotePushedAt={project.dougsQuotePushedAt?.toISOString() ?? null}
+          />
+        </SidebarSection>
+        <SidebarSection title="Jalons de facturation">
+          <BillingMilestonesSection
+            projectId={id}
+            projectValueHt={Number(project.valueAmount ?? project.budgetAmount ?? 0)}
+            milestones={project.billingMilestones ?? []}
+          />
+        </SidebarSection>
+      </div>
+    ) : null;
+
   const timeContent = (
     <div className="grid gap-6 lg:grid-cols-2">
       <SidebarSection title="Temps passé">
@@ -495,6 +521,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         notes={notesContent}
         meetings={meetingsContent}
         files={filesContent}
+        billing={billingContent}
         time={timeContent}
       />
     </div>
