@@ -12,6 +12,14 @@ import { resolveToken } from "@/lib/db/queries/api-tokens";
 import { type NextRequest, NextResponse } from "next/server";
 
 import {
+  pushCoworkingInvoiceMcp,
+  pushCoworkingInvoiceMcpSchema,
+  pushProjectMilestoneInvoice,
+  pushProjectMilestoneInvoiceSchema,
+  pushProjectQuote,
+  pushProjectQuoteSchema,
+} from "./_dougs-handlers";
+import {
   PROMPTS,
   RESOURCE_TEMPLATES,
   addNote,
@@ -145,6 +153,24 @@ const TOOL_REGISTRY: Record<
     description: "Full-text search.",
     schema: searchAllSchema,
     handler: (a) => searchAll(a as never),
+  },
+  push_project_quote: {
+    description:
+      "Pousse un devis sur Dougs depuis un projet Paradeos, stocke le lien atomiquement. Args: projectId, subject?, thankYouNote?, lines[] {title, description?, unit?, quantity, unitAmount, vatRate?}. TVA défaut 0.2.",
+    schema: pushProjectQuoteSchema,
+    handler: (a, ctx) => pushProjectQuote(a as never, ctx as never),
+  },
+  push_project_milestone_invoice: {
+    description:
+      "Crée une facture Dougs depuis un jalon de projet (ou crée le jalon à la volée). Args: projectId, milestoneId? (sinon crée), type? acompte|intermediaire|solde, percent? 0-150, amountHt?, label?.",
+    schema: pushProjectMilestoneInvoiceSchema,
+    handler: (a, ctx) => pushProjectMilestoneInvoice(a as never, ctx as never),
+  },
+  push_coworking_invoice: {
+    description:
+      "Pousse une facture coworking existante sur Dougs (brouillon). Args: coworkingInvoiceId.",
+    schema: pushCoworkingInvoiceMcpSchema,
+    handler: (a, ctx) => pushCoworkingInvoiceMcp(a as never, ctx as never),
   },
 };
 
