@@ -196,7 +196,7 @@ export function DougsSection({
               Token créé — copie ces deux valeurs dans la popup de l'extension.
             </p>
             <div>
-              <p className="text-muted-foreground text-[11px]">Endpoint :</p>
+              <p className="text-[11px] text-muted-foreground">Endpoint :</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 break-all rounded bg-muted/60 p-1.5 font-mono text-[11px]">
                   {syncEndpoint}
@@ -213,7 +213,7 @@ export function DougsSection({
               </div>
             </div>
             <div>
-              <p className="text-muted-foreground text-[11px]">Token (affiché une seule fois) :</p>
+              <p className="text-[11px] text-muted-foreground">Token (affiché une seule fois) :</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 break-all rounded bg-muted/60 p-1.5 font-mono text-[11px]">
                   {createdToken}

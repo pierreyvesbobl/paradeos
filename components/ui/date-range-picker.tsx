@@ -234,7 +234,7 @@ export function DateRangePicker({
             ))}
           </div>
         ) : null}
-        <div className="w-[260px] p-2 select-none">
+        <div className="w-[260px] select-none p-2">
           <header className="flex items-center justify-between px-1.5 pb-2">
             <span className="font-medium text-foreground text-sm capitalize">
               {FMT_MONTH_YEAR.format(month)}
@@ -334,8 +334,8 @@ function MonthGrid({
               // Range middle : bg léger, pas de border-radius (continuité)
               inRange && !isStart && !isEnd && "bg-primary/15",
               // Start/End : bg plein, rounded côté extérieur seulement
-              isStart && !isSingle && "bg-primary/15 rounded-l-md",
-              isEnd && !isSingle && "bg-primary/15 rounded-r-md",
+              isStart && !isSingle && "rounded-l-md bg-primary/15",
+              isEnd && !isSingle && "rounded-r-md bg-primary/15",
             )}
           >
             <span

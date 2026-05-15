@@ -63,10 +63,7 @@ async function sync() {
 
     const { cookieString, count, names, hasAuthSession } = await getDougsCookieString();
     if (count === 0) {
-      showStatus(
-        "Aucun cookie pour app.dougs.fr. Connecte-toi sur app.dougs.fr d'abord.",
-        "err",
-      );
+      showStatus("Aucun cookie pour app.dougs.fr. Connecte-toi sur app.dougs.fr d'abord.", "err");
       return;
     }
     if (!hasAuthSession) {
@@ -102,10 +99,7 @@ async function sync() {
         "ok",
       );
     } else {
-      showStatus(
-        `✗ HTTP ${res.status} : ${body.error || "erreur inconnue"}`,
-        "err",
-      );
+      showStatus(`✗ HTTP ${res.status} : ${body.error || "erreur inconnue"}`, "err");
     }
   } catch (err) {
     showStatus(`✗ Erreur : ${err.message || err}`, "err");
