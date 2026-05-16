@@ -111,7 +111,7 @@ export default async function ReconciliationPage() {
                   <li key={s.dougs.id} className="space-y-2 px-6 py-4 text-sm">
                     <div className="flex flex-wrap items-baseline gap-2">
                       <a
-                        href={`https://app.dougs.fr/app/c/107610/invoicing/quotes/${s.dougs.id}`}
+                        href={`https://app.dougs.fr/app/c/107610/invoicing/quote?status=pending&quoteId=${s.dougs.id}`}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 font-mono text-xs hover:underline"
@@ -192,7 +192,7 @@ export default async function ReconciliationPage() {
                   <li key={s.dougs.id} className="space-y-2 px-6 py-4 text-sm">
                     <div className="flex flex-wrap items-baseline gap-2">
                       <a
-                        href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoices/${s.dougs.id}`}
+                        href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoice?status=${s.dougs.paidAt ? "paid" : "waiting"}&salesInvoiceId=${s.dougs.id}`}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 font-mono text-xs hover:underline"

@@ -53,7 +53,7 @@ export function BillingSummary({
         <h3 className="font-medium text-sm">Synthèse facturation</h3>
         {fromDougs && dougsQuoteId ? (
           <Link
-            href={`https://app.dougs.fr/app/c/107610/invoicing/quotes/${dougsQuoteId}`}
+            href={`https://app.dougs.fr/app/c/107610/invoicing/quote?status=pending&quoteId=${dougsQuoteId}`}
             target="_blank"
             className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[10px] text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
             title="Source : devis Dougs"

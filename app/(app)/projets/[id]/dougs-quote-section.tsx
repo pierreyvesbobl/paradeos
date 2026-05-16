@@ -100,7 +100,7 @@ export function DougsQuoteSection({
             <div className="flex flex-wrap items-center gap-2">
               <FileText className="size-4 text-muted-foreground" />
               <a
-                href={`https://app.dougs.fr/app/c/107610/invoicing/quotes/${dougsQuoteId}`}
+                href={`https://app.dougs.fr/app/c/107610/invoicing/quote?status=pending&quoteId=${dougsQuoteId}`}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 font-mono text-sm hover:underline"

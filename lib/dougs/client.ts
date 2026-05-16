@@ -178,11 +178,40 @@ export async function deleteDougsSalesInvoiceDraft(userId: string, draftId: stri
   });
 }
 
+/**
+ * URL de la facture dans l'UI Dougs. Pattern Angular Dougs (vérifié
+ * 2026-05) : query params, pas path segments. `salesInvoiceId` ouvre
+ * la modal de détail ; `status` détermine quel onglet est actif quand
+ * l'utilisateur ferme la modal (waiting / paid / late / draft).
+ */
+export function buildDougsInvoiceUrl(
+  companyId: string,
+  invoiceId: string,
+  opts: { status?: "waiting" | "paid" | "late" | "draft" | null } = {},
+): string {
+  const status = opts.status ?? "waiting";
+  return `${BASE}/app/c/${companyId}/invoicing/sales-invoice?status=${status}&salesInvoiceId=${invoiceId}`;
+}
+
+/**
+ * URL du devis dans l'UI Dougs. Pattern symétrique aux factures de
+ * vente. Pour l'instant on suppose `quoteId` + `status` (draft /
+ * pending / accepted / refused).
+ */
+export function buildDougsQuoteUrl(
+  companyId: string,
+  quoteId: string,
+  opts: { status?: "draft" | "pending" | "accepted" | "refused" | null } = {},
+): string {
+  const status = opts.status ?? "pending";
+  return `${BASE}/app/c/${companyId}/invoicing/quote?status=${status}&quoteId=${quoteId}`;
+}
+
 /** URL du brouillon dans l'UI Dougs (pour pop-up "voir sur Dougs"). */
 export async function getDougsDraftUrl(userId: string, draftId: string): Promise<string> {
   const session = await loadSession(userId);
   if (!session) throw new DougsAuthError("Pas de session Dougs.");
-  return `${BASE}/app/c/${session.companyId}/invoicing/sales-invoices/${draftId}`;
+  return buildDougsInvoiceUrl(session.companyId, draftId, { status: "draft" });
 }
 
 /**
@@ -284,7 +313,7 @@ export async function deleteDougsQuoteDraft(userId: string, draftId: string): Pr
 export async function getDougsQuoteUrl(userId: string, quoteId: string): Promise<string> {
   const session = await loadSession(userId);
   if (!session) throw new DougsAuthError("Pas de session Dougs.");
-  return `${BASE}/app/c/${session.companyId}/invoicing/quotes/${quoteId}`;
+  return buildDougsQuoteUrl(session.companyId, quoteId);
 }
 
 /**

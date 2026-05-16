@@ -40,7 +40,8 @@ export default async function InvoiceDetailPage({ params }: { params: Params }) 
       .where(eq(dougsSessions.userId, user.id))
       .limit(1);
     if (session) {
-      dougsUrl = `https://app.dougs.fr/app/c/${session.companyId}/invoicing/sales-invoices/${invoice.dougsInvoiceId}`;
+      const status = invoice.status === "payee" ? "paid" : "waiting";
+      dougsUrl = `https://app.dougs.fr/app/c/${session.companyId}/invoicing/sales-invoice?status=${status}&salesInvoiceId=${invoice.dougsInvoiceId}`;
     }
   }
 

@@ -268,7 +268,7 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
                       <>
                         {" · "}
                         <a
-                          href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoices/${m.dougsInvoiceId}`}
+                          href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoice?status=${m.status === "paid" ? "paid" : "waiting"}&salesInvoiceId=${m.dougsInvoiceId}`}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-0.5 font-mono hover:underline"
@@ -333,7 +333,7 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
                         title="Ouvrir sur Dougs"
                       >
                         <a
-                          href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoices/${m.dougsInvoiceId}`}
+                          href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoice?status=${m.status === "paid" ? "paid" : "waiting"}&salesInvoiceId=${m.dougsInvoiceId}`}
                           target="_blank"
                           rel="noreferrer"
                         >
