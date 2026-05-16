@@ -4,7 +4,14 @@ import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
 import { type BillingMilestone, projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
-import { listDougsQuotes, listDougsSalesInvoices } from "@/lib/dougs/client";
+import {
+  type DougsQuote,
+  type DougsSalesInvoice,
+  getDougsQuote,
+  getDougsSalesInvoice,
+  listDougsQuotes,
+  listDougsSalesInvoices,
+} from "@/lib/dougs/client";
 import {
   type MatchScore,
   scoreMatch,
@@ -88,7 +95,23 @@ export async function getQuoteSuggestions(userId: string): Promise<QuoteSuggesti
   const linkedQuoteIds = new Set(
     allClientProjects.map((p) => p.dougsQuoteId).filter((x): x is string => !!x),
   );
-  const unlinkedQuotes = dougsQuotes.filter((q) => !linkedQuoteIds.has(q.id));
+  const unlinkedQuotesList = dougsQuotes.filter((q) => !linkedQuoteIds.has(q.id));
+
+  // Enrichissement : le endpoint /quotes (liste) ne renvoie pas
+  // clientData ni les totaux complets. On fetch chaque devis individu-
+  // ellement pour avoir le détail. Cappé à 50 entrées pour éviter de
+  // saturer Dougs sur une grosse base.
+  const enrichedQuotes: (DougsQuote & { id: string })[] = await Promise.all(
+    unlinkedQuotesList.slice(0, 50).map(async (q) => {
+      try {
+        const detail = await getDougsQuote(userId, q.id);
+        return { ...q, ...detail, id: q.id } as DougsQuote & { id: string };
+      } catch {
+        return { ...q, id: q.id } as DougsQuote & { id: string };
+      }
+    }),
+  );
+  const unlinkedQuotes = enrichedQuotes;
 
   // 3. Pour chaque devis Dougs non lié, calcule top 3 candidats Paradeos.
   const out: QuoteSuggestion[] = [];
@@ -277,7 +300,21 @@ export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSugg
   for (const c of coworkingCandidates) {
     if (c.dougsInvoiceId) linkedInvoiceIds.add(c.dougsInvoiceId);
   }
-  const unlinkedInvoices = dougsInvoices.filter((i) => !linkedInvoiceIds.has(i.id));
+  const unlinkedInvoicesList = dougsInvoices.filter((i) => !linkedInvoiceIds.has(i.id));
+
+  // Enrichissement (cf. quotes plus haut) : le endpoint liste ne renvoie
+  // pas clientData ni les totaux complets. Fetch chaque facture en
+  // détail. Cappé à 50.
+  const unlinkedInvoices: (DougsSalesInvoice & { id: string })[] = await Promise.all(
+    unlinkedInvoicesList.slice(0, 50).map(async (i) => {
+      try {
+        const detail = await getDougsSalesInvoice(userId, i.id);
+        return { ...i, ...detail, id: i.id } as DougsSalesInvoice & { id: string };
+      } catch {
+        return { ...i, id: i.id } as DougsSalesInvoice & { id: string };
+      }
+    }),
+  );
 
   // 3. Pour chaque facture Dougs non liée, score contre jalons + coworking.
   const out: InvoiceSuggestion[] = [];

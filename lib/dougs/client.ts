@@ -200,6 +200,13 @@ export type DougsSalesInvoice = {
   totalAmountWithVat?: number;
   issuedAt?: string | null;
   paidAt?: string | null;
+  createdAt?: string | null;
+  clientData?: {
+    legalName?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    siren?: string | null;
+  } | null;
   [key: string]: unknown;
 };
 
@@ -294,6 +301,13 @@ export type DougsQuote = {
   totalVatAmount?: number;
   totalAmountWithVat?: number;
   issuedAt?: string | null;
+  createdAt?: string | null;
+  clientData?: {
+    legalName?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    siren?: string | null;
+  } | null;
   [key: string]: unknown;
 };
 
