@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { z } from "zod";
 import { contacts as contactsTable } from "../../../db/schema/contacts";
 import { coworkingContracts, coworkingInvoices } from "../../../db/schema/coworking";
 import { entities as entitiesTable } from "../../../db/schema/entities";
@@ -15,8 +17,6 @@ import {
   updateDougsQuote,
   updateDougsSalesInvoice,
 } from "../../../lib/dougs/client";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
 
 /**
  * Outils MCP qui orchestrent : push Dougs + stockage du lien Paradeos.

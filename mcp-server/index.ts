@@ -17,6 +17,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
+import {
+  pushCoworkingInvoiceMcp,
+  pushCoworkingInvoiceMcpSchema,
+  pushProjectMilestoneInvoice,
+  pushProjectMilestoneInvoiceSchema,
+  pushProjectQuote,
+  pushProjectQuoteSchema,
+} from "../app/api/mcp/_dougs-handlers";
 import { getStdioContext } from "./context";
 import { closeDb } from "./db";
 import { PROMPTS, getPromptMessages } from "./prompts";
@@ -78,14 +86,6 @@ import {
   updateProject,
   updateProjectSchema,
 } from "./tools";
-import {
-  pushCoworkingInvoiceMcp,
-  pushCoworkingInvoiceMcpSchema,
-  pushProjectMilestoneInvoice,
-  pushProjectMilestoneInvoiceSchema,
-  pushProjectQuote,
-  pushProjectQuoteSchema,
-} from "../app/api/mcp/_dougs-handlers";
 
 // Si lancé en standalone (pas via Next), charge .env.local pour récupérer
 // DATABASE_URL et autres. On skippe quand Claude Desktop a déjà injecté
@@ -291,9 +291,7 @@ server.tool(
   "Crée un devis Dougs depuis un projet Paradeos, stocke le lien atomiquement. Args : projectId, subject?, thankYouNote?, lines[] {title, description?, unit?, quantity, unitAmount, vatRate?}. TVA défaut 0.2. Demande confirmation user avant d'invoquer (création externe sur Dougs).",
   pushProjectQuoteSchema.shape,
   async (args) => ({
-    content: [
-      { type: "text", text: JSON.stringify(await pushProjectQuote(args, ctx), null, 2) },
-    ],
+    content: [{ type: "text", text: JSON.stringify(await pushProjectQuote(args, ctx), null, 2) }],
   }),
 );
 
