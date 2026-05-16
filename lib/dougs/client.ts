@@ -243,9 +243,22 @@ export async function getDougsSalesInvoice(
   userId: string,
   invoiceId: string,
 ): Promise<DougsSalesInvoice> {
-  // Endpoint stable (couvre draft + finalisé).
-  const res = await dougsFetch(userId, `/companies/{companyId}/sales-invoices/${invoiceId}`);
-  return res.json();
+  // Tente d'abord l'endpoint des factures finalisées. Si 404 (drafts
+  // ne sont pas accessibles via /sales-invoices/{id}), on retombe sur
+  // /sales-invoices-drafts/{id}.
+  try {
+    const res = await dougsFetch(userId, `/companies/{companyId}/sales-invoices/${invoiceId}`);
+    return res.json();
+  } catch (err) {
+    if (err instanceof DougsApiError && err.status === 404) {
+      const res = await dougsFetch(
+        userId,
+        `/companies/{companyId}/sales-invoices-drafts/${invoiceId}`,
+      );
+      return res.json();
+    }
+    throw err;
+  }
 }
 
 // ---------- Devis (quotes) ----------
@@ -341,8 +354,20 @@ export type DougsQuote = {
 };
 
 export async function getDougsQuote(userId: string, quoteId: string): Promise<DougsQuote> {
-  const res = await dougsFetch(userId, `/companies/{companyId}/invoicing/quotes/${quoteId}`);
-  return res.json();
+  // Fallback drafts si 404 sur l'endpoint stable (idem sales-invoices).
+  try {
+    const res = await dougsFetch(userId, `/companies/{companyId}/invoicing/quotes/${quoteId}`);
+    return res.json();
+  } catch (err) {
+    if (err instanceof DougsApiError && err.status === 404) {
+      const res = await dougsFetch(
+        userId,
+        `/companies/{companyId}/invoicing/quote-drafts/${quoteId}`,
+      );
+      return res.json();
+    }
+    throw err;
+  }
 }
 
 /**

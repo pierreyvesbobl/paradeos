@@ -1,6 +1,30 @@
 import "server-only";
 
 import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
+
+/**
+ * Map async avec concurrency cap. Évite de saturer Dougs (Cloudflare
+ * rate-limit) avec un Promise.all de 50 GET d'un coup. Conserve l'ordre
+ * du tableau d'entrée.
+ */
+async function pMap<T, R>(
+  items: T[],
+  fn: (item: T, index: number) => Promise<R>,
+  concurrency = 5,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      const item = items[i];
+      if (item === undefined) continue;
+      results[i] = await fn(item, i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
+}
 import { entities } from "@/db/schema/entities";
 import { type BillingMilestone, projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
@@ -101,15 +125,21 @@ export async function getQuoteSuggestions(userId: string): Promise<QuoteSuggesti
   // clientData ni les totaux complets. On fetch chaque devis individu-
   // ellement pour avoir le détail. Cappé à 50 entrées pour éviter de
   // saturer Dougs sur une grosse base.
-  const enrichedQuotes: (DougsQuote & { id: string })[] = await Promise.all(
-    unlinkedQuotesList.slice(0, 50).map(async (q) => {
+  const enrichedQuotes: (DougsQuote & { id: string })[] = await pMap(
+    unlinkedQuotesList.slice(0, 50),
+    async (q) => {
       try {
         const detail = await getDougsQuote(userId, q.id);
         return { ...q, ...detail, id: q.id } as DougsQuote & { id: string };
-      } catch {
+      } catch (err) {
+        console.warn(
+          `[rapprochement] enrich quote ${q.id} failed:`,
+          err instanceof Error ? err.message : err,
+        );
         return { ...q, id: q.id } as DougsQuote & { id: string };
       }
-    }),
+    },
+    5,
   );
   const unlinkedQuotes = enrichedQuotes;
 
@@ -305,15 +335,21 @@ export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSugg
   // Enrichissement (cf. quotes plus haut) : le endpoint liste ne renvoie
   // pas clientData ni les totaux complets. Fetch chaque facture en
   // détail. Cappé à 50.
-  const unlinkedInvoices: (DougsSalesInvoice & { id: string })[] = await Promise.all(
-    unlinkedInvoicesList.slice(0, 50).map(async (i) => {
+  const unlinkedInvoices: (DougsSalesInvoice & { id: string })[] = await pMap(
+    unlinkedInvoicesList.slice(0, 50),
+    async (i) => {
       try {
         const detail = await getDougsSalesInvoice(userId, i.id);
         return { ...i, ...detail, id: i.id } as DougsSalesInvoice & { id: string };
-      } catch {
+      } catch (err) {
+        console.warn(
+          `[rapprochement] enrich invoice ${i.id} failed:`,
+          err instanceof Error ? err.message : err,
+        );
         return { ...i, id: i.id } as DougsSalesInvoice & { id: string };
       }
-    }),
+    },
+    5,
   );
 
   // 3. Pour chaque facture Dougs non liée, score contre jalons + coworking.
