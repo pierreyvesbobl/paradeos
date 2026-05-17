@@ -244,11 +244,16 @@ export type InvoiceSuggestion = {
     clientName: string;
     createdAt: string | null;
     paidAt: string | null;
+    /** Présent uniquement en mode debug — payload brut Dougs. */
+    debugRaw?: unknown;
   };
   candidates: InvoiceCandidate[];
 };
 
-export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSuggestion[]> {
+export async function getInvoiceSuggestions(
+  userId: string,
+  opts: { debug?: boolean } = {},
+): Promise<InvoiceSuggestion[]> {
   console.info("[rapprochement] getInvoiceSuggestions start");
   const conn = await db();
 
@@ -360,9 +365,7 @@ export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSugg
     },
     5,
   );
-  console.info(
-    `[rapprochement] invoice enrichment: ${enrichSuccess} success, ${enrichFail} fail`,
-  );
+  console.info(`[rapprochement] invoice enrichment: ${enrichSuccess} success, ${enrichFail} fail`);
 
   // 3. Pour chaque facture Dougs non liée, score contre jalons + coworking.
   const out: InvoiceSuggestion[] = [];
@@ -479,6 +482,10 @@ export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSugg
       .sort((a, b) => b.score.total - a.score.total)
       .slice(0, 4);
 
+    const isProblematic =
+      typeof inv.totalNetAmount !== "number" &&
+      typeof inv.totalAmountWithVat !== "number" &&
+      !inv.clientData;
     out.push({
       dougs: {
         id: inv.id,
@@ -489,6 +496,7 @@ export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSugg
         clientName: dougsName(inv.clientData),
         createdAt: inv.createdAt ?? null,
         paidAt: inv.paidAt ?? null,
+        debugRaw: opts.debug && isProblematic ? inv : undefined,
       },
       candidates: all,
     });

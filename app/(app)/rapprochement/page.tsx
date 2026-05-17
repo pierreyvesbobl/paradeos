@@ -32,7 +32,11 @@ function scoreTone(score: number): string {
   return "border-slate-300 bg-slate-50 text-slate-600";
 }
 
-export default async function ReconciliationPage() {
+type SearchParams = Promise<{ debug?: string }>;
+
+export default async function ReconciliationPage({ searchParams }: { searchParams: SearchParams }) {
+  const { debug } = await searchParams;
+  const debugMode = debug === "1" || debug === "true";
   const user = await requireUser();
   const conn = await db();
 
@@ -64,7 +68,7 @@ export default async function ReconciliationPage() {
   try {
     [quoteSuggestions, invoiceSuggestions] = await Promise.all([
       getQuoteSuggestions(user.id),
-      getInvoiceSuggestions(user.id),
+      getInvoiceSuggestions(user.id, { debug: debugMode }),
     ]);
   } catch (err) {
     if (err instanceof DougsAuthError) {
@@ -218,6 +222,17 @@ export default async function ReconciliationPage() {
                         </span>
                       ) : null}
                     </div>
+
+                    {s.dougs.debugRaw ? (
+                      <details className="rounded-md border border-amber-300 bg-amber-50 p-2 text-[10px]">
+                        <summary className="cursor-pointer font-medium text-amber-900">
+                          🐞 Raw Dougs payload (cliquez pour ouvrir)
+                        </summary>
+                        <pre className="mt-2 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-amber-950">
+                          {JSON.stringify(s.dougs.debugRaw, null, 2)}
+                        </pre>
+                      </details>
+                    ) : null}
 
                     {s.candidates.length === 0 ? (
                       <p className="text-[11px] text-muted-foreground italic">
