@@ -207,6 +207,75 @@ export function buildDougsQuoteUrl(
   return `${BASE}/app/c/${companyId}/invoicing/quote?status=${status}&quoteId=${quoteId}`;
 }
 
+/**
+ * Helpers de lecture tolérants aux deux schémas Dougs :
+ * - "détail" Angular (édition) : totalNetAmount / totalAmountWithVat /
+ *   totalVatAmount / clientData.legalName / status
+ * - "liste compacte" : netAmount / amount / vatAmount / clientData.name
+ *   (ou clientName en racine) / paymentStatus
+ *
+ * Le détail endpoint /sales-invoices/{id} renvoie parfois le format
+ * compact aussi (vérifié 2026-05). Donc on doit toujours lire les deux.
+ */
+type DougsPayloadAny = {
+  totalNetAmount?: number;
+  totalAmountWithVat?: number;
+  totalVatAmount?: number;
+  netAmount?: unknown;
+  amount?: unknown;
+  vatAmount?: unknown;
+  paidAt?: string | null;
+  issuedAt?: string | null;
+  date?: string | null;
+  status?: string | null;
+  paymentStatus?: string | null;
+  clientName?: string | null;
+  clientData?: {
+    legalName?: string | null;
+    name?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    siren?: string | null;
+  } | null;
+  [key: string]: unknown;
+};
+
+export function pickDougsHt(o: DougsPayloadAny): number | null {
+  if (typeof o.totalNetAmount === "number") return o.totalNetAmount;
+  if (typeof o.netAmount === "number") return o.netAmount;
+  return null;
+}
+
+export function pickDougsTtc(o: DougsPayloadAny): number | null {
+  if (typeof o.totalAmountWithVat === "number") return o.totalAmountWithVat;
+  if (typeof o.amount === "number") return o.amount;
+  return null;
+}
+
+export function pickDougsVat(o: DougsPayloadAny): number | null {
+  if (typeof o.totalVatAmount === "number") return o.totalVatAmount;
+  if (typeof o.vatAmount === "number") return o.vatAmount;
+  return null;
+}
+
+export function pickDougsPaidAt(o: DougsPayloadAny): string | null {
+  return o.paidAt ?? null;
+}
+
+export function pickDougsIssuedAt(o: DougsPayloadAny): string | null {
+  return o.issuedAt ?? o.date ?? null;
+}
+
+export function pickDougsStatus(o: DougsPayloadAny): string | null {
+  return o.status ?? o.paymentStatus ?? null;
+}
+
+export function pickDougsClientName(o: DougsPayloadAny): string | null {
+  const c = o.clientData;
+  const fromObj = c?.legalName ?? c?.name ?? `${c?.firstName ?? ""} ${c?.lastName ?? ""}`.trim();
+  return (fromObj || o.clientName || null) as string | null;
+}
+
 /** URL du brouillon dans l'UI Dougs (pour pop-up "voir sur Dougs"). */
 export async function getDougsDraftUrl(userId: string, draftId: string): Promise<string> {
   const session = await loadSession(userId);

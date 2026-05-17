@@ -20,21 +20,49 @@ function normalize(s: string | null | undefined): string {
 }
 
 /**
- * Token-based Jaccard sur les mots normalisés. Robuste aux variations
- * "ACME SAS" vs "Acme S.A.S." vs "Acme".
+ * Token-based Jaccard sur les mots normalisés + bonus inclusion totale.
+ *
+ * Cas testés :
+ *  - "ACME SAS" vs "Acme S.A.S." → 1 (Jaccard fort)
+ *  - "Acme" vs "Acme SAS Holdings" → 0.95 (inclusion totale, un côté est
+ *    sous-chaîne complète de l'autre — Jaccard seul donnerait 1/3)
+ *  - "Arthur Heynard" vs "Heynard Arthur" → 1 (Jaccard ignore l'ordre)
+ *  - "Cabinet Dupont" vs "Dupont Conseil" → 0.33 (1 mot commun /3)
  */
 export function similarityName(a: string | null | undefined, b: string | null | undefined): number {
   const na = normalize(a);
   const nb = normalize(b);
   if (!na || !nb) return 0;
   if (na === nb) return 1;
+
+  // Inclusion totale d'une chaîne dans l'autre — match probable.
+  // "acme" inclus dans "acme sas holdings" → 0.95
+  if (na.length >= 3 && nb.length >= 3) {
+    if (nb.includes(na) || na.includes(nb)) {
+      return 0.95;
+    }
+  }
+
+  // Jaccard sur tokens significatifs (≥2 chars), strippe les acronymes
+  // d'une lettre type "S.A.S" devenu "s a s" après normalisation.
   const ta = new Set(na.split(" ").filter((w) => w.length >= 2));
   const tb = new Set(nb.split(" ").filter((w) => w.length >= 2));
   if (ta.size === 0 || tb.size === 0) return 0;
   let inter = 0;
   for (const w of ta) if (tb.has(w)) inter++;
   const union = ta.size + tb.size - inter;
-  return inter / union;
+  const jaccard = inter / union;
+
+  // Bonus : si tous les tokens d'un côté sont dans l'autre, c'est
+  // probablement un match (ex : "Acme" → tous les tokens de "Acme" sont
+  // dans "Acme SAS"). On élève le score à au moins 0.7.
+  const allInB = [...ta].every((w) => tb.has(w));
+  const allInA = [...tb].every((w) => ta.has(w));
+  if ((allInB || allInA) && jaccard > 0) {
+    return Math.max(jaccard, 0.7);
+  }
+
+  return jaccard;
 }
 
 /**

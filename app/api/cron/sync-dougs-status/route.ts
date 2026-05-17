@@ -12,15 +12,25 @@ import { coworkingInvoices } from "@/db/schema/coworking";
 import { dougsSessions } from "@/db/schema/dougs";
 import { type BillingMilestone, projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
-import { DougsApiError, DougsAuthError } from "@/lib/dougs/client";
-import { getDougsQuote, getDougsSalesInvoice } from "@/lib/dougs/client";
+import {
+  DougsApiError,
+  DougsAuthError,
+  getDougsQuote,
+  getDougsSalesInvoice,
+  pickDougsHt,
+  pickDougsIssuedAt,
+  pickDougsPaidAt,
+  pickDougsStatus,
+  pickDougsTtc,
+  pickDougsVat,
+} from "@/lib/dougs/client";
 import { and, eq, isNotNull, ne, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-function toNumeric(n: number | undefined): string | null {
+function toNumeric(n: number | null | undefined): string | null {
   return typeof n === "number" && Number.isFinite(n) ? n.toFixed(2) : null;
 }
 
@@ -73,11 +83,11 @@ async function syncForUser(userId: string, stats: Stats): Promise<void> {
           .update(projects)
           .set({
             dougsQuoteReference: quote.reference ?? null,
-            dougsQuoteStatus: quote.status ?? null,
-            dougsQuoteTotalHt: toNumeric(quote.totalNetAmount),
-            dougsQuoteTotalVat: toNumeric(quote.totalVatAmount),
-            dougsQuoteTotalTtc: toNumeric(quote.totalAmountWithVat),
-            dougsQuoteIssuedAt: toDate(quote.issuedAt),
+            dougsQuoteStatus: pickDougsStatus(quote),
+            dougsQuoteTotalHt: toNumeric(pickDougsHt(quote)),
+            dougsQuoteTotalVat: toNumeric(pickDougsVat(quote)),
+            dougsQuoteTotalTtc: toNumeric(pickDougsTtc(quote)),
+            dougsQuoteIssuedAt: toDate(pickDougsIssuedAt(quote)),
             dougsQuoteSyncedAt: new Date(),
             updatedAt: new Date(),
           })
@@ -102,18 +112,18 @@ async function syncForUser(userId: string, stats: Stats): Promise<void> {
           const inv = await getDougsSalesInvoice(userId, m.dougsInvoiceId);
           milestonesChanged = true;
           stats.milestonesUpdated++;
+          const paidAt = pickDougsPaidAt(inv);
           updated.push({
             ...m,
             dougsInvoiceReference: inv.reference ?? m.dougsInvoiceReference,
-            dougsStatus: inv.status ?? null,
-            dougsTotalHt: typeof inv.totalNetAmount === "number" ? inv.totalNetAmount : null,
-            dougsTotalVat: typeof inv.totalVatAmount === "number" ? inv.totalVatAmount : null,
-            dougsTotalTtc:
-              typeof inv.totalAmountWithVat === "number" ? inv.totalAmountWithVat : null,
-            dougsIssuedAt: inv.issuedAt ?? null,
+            dougsStatus: pickDougsStatus(inv),
+            dougsTotalHt: pickDougsHt(inv),
+            dougsTotalVat: pickDougsVat(inv),
+            dougsTotalTtc: pickDougsTtc(inv),
+            dougsIssuedAt: pickDougsIssuedAt(inv),
             dougsSyncedAt: new Date().toISOString(),
-            paidAt: inv.paidAt ?? m.paidAt,
-            status: inv.paidAt ? "paid" : m.status,
+            paidAt: paidAt ?? m.paidAt,
+            status: paidAt ? "paid" : m.status,
           });
         } catch (err) {
           const msg = err instanceof Error ? err.message : "unknown";
@@ -149,17 +159,18 @@ async function syncForUser(userId: string, stats: Stats): Promise<void> {
     stats.coworkingChecked++;
     try {
       const inv = await getDougsSalesInvoice(userId, cw.dougsInvoiceId);
-      const localStatus = inv.paidAt && cw.status !== "payee" ? ("payee" as const) : cw.status;
+      const paidAt = pickDougsPaidAt(inv);
+      const localStatus = paidAt && cw.status !== "payee" ? ("payee" as const) : cw.status;
       await conn
         .update(coworkingInvoices)
         .set({
           dougsInvoiceReference: inv.reference ?? null,
-          dougsInvoiceStatus: inv.status ?? null,
-          dougsInvoiceTotalHt: toNumeric(inv.totalNetAmount),
-          dougsInvoiceTotalVat: toNumeric(inv.totalVatAmount),
-          dougsInvoiceTotalTtc: toNumeric(inv.totalAmountWithVat),
-          dougsInvoiceIssuedAt: toDate(inv.issuedAt),
-          dougsInvoicePaidAt: toDate(inv.paidAt),
+          dougsInvoiceStatus: pickDougsStatus(inv),
+          dougsInvoiceTotalHt: toNumeric(pickDougsHt(inv)),
+          dougsInvoiceTotalVat: toNumeric(pickDougsVat(inv)),
+          dougsInvoiceTotalTtc: toNumeric(pickDougsTtc(inv)),
+          dougsInvoiceIssuedAt: toDate(pickDougsIssuedAt(inv)),
+          dougsInvoicePaidAt: toDate(paidAt),
           dougsInvoiceSyncedAt: new Date(),
           status: localStatus,
           updatedAt: new Date(),

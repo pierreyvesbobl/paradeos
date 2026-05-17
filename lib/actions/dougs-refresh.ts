@@ -10,12 +10,18 @@ import {
   DougsAuthError,
   getDougsQuote,
   getDougsSalesInvoice,
+  pickDougsHt,
+  pickDougsIssuedAt,
+  pickDougsPaidAt,
+  pickDougsStatus,
+  pickDougsTtc,
+  pickDougsVat,
 } from "@/lib/dougs/client";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-function toNumeric(n: number | undefined): string | null {
+function toNumeric(n: number | null | undefined): string | null {
   return typeof n === "number" && Number.isFinite(n) ? n.toFixed(2) : null;
 }
 
@@ -76,11 +82,11 @@ export const refreshProjectDougsQuote = action(
       .update(projects)
       .set({
         dougsQuoteReference: quote.reference ?? null,
-        dougsQuoteStatus: quote.status ?? null,
-        dougsQuoteTotalHt: toNumeric(quote.totalNetAmount),
-        dougsQuoteTotalVat: toNumeric(quote.totalVatAmount),
-        dougsQuoteTotalTtc: toNumeric(quote.totalAmountWithVat),
-        dougsQuoteIssuedAt: toDate(quote.issuedAt),
+        dougsQuoteStatus: pickDougsStatus(quote),
+        dougsQuoteTotalHt: toNumeric(pickDougsHt(quote)),
+        dougsQuoteTotalVat: toNumeric(pickDougsVat(quote)),
+        dougsQuoteTotalTtc: toNumeric(pickDougsTtc(quote)),
+        dougsQuoteIssuedAt: toDate(pickDougsIssuedAt(quote)),
         dougsQuoteSyncedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -89,8 +95,8 @@ export const refreshProjectDougsQuote = action(
     revalidatePath(`/projets/${input.projectId}`);
     return {
       reference: quote.reference ?? null,
-      status: quote.status ?? null,
-      totalTtc: quote.totalAmountWithVat ?? null,
+      status: pickDougsStatus(quote),
+      totalTtc: pickDougsTtc(quote),
     };
   },
 );
@@ -129,22 +135,19 @@ export const refreshProjectMilestoneDougsInvoice = action(
       throw err;
     }
 
+    const paidAt = pickDougsPaidAt(invoice);
     const next = [...milestones];
     next[idx] = {
       ...milestone,
       dougsInvoiceReference: invoice.reference ?? milestone.dougsInvoiceReference,
-      dougsStatus: invoice.status ?? null,
-      dougsTotalHt: typeof invoice.totalNetAmount === "number" ? invoice.totalNetAmount : null,
-      dougsTotalVat: typeof invoice.totalVatAmount === "number" ? invoice.totalVatAmount : null,
-      dougsTotalTtc:
-        typeof invoice.totalAmountWithVat === "number" ? invoice.totalAmountWithVat : null,
-      dougsIssuedAt: invoice.issuedAt ?? null,
+      dougsStatus: pickDougsStatus(invoice),
+      dougsTotalHt: pickDougsHt(invoice),
+      dougsTotalVat: pickDougsVat(invoice),
+      dougsTotalTtc: pickDougsTtc(invoice),
+      dougsIssuedAt: pickDougsIssuedAt(invoice),
       dougsSyncedAt: new Date().toISOString(),
-      // Si Dougs a marqué la facture comme payée, on met aussi à jour
-      // notre statut local (paid). Sinon on touche pas — l'humain peut
-      // avoir marqué payé à la main avant que Dougs le sache.
-      paidAt: invoice.paidAt ?? milestone.paidAt,
-      status: invoice.paidAt && milestone.status !== "paid" ? "paid" : milestone.status,
+      paidAt: paidAt ?? milestone.paidAt,
+      status: paidAt && milestone.status !== "paid" ? "paid" : milestone.status,
     };
 
     await conn
@@ -155,8 +158,8 @@ export const refreshProjectMilestoneDougsInvoice = action(
     revalidatePath(`/projets/${input.projectId}`);
     return {
       reference: invoice.reference ?? null,
-      status: invoice.status ?? null,
-      paidAt: invoice.paidAt ?? null,
+      status: pickDougsStatus(invoice),
+      paidAt,
     };
   },
 );
@@ -191,11 +194,11 @@ export const linkProjectDougsQuote = action(
       .set({
         dougsQuoteId: dougsId,
         dougsQuoteReference: quote.reference ?? null,
-        dougsQuoteStatus: quote.status ?? null,
-        dougsQuoteTotalHt: toNumeric(quote.totalNetAmount),
-        dougsQuoteTotalVat: toNumeric(quote.totalVatAmount),
-        dougsQuoteTotalTtc: toNumeric(quote.totalAmountWithVat),
-        dougsQuoteIssuedAt: toDate(quote.issuedAt),
+        dougsQuoteStatus: pickDougsStatus(quote),
+        dougsQuoteTotalHt: toNumeric(pickDougsHt(quote)),
+        dougsQuoteTotalVat: toNumeric(pickDougsVat(quote)),
+        dougsQuoteTotalTtc: toNumeric(pickDougsTtc(quote)),
+        dougsQuoteIssuedAt: toDate(pickDougsIssuedAt(quote)),
         dougsQuotePushedAt: new Date(),
         dougsQuoteSyncedAt: new Date(),
         updatedAt: new Date(),
@@ -205,7 +208,7 @@ export const linkProjectDougsQuote = action(
     revalidatePath(`/projets/${input.projectId}`);
     return {
       reference: quote.reference ?? null,
-      status: quote.status ?? null,
+      status: pickDougsStatus(quote),
     };
   },
 );
@@ -254,7 +257,7 @@ export const linkProjectAsNewMilestone = action(
       .limit(1);
     if (!project) throw new Error("Projet introuvable.");
 
-    const invoiceAmount = invoice.totalNetAmount ?? invoice.totalAmountWithVat ?? 0;
+    const invoiceAmount = pickDougsHt(invoice) ?? pickDougsTtc(invoice) ?? 0;
     if (invoiceAmount <= 0) throw new Error("Montant facture inconnu.");
 
     const projectValueHt = Number(project.valueAmount ?? project.budgetAmount ?? 0);
@@ -292,17 +295,16 @@ export const linkProjectAsNewMilestone = action(
       percent: computedPercent,
       amountHt: Math.round(invoiceAmount * 100) / 100,
       vatRate: 0.2,
-      status: invoice.paidAt ? "paid" : "invoiced",
+      status: pickDougsPaidAt(invoice) ? "paid" : "invoiced",
       dougsInvoiceId: dougsId,
       dougsInvoiceReference: invoice.reference ?? null,
-      invoicedAt: invoice.issuedAt ?? new Date().toISOString(),
-      paidAt: invoice.paidAt ?? null,
-      dougsStatus: invoice.status ?? null,
-      dougsTotalHt: typeof invoice.totalNetAmount === "number" ? invoice.totalNetAmount : null,
-      dougsTotalVat: typeof invoice.totalVatAmount === "number" ? invoice.totalVatAmount : null,
-      dougsTotalTtc:
-        typeof invoice.totalAmountWithVat === "number" ? invoice.totalAmountWithVat : null,
-      dougsIssuedAt: invoice.issuedAt ?? null,
+      invoicedAt: pickDougsIssuedAt(invoice) ?? new Date().toISOString(),
+      paidAt: pickDougsPaidAt(invoice),
+      dougsStatus: pickDougsStatus(invoice),
+      dougsTotalHt: pickDougsHt(invoice),
+      dougsTotalVat: pickDougsVat(invoice),
+      dougsTotalTtc: pickDougsTtc(invoice),
+      dougsIssuedAt: pickDougsIssuedAt(invoice),
       dougsSyncedAt: new Date().toISOString(),
     };
 
@@ -362,16 +364,19 @@ export const linkProjectMilestoneDougsInvoice = action(
       ...milestone,
       dougsInvoiceId: dougsId,
       dougsInvoiceReference: invoice.reference ?? null,
-      dougsStatus: invoice.status ?? null,
-      dougsTotalHt: typeof invoice.totalNetAmount === "number" ? invoice.totalNetAmount : null,
-      dougsTotalVat: typeof invoice.totalVatAmount === "number" ? invoice.totalVatAmount : null,
-      dougsTotalTtc:
-        typeof invoice.totalAmountWithVat === "number" ? invoice.totalAmountWithVat : null,
-      dougsIssuedAt: invoice.issuedAt ?? null,
+      dougsStatus: pickDougsStatus(invoice),
+      dougsTotalHt: pickDougsHt(invoice),
+      dougsTotalVat: pickDougsVat(invoice),
+      dougsTotalTtc: pickDougsTtc(invoice),
+      dougsIssuedAt: pickDougsIssuedAt(invoice),
       dougsSyncedAt: new Date().toISOString(),
       invoicedAt: milestone.invoicedAt ?? new Date().toISOString(),
-      paidAt: invoice.paidAt ?? milestone.paidAt,
-      status: invoice.paidAt ? "paid" : milestone.status === "todo" ? "invoiced" : milestone.status,
+      paidAt: pickDougsPaidAt(invoice) ?? milestone.paidAt,
+      status: pickDougsPaidAt(invoice)
+        ? "paid"
+        : milestone.status === "todo"
+          ? "invoiced"
+          : milestone.status,
     };
 
     await conn
@@ -382,7 +387,7 @@ export const linkProjectMilestoneDougsInvoice = action(
     revalidatePath(`/projets/${input.projectId}`);
     return {
       reference: invoice.reference ?? null,
-      status: invoice.status ?? null,
+      status: pickDougsStatus(invoice),
     };
   },
 );
@@ -416,8 +421,9 @@ export const linkCoworkingInvoiceDougs = action(
       .limit(1);
     if (!row) throw new Error("Facture coworking introuvable.");
 
+    const paidAt = pickDougsPaidAt(invoice);
     const localStatus =
-      invoice.paidAt && row.status !== "payee"
+      paidAt && row.status !== "payee"
         ? ("payee" as const)
         : row.status === "a_facturer"
           ? ("envoyee" as const)
@@ -428,12 +434,12 @@ export const linkCoworkingInvoiceDougs = action(
       .set({
         dougsInvoiceId: dougsId,
         dougsInvoiceReference: invoice.reference ?? null,
-        dougsInvoiceStatus: invoice.status ?? null,
-        dougsInvoiceTotalHt: toNumeric(invoice.totalNetAmount),
-        dougsInvoiceTotalVat: toNumeric(invoice.totalVatAmount),
-        dougsInvoiceTotalTtc: toNumeric(invoice.totalAmountWithVat),
-        dougsInvoiceIssuedAt: toDate(invoice.issuedAt),
-        dougsInvoicePaidAt: toDate(invoice.paidAt),
+        dougsInvoiceStatus: pickDougsStatus(invoice),
+        dougsInvoiceTotalHt: toNumeric(pickDougsHt(invoice)),
+        dougsInvoiceTotalVat: toNumeric(pickDougsVat(invoice)),
+        dougsInvoiceTotalTtc: toNumeric(pickDougsTtc(invoice)),
+        dougsInvoiceIssuedAt: toDate(pickDougsIssuedAt(invoice)),
+        dougsInvoicePaidAt: toDate(paidAt),
         dougsInvoiceSyncedAt: new Date(),
         status: localStatus,
         updatedAt: new Date(),
@@ -444,7 +450,7 @@ export const linkCoworkingInvoiceDougs = action(
     revalidatePath("/coworking");
     return {
       reference: invoice.reference ?? null,
-      status: invoice.status ?? null,
+      status: pickDougsStatus(invoice),
     };
   },
 );
@@ -483,18 +489,19 @@ export const refreshCoworkingInvoiceDougs = action(
     // Si Dougs dit que c'est payé, on aligne le statut local. On garde
     // `envoyee` si Dougs renvoie autre chose qu'un paiement, pour ne pas
     // écraser une décision humaine.
-    const localStatus = invoice.paidAt && row.status !== "payee" ? ("payee" as const) : row.status;
+    const paidAt = pickDougsPaidAt(invoice);
+    const localStatus = paidAt && row.status !== "payee" ? ("payee" as const) : row.status;
 
     await conn
       .update(coworkingInvoices)
       .set({
         dougsInvoiceReference: invoice.reference ?? null,
-        dougsInvoiceStatus: invoice.status ?? null,
-        dougsInvoiceTotalHt: toNumeric(invoice.totalNetAmount),
-        dougsInvoiceTotalVat: toNumeric(invoice.totalVatAmount),
-        dougsInvoiceTotalTtc: toNumeric(invoice.totalAmountWithVat),
-        dougsInvoiceIssuedAt: toDate(invoice.issuedAt),
-        dougsInvoicePaidAt: toDate(invoice.paidAt),
+        dougsInvoiceStatus: pickDougsStatus(invoice),
+        dougsInvoiceTotalHt: toNumeric(pickDougsHt(invoice)),
+        dougsInvoiceTotalVat: toNumeric(pickDougsVat(invoice)),
+        dougsInvoiceTotalTtc: toNumeric(pickDougsTtc(invoice)),
+        dougsInvoiceIssuedAt: toDate(pickDougsIssuedAt(invoice)),
+        dougsInvoicePaidAt: toDate(paidAt),
         dougsInvoiceSyncedAt: new Date(),
         status: localStatus,
         updatedAt: new Date(),
@@ -505,8 +512,8 @@ export const refreshCoworkingInvoiceDougs = action(
     revalidatePath("/coworking");
     return {
       reference: invoice.reference ?? null,
-      status: invoice.status ?? null,
-      paidAt: invoice.paidAt ?? null,
+      status: pickDougsStatus(invoice),
+      paidAt,
     };
   },
 );
@@ -540,11 +547,11 @@ export const refreshAllDougsLinks = action(z.object({}), async ({ user }) => {
           .update(projects)
           .set({
             dougsQuoteReference: quote.reference ?? null,
-            dougsQuoteStatus: quote.status ?? null,
-            dougsQuoteTotalHt: toNumeric(quote.totalNetAmount),
-            dougsQuoteTotalVat: toNumeric(quote.totalVatAmount),
-            dougsQuoteTotalTtc: toNumeric(quote.totalAmountWithVat),
-            dougsQuoteIssuedAt: toDate(quote.issuedAt),
+            dougsQuoteStatus: pickDougsStatus(quote),
+            dougsQuoteTotalHt: toNumeric(pickDougsHt(quote)),
+            dougsQuoteTotalVat: toNumeric(pickDougsVat(quote)),
+            dougsQuoteTotalTtc: toNumeric(pickDougsTtc(quote)),
+            dougsQuoteIssuedAt: toDate(pickDougsIssuedAt(quote)),
             dougsQuoteSyncedAt: new Date(),
             updatedAt: new Date(),
           })
@@ -563,20 +570,20 @@ export const refreshAllDougsLinks = action(z.object({}), async ({ user }) => {
       if (m.dougsInvoiceId && m.status !== "paid") {
         try {
           const inv = await getDougsSalesInvoice(user.id, m.dougsInvoiceId);
+          const paidAt = pickDougsPaidAt(inv);
           milestonesUpdated++;
           changed = true;
           next.push({
             ...m,
             dougsInvoiceReference: inv.reference ?? m.dougsInvoiceReference,
-            dougsStatus: inv.status ?? null,
-            dougsTotalHt: typeof inv.totalNetAmount === "number" ? inv.totalNetAmount : null,
-            dougsTotalVat: typeof inv.totalVatAmount === "number" ? inv.totalVatAmount : null,
-            dougsTotalTtc:
-              typeof inv.totalAmountWithVat === "number" ? inv.totalAmountWithVat : null,
-            dougsIssuedAt: inv.issuedAt ?? null,
+            dougsStatus: pickDougsStatus(inv),
+            dougsTotalHt: pickDougsHt(inv),
+            dougsTotalVat: pickDougsVat(inv),
+            dougsTotalTtc: pickDougsTtc(inv),
+            dougsIssuedAt: pickDougsIssuedAt(inv),
             dougsSyncedAt: new Date().toISOString(),
-            paidAt: inv.paidAt ?? m.paidAt,
-            status: inv.paidAt ? "paid" : m.status,
+            paidAt: paidAt ?? m.paidAt,
+            status: paidAt ? "paid" : m.status,
           });
         } catch (err) {
           if (err instanceof DougsAuthError) throw err;
@@ -607,17 +614,18 @@ export const refreshAllDougsLinks = action(z.object({}), async ({ user }) => {
     if (!cw.dougsInvoiceId || cw.status === "payee") continue;
     try {
       const inv = await getDougsSalesInvoice(user.id, cw.dougsInvoiceId);
-      const localStatus = inv.paidAt ? ("payee" as const) : cw.status;
+      const paidAt = pickDougsPaidAt(inv);
+      const localStatus = paidAt ? ("payee" as const) : cw.status;
       await conn
         .update(coworkingInvoices)
         .set({
           dougsInvoiceReference: inv.reference ?? null,
-          dougsInvoiceStatus: inv.status ?? null,
-          dougsInvoiceTotalHt: toNumeric(inv.totalNetAmount),
-          dougsInvoiceTotalVat: toNumeric(inv.totalVatAmount),
-          dougsInvoiceTotalTtc: toNumeric(inv.totalAmountWithVat),
-          dougsInvoiceIssuedAt: toDate(inv.issuedAt),
-          dougsInvoicePaidAt: toDate(inv.paidAt),
+          dougsInvoiceStatus: pickDougsStatus(inv),
+          dougsInvoiceTotalHt: toNumeric(pickDougsHt(inv)),
+          dougsInvoiceTotalVat: toNumeric(pickDougsVat(inv)),
+          dougsInvoiceTotalTtc: toNumeric(pickDougsTtc(inv)),
+          dougsInvoiceIssuedAt: toDate(pickDougsIssuedAt(inv)),
+          dougsInvoicePaidAt: toDate(paidAt),
           dougsInvoiceSyncedAt: new Date(),
           status: localStatus,
           updatedAt: new Date(),
