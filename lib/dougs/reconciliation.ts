@@ -1,5 +1,6 @@
 import "server-only";
 
+import { contacts } from "@/db/schema/contacts";
 import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
 
 /**
@@ -35,6 +36,7 @@ import {
   getDougsSalesInvoice,
   listDougsQuotes,
   listDougsSalesInvoices,
+  pickDougsClientName,
 } from "@/lib/dougs/client";
 import {
   type MatchScore,
@@ -176,12 +178,13 @@ export async function getQuoteSuggestions(userId: string): Promise<QuoteSuggesti
   const out: QuoteSuggestion[] = [];
   for (const q of unlinkedQuotes) {
     const dougsAmount = pickHt(q) ?? pickTtc(q);
+    const dougsClientName = pickDougsClientName(q);
     const scored = candidates
       .map((c) => {
         const paradeosAmount = Number(c.valueAmount ?? c.budgetAmount ?? 0) || null;
         const score = scoreMatch(
           {
-            legalName: q.clientData?.legalName ?? null,
+            legalName: dougsClientName,
             firstName: q.clientData?.firstName ?? null,
             lastName: q.clientData?.lastName ?? null,
             amount: dougsAmount,
@@ -327,7 +330,9 @@ export async function getInvoiceSuggestions(
     }
   }
 
-  // 1b. Factures coworking sans dougsInvoiceId.
+  // 1b. Factures coworking sans dougsInvoiceId. Join sur le contact
+  // (occupant du poste) pour matcher les factures B2C, où Dougs renvoie
+  // un nom de personne plutôt qu'un nom d'entité.
   const coworkingCandidates = await conn
     .select({
       id: coworkingInvoices.id,
@@ -343,10 +348,13 @@ export async function getInvoiceSuggestions(
       contractName: coworkingContracts.name,
       billToEntityId: coworkingContracts.billToEntityId,
       billToEntityName: entities.name,
+      contactFirstName: contacts.firstName,
+      contactLastName: contacts.lastName,
     })
     .from(coworkingInvoices)
     .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
-    .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId));
+    .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
+    .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId));
 
   const unlinkedCoworking = coworkingCandidates.filter((c) => !c.dougsInvoiceId);
 
@@ -399,6 +407,9 @@ export async function getInvoiceSuggestions(
   const out: InvoiceSuggestion[] = [];
   for (const inv of unlinkedInvoices) {
     const dougsAmount = pickHt(inv) ?? pickTtc(inv);
+    // Nom client Dougs résolu peu importe le schéma (compact / détail).
+    // On le passe via `legalName` à scoreMatch (qui sait le lire en priorité).
+    const dougsClientName = pickDougsClientName(inv);
 
     const milestoneScored: InvoiceCandidate[] = milestoneCandidates
       .map((c) => ({
@@ -411,7 +422,7 @@ export async function getInvoiceSuggestions(
         amountHt: c.milestone.amountHt,
         score: scoreMatch(
           {
-            legalName: inv.clientData?.legalName ?? null,
+            legalName: dougsClientName,
             firstName: inv.clientData?.firstName ?? null,
             lastName: inv.clientData?.lastName ?? null,
             amount: dougsAmount,
@@ -429,23 +440,29 @@ export async function getInvoiceSuggestions(
     const coworkingScored: InvoiceCandidate[] = unlinkedCoworking
       .map((c) => {
         const localAmount = Number(c.unitPriceHt) * c.desks;
+        // Nom client côté Paradeos : entité de facturation (B2B) en
+        // priorité, sinon nom du contact occupant (B2C), sinon nom du
+        // contrat — jamais le nom de la facture (ex. "Coworking Q1") qui
+        // n'a aucun lien avec le client.
+        const contactName = `${c.contactFirstName ?? ""} ${c.contactLastName ?? ""}`.trim() || null;
+        const paradeosClient = c.billToEntityName ?? contactName ?? c.contractName;
         return {
           kind: "coworking" as const,
           coworkingInvoiceId: c.id,
           contractName: c.contractName,
-          entityName: c.billToEntityName,
+          entityName: c.billToEntityName ?? contactName,
           name: c.name,
           amountHt: localAmount,
           score: scoreMatch(
             {
-              legalName: inv.clientData?.legalName ?? null,
+              legalName: dougsClientName,
               firstName: inv.clientData?.firstName ?? null,
               lastName: inv.clientData?.lastName ?? null,
               amount: dougsAmount,
               createdAt: inv.createdAt ?? null,
             },
             {
-              clientName: c.billToEntityName ?? c.contractName,
+              clientName: paradeosClient,
               amount: localAmount,
               date: c.invoiceDate ?? c.periodStart,
             },
@@ -465,11 +482,7 @@ export async function getInvoiceSuggestions(
         const projectValueHt = Number(p.valueAmount ?? p.budgetAmount ?? 0);
         if (projectValueHt <= 0) continue;
 
-        const nameSim = similarityName(
-          inv.clientData?.legalName ??
-            `${inv.clientData?.firstName ?? ""} ${inv.clientData?.lastName ?? ""}`.trim(),
-          p.entityName,
-        );
+        const nameSim = similarityName(dougsClientName, p.entityName);
         const partial = similarityAmountPartial(dougsAmount, projectValueHt);
         const dateSim = similarityDate(inv.createdAt ?? null, p.startDate ?? p.createdAt);
         const total =
