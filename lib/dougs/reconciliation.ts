@@ -482,10 +482,6 @@ export async function getInvoiceSuggestions(
       .sort((a, b) => b.score.total - a.score.total)
       .slice(0, 4);
 
-    const isProblematic =
-      typeof inv.totalNetAmount !== "number" &&
-      typeof inv.totalAmountWithVat !== "number" &&
-      !inv.clientData;
     out.push({
       dougs: {
         id: inv.id,
@@ -496,7 +492,9 @@ export async function getInvoiceSuggestions(
         clientName: dougsName(inv.clientData),
         createdAt: inv.createdAt ?? null,
         paidAt: inv.paidAt ?? null,
-        debugRaw: opts.debug && isProblematic ? inv : undefined,
+        // En mode debug, on attache TOUJOURS le payload — l'utilisateur
+        // peut ouvrir n'importe quelle ligne pour inspecter.
+        debugRaw: opts.debug ? inv : undefined,
       },
       candidates: all,
     });
