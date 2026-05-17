@@ -47,13 +47,42 @@ import { eq } from "drizzle-orm";
 
 export type DougsClientName = {
   legalName?: string | null;
+  /** Champ utilisé dans le payload "liste compacte" (ex : Arthur Heynard). */
+  name?: string | null;
   firstName?: string | null;
   lastName?: string | null;
 };
 
-function dougsName(c: DougsClientName | null | undefined): string {
-  if (!c) return "—";
-  return c.legalName ?? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() ?? "—";
+/**
+ * Récupère le nom client peu importe la forme de payload Dougs.
+ * Le endpoint /sales-invoices renvoie `clientData.name` (compacte) ou
+ * `clientData.legalName` (détail Angular complet) ou même `clientName`
+ * en racine. Idem pour les devis.
+ */
+function dougsName(
+  c: DougsClientName | null | undefined,
+  fallbackClientName?: string | null,
+): string {
+  const fromObj = c?.legalName ?? c?.name ?? `${c?.firstName ?? ""} ${c?.lastName ?? ""}`.trim();
+  const v = fromObj || fallbackClientName || "";
+  return v || "—";
+}
+
+/**
+ * Extrait le montant HT depuis n'importe quel format Dougs.
+ * Detail Angular : `totalNetAmount`. Liste compacte : `netAmount`.
+ */
+function pickHt(o: { totalNetAmount?: number; netAmount?: unknown }): number | null {
+  if (typeof o.totalNetAmount === "number") return o.totalNetAmount;
+  if (typeof o.netAmount === "number") return o.netAmount;
+  return null;
+}
+
+/** Extrait le montant TTC : `totalAmountWithVat` ou `amount`. */
+function pickTtc(o: { totalAmountWithVat?: number; amount?: unknown }): number | null {
+  if (typeof o.totalAmountWithVat === "number") return o.totalAmountWithVat;
+  if (typeof o.amount === "number") return o.amount;
+  return null;
 }
 
 export type QuoteSuggestion = {
@@ -146,8 +175,7 @@ export async function getQuoteSuggestions(userId: string): Promise<QuoteSuggesti
   // 3. Pour chaque devis Dougs non lié, calcule top 3 candidats Paradeos.
   const out: QuoteSuggestion[] = [];
   for (const q of unlinkedQuotes) {
-    const dougsAmount =
-      typeof q.totalNetAmount === "number" ? q.totalNetAmount : (q.totalAmountWithVat ?? null);
+    const dougsAmount = pickHt(q) ?? pickTtc(q);
     const scored = candidates
       .map((c) => {
         const paradeosAmount = Number(c.valueAmount ?? c.budgetAmount ?? 0) || null;
@@ -182,9 +210,9 @@ export async function getQuoteSuggestions(userId: string): Promise<QuoteSuggesti
         id: q.id,
         reference: q.reference ?? null,
         status: q.status ?? null,
-        totalHt: typeof q.totalNetAmount === "number" ? q.totalNetAmount : null,
-        totalTtc: typeof q.totalAmountWithVat === "number" ? q.totalAmountWithVat : null,
-        clientName: dougsName(q.clientData),
+        totalHt: pickHt(q),
+        totalTtc: pickTtc(q),
+        clientName: dougsName(q.clientData, (q as { clientName?: string }).clientName ?? null),
         createdAt: q.createdAt ?? null,
       },
       candidates: scored,
@@ -370,10 +398,7 @@ export async function getInvoiceSuggestions(
   // 3. Pour chaque facture Dougs non liée, score contre jalons + coworking.
   const out: InvoiceSuggestion[] = [];
   for (const inv of unlinkedInvoices) {
-    const dougsAmount =
-      typeof inv.totalNetAmount === "number"
-        ? inv.totalNetAmount
-        : (inv.totalAmountWithVat ?? null);
+    const dougsAmount = pickHt(inv) ?? pickTtc(inv);
 
     const milestoneScored: InvoiceCandidate[] = milestoneCandidates
       .map((c) => ({
@@ -486,14 +511,13 @@ export async function getInvoiceSuggestions(
       dougs: {
         id: inv.id,
         reference: inv.reference ?? null,
-        status: inv.status ?? null,
-        totalHt: typeof inv.totalNetAmount === "number" ? inv.totalNetAmount : null,
-        totalTtc: typeof inv.totalAmountWithVat === "number" ? inv.totalAmountWithVat : null,
-        clientName: dougsName(inv.clientData),
+        // status Dougs varie : Angular full → "status", liste compacte → "paymentStatus".
+        status: inv.status ?? (inv as { paymentStatus?: string }).paymentStatus ?? null,
+        totalHt: pickHt(inv),
+        totalTtc: pickTtc(inv),
+        clientName: dougsName(inv.clientData, (inv as { clientName?: string }).clientName ?? null),
         createdAt: inv.createdAt ?? null,
         paidAt: inv.paidAt ?? null,
-        // En mode debug, on attache TOUJOURS le payload — l'utilisateur
-        // peut ouvrir n'importe quelle ligne pour inspecter.
         debugRaw: opts.debug ? inv : undefined,
       },
       candidates: all,
