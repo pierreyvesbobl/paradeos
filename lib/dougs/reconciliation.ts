@@ -249,6 +249,7 @@ export type InvoiceSuggestion = {
 };
 
 export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSuggestion[]> {
+  console.info("[rapprochement] getInvoiceSuggestions start");
   const conn = await db();
 
   // 1a. Jalons projet sans dougsInvoiceId. On charge aussi valueAmount
@@ -318,6 +319,7 @@ export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSugg
 
   // 2. Factures Dougs : récupère, exclut déjà liées.
   const dougsInvoices = await listDougsSalesInvoices(userId, { limit: 200 });
+  console.info(`[rapprochement] listDougsSalesInvoices → ${dougsInvoices.length} entries`);
 
   // Collect linked invoice ids from milestones + coworking
   const linkedInvoiceIds = new Set<string>();
@@ -331,17 +333,24 @@ export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSugg
     if (c.dougsInvoiceId) linkedInvoiceIds.add(c.dougsInvoiceId);
   }
   const unlinkedInvoicesList = dougsInvoices.filter((i) => !linkedInvoiceIds.has(i.id));
+  console.info(
+    `[rapprochement] unlinked invoices: ${unlinkedInvoicesList.length} (linked: ${linkedInvoiceIds.size})`,
+  );
 
   // Enrichissement (cf. quotes plus haut) : le endpoint liste ne renvoie
   // pas clientData ni les totaux complets. Fetch chaque facture en
   // détail. Cappé à 50.
+  let enrichSuccess = 0;
+  let enrichFail = 0;
   const unlinkedInvoices: (DougsSalesInvoice & { id: string })[] = await pMap(
     unlinkedInvoicesList.slice(0, 50),
     async (i) => {
       try {
         const detail = await getDougsSalesInvoice(userId, i.id);
+        enrichSuccess++;
         return { ...i, ...detail, id: i.id } as DougsSalesInvoice & { id: string };
       } catch (err) {
+        enrichFail++;
         console.warn(
           `[rapprochement] enrich invoice ${i.id} failed:`,
           err instanceof Error ? err.message : err,
@@ -350,6 +359,9 @@ export async function getInvoiceSuggestions(userId: string): Promise<InvoiceSugg
       }
     },
     5,
+  );
+  console.info(
+    `[rapprochement] invoice enrichment: ${enrichSuccess} success, ${enrichFail} fail`,
   );
 
   // 3. Pour chaque facture Dougs non liée, score contre jalons + coworking.
