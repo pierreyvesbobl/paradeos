@@ -45,6 +45,7 @@ import {
   similarityDate,
   similarityName,
 } from "@/lib/dougs/match";
+import { monthsBetween } from "@/lib/schemas/coworking";
 import { eq } from "drizzle-orm";
 
 export type DougsClientName = {
@@ -439,7 +440,12 @@ export async function getInvoiceSuggestions(
 
     const coworkingScored: InvoiceCandidate[] = unlinkedCoworking
       .map((c) => {
-        const localAmount = Number(c.unitPriceHt) * c.desks;
+        // Montant réel facture = mensuel × postes × nb mois dans la
+        // période. Sans le facteur mois, toutes les factures d'un même
+        // contrat ont le même montant et le scoring ne peut pas les
+        // distinguer entre factures Dougs Q1/Q2/Q3 du même client.
+        const months = monthsBetween(c.periodStart, c.periodEnd);
+        const localAmount = Number(c.unitPriceHt) * c.desks * months;
         // Nom client côté Paradeos : entité de facturation (B2B) en
         // priorité, sinon nom du contact occupant (B2C), sinon nom du
         // contrat — jamais le nom de la facture (ex. "Coworking Q1") qui
