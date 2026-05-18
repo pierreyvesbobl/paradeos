@@ -356,6 +356,10 @@ export type LinkedDougsEntries = {
     milestoneId: string;
     milestoneLabel: string;
     amountHt: number;
+    status: BillingMilestone["status"];
+    type: BillingMilestone["type"];
+    percent: number | null;
+    vatRate: number;
   }[];
   coworking: {
     dougsId: string;
@@ -363,6 +367,15 @@ export type LinkedDougsEntries = {
     coworkingInvoiceId: string;
     invoiceName: string;
     contractName: string | null;
+    amountHt: number;
+    status: "a_facturer" | "envoyee" | "payee";
+  }[];
+  /** Cibles libres pour relink (jalons sans dougsInvoiceId). */
+  freeMilestones: {
+    projectId: string;
+    projectName: string;
+    milestoneId: string;
+    label: string;
     amountHt: number;
   }[];
 };
@@ -385,6 +398,7 @@ export async function getLinkedDougsEntries(): Promise<LinkedDougsEntries> {
 
   const quotes: LinkedDougsEntries["quotes"] = [];
   const milestones: LinkedDougsEntries["milestones"] = [];
+  const freeMilestones: LinkedDougsEntries["freeMilestones"] = [];
   for (const p of projectRows) {
     if (p.dougsQuoteId) {
       quotes.push({
@@ -408,6 +422,18 @@ export async function getLinkedDougsEntries(): Promise<LinkedDougsEntries> {
           milestoneId: m.id,
           milestoneLabel: m.label,
           amountHt: Number(m.amountHt) || 0,
+          status: m.status,
+          type: m.type,
+          percent: m.percent,
+          vatRate: Number(m.vatRate) || 0.2,
+        });
+      } else {
+        freeMilestones.push({
+          projectId: p.id,
+          projectName: p.name,
+          milestoneId: m.id,
+          label: m.label,
+          amountHt: Number(m.amountHt) || 0,
         });
       }
     }
@@ -421,6 +447,7 @@ export async function getLinkedDougsEntries(): Promise<LinkedDougsEntries> {
       unitPriceHt: coworkingInvoices.unitPriceHt,
       dougsInvoiceId: coworkingInvoices.dougsInvoiceId,
       dougsInvoiceReference: coworkingInvoices.dougsInvoiceReference,
+      status: coworkingInvoices.status,
       contractName: coworkingContracts.name,
     })
     .from(coworkingInvoices)
@@ -436,11 +463,12 @@ export async function getLinkedDougsEntries(): Promise<LinkedDougsEntries> {
         invoiceName: c.name,
         contractName: c.contractName,
         amountHt: (Number(c.unitPriceHt) || 0) * c.desks,
+        status: c.status,
       });
     }
   }
 
-  return { quotes, milestones, coworking };
+  return { quotes, milestones, coworking, freeMilestones };
 }
 
 export async function getInvoiceSuggestions(

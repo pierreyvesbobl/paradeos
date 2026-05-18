@@ -742,6 +742,255 @@ export const refreshAllDougsLinks = action(z.object({}), async ({ user }) => {
 });
 
 /**
+ * Re-lier un devis Dougs d'un projet vers un autre projet, sans passer
+ * par Dougs. On copie la snapshot du devis (référence, statut, totaux,
+ * dates) sur le nouveau projet et on l'efface de l'ancien.
+ */
+export const relinkProjectDougsQuote = action(
+  z.object({
+    oldProjectId: z.string().uuid(),
+    newProjectId: z.string().uuid(),
+  }),
+  async ({ input }) => {
+    if (input.oldProjectId === input.newProjectId) {
+      throw new Error("Source et cible identiques.");
+    }
+    const conn = await db();
+    const [oldRow] = await conn
+      .select({
+        dougsQuoteId: projects.dougsQuoteId,
+        dougsQuoteReference: projects.dougsQuoteReference,
+        dougsQuoteStatus: projects.dougsQuoteStatus,
+        dougsQuotePushedAt: projects.dougsQuotePushedAt,
+        dougsQuoteTotalHt: projects.dougsQuoteTotalHt,
+        dougsQuoteTotalTtc: projects.dougsQuoteTotalTtc,
+        dougsQuoteTotalVat: projects.dougsQuoteTotalVat,
+        dougsQuoteIssuedAt: projects.dougsQuoteIssuedAt,
+        dougsQuoteSyncedAt: projects.dougsQuoteSyncedAt,
+      })
+      .from(projects)
+      .where(eq(projects.id, input.oldProjectId))
+      .limit(1);
+    if (!oldRow?.dougsQuoteId) throw new Error("Aucun devis Dougs lié à l'ancien projet.");
+
+    await conn
+      .update(projects)
+      .set({
+        dougsQuoteId: oldRow.dougsQuoteId,
+        dougsQuoteReference: oldRow.dougsQuoteReference,
+        dougsQuoteStatus: oldRow.dougsQuoteStatus,
+        dougsQuotePushedAt: oldRow.dougsQuotePushedAt,
+        dougsQuoteTotalHt: oldRow.dougsQuoteTotalHt,
+        dougsQuoteTotalTtc: oldRow.dougsQuoteTotalTtc,
+        dougsQuoteTotalVat: oldRow.dougsQuoteTotalVat,
+        dougsQuoteIssuedAt: oldRow.dougsQuoteIssuedAt,
+        dougsQuoteSyncedAt: oldRow.dougsQuoteSyncedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(projects.id, input.newProjectId));
+
+    await conn
+      .update(projects)
+      .set({
+        dougsQuoteId: null,
+        dougsQuoteReference: null,
+        dougsQuoteStatus: null,
+        dougsQuotePushedAt: null,
+        dougsQuoteTotalHt: null,
+        dougsQuoteTotalTtc: null,
+        dougsQuoteTotalVat: null,
+        dougsQuoteIssuedAt: null,
+        dougsQuoteSyncedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(projects.id, input.oldProjectId));
+
+    revalidatePath(`/projets/${input.oldProjectId}`);
+    revalidatePath(`/projets/${input.newProjectId}`);
+    revalidatePath("/compta");
+    return { ok: true };
+  },
+);
+
+/**
+ * Re-lier une facture Dougs d'un jalon vers un autre jalon (même projet
+ * ou non). Copie la snapshot Dougs du jalon source vers le jalon cible
+ * et efface celle du jalon source.
+ */
+export const relinkProjectMilestoneDougsInvoice = action(
+  z.object({
+    oldProjectId: z.string().uuid(),
+    oldMilestoneId: z.string().uuid(),
+    newProjectId: z.string().uuid(),
+    newMilestoneId: z.string().uuid(),
+  }),
+  async ({ input }) => {
+    if (
+      input.oldProjectId === input.newProjectId &&
+      input.oldMilestoneId === input.newMilestoneId
+    ) {
+      throw new Error("Source et cible identiques.");
+    }
+    const conn = await db();
+
+    const [oldP] = await conn
+      .select({ billingMilestones: projects.billingMilestones })
+      .from(projects)
+      .where(eq(projects.id, input.oldProjectId))
+      .limit(1);
+    if (!oldP) throw new Error("Projet source introuvable.");
+    const oldMilestones = (oldP.billingMilestones ?? []) as BillingMilestone[];
+    const oldMilestone = oldMilestones.find((m) => m.id === input.oldMilestoneId);
+    if (!oldMilestone?.dougsInvoiceId) throw new Error("Aucune facture Dougs sur le jalon source.");
+
+    // Snapshot Dougs à transférer.
+    const snap = {
+      dougsInvoiceId: oldMilestone.dougsInvoiceId,
+      dougsInvoiceReference: oldMilestone.dougsInvoiceReference ?? null,
+      dougsStatus: oldMilestone.dougsStatus ?? null,
+      dougsTotalHt: oldMilestone.dougsTotalHt ?? null,
+      dougsTotalVat: oldMilestone.dougsTotalVat ?? null,
+      dougsTotalTtc: oldMilestone.dougsTotalTtc ?? null,
+      dougsIssuedAt: oldMilestone.dougsIssuedAt ?? null,
+      dougsSyncedAt: oldMilestone.dougsSyncedAt ?? null,
+    };
+
+    // Clear sur l'ancien jalon (en garde le reste : label, montant, statut local).
+    const updatedOld = oldMilestones.map((m) =>
+      m.id === input.oldMilestoneId
+        ? {
+            ...m,
+            dougsInvoiceId: null,
+            dougsInvoiceReference: null,
+            dougsStatus: null,
+            dougsTotalHt: null,
+            dougsTotalVat: null,
+            dougsTotalTtc: null,
+            dougsIssuedAt: null,
+            dougsSyncedAt: null,
+          }
+        : m,
+    );
+
+    // Charge le projet cible (peut être le même).
+    let newMilestones: BillingMilestone[];
+    if (input.newProjectId === input.oldProjectId) {
+      newMilestones = updatedOld;
+    } else {
+      const [newP] = await conn
+        .select({ billingMilestones: projects.billingMilestones })
+        .from(projects)
+        .where(eq(projects.id, input.newProjectId))
+        .limit(1);
+      if (!newP) throw new Error("Projet cible introuvable.");
+      newMilestones = (newP.billingMilestones ?? []) as BillingMilestone[];
+      // Sauve l'ancien projet d'abord (cas inter-projet).
+      await conn
+        .update(projects)
+        .set({ billingMilestones: updatedOld, updatedAt: new Date() })
+        .where(eq(projects.id, input.oldProjectId));
+    }
+
+    const newIdx = newMilestones.findIndex((m) => m.id === input.newMilestoneId);
+    if (newIdx === -1) throw new Error("Jalon cible introuvable.");
+    const newMilestone = newMilestones[newIdx];
+    if (!newMilestone) throw new Error("Jalon cible introuvable.");
+    if (newMilestone.dougsInvoiceId) {
+      throw new Error("Le jalon cible a déjà une facture Dougs liée.");
+    }
+
+    const nextNew = [...newMilestones];
+    nextNew[newIdx] = {
+      ...newMilestone,
+      ...snap,
+      status: newMilestone.status === "todo" ? "invoiced" : newMilestone.status,
+    };
+
+    await conn
+      .update(projects)
+      .set({ billingMilestones: nextNew, updatedAt: new Date() })
+      .where(eq(projects.id, input.newProjectId));
+
+    revalidatePath(`/projets/${input.oldProjectId}`);
+    revalidatePath(`/projets/${input.newProjectId}`);
+    revalidatePath("/compta");
+    return { ok: true };
+  },
+);
+
+/**
+ * Re-lier une facture Dougs d'une facture coworking vers une autre.
+ */
+export const relinkCoworkingInvoiceDougs = action(
+  z.object({
+    oldCoworkingInvoiceId: z.string().uuid(),
+    newCoworkingInvoiceId: z.string().uuid(),
+  }),
+  async ({ input }) => {
+    if (input.oldCoworkingInvoiceId === input.newCoworkingInvoiceId) {
+      throw new Error("Source et cible identiques.");
+    }
+    const conn = await db();
+    const [oldRow] = await conn
+      .select()
+      .from(coworkingInvoices)
+      .where(eq(coworkingInvoices.id, input.oldCoworkingInvoiceId))
+      .limit(1);
+    if (!oldRow?.dougsInvoiceId) {
+      throw new Error("Aucune facture Dougs sur la coworking source.");
+    }
+
+    const [target] = await conn
+      .select({ dougsInvoiceId: coworkingInvoices.dougsInvoiceId })
+      .from(coworkingInvoices)
+      .where(eq(coworkingInvoices.id, input.newCoworkingInvoiceId))
+      .limit(1);
+    if (!target) throw new Error("Facture coworking cible introuvable.");
+    if (target.dougsInvoiceId) {
+      throw new Error("La facture coworking cible a déjà une facture Dougs liée.");
+    }
+
+    await conn
+      .update(coworkingInvoices)
+      .set({
+        dougsInvoiceId: oldRow.dougsInvoiceId,
+        dougsInvoiceReference: oldRow.dougsInvoiceReference,
+        dougsInvoiceStatus: oldRow.dougsInvoiceStatus,
+        dougsInvoiceTotalHt: oldRow.dougsInvoiceTotalHt,
+        dougsInvoiceTotalVat: oldRow.dougsInvoiceTotalVat,
+        dougsInvoiceTotalTtc: oldRow.dougsInvoiceTotalTtc,
+        dougsInvoiceIssuedAt: oldRow.dougsInvoiceIssuedAt,
+        dougsInvoicePaidAt: oldRow.dougsInvoicePaidAt,
+        dougsInvoiceSyncedAt: oldRow.dougsInvoiceSyncedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(coworkingInvoices.id, input.newCoworkingInvoiceId));
+
+    await conn
+      .update(coworkingInvoices)
+      .set({
+        dougsInvoiceId: null,
+        dougsInvoiceReference: null,
+        dougsInvoiceStatus: null,
+        dougsInvoiceTotalHt: null,
+        dougsInvoiceTotalVat: null,
+        dougsInvoiceTotalTtc: null,
+        dougsInvoiceIssuedAt: null,
+        dougsInvoicePaidAt: null,
+        dougsInvoiceSyncedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(coworkingInvoices.id, input.oldCoworkingInvoiceId));
+
+    revalidatePath(`/coworking/factures/${input.oldCoworkingInvoiceId}`);
+    revalidatePath(`/coworking/factures/${input.newCoworkingInvoiceId}`);
+    revalidatePath("/coworking");
+    revalidatePath("/compta");
+    return { ok: true };
+  },
+);
+
+/**
  * Coupe le lien entre un jalon projet et sa facture Dougs. Garde le
  * jalon en place mais efface tous les snapshots Dougs. Le statut du
  * jalon reste tel quel (invoiced/paid pas remis à todo) : si l'user a
