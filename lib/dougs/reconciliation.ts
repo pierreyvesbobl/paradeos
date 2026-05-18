@@ -332,6 +332,117 @@ export type InvoiceSuggestionsResult = {
   invoiceOptions: DougsInvoiceOption[];
 };
 
+/**
+ * Liste tous les liens Dougs ↔ Paradeos actuels (devis, jalons,
+ * coworking), sans appel à l'API Dougs : on lit uniquement les snapshots
+ * stockés localement. Utilisé par la section "Déjà rattachés" du
+ * rapprochement, pour pouvoir défaire un mauvais lien.
+ */
+export type LinkedDougsEntries = {
+  quotes: {
+    dougsId: string;
+    reference: string | null;
+    status: string | null;
+    projectId: string;
+    projectName: string;
+    entityName: string | null;
+  }[];
+  milestones: {
+    dougsId: string;
+    reference: string | null;
+    projectId: string;
+    projectName: string;
+    entityName: string | null;
+    milestoneId: string;
+    milestoneLabel: string;
+    amountHt: number;
+  }[];
+  coworking: {
+    dougsId: string;
+    reference: string | null;
+    coworkingInvoiceId: string;
+    invoiceName: string;
+    contractName: string | null;
+    amountHt: number;
+  }[];
+};
+
+export async function getLinkedDougsEntries(): Promise<LinkedDougsEntries> {
+  const conn = await db();
+
+  const projectRows = await conn
+    .select({
+      id: projects.id,
+      name: projects.name,
+      entityName: entities.name,
+      dougsQuoteId: projects.dougsQuoteId,
+      dougsQuoteReference: projects.dougsQuoteReference,
+      dougsQuoteStatus: projects.dougsQuoteStatus,
+      billingMilestones: projects.billingMilestones,
+    })
+    .from(projects)
+    .leftJoin(entities, eq(entities.id, projects.entityId));
+
+  const quotes: LinkedDougsEntries["quotes"] = [];
+  const milestones: LinkedDougsEntries["milestones"] = [];
+  for (const p of projectRows) {
+    if (p.dougsQuoteId) {
+      quotes.push({
+        dougsId: p.dougsQuoteId,
+        reference: p.dougsQuoteReference ?? null,
+        status: p.dougsQuoteStatus ?? null,
+        projectId: p.id,
+        projectName: p.name,
+        entityName: p.entityName,
+      });
+    }
+    const ms = (p.billingMilestones ?? []) as BillingMilestone[];
+    for (const m of ms) {
+      if (m.dougsInvoiceId) {
+        milestones.push({
+          dougsId: m.dougsInvoiceId,
+          reference: m.dougsInvoiceReference ?? null,
+          projectId: p.id,
+          projectName: p.name,
+          entityName: p.entityName,
+          milestoneId: m.id,
+          milestoneLabel: m.label,
+          amountHt: Number(m.amountHt) || 0,
+        });
+      }
+    }
+  }
+
+  const coworkingRows = await conn
+    .select({
+      id: coworkingInvoices.id,
+      name: coworkingInvoices.name,
+      desks: coworkingInvoices.desks,
+      unitPriceHt: coworkingInvoices.unitPriceHt,
+      dougsInvoiceId: coworkingInvoices.dougsInvoiceId,
+      dougsInvoiceReference: coworkingInvoices.dougsInvoiceReference,
+      contractName: coworkingContracts.name,
+    })
+    .from(coworkingInvoices)
+    .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId));
+
+  const coworking: LinkedDougsEntries["coworking"] = [];
+  for (const c of coworkingRows) {
+    if (c.dougsInvoiceId) {
+      coworking.push({
+        dougsId: c.dougsInvoiceId,
+        reference: c.dougsInvoiceReference ?? null,
+        coworkingInvoiceId: c.id,
+        invoiceName: c.name,
+        contractName: c.contractName,
+        amountHt: (Number(c.unitPriceHt) || 0) * c.desks,
+      });
+    }
+  }
+
+  return { quotes, milestones, coworking };
+}
+
 export async function getInvoiceSuggestions(
   userId: string,
   opts: { debug?: boolean } = {},

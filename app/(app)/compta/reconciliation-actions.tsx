@@ -3,6 +3,7 @@
 import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
 import { linkDougsCreditNote, unlinkDougsCreditNote } from "@/lib/actions/dougs-credit-notes";
+import { unlinkProjectDougsQuote } from "@/lib/actions/dougs-quotes";
 import {
   linkCoworkingContractAsNewInvoice,
   linkCoworkingInvoiceDougs,
@@ -10,6 +11,8 @@ import {
   linkProjectDougsQuote,
   linkProjectMilestoneDougsInvoice,
   refreshAllDougsLinks,
+  unlinkCoworkingInvoiceDougs,
+  unlinkProjectMilestoneDougsInvoice,
 } from "@/lib/actions/dougs-refresh";
 import { CloudDownload, Link2, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -588,6 +591,94 @@ export function LinkCreditNotePicker({
         {pending ? "Lié…" : "Lier"}
       </Button>
     </div>
+  );
+}
+
+/**
+ * Bouton générique "défaire le lien" — utilisé pour les entrées Dougs
+ * déjà rattachées dans la section dépliable. Caller décide quelle
+ * action effectuer.
+ */
+function UnlinkButton({ pending, onClick }: { pending: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={onClick}
+      className="inline-flex items-center gap-1 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+      aria-label="Défaire le lien"
+      title="Défaire le lien Dougs"
+    >
+      <X className="size-3.5" />
+    </button>
+  );
+}
+
+export function UnlinkProjectQuoteButton({ projectId }: { projectId: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  return (
+    <UnlinkButton
+      pending={pending}
+      onClick={() => {
+        startTransition(async () => {
+          const res = await unlinkProjectDougsQuote({ projectId });
+          if (!res.ok) {
+            toast.error(res.message);
+            return;
+          }
+          toast.success("Devis délié");
+          router.refresh();
+        });
+      }}
+    />
+  );
+}
+
+export function UnlinkMilestoneButton({
+  projectId,
+  milestoneId,
+}: { projectId: string; milestoneId: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  return (
+    <UnlinkButton
+      pending={pending}
+      onClick={() => {
+        startTransition(async () => {
+          const res = await unlinkProjectMilestoneDougsInvoice({ projectId, milestoneId });
+          if (!res.ok) {
+            toast.error(res.message);
+            return;
+          }
+          toast.success("Jalon délié");
+          router.refresh();
+        });
+      }}
+    />
+  );
+}
+
+export function UnlinkCoworkingInvoiceButton({
+  coworkingInvoiceId,
+}: { coworkingInvoiceId: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  return (
+    <UnlinkButton
+      pending={pending}
+      onClick={() => {
+        startTransition(async () => {
+          const res = await unlinkCoworkingInvoiceDougs({ coworkingInvoiceId });
+          if (!res.ok) {
+            toast.error(res.message);
+            return;
+          }
+          toast.success("Facture coworking déliée");
+          router.refresh();
+        });
+      }}
+    />
   );
 }
 

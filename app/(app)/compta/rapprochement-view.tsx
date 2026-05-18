@@ -5,7 +5,11 @@ import { projects } from "@/db/schema/projects";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
 import { DougsAuthError } from "@/lib/dougs/client";
-import { getInvoiceSuggestions, getQuoteSuggestions } from "@/lib/dougs/reconciliation";
+import {
+  getInvoiceSuggestions,
+  getLinkedDougsEntries,
+  getQuoteSuggestions,
+} from "@/lib/dougs/reconciliation";
 import { asc, desc, eq } from "drizzle-orm";
 import { ExternalLink, FileText, Receipt } from "lucide-react";
 import Link from "next/link";
@@ -22,7 +26,10 @@ import {
   ManualLinkQuote,
   type ProjectOption,
   RefreshAllButton,
+  UnlinkCoworkingInvoiceButton,
   UnlinkCreditNoteButton,
+  UnlinkMilestoneButton,
+  UnlinkProjectQuoteButton,
 } from "./reconciliation-actions";
 
 function formatEur(n: number | null | undefined): string {
@@ -136,6 +143,11 @@ export async function RapprochementView({ debug }: { debug?: string }) {
   const invoiceSuggestions = invoiceResult.invoices;
   const creditNotes = invoiceResult.creditNotes;
   const invoiceOptions = invoiceResult.invoiceOptions;
+
+  // Liste des entrées Dougs déjà rattachées (lue sur les snapshots locaux,
+  // sans appel API). Affichée dans une section dépliable en bas.
+  const linked = await getLinkedDougsEntries();
+  const linkedTotal = linked.quotes.length + linked.milestones.length + linked.coworking.length;
 
   return (
     <div className="space-y-6">
@@ -534,6 +546,131 @@ export async function RapprochementView({ debug }: { debug?: string }) {
               </ul>
             )}
           </section>
+
+          <details className="rounded-lg border bg-card">
+            <summary className="flex cursor-pointer select-none items-center gap-2 px-6 py-4 font-medium text-sm hover:bg-muted/30">
+              <span className="text-muted-foreground">▸</span>
+              Déjà rattachés ({linkedTotal})
+              <span className="text-muted-foreground text-xs">
+                · {linked.quotes.length} devis · {linked.milestones.length} jalons ·{" "}
+                {linked.coworking.length} coworking
+              </span>
+            </summary>
+            <div className="border-t">
+              {linkedTotal === 0 ? (
+                <p className="px-6 py-6 text-center text-muted-foreground text-sm">
+                  Aucun lien Dougs ↔ Paradeos pour le moment.
+                </p>
+              ) : (
+                <ul className="divide-y text-sm">
+                  {linked.quotes.map((q) => (
+                    <li
+                      key={`q-${q.projectId}-${q.dougsId}`}
+                      className="flex items-center justify-between gap-3 px-6 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                          Devis
+                        </span>
+                        <span className="ml-2 font-mono text-xs">{q.reference ?? "—"}</span>
+                        {q.status ? (
+                          <span className="ml-2 rounded-full border bg-muted/30 px-1.5 py-0.5 text-[10px]">
+                            {q.status}
+                          </span>
+                        ) : null}
+                        <Link
+                          href={`/projets/${q.projectId}`}
+                          className="ml-2 font-medium hover:underline"
+                        >
+                          {q.projectName}
+                        </Link>
+                        {q.entityName ? (
+                          <span className="ml-2 text-muted-foreground">{q.entityName}</span>
+                        ) : null}
+                      </div>
+                      <a
+                        href={`https://app.dougs.fr/app/c/107610/invoicing/quote?status=pending&quoteId=${q.dougsId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label="Ouvrir sur Dougs"
+                      >
+                        <ExternalLink className="size-3.5" />
+                      </a>
+                      <UnlinkProjectQuoteButton projectId={q.projectId} />
+                    </li>
+                  ))}
+                  {linked.milestones.map((m) => (
+                    <li
+                      key={`m-${m.projectId}-${m.milestoneId}`}
+                      className="flex items-center justify-between gap-3 px-6 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                          Jalon
+                        </span>
+                        <span className="ml-2 font-mono text-xs">{m.reference ?? "—"}</span>
+                        <Link
+                          href={`/projets/${m.projectId}?tab=billing`}
+                          className="ml-2 font-medium hover:underline"
+                        >
+                          {m.projectName}
+                        </Link>
+                        <span className="ml-2 text-muted-foreground">
+                          {m.milestoneLabel} ·{" "}
+                          <span className="tabular-nums">{formatEur(m.amountHt)}</span>
+                          {m.entityName ? ` · ${m.entityName}` : ""}
+                        </span>
+                      </div>
+                      <a
+                        href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoice?status=waiting&salesInvoiceId=${m.dougsId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label="Ouvrir sur Dougs"
+                      >
+                        <ExternalLink className="size-3.5" />
+                      </a>
+                      <UnlinkMilestoneButton projectId={m.projectId} milestoneId={m.milestoneId} />
+                    </li>
+                  ))}
+                  {linked.coworking.map((c) => (
+                    <li
+                      key={`c-${c.coworkingInvoiceId}`}
+                      className="flex items-center justify-between gap-3 px-6 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                          Coworking
+                        </span>
+                        <span className="ml-2 font-mono text-xs">{c.reference ?? "—"}</span>
+                        <Link
+                          href={`/coworking/factures/${c.coworkingInvoiceId}`}
+                          className="ml-2 font-medium hover:underline"
+                        >
+                          {c.invoiceName}
+                        </Link>
+                        <span className="ml-2 text-muted-foreground">
+                          {c.contractName ?? "—"} ·{" "}
+                          <span className="tabular-nums">{formatEur(c.amountHt)}</span>
+                        </span>
+                      </div>
+                      <a
+                        href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoice?status=waiting&salesInvoiceId=${c.dougsId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label="Ouvrir sur Dougs"
+                      >
+                        <ExternalLink className="size-3.5" />
+                      </a>
+                      <UnlinkCoworkingInvoiceButton coworkingInvoiceId={c.coworkingInvoiceId} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </details>
         </>
       ) : null}
     </div>

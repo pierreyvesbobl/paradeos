@@ -740,3 +740,84 @@ export const refreshAllDougsLinks = action(z.object({}), async ({ user }) => {
   revalidatePath("/rapprochement");
   return { quotesUpdated, milestonesUpdated, coworkingUpdated, errors };
 });
+
+/**
+ * Coupe le lien entre un jalon projet et sa facture Dougs. Garde le
+ * jalon en place mais efface tous les snapshots Dougs. Le statut du
+ * jalon reste tel quel (invoiced/paid pas remis à todo) : si l'user a
+ * marqué le jalon payé à la main, on respecte cette donnée locale.
+ */
+export const unlinkProjectMilestoneDougsInvoice = action(
+  z.object({
+    projectId: z.string().uuid(),
+    milestoneId: z.string().uuid(),
+  }),
+  async ({ input }) => {
+    const conn = await db();
+    const [row] = await conn
+      .select({ billingMilestones: projects.billingMilestones })
+      .from(projects)
+      .where(eq(projects.id, input.projectId))
+      .limit(1);
+    if (!row) throw new Error("Projet introuvable.");
+
+    const milestones = (row.billingMilestones ?? []) as BillingMilestone[];
+    const idx = milestones.findIndex((m) => m.id === input.milestoneId);
+    if (idx === -1) throw new Error("Jalon introuvable.");
+    const milestone = milestones[idx];
+    if (!milestone) throw new Error("Jalon introuvable.");
+
+    const next = [...milestones];
+    next[idx] = {
+      ...milestone,
+      dougsInvoiceId: null,
+      dougsInvoiceReference: null,
+      dougsStatus: null,
+      dougsTotalHt: null,
+      dougsTotalVat: null,
+      dougsTotalTtc: null,
+      dougsIssuedAt: null,
+      dougsSyncedAt: null,
+    };
+
+    await conn
+      .update(projects)
+      .set({ billingMilestones: next, updatedAt: new Date() })
+      .where(eq(projects.id, input.projectId));
+
+    revalidatePath(`/projets/${input.projectId}`);
+    revalidatePath("/compta");
+    return { ok: true };
+  },
+);
+
+/**
+ * Coupe le lien entre une facture coworking et sa facture Dougs. Efface
+ * les snapshots Dougs mais conserve la facture coworking et son statut.
+ */
+export const unlinkCoworkingInvoiceDougs = action(
+  z.object({ coworkingInvoiceId: z.string().uuid() }),
+  async ({ input }) => {
+    const conn = await db();
+    await conn
+      .update(coworkingInvoices)
+      .set({
+        dougsInvoiceId: null,
+        dougsInvoiceReference: null,
+        dougsInvoiceStatus: null,
+        dougsInvoiceTotalHt: null,
+        dougsInvoiceTotalVat: null,
+        dougsInvoiceTotalTtc: null,
+        dougsInvoiceIssuedAt: null,
+        dougsInvoicePaidAt: null,
+        dougsInvoiceSyncedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(coworkingInvoices.id, input.coworkingInvoiceId));
+
+    revalidatePath(`/coworking/factures/${input.coworkingInvoiceId}`);
+    revalidatePath("/coworking");
+    revalidatePath("/compta");
+    return { ok: true };
+  },
+);
