@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { coworkingInvoices } from "@/db/schema/coworking";
+import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
 import { type BillingMilestone, projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
@@ -395,6 +395,105 @@ export const linkProjectMilestoneDougsInvoice = action(
 /**
  * Lie une facture Dougs existante à une facture coworking.
  */
+/**
+ * Lie une facture Dougs à un CONTRAT coworking sans facture Paradeos
+ * pré-existante : crée une coworking_invoice à la volée pour le contrat
+ * avec une période déduite de la date de la facture Dougs (ou de la
+ * date d'aujourd'hui à défaut), puis attache le lien Dougs.
+ *
+ * Période par défaut :
+ *   - trimestriel  : du 1er du mois de la facture au dernier jour du
+ *                    mois +2 (3 mois)
+ *   - mensuel      : du 1er au dernier jour du mois de la facture
+ */
+export const linkCoworkingContractAsNewInvoice = action(
+  z.object({
+    contractId: z.string().uuid(),
+    dougsIdOrUrl: z.string().trim().min(1),
+  }),
+  async ({ input, user }) => {
+    const dougsId = extractDougsUuid(input.dougsIdOrUrl);
+    let invoice: Awaited<ReturnType<typeof getDougsSalesInvoice>>;
+    try {
+      invoice = await getDougsSalesInvoice(user.id, dougsId);
+    } catch (err) {
+      if (err instanceof DougsAuthError) throw err;
+      if (err instanceof DougsApiError) {
+        throw new Error(`Facture Dougs introuvable : ${err.message}`);
+      }
+      throw err;
+    }
+
+    const conn = await db();
+    const [contract] = await conn
+      .select({
+        id: coworkingContracts.id,
+        name: coworkingContracts.name,
+        desks: coworkingContracts.desks,
+        unitPriceHt: coworkingContracts.unitPriceHt,
+        billingFrequency: coworkingContracts.billingFrequency,
+      })
+      .from(coworkingContracts)
+      .where(eq(coworkingContracts.id, input.contractId))
+      .limit(1);
+    if (!contract) throw new Error("Contrat coworking introuvable.");
+
+    // Période déduite de la date Dougs (issuedAt → createdAt → today).
+    const dougsDateStr =
+      pickDougsIssuedAt(invoice) ??
+      (invoice as { createdAt?: string }).createdAt ??
+      new Date().toISOString();
+    const dougsDate = new Date(dougsDateStr);
+    const monthsInPeriod = contract.billingFrequency === "quarterly" ? 3 : 1;
+    const periodStart = new Date(dougsDate.getFullYear(), dougsDate.getMonth(), 1);
+    const periodEnd = new Date(dougsDate.getFullYear(), dougsDate.getMonth() + monthsInPeriod, 0);
+    const toISO = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const periodStartStr = toISO(periodStart);
+    const periodEndStr = toISO(periodEnd);
+    const invoiceDateStr = toISO(dougsDate);
+
+    const status: "envoyee" | "payee" = pickDougsPaidAt(invoice) ? "payee" : "envoyee";
+    const paidAt = pickDougsPaidAt(invoice);
+
+    const [newInv] = await conn
+      .insert(coworkingInvoices)
+      .values({
+        contractId: contract.id,
+        name: `${contract.name} — ${periodStartStr.slice(0, 7)}`,
+        invoiceDate: invoiceDateStr,
+        periodStart: periodStartStr,
+        periodEnd: periodEndStr,
+        status,
+        billedBy: "parade",
+        desks: contract.desks,
+        unitPriceHt: contract.unitPriceHt,
+        vatRate: "0.2",
+        notes: null,
+        dougsInvoiceId: dougsId,
+        dougsInvoiceReference: invoice.reference ?? null,
+        dougsInvoiceStatus: pickDougsStatus(invoice),
+        dougsInvoiceTotalHt: toNumeric(pickDougsHt(invoice)),
+        dougsInvoiceTotalVat: toNumeric(pickDougsVat(invoice)),
+        dougsInvoiceTotalTtc: toNumeric(pickDougsTtc(invoice)),
+        dougsInvoiceIssuedAt: toDate(pickDougsIssuedAt(invoice)),
+        dougsInvoicePaidAt: toDate(paidAt),
+        dougsInvoiceSyncedAt: new Date(),
+        createdBy: user.id,
+      })
+      .returning({ id: coworkingInvoices.id });
+
+    revalidatePath("/coworking");
+    revalidatePath("/rapprochement");
+    return {
+      coworkingInvoiceId: newInv?.id ?? null,
+      reference: invoice.reference ?? null,
+      periodStart: periodStartStr,
+      periodEnd: periodEndStr,
+    };
+  },
+);
+
 export const linkCoworkingInvoiceDougs = action(
   z.object({
     coworkingInvoiceId: z.string().uuid(),

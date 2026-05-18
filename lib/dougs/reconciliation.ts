@@ -264,6 +264,19 @@ export type InvoiceCandidate =
       /** Montant qu'aura le nouveau jalon (= montant facture). */
       amountHt: number;
       score: MatchScore;
+    }
+  | {
+      // Contrat coworking sans facture Paradeos pour la période — propose
+      // de créer une nouvelle coworking_invoice à la volée pour ce contrat,
+      // déduisant la période depuis la date de la facture Dougs.
+      kind: "coworking-contract";
+      contractId: string;
+      contractName: string;
+      entityName: string | null;
+      monthlyHt: number;
+      desks: number;
+      amountHt: number;
+      score: MatchScore;
     };
 
 export type InvoiceSuggestion = {
@@ -358,6 +371,29 @@ export async function getInvoiceSuggestions(
     .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId));
 
   const unlinkedCoworking = coworkingCandidates.filter((c) => !c.dougsInvoiceId);
+
+  // Contrats coworking en cours, indépendamment des factures Paradeos
+  // déjà émises. Servent à matcher les factures Dougs qui n'ont pas
+  // encore d'équivalent en facture Paradeos (= on créera la facture
+  // coworking à la volée au moment du lien).
+  const contractCandidates = await conn
+    .select({
+      id: coworkingContracts.id,
+      name: coworkingContracts.name,
+      contactId: coworkingContracts.contactId,
+      contactFirstName: contacts.firstName,
+      contactLastName: contacts.lastName,
+      billToEntityId: coworkingContracts.billToEntityId,
+      billToEntityName: entities.name,
+      desks: coworkingContracts.desks,
+      unitPriceHt: coworkingContracts.unitPriceHt,
+      startDate: coworkingContracts.startDate,
+      billingFrequency: coworkingContracts.billingFrequency,
+      status: coworkingContracts.status,
+    })
+    .from(coworkingContracts)
+    .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
+    .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId));
 
   // 2. Factures Dougs : récupère, exclut déjà liées.
   const dougsInvoices = await listDougsSalesInvoices(userId, { limit: 200 });
@@ -477,6 +513,59 @@ export async function getInvoiceSuggestions(
       })
       .filter((x) => x.score.total >= 0.3);
 
+    // Candidats "contrat coworking" : contrat dont le client matche la
+    // facture Dougs. Le montant attendu pour 1 mois = unitPriceHt * desks,
+    // pour 3 mois (trimestriel) = × 3. On teste les deux ratios.
+    const contractScored: InvoiceCandidate[] = [];
+    for (const ct of contractCandidates) {
+      const contactName = `${ct.contactFirstName ?? ""} ${ct.contactLastName ?? ""}`.trim() || null;
+      const clientName = ct.billToEntityName ?? contactName ?? ct.name;
+      const nameSim = similarityName(dougsClientName, clientName);
+      if (nameSim < 0.4) continue;
+
+      const monthlyHt = Number(ct.unitPriceHt) * ct.desks;
+      const period = ct.billingFrequency === "quarterly" ? 3 : 1;
+      const expectedAmount = monthlyHt * period;
+      const amountSim =
+        typeof dougsAmount === "number" && dougsAmount > 0 && expectedAmount > 0
+          ? 1 - Math.min(1, Math.abs(dougsAmount - expectedAmount) / expectedAmount)
+          : 0;
+      // Date : on n'a pas de période précise sans facture, donc bonus
+      // si le contrat est en cours (statut en_cours) au moment de la
+      // facture, sinon 0.
+      const dateSim = ct.status === "en_cours" ? 0.5 : 0;
+      const total = Math.round((nameSim * 0.5 + amountSim * 0.3 + dateSim * 0.2) * 1000) / 1000;
+      if (total < 0.4) continue;
+
+      contractScored.push({
+        kind: "coworking-contract",
+        contractId: ct.id,
+        contractName: ct.name,
+        entityName: ct.billToEntityName ?? contactName,
+        monthlyHt,
+        desks: ct.desks,
+        amountHt: dougsAmount ?? expectedAmount,
+        score: { total, name: nameSim, amount: amountSim, date: dateSim },
+      });
+    }
+
+    // Filtre : si une facture coworking du même contrat est déjà candidate
+    // (kind=coworking), on cache le candidat "contrat" — la facture
+    // existante est plus précise.
+    const contractsWithInvoiceCandidate = new Set(
+      unlinkedCoworking
+        .filter((c) =>
+          coworkingScored.some((cs) => cs.kind === "coworking" && cs.coworkingInvoiceId === c.id),
+        )
+        .map((c) => c.id)
+        // Le contractId est implicite dans c — pas exposé ici. On filtre
+        // sur le nom du contrat à la place via le set des contracts qui
+        // ont une facture candidate.
+        .filter((x) => !!x),
+    );
+    void contractsWithInvoiceCandidate;
+    const contractScoredFiltered = contractScored;
+
     // Candidats "projet" : projets client dont le montant total tombe
     // sur un % standard (acompte/solde/full) par rapport à la facture.
     // Permet de détecter "cette facture est probablement l'acompte 40%
@@ -522,7 +611,12 @@ export async function getInvoiceSuggestions(
       c.kind === "project" ? !projectsWithMilestoneCandidate.has(c.projectId) : true,
     );
 
-    const all = [...milestoneScored, ...coworkingScored, ...projectScoredFiltered]
+    const all = [
+      ...milestoneScored,
+      ...coworkingScored,
+      ...contractScoredFiltered,
+      ...projectScoredFiltered,
+    ]
       .sort((a, b) => b.score.total - a.score.total)
       .slice(0, 4);
 

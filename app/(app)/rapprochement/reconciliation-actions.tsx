@@ -3,6 +3,7 @@
 import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
 import {
+  linkCoworkingContractAsNewInvoice,
   linkCoworkingInvoiceDougs,
   linkProjectAsNewMilestone,
   linkProjectDougsQuote,
@@ -343,6 +344,45 @@ export function ManualLinkInvoice({
         Annuler
       </Button>
     </div>
+  );
+}
+
+export function LinkCoworkingContractButton({
+  contractId,
+  dougsId,
+}: {
+  contractId: string;
+  dougsId: string;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      disabled={pending}
+      onClick={() => {
+        startTransition(async () => {
+          const res = await linkCoworkingContractAsNewInvoice({
+            contractId,
+            dougsIdOrUrl: dougsId,
+          });
+          if (!res.ok) {
+            toast.error(res.message);
+            return;
+          }
+          toast.success(
+            `Facture coworking créée (${res.data.periodStart} → ${res.data.periodEnd}).`,
+          );
+          router.refresh();
+        });
+      }}
+      className="gap-1.5"
+    >
+      <Plus className="size-3.5" />
+      {pending ? "Création…" : "Créer facture"}
+    </Button>
   );
 }
 
