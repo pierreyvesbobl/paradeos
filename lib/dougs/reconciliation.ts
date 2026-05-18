@@ -89,6 +89,12 @@ function pickTtc(o: { totalAmountWithVat?: number | null; amount?: unknown }): n
   return null;
 }
 
+/** Renvoie le négatif d'un montant si défini (et garde 0 → 0). */
+function negate(n: number | null): number | null {
+  if (n === null) return null;
+  return n === 0 ? 0 : -Math.abs(n);
+}
+
 export type QuoteSuggestion = {
   dougs: {
     id: string;
@@ -572,9 +578,10 @@ export async function getInvoiceSuggestions(
     .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
     .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId));
 
-  // 2. Factures Dougs : récupère tout, sépare avoirs (montant < 0) des
-  // factures normales pour éviter qu'un avoir négatif "matche" un jalon
-  // positif à l'envers.
+  // 2. Factures Dougs : récupère tout, sépare avoirs des factures
+  // normales. Détection prioritaire par `isRefund: true` (champ Dougs
+  // qui distingue avoir de facture), avec fallback sur le signe négatif
+  // au cas où le payload ne contient pas le flag (paranoïa).
   const dougsInvoicesAll = await listDougsSalesInvoices(userId, { limit: 200 });
   console.info(`[rapprochement] listDougsSalesInvoices → ${dougsInvoicesAll.length} entries`);
 
@@ -583,7 +590,10 @@ export async function getInvoiceSuggestions(
   for (const i of dougsInvoicesAll) {
     const ht = pickHt(i);
     const ttc = pickTtc(i);
-    const isCredit = (typeof ht === "number" && ht < 0) || (typeof ttc === "number" && ttc < 0);
+    const isCredit =
+      i.isRefund === true ||
+      (typeof ht === "number" && ht < 0) ||
+      (typeof ttc === "number" && ttc < 0);
     if (isCredit) dougsCreditNotes.push(i);
     else dougsInvoices.push(i);
   }
@@ -937,8 +947,11 @@ export async function getInvoiceSuggestions(
         id: cn.id,
         reference: cn.reference ?? null,
         status: cn.status ?? (cn as { paymentStatus?: string }).paymentStatus ?? null,
-        totalHt: pickHt(cn),
-        totalTtc: pickTtc(cn),
+        // Dougs peut stocker le montant en positif sur les avoirs ;
+        // on force le signe négatif pour signaler visuellement la
+        // nature "remboursement" (déduction du CA).
+        totalHt: negate(pickHt(cn)),
+        totalTtc: negate(pickTtc(cn)),
         clientName: pickDougsClientName(cn) ?? "—",
         createdAt: cn.createdAt ?? null,
       },

@@ -482,6 +482,8 @@ export type DougsSalesInvoiceListItem = {
   status?: string | null;
   totalNetAmount?: number | null;
   totalAmountWithVat?: number | null;
+  /** True si l'entrée est un avoir (facture de remboursement). */
+  isRefund?: boolean | null;
   issuedAt?: string | null;
   paidAt?: string | null;
   createdAt?: string | null;
