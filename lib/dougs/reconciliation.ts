@@ -350,6 +350,7 @@ export async function getInvoiceSuggestions(
   const coworkingCandidates = await conn
     .select({
       id: coworkingInvoices.id,
+      contractId: coworkingInvoices.contractId,
       name: coworkingInvoices.name,
       desks: coworkingInvoices.desks,
       unitPriceHt: coworkingInvoices.unitPriceHt,
@@ -549,22 +550,79 @@ export async function getInvoiceSuggestions(
       });
     }
 
-    // Filtre : si une facture coworking du même contrat est déjà candidate
-    // (kind=coworking), on cache le candidat "contrat" — la facture
-    // existante est plus précise.
-    const contractsWithInvoiceCandidate = new Set(
-      unlinkedCoworking
-        .filter((c) =>
-          coworkingScored.some((cs) => cs.kind === "coworking" && cs.coworkingInvoiceId === c.id),
+    // Pour chaque contrat matché, on remonte aussi ses factures
+    // coworking non liées comme candidats `coworking` — héritent du
+    // score du contrat. Évite que l'user crée une facture en doublon
+    // alors qu'une existe mais dont le score individuel n'a pas
+    // dépassé le seuil 0.3 (cas vu : montant attendu ne matche pas
+    // parfaitement la facture Dougs, ou date trop loin).
+    const matchedContractIds = new Set(
+      contractScored
+        .filter(
+          (c): c is Extract<InvoiceCandidate, { kind: "coworking-contract" }> =>
+            c.kind === "coworking-contract",
         )
-        .map((c) => c.id)
-        // Le contractId est implicite dans c — pas exposé ici. On filtre
-        // sur le nom du contrat à la place via le set des contracts qui
-        // ont une facture candidate.
-        .filter((x) => !!x),
+        .map((c) => c.contractId),
     );
-    void contractsWithInvoiceCandidate;
-    const contractScoredFiltered = contractScored;
+    const alreadyScoredInvoiceIds = new Set(
+      coworkingScored
+        .filter(
+          (c): c is Extract<InvoiceCandidate, { kind: "coworking" }> => c.kind === "coworking",
+        )
+        .map((c) => c.coworkingInvoiceId),
+    );
+    const inheritedCoworkingScored: InvoiceCandidate[] = [];
+    for (const ct of contractScored) {
+      if (ct.kind !== "coworking-contract") continue;
+      const facturesOfContract = unlinkedCoworking.filter(
+        (cwi) => cwi.contractId === ct.contractId && !alreadyScoredInvoiceIds.has(cwi.id),
+      );
+      for (const cwi of facturesOfContract) {
+        const months = monthsBetween(cwi.periodStart, cwi.periodEnd);
+        const localAmount = Number(cwi.unitPriceHt) * cwi.desks * months;
+        const contactName =
+          `${cwi.contactFirstName ?? ""} ${cwi.contactLastName ?? ""}`.trim() || null;
+        inheritedCoworkingScored.push({
+          kind: "coworking",
+          coworkingInvoiceId: cwi.id,
+          contractName: cwi.contractName,
+          entityName: cwi.billToEntityName ?? contactName,
+          name: cwi.name,
+          amountHt: localAmount,
+          // Score "name" hérité du contrat ; on garde le score amount
+          // (souvent faible quand mal aligné) pour signaler la
+          // divergence, mais le total reste au moins celui du contrat.
+          score: {
+            total: Math.max(ct.score.total - 0.05, ct.score.name * 0.5),
+            name: ct.score.name,
+            amount: 0,
+            date: 0,
+          },
+        });
+      }
+    }
+
+    // Filtre : on cache le candidat "contrat coworking" si on a réussi
+    // à surfacer au moins une facture pour ce contrat (la facture
+    // existante est toujours préférable à un duplicate).
+    const contractsWithFactureCandidate = new Set(
+      [...coworkingScored, ...inheritedCoworkingScored]
+        .filter((c) => c.kind === "coworking")
+        .map((c) => {
+          const found = unlinkedCoworking.find(
+            (cwi) => c.kind === "coworking" && cwi.id === c.coworkingInvoiceId,
+          );
+          return found?.contractId;
+        })
+        .filter((x): x is string => !!x),
+    );
+    void matchedContractIds;
+    const contractScoredFiltered = contractScored.filter((c) =>
+      c.kind === "coworking-contract" ? !contractsWithFactureCandidate.has(c.contractId) : true,
+    );
+
+    // Merge factures héritées dans coworkingScored.
+    const coworkingScoredFinal = [...coworkingScored, ...inheritedCoworkingScored];
 
     // Candidats "projet" : projets client dont le montant total tombe
     // sur un % standard (acompte/solde/full) par rapport à la facture.
@@ -613,7 +671,7 @@ export async function getInvoiceSuggestions(
 
     const all = [
       ...milestoneScored,
-      ...coworkingScored,
+      ...coworkingScoredFinal,
       ...contractScoredFiltered,
       ...projectScoredFiltered,
     ]
