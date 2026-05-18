@@ -5,6 +5,7 @@ import { db } from "@/lib/db/server";
 import { asc, eq } from "drizzle-orm";
 import { ArrowRight, FileText, Receipt } from "lucide-react";
 import Link from "next/link";
+import { type ComptaPeriod, PeriodSelector } from "./period-selector";
 
 function formatEur(n: number): string {
   return n.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
@@ -47,8 +48,78 @@ type PendingCoworking = {
 
 type PendingItem = PendingMilestone | PendingCoworking;
 
-export async function DashboardView() {
+/**
+ * Calcule la fenêtre [start, end[ correspondant au preset. `null` = pas
+ * de borne (tout). On compare ensuite les dates milestones/factures en
+ * `>= start && < end` (end = jour suivant la dernière date incluse).
+ */
+function periodWindow(period: ComptaPeriod): {
+  start: Date | null;
+  end: Date | null;
+  label: string;
+} {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  switch (period) {
+    case "current_month":
+      return {
+        start: new Date(y, m, 1),
+        end: new Date(y, m + 1, 1),
+        label: "mois en cours",
+      };
+    case "last_month":
+      return {
+        start: new Date(y, m - 1, 1),
+        end: new Date(y, m, 1),
+        label: "mois dernier",
+      };
+    case "last_3_months":
+      return {
+        start: new Date(y, m - 2, 1),
+        end: new Date(y, m + 1, 1),
+        label: "3 derniers mois",
+      };
+    case "current_year":
+      return {
+        start: new Date(y, 0, 1),
+        end: new Date(y + 1, 0, 1),
+        label: "année en cours",
+      };
+    case "last_year":
+      return {
+        start: new Date(y - 1, 0, 1),
+        end: new Date(y, 0, 1),
+        label: "année dernière",
+      };
+    case "all":
+      return { start: null, end: null, label: "tout" };
+    default:
+      return {
+        start: new Date(y, m - 11, 1),
+        end: new Date(y, m + 1, 1),
+        label: "12 derniers mois",
+      };
+  }
+}
+
+function inWindow(value: Date | null, window: { start: Date | null; end: Date | null }): boolean {
+  if (!value) return false;
+  if (window.start && value < window.start) return false;
+  if (window.end && value >= window.end) return false;
+  return true;
+}
+
+function parseDate(raw: string | Date | null | undefined): Date | null {
+  if (!raw) return null;
+  if (raw instanceof Date) return raw;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export async function DashboardView({ period }: { period: ComptaPeriod }) {
   const conn = await db();
+  const window = periodWindow(period);
 
   // Tous les projets client (peu importe le statut) — on filtre les
   // jalons par leur propre status pour calculer les agrégats.
@@ -73,6 +144,8 @@ export async function DashboardView() {
       unitPriceHt: coworkingInvoices.unitPriceHt,
       status: coworkingInvoices.status,
       periodStart: coworkingInvoices.periodStart,
+      invoiceDate: coworkingInvoices.invoiceDate,
+      dougsPaidAt: coworkingInvoices.dougsInvoicePaidAt,
       contractName: coworkingContracts.name,
       entityName: entities.name,
     })
@@ -90,42 +163,48 @@ export async function DashboardView() {
 
   for (const p of projectRows) {
     const ms: BillingMilestone[] = Array.isArray(p.milestones) ? p.milestones : [];
-    for (const m of ms) {
-      const amount = Number(m.amountHt) || 0;
-      if (m.status === "todo") {
+    for (const mi of ms) {
+      const amount = Number(mi.amountHt) || 0;
+      const invoicedAt = parseDate(mi.invoicedAt);
+      const paidAt = parseDate(mi.paidAt);
+      if (mi.status === "todo") {
         toBillHt += amount;
         pending.push({
           kind: "milestone",
           projectId: p.id,
           projectName: p.name,
           entityName: p.entityName,
-          milestoneId: m.id,
-          label: m.label,
+          milestoneId: mi.id,
+          label: mi.label,
           amountHt: amount,
           status: "todo",
         });
-      } else if (m.status === "invoiced") {
-        billedHt += amount;
+      } else if (mi.status === "invoiced") {
+        if (inWindow(invoicedAt, window)) billedHt += amount;
         toCashHt += amount;
         pending.push({
           kind: "milestone",
           projectId: p.id,
           projectName: p.name,
           entityName: p.entityName,
-          milestoneId: m.id,
-          label: m.label,
+          milestoneId: mi.id,
+          label: mi.label,
           amountHt: amount,
           status: "invoiced",
         });
-      } else if (m.status === "paid") {
-        billedHt += amount;
-        cashedHt += amount;
+      } else if (mi.status === "paid") {
+        // Facturé : on prend invoicedAt si dispo, sinon paidAt en
+        // fallback (jalon marqué payé sans étape "émis" intermédiaire).
+        if (inWindow(invoicedAt ?? paidAt, window)) billedHt += amount;
+        if (inWindow(paidAt, window)) cashedHt += amount;
       }
     }
   }
 
   for (const c of cwRows) {
     const amount = (Number(c.unitPriceHt) || 0) * c.desks;
+    const invoiceDate = parseDate(c.invoiceDate);
+    const paidAt = parseDate(c.dougsPaidAt) ?? invoiceDate;
     if (c.status === "a_facturer") {
       toBillHt += amount;
       pending.push({
@@ -139,7 +218,7 @@ export async function DashboardView() {
         periodStart: c.periodStart,
       });
     } else if (c.status === "envoyee") {
-      billedHt += amount;
+      if (inWindow(invoiceDate, window)) billedHt += amount;
       toCashHt += amount;
       pending.push({
         kind: "coworking",
@@ -152,8 +231,8 @@ export async function DashboardView() {
         periodStart: c.periodStart,
       });
     } else if (c.status === "payee") {
-      billedHt += amount;
-      cashedHt += amount;
+      if (inWindow(invoiceDate, window)) billedHt += amount;
+      if (inWindow(paidAt, window)) cashedHt += amount;
     }
   }
 
@@ -175,9 +254,17 @@ export async function DashboardView() {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <PeriodSelector current={period} />
+        <p className="text-[11px] text-muted-foreground">
+          Facturé et Encaissé filtrés sur la période. Reste à facturer/encaisser : valeurs
+          actuelles.
+        </p>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard tone="neutral" label="Facturé" value={billedHt} hint="Émis + encaissé" />
-        <KpiCard tone="ok" label="Encaissé" value={cashedHt} hint="Marqué payé" />
+        <KpiCard tone="neutral" label="Facturé" value={billedHt} hint={`Sur ${window.label}`} />
+        <KpiCard tone="ok" label="Encaissé" value={cashedHt} hint={`Sur ${window.label}`} />
         <KpiCard
           tone="warn"
           label="Reste à facturer"
