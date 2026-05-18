@@ -76,6 +76,11 @@ export function DateRangePicker({
   );
   const [drag, setDrag] = useState<DragState>(null);
   const [hover, setHover] = useState<Date | null>(null);
+  // Champs texte JJ/MM/AAAA — édition libre, commit sur blur/Enter.
+  const [startText, setStartText] = useState(() => formatFrDate(value?.start ?? null));
+  const [endText, setEndText] = useState(() => formatFrDate(value?.end ?? null));
+  const [startInvalid, setStartInvalid] = useState(false);
+  const [endInvalid, setEndInvalid] = useState(false);
 
   // Refs pour accéder à la dernière valeur dans les listeners window.
   const dragRef = useRef<DragState>(null);
@@ -96,8 +101,76 @@ export function DateRangePicker({
       setMonth(startOfMonth(v?.start ?? v?.end ?? new Date()));
       setDrag(null);
       setHover(null);
+      setStartText(formatFrDate(v?.start ?? null));
+      setEndText(formatFrDate(v?.end ?? null));
+      setStartInvalid(false);
+      setEndInvalid(false);
     }
   }, [open]);
+
+  // Resynchronise les champs texte quand la valeur change depuis
+  // l'extérieur (clic dans le calendrier, preset, parent qui maj).
+  // Deps en primitif (timestamps) pour éviter la boucle d'objets.
+  const startTime = value?.start ? value.start.getTime() : 0;
+  const endTime = value?.end ? value.end.getTime() : 0;
+  useEffect(() => {
+    setStartText(startTime ? formatFrDate(new Date(startTime)) : "");
+    setStartInvalid(false);
+  }, [startTime]);
+  useEffect(() => {
+    setEndText(endTime ? formatFrDate(new Date(endTime)) : "");
+    setEndInvalid(false);
+  }, [endTime]);
+
+  function commitStart(raw: string) {
+    if (raw.trim() === "") {
+      const currentEnd = valueRef.current?.end ?? null;
+      onChange(currentEnd ? { start: null, end: currentEnd } : null);
+      setStartInvalid(false);
+      return;
+    }
+    const parsed = parseFrDate(raw);
+    if (!parsed) {
+      setStartInvalid(true);
+      return;
+    }
+    setStartInvalid(false);
+    let nextStart: Date = startOfDay(parsed);
+    let nextEnd: Date | null = valueRef.current?.end ? endOfDay(valueRef.current.end) : null;
+    if (nextEnd && nextStart > nextEnd) {
+      const swapEnd = endOfDay(nextStart);
+      nextStart = startOfDay(nextEnd);
+      nextEnd = swapEnd;
+    }
+    onChange({ start: nextStart, end: nextEnd });
+    setMonth(startOfMonth(nextStart));
+  }
+
+  function commitEnd(raw: string) {
+    if (raw.trim() === "") {
+      const currentStart = valueRef.current?.start ?? null;
+      onChange(currentStart ? { start: currentStart, end: null } : null);
+      setEndInvalid(false);
+      return;
+    }
+    const parsed = parseFrDate(raw);
+    if (!parsed) {
+      setEndInvalid(true);
+      return;
+    }
+    setEndInvalid(false);
+    let nextStart: Date | null = valueRef.current?.start
+      ? startOfDay(valueRef.current.start)
+      : null;
+    let nextEnd: Date = endOfDay(parsed);
+    if (nextStart && nextStart > nextEnd) {
+      const swapStart = startOfDay(nextEnd);
+      nextEnd = endOfDay(nextStart);
+      nextStart = swapStart;
+    }
+    onChange({ start: nextStart, end: nextEnd });
+    setMonth(startOfMonth(nextEnd));
+  }
 
   // Listener window : finalise le drag au pointerup, peu importe où le
   // pointeur est relâché. Sans ça, lâcher en dehors d'une cellule
@@ -235,6 +308,50 @@ export function DateRangePicker({
           </div>
         ) : null}
         <div className="w-[260px] select-none p-2">
+          <div className="flex gap-1.5 pb-2">
+            <label className="flex flex-1 flex-col gap-0.5">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Du</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={startText}
+                placeholder="JJ/MM/AAAA"
+                onChange={(e) => setStartText(e.target.value)}
+                onBlur={() => commitStart(startText)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitStart(startText);
+                  }
+                }}
+                className={cn(
+                  "h-7 w-full rounded-md border bg-background px-2 text-sm tabular-nums outline-none focus:ring-1 focus:ring-ring",
+                  startInvalid && "border-destructive focus:ring-destructive",
+                )}
+              />
+            </label>
+            <label className="flex flex-1 flex-col gap-0.5">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Au</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={endText}
+                placeholder="JJ/MM/AAAA"
+                onChange={(e) => setEndText(e.target.value)}
+                onBlur={() => commitEnd(endText)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitEnd(endText);
+                  }
+                }}
+                className={cn(
+                  "h-7 w-full rounded-md border bg-background px-2 text-sm tabular-nums outline-none focus:ring-1 focus:ring-ring",
+                  endInvalid && "border-destructive focus:ring-destructive",
+                )}
+              />
+            </label>
+          </div>
           <header className="flex items-center justify-between px-1.5 pb-2">
             <span className="font-medium text-foreground text-sm capitalize">
               {FMT_MONTH_YEAR.format(month)}
@@ -504,6 +621,50 @@ export function formatIsoDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+/**
+ * Parse une saisie utilisateur en FR : `DD/MM/YYYY`, `DD-MM-YYYY`,
+ * `DD.MM.YYYY` ou `DDMMYYYY`. Tolère `DD/MM/YY` (préfixé 20). Retourne
+ * `null` si invalide ; valide les bornes du jour réel (28/02 ≠ 30/02).
+ */
+export function parseFrDate(input: string): Date | null {
+  const s = input.trim();
+  if (!s) return null;
+  // Accepte aussi ISO YYYY-MM-DD si l'utilisateur colle ce format.
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (iso) {
+    const y = Number(iso[1]);
+    const m = Number(iso[2]);
+    const d = Number(iso[3]);
+    return buildDateChecked(y, m, d);
+  }
+  const m = /^(\d{1,2})[\s./-]?(\d{1,2})[\s./-]?(\d{2}|\d{4})$/.exec(s);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  let year = Number(m[3]);
+  if (year < 100) year += 2000;
+  return buildDateChecked(year, month, day);
+}
+
+function buildDateChecked(y: number, m: number, d: number): Date | null {
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return null;
+  if (y < 1900 || y > 2200) return null;
+  if (m < 1 || m > 12) return null;
+  if (d < 1 || d > 31) return null;
+  const out = new Date(y, m - 1, d);
+  // setDate accepte 31/02 puis le renormalise → on revérifie l'identité.
+  if (out.getFullYear() !== y || out.getMonth() !== m - 1 || out.getDate() !== d) return null;
+  return startOfDay(out);
+}
+
+/** Format `DD/MM/YYYY` ou chaîne vide. */
+export function formatFrDate(d: Date | null): string {
+  if (!d) return "";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}/${d.getFullYear()}`;
 }
 
 /** Format compact FR adapté au cas. */
