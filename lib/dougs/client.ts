@@ -218,9 +218,9 @@ export function buildDougsQuoteUrl(
  * compact aussi (vérifié 2026-05). Donc on doit toujours lire les deux.
  */
 type DougsPayloadAny = {
-  totalNetAmount?: number;
-  totalAmountWithVat?: number;
-  totalVatAmount?: number;
+  totalNetAmount?: number | null;
+  totalAmountWithVat?: number | null;
+  totalVatAmount?: number | null;
   netAmount?: unknown;
   amount?: unknown;
   vatAmount?: unknown;

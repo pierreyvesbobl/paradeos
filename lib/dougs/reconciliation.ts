@@ -26,6 +26,7 @@ async function pMap<T, R>(
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
   return results;
 }
+import { dougsCreditNoteLinks } from "@/db/schema/dougs";
 import { entities } from "@/db/schema/entities";
 import { type BillingMilestone, projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
@@ -46,7 +47,7 @@ import {
   similarityName,
 } from "@/lib/dougs/match";
 import { monthsBetween } from "@/lib/schemas/coworking";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 export type DougsClientName = {
   legalName?: string | null;
@@ -75,14 +76,14 @@ function dougsName(
  * Extrait le montant HT depuis n'importe quel format Dougs.
  * Detail Angular : `totalNetAmount`. Liste compacte : `netAmount`.
  */
-function pickHt(o: { totalNetAmount?: number; netAmount?: unknown }): number | null {
+function pickHt(o: { totalNetAmount?: number | null; netAmount?: unknown }): number | null {
   if (typeof o.totalNetAmount === "number") return o.totalNetAmount;
   if (typeof o.netAmount === "number") return o.netAmount;
   return null;
 }
 
 /** Extrait le montant TTC : `totalAmountWithVat` ou `amount`. */
-function pickTtc(o: { totalAmountWithVat?: number; amount?: unknown }): number | null {
+function pickTtc(o: { totalAmountWithVat?: number | null; amount?: unknown }): number | null {
   if (typeof o.totalAmountWithVat === "number") return o.totalAmountWithVat;
   if (typeof o.amount === "number") return o.amount;
   return null;
@@ -299,10 +300,42 @@ export type InvoiceSuggestion = {
   candidates: InvoiceCandidate[];
 };
 
+export type DougsInvoiceOption = {
+  id: string;
+  reference: string | null;
+  clientName: string;
+  totalHt: number | null;
+  createdAt: string | null;
+};
+
+export type CreditNoteEntry = {
+  dougs: {
+    id: string;
+    reference: string | null;
+    status: string | null;
+    totalHt: number | null;
+    totalTtc: number | null;
+    clientName: string;
+    createdAt: string | null;
+  };
+  /** Lien stocké côté Paradeos vers la facture annulée (null = non lié). */
+  link: {
+    cancelsDougsInvoiceId: string;
+    invoice: { reference: string | null; clientName: string; totalHt: number | null } | null;
+  } | null;
+};
+
+export type InvoiceSuggestionsResult = {
+  invoices: InvoiceSuggestion[];
+  creditNotes: CreditNoteEntry[];
+  /** Toutes les factures Dougs (hors avoirs) — sert au picker de liaison d'avoir. */
+  invoiceOptions: DougsInvoiceOption[];
+};
+
 export async function getInvoiceSuggestions(
   userId: string,
   opts: { debug?: boolean } = {},
-): Promise<InvoiceSuggestion[]> {
+): Promise<InvoiceSuggestionsResult> {
   console.info("[rapprochement] getInvoiceSuggestions start");
   const conn = await db();
 
@@ -400,9 +433,24 @@ export async function getInvoiceSuggestions(
     .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
     .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId));
 
-  // 2. Factures Dougs : récupère, exclut déjà liées.
-  const dougsInvoices = await listDougsSalesInvoices(userId, { limit: 200 });
-  console.info(`[rapprochement] listDougsSalesInvoices → ${dougsInvoices.length} entries`);
+  // 2. Factures Dougs : récupère tout, sépare avoirs (montant < 0) des
+  // factures normales pour éviter qu'un avoir négatif "matche" un jalon
+  // positif à l'envers.
+  const dougsInvoicesAll = await listDougsSalesInvoices(userId, { limit: 200 });
+  console.info(`[rapprochement] listDougsSalesInvoices → ${dougsInvoicesAll.length} entries`);
+
+  const dougsInvoices: typeof dougsInvoicesAll = [];
+  const dougsCreditNotes: typeof dougsInvoicesAll = [];
+  for (const i of dougsInvoicesAll) {
+    const ht = pickHt(i);
+    const ttc = pickTtc(i);
+    const isCredit = (typeof ht === "number" && ht < 0) || (typeof ttc === "number" && ttc < 0);
+    if (isCredit) dougsCreditNotes.push(i);
+    else dougsInvoices.push(i);
+  }
+  console.info(
+    `[rapprochement] split: ${dougsInvoices.length} factures, ${dougsCreditNotes.length} avoirs`,
+  );
 
   // Collect linked invoice ids from milestones + coworking
   const linkedInvoiceIds = new Set<string>();
@@ -706,5 +754,85 @@ export async function getInvoiceSuggestions(
   }
 
   out.sort((a, b) => (b.candidates[0]?.score.total ?? 0) - (a.candidates[0]?.score.total ?? 0));
-  return out;
+
+  // 4. Avoirs : enrichissement + résolution du lien Paradeos
+  // (dougs_credit_note_links). Beaucoup moins nombreux que les factures
+  // (quelques par an), on les enrichit tous sans cap.
+  const enrichedCreditNotes: (DougsSalesInvoice & { id: string })[] = await pMap(
+    dougsCreditNotes,
+    async (i) => {
+      try {
+        const detail = await getDougsSalesInvoice(userId, i.id);
+        return { ...i, ...detail, id: i.id } as DougsSalesInvoice & { id: string };
+      } catch (err) {
+        console.warn(
+          `[rapprochement] enrich credit note ${i.id} failed:`,
+          err instanceof Error ? err.message : err,
+        );
+        return { ...i, id: i.id } as DougsSalesInvoice & { id: string };
+      }
+    },
+    5,
+  );
+
+  const creditNoteIds = enrichedCreditNotes.map((cn) => cn.id);
+  const links = creditNoteIds.length
+    ? await conn
+        .select({
+          dougsCreditNoteId: dougsCreditNoteLinks.dougsCreditNoteId,
+          cancelsDougsInvoiceId: dougsCreditNoteLinks.cancelsDougsInvoiceId,
+        })
+        .from(dougsCreditNoteLinks)
+        .where(inArray(dougsCreditNoteLinks.dougsCreditNoteId, creditNoteIds))
+    : [];
+  const linksByCn = new Map(links.map((l) => [l.dougsCreditNoteId, l.cancelsDougsInvoiceId]));
+
+  // Index des factures Dougs par id pour lookup rapide du "cancels".
+  const invoicesById = new Map(dougsInvoices.map((i) => [i.id, i]));
+
+  const creditNotes: CreditNoteEntry[] = enrichedCreditNotes.map((cn) => {
+    const cancelsId = linksByCn.get(cn.id) ?? null;
+    const cancels = cancelsId ? (invoicesById.get(cancelsId) ?? null) : null;
+    return {
+      dougs: {
+        id: cn.id,
+        reference: cn.reference ?? null,
+        status: cn.status ?? (cn as { paymentStatus?: string }).paymentStatus ?? null,
+        totalHt: pickHt(cn),
+        totalTtc: pickTtc(cn),
+        clientName: pickDougsClientName(cn) ?? "—",
+        createdAt: cn.createdAt ?? null,
+      },
+      link: cancelsId
+        ? {
+            cancelsDougsInvoiceId: cancelsId,
+            invoice: cancels
+              ? {
+                  reference: cancels.reference ?? null,
+                  clientName: pickDougsClientName(cancels) ?? "—",
+                  totalHt: pickHt(cancels),
+                }
+              : null,
+          }
+        : null,
+    };
+  });
+
+  // Picker options : toutes les factures normales (hors avoirs), récent
+  // d'abord. Permet à l'utilisateur de choisir quelle facture l'avoir annule.
+  const invoiceOptions: DougsInvoiceOption[] = dougsInvoices
+    .map((i) => ({
+      id: i.id,
+      reference: i.reference ?? null,
+      clientName: pickDougsClientName(i) ?? "—",
+      totalHt: pickHt(i),
+      createdAt: i.createdAt ?? null,
+    }))
+    .sort((a, b) => {
+      const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return db - da;
+    });
+
+  return { invoices: out, creditNotes, invoiceOptions };
 }

@@ -13,6 +13,7 @@ import {
   type CoworkingInvoiceOption,
   LinkCoworkingContractButton,
   LinkCoworkingInvoiceButton,
+  LinkCreditNotePicker,
   LinkMilestoneButton,
   LinkProjectAsMilestoneButton,
   LinkQuoteButton,
@@ -21,6 +22,7 @@ import {
   ManualLinkQuote,
   type ProjectOption,
   RefreshAllButton,
+  UnlinkCreditNoteButton,
 } from "./reconciliation-actions";
 
 function formatEur(n: number | null | undefined): string {
@@ -111,11 +113,15 @@ export async function RapprochementView({ debug }: { debug?: string }) {
   });
 
   let quoteSuggestions: Awaited<ReturnType<typeof getQuoteSuggestions>> = [];
-  let invoiceSuggestions: Awaited<ReturnType<typeof getInvoiceSuggestions>> = [];
+  let invoiceResult: Awaited<ReturnType<typeof getInvoiceSuggestions>> = {
+    invoices: [],
+    creditNotes: [],
+    invoiceOptions: [],
+  };
   let authError: string | null = null;
 
   try {
-    [quoteSuggestions, invoiceSuggestions] = await Promise.all([
+    [quoteSuggestions, invoiceResult] = await Promise.all([
       getQuoteSuggestions(user.id),
       getInvoiceSuggestions(user.id, { debug: debugMode }),
     ]);
@@ -126,6 +132,10 @@ export async function RapprochementView({ debug }: { debug?: string }) {
       throw err;
     }
   }
+
+  const invoiceSuggestions = invoiceResult.invoices;
+  const creditNotes = invoiceResult.creditNotes;
+  const invoiceOptions = invoiceResult.invoiceOptions;
 
   return (
     <div className="space-y-6">
@@ -446,6 +456,79 @@ export async function RapprochementView({ debug }: { debug?: string }) {
                         invoices={coworkingInvoiceOptions}
                       />
                     </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-rose-200 bg-rose-50/20 dark:border-rose-900 dark:bg-rose-950/10">
+            <header className="border-rose-200 border-b px-6 py-4 dark:border-rose-900">
+              <h2 className="flex items-center gap-2 font-medium text-sm">
+                <Receipt className="size-4 text-rose-700 dark:text-rose-300" />
+                Factures d'avoir Dougs ({creditNotes.length})
+              </h2>
+              <p className="text-rose-700/80 text-xs dark:text-rose-300/70">
+                Montants négatifs — séparés des factures pour éviter de fausser les rapprochements.
+                Rattache chaque avoir à la facture qu'il annule.
+              </p>
+            </header>
+            {creditNotes.length === 0 ? (
+              <p className="px-6 py-6 text-center text-muted-foreground text-sm">
+                Aucun avoir Dougs.
+              </p>
+            ) : (
+              <ul className="divide-y divide-rose-200 dark:divide-rose-900">
+                {creditNotes.map((cn) => (
+                  <li key={cn.dougs.id} className="space-y-2 px-6 py-4 text-sm">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <a
+                        href={`https://app.dougs.fr/app/c/107610/invoicing/sales-invoice?status=waiting&salesInvoiceId=${cn.dougs.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 font-mono text-xs hover:underline"
+                      >
+                        {cn.dougs.reference ?? "—"}
+                        <ExternalLink className="size-3" />
+                      </a>
+                      <span className="rounded-full border border-rose-300 bg-rose-100 px-1.5 py-0.5 font-medium text-[10px] text-rose-700 uppercase tracking-wide dark:border-rose-700 dark:bg-rose-900/40 dark:text-rose-200">
+                        Avoir
+                      </span>
+                      <span className="font-medium">{cn.dougs.clientName}</span>
+                      <span className="text-rose-700 tabular-nums dark:text-rose-300">
+                        {formatEur(cn.dougs.totalHt)} HT
+                      </span>
+                      {cn.dougs.createdAt ? (
+                        <span className="text-[11px] text-muted-foreground">
+                          créé le {new Date(cn.dougs.createdAt).toLocaleDateString("fr-FR")}
+                        </span>
+                      ) : null}
+                    </div>
+                    {cn.link ? (
+                      <div className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-muted-foreground">Annule&nbsp;:</span>{" "}
+                          <span className="font-mono">
+                            {cn.link.invoice?.reference ?? cn.link.cancelsDougsInvoiceId}
+                          </span>
+                          {cn.link.invoice ? (
+                            <span className="ml-2 text-muted-foreground">
+                              {cn.link.invoice.clientName} ·{" "}
+                              <span className="tabular-nums">
+                                {formatEur(cn.link.invoice.totalHt)}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="ml-2 text-amber-700 text-xs">
+                              (facture introuvable dans Dougs)
+                            </span>
+                          )}
+                        </div>
+                        <UnlinkCreditNoteButton creditNoteId={cn.dougs.id} />
+                      </div>
+                    ) : (
+                      <LinkCreditNotePicker creditNoteId={cn.dougs.id} options={invoiceOptions} />
+                    )}
                   </li>
                 ))}
               </ul>

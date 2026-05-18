@@ -2,6 +2,7 @@
 
 import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
+import { linkDougsCreditNote, unlinkDougsCreditNote } from "@/lib/actions/dougs-credit-notes";
 import {
   linkCoworkingContractAsNewInvoice,
   linkCoworkingInvoiceDougs,
@@ -10,7 +11,7 @@ import {
   linkProjectMilestoneDougsInvoice,
   refreshAllDougsLinks,
 } from "@/lib/actions/dougs-refresh";
-import { CloudDownload, Link2, Plus } from "lucide-react";
+import { CloudDownload, Link2, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -521,5 +522,97 @@ export function LinkCoworkingInvoiceButton({
       <Link2 className="size-3.5" />
       {pending ? "Lié…" : "Lier"}
     </Button>
+  );
+}
+
+export type InvoiceOption = {
+  id: string;
+  reference: string | null;
+  clientName: string;
+  totalHt: number | null;
+  createdAt: string | null;
+};
+
+function formatEurOption(n: number | null): string {
+  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
+  return n.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+}
+
+/** Picker pour rattacher une facture d'avoir à la facture qu'elle annule. */
+export function LinkCreditNotePicker({
+  creditNoteId,
+  options,
+}: { creditNoteId: string; options: InvoiceOption[] }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [selected, setSelected] = useState<string | null>(null);
+
+  function submit() {
+    if (!selected) return;
+    startTransition(async () => {
+      const res = await linkDougsCreditNote({
+        creditNoteId,
+        originalInvoiceId: selected,
+      });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Avoir rattaché");
+      setSelected(null);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-dashed bg-background/50 p-2">
+      <FkCombobox
+        value={selected}
+        onValueChange={setSelected}
+        options={options.map((o) => {
+          const ref = o.reference ?? "—";
+          const date = o.createdAt ? new Date(o.createdAt).toLocaleDateString("fr-FR") : "—";
+          return {
+            id: o.id,
+            label: `${ref} · ${o.clientName} · ${formatEurOption(o.totalHt)} · ${date}`,
+            searchValue: `${ref} ${o.clientName} ${formatEurOption(o.totalHt)} ${date}`,
+          };
+        })}
+        searchPlaceholder="Rechercher une facture (n° / client / montant)…"
+        placeholder="Choisir la facture annulée par cet avoir…"
+        disabled={pending}
+        className="flex-1"
+      />
+      <Button type="button" size="sm" onClick={submit} disabled={pending || !selected}>
+        <Link2 className="size-3.5" />
+        {pending ? "Lié…" : "Lier"}
+      </Button>
+    </div>
+  );
+}
+
+export function UnlinkCreditNoteButton({ creditNoteId }: { creditNoteId: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => {
+        startTransition(async () => {
+          const res = await unlinkDougsCreditNote({ creditNoteId });
+          if (!res.ok) {
+            toast.error(res.message);
+            return;
+          }
+          toast.success("Lien retiré");
+          router.refresh();
+        });
+      }}
+      className="inline-flex items-center gap-1 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+      aria-label="Retirer le lien"
+    >
+      <X className="size-3.5" />
+    </button>
   );
 }
