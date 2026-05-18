@@ -349,6 +349,9 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
                                   <span className="ml-2 text-muted-foreground">
                                     {c.contractName ?? "—"} ·{" "}
                                     <span className="tabular-nums">{formatEur(c.amountHt)}</span>
+                                    {c.invoiceDate
+                                      ? ` · émise ${new Date(c.invoiceDate).toLocaleDateString("fr-FR")}`
+                                      : " · non émise"}
                                   </span>
                                 </div>
                                 <span

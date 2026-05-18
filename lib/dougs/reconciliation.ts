@@ -248,6 +248,10 @@ export type InvoiceCandidate =
       entityName: string | null;
       name: string;
       amountHt: number;
+      /** Date d'émission (YYYY-MM-DD) si la facture coworking est émise. */
+      invoiceDate: string | null;
+      periodStart: string;
+      periodEnd: string;
       score: MatchScore;
     }
   | {
@@ -496,6 +500,9 @@ export async function getInvoiceSuggestions(
           entityName: c.billToEntityName ?? contactName,
           name: c.name,
           amountHt: localAmount,
+          invoiceDate: c.invoiceDate,
+          periodStart: c.periodStart,
+          periodEnd: c.periodEnd,
           score: scoreMatch(
             {
               legalName: dougsClientName,
@@ -589,6 +596,9 @@ export async function getInvoiceSuggestions(
           entityName: cwi.billToEntityName ?? contactName,
           name: cwi.name,
           amountHt: localAmount,
+          invoiceDate: cwi.invoiceDate,
+          periodStart: cwi.periodStart,
+          periodEnd: cwi.periodEnd,
           // Score "name" hérité du contrat ; on garde le score amount
           // (souvent faible quand mal aligné) pour signaler la
           // divergence, mais le total reste au moins celui du contrat.
