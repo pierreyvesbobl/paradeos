@@ -21,7 +21,7 @@ async function main() {
 
   const linked =
     await sql`select count(*) as cnt from public.invoices where dougs_invoice_id is not null or dougs_quote_id is not null`;
-  console.info("Avec lien Dougs :", linked[0].cnt);
+  console.info("Avec lien Dougs :", linked[0]?.cnt ?? 0);
 
   await sql.end({ timeout: 5 });
 }
