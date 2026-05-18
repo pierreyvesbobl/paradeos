@@ -3,7 +3,6 @@ import {
   date,
   index,
   integer,
-  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -85,26 +84,11 @@ export const projects = pgTable(
     expectedCloseDate: date("expected_close_date"),
     ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
-    // Lien vers le devis Dougs poussé depuis la fiche projet. status =
-    // DRAFT/PENDING/ACCEPTED/REFUSED côté Dougs (snapshot, peut désynchro).
-    dougsQuoteId: text("dougs_quote_id"),
-    dougsQuoteReference: text("dougs_quote_reference"),
-    dougsQuoteStatus: text("dougs_quote_status"),
-    dougsQuotePushedAt: timestamp("dougs_quote_pushed_at", { withTimezone: true }),
-    // Snapshot des champs synchronisés depuis Dougs après push (totaux
-    // recalculés serveur, date d'émission). Voir refreshProjectDougsQuote
-    // pour le rafraîchissement à la demande / via cron.
-    dougsQuoteTotalHt: numeric("dougs_quote_total_ht", { precision: 12, scale: 2 }),
-    dougsQuoteTotalTtc: numeric("dougs_quote_total_ttc", { precision: 12, scale: 2 }),
-    dougsQuoteTotalVat: numeric("dougs_quote_total_vat", { precision: 12, scale: 2 }),
-    dougsQuoteIssuedAt: timestamp("dougs_quote_issued_at", { withTimezone: true }),
-    dougsQuoteSyncedAt: timestamp("dougs_quote_synced_at", { withTimezone: true }),
-    // Jalons de facturation (acompte/intermédiaire/solde) — JSON typé
-    // côté app via BillingMilestone. Cf. migration 0039.
-    billingMilestones: jsonb("billing_milestones")
-      .$type<BillingMilestone[]>()
-      .notNull()
-      .default(sql`'[]'::jsonb`),
+    // Devis et jalons sont stockés dans la table `invoices` (cf. migration
+    // 0043_invoices_unified). Pour récupérer le devis d'un projet :
+    //   select * from invoices where project_id = ? and kind = 'quote' limit 1
+    // Pour les jalons :
+    //   select * from invoices where project_id = ? and kind = 'milestone'
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
@@ -117,33 +101,6 @@ export const projects = pgTable(
     followUpIdx: index("projects_follow_up_idx").on(table.followUpDate),
   }),
 );
-
-export type BillingMilestoneType = "acompte" | "intermediaire" | "solde";
-export type BillingMilestoneStatus = "todo" | "invoiced" | "paid";
-
-export type BillingMilestone = {
-  id: string;
-  type: BillingMilestoneType;
-  label: string;
-  /** % du montant projet — null si saisie en € absolus. */
-  percent: number | null;
-  amountHt: number;
-  vatRate: number;
-  status: BillingMilestoneStatus;
-  dougsInvoiceId: string | null;
-  dougsInvoiceReference: string | null;
-  invoicedAt: string | null;
-  paidAt: string | null;
-  // Champs synchronisés depuis Dougs (refresh à la demande ou cron).
-  // Null tant qu'on n'a pas fait de refresh. Voir
-  // refreshProjectMilestoneDougsInvoice.
-  dougsStatus?: string | null;
-  dougsTotalHt?: number | null;
-  dougsTotalTtc?: number | null;
-  dougsTotalVat?: number | null;
-  dougsIssuedAt?: string | null;
-  dougsSyncedAt?: string | null;
-};
 
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;

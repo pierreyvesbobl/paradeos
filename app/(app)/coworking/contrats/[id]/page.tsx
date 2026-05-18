@@ -159,9 +159,10 @@ export default async function ContractDetailPage({ params }: { params: Params })
                 </TableHeader>
                 <TableBody>
                   {invoices.map((i) => {
-                    // Totaux live depuis le contrat parent (pas le snapshot facture).
-                    // Prix mensuel × nombre de mois de la période facturée.
-                    const months = monthsBetween(i.periodStart, i.periodEnd);
+                    const periodStart = i.periodStart ?? "";
+                    const periodEnd = i.periodEnd ?? "";
+                    const months =
+                      periodStart && periodEnd ? monthsBetween(periodStart, periodEnd) : 1;
                     const ht = invoiceTotalHt(contract.desks, contract.unitPriceHt, months);
                     const ttc = invoiceTotalTtc(
                       contract.desks,
@@ -169,16 +170,17 @@ export default async function ContractDetailPage({ params }: { params: Params })
                       months,
                       i.vatRate,
                     );
+                    const billedByKey = (i.billedBy as "parade" | "g_and_o" | null) ?? "parade";
                     return (
                       <TableRow key={i.id}>
                         <TableCell className="text-xs">
                           <Link href={`/coworking/factures/${i.id}`} className="hover:underline">
-                            {fmtDate(i.periodStart)} → {fmtDate(i.periodEnd)}
+                            {fmtDate(periodStart)} → {fmtDate(periodEnd)}
                           </Link>
                           <p className="text-muted-foreground">{i.name}</p>
                         </TableCell>
                         <TableCell className="text-xs">
-                          {coworkingInvoiceBilledByLabels[i.billedBy]}
+                          {coworkingInvoiceBilledByLabels[billedByKey]}
                         </TableCell>
                         <TableCell className="text-right text-sm tabular-nums">
                           {formatEuro(ht)}

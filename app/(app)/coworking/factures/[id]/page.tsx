@@ -4,7 +4,7 @@ import { PushToDougsButton } from "@/components/coworking/push-to-dougs-button";
 import { DeleteButton } from "@/components/delete-button";
 import { PageHeader } from "@/components/page-header";
 import { dougsSessions } from "@/db/schema/dougs";
-import { deleteCoworkingInvoice } from "@/lib/actions/coworking";
+import { deleteInvoice } from "@/lib/actions/invoices";
 import { requireUser } from "@/lib/auth/server";
 import { getCoworkingInvoice } from "@/lib/db/queries/coworking";
 import { db } from "@/lib/db/server";
@@ -18,7 +18,7 @@ async function deleteAndRedirect(formData: FormData) {
   "use server";
   const id = formData.get("id");
   if (typeof id !== "string") return;
-  const res = await deleteCoworkingInvoice({ id });
+  const res = await deleteInvoice({ id });
   if (!res.ok) throw new Error(res.message);
   redirect("/coworking?tab=invoices");
 }
@@ -171,10 +171,10 @@ export default async function InvoiceDetailPage({ params }: { params: Params }) 
             contractId: invoice.contractId ?? "",
             name: invoice.name,
             invoiceDate: invoice.invoiceDate ?? "",
-            periodStart: invoice.periodStart,
-            periodEnd: invoice.periodEnd,
+            periodStart: invoice.periodStart ?? "",
+            periodEnd: invoice.periodEnd ?? "",
             status: invoice.status,
-            billedBy: invoice.billedBy,
+            billedBy: (invoice.billedBy as "parade" | "g_and_o") ?? "parade",
             desks: invoice.desks,
             unitPriceHt: invoice.unitPriceHt,
             vatRate: invoice.vatRate,

@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { contacts as contactsTable } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
+import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
@@ -31,7 +32,7 @@ import { db } from "@/lib/db/server";
 import { formatDuration, formatEuro } from "@/lib/format";
 import { projectBillingTypeLabels } from "@/lib/schemas/projects";
 import { cn } from "@/lib/utils";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -80,6 +81,19 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
 
   if (!row) notFound();
   const { project, entity, ownerId, ownerName, ownerAvatarUrl } = row;
+
+  // Devis + jalons depuis la table invoices unifiée (cf. migration 0043).
+  const [quoteInvoice] = await conn
+    .select()
+    .from(invoices)
+    .where(and(eq(invoices.projectId, id), eq(invoices.kind, "quote")))
+    .limit(1);
+  const milestonesRows = await conn
+    .select()
+    .from(invoices)
+    .where(and(eq(invoices.projectId, id), eq(invoices.kind, "milestone")))
+    .orderBy(asc(invoices.createdAt));
+
   const entityList = await conn
     .select({ id: entities.id, name: entities.name })
     .from(entities)
@@ -290,17 +304,17 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
           <dl className="space-y-3">
             <ProjField
               label={
-                project.dougsQuoteTotalHt != null
+                quoteInvoice?.dougsTotalHt != null
                   ? "Montant prévisionnel (manuel)"
                   : "Montant prévisionnel"
               }
             >
               <div className="space-y-1">
                 <ProjValueAmount id={id} value={project.valueAmount} />
-                {project.dougsQuoteTotalHt != null ? (
+                {quoteInvoice?.dougsTotalHt != null ? (
                   <p className="text-[10px] text-muted-foreground">
                     ⓘ Source de vérité : devis Dougs (
-                    {Number(project.dougsQuoteTotalHt).toLocaleString("fr-FR", {
+                    {Number(quoteInvoice.dougsTotalHt).toLocaleString("fr-FR", {
                       style: "currency",
                       currency: "EUR",
                     })}
@@ -335,43 +349,41 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     </div>
   );
 
+  const quoteTotalHt =
+    quoteInvoice?.dougsTotalHt != null ? Number(quoteInvoice.dougsTotalHt) : null;
+  const quoteTotalTtc =
+    quoteInvoice?.dougsTotalTtc != null ? Number(quoteInvoice.dougsTotalTtc) : null;
+
   const billingContent =
     project.kind === "client" ? (
       <div className="space-y-6">
         <BillingSummary
           projectValueHt={Number(project.valueAmount ?? project.budgetAmount ?? 0)}
-          dougsQuoteTotalHt={
-            project.dougsQuoteTotalHt != null ? Number(project.dougsQuoteTotalHt) : null
-          }
-          dougsQuoteReference={project.dougsQuoteReference}
-          dougsQuoteId={project.dougsQuoteId}
-          milestones={project.billingMilestones ?? []}
+          dougsQuoteTotalHt={quoteTotalHt}
+          dougsQuoteReference={quoteInvoice?.dougsReference ?? null}
+          dougsQuoteId={quoteInvoice?.dougsQuoteId ?? null}
+          milestones={milestonesRows}
         />
         <div className="grid gap-6 lg:grid-cols-2">
           <SidebarSection title="Devis Dougs">
             <DougsQuoteSection
               projectId={id}
-              dougsQuoteId={project.dougsQuoteId}
-              dougsQuoteReference={project.dougsQuoteReference}
-              dougsQuoteStatus={project.dougsQuoteStatus}
-              dougsQuotePushedAt={project.dougsQuotePushedAt?.toISOString() ?? null}
-              dougsQuoteTotalHt={
-                project.dougsQuoteTotalHt != null ? Number(project.dougsQuoteTotalHt) : null
-              }
-              dougsQuoteTotalTtc={
-                project.dougsQuoteTotalTtc != null ? Number(project.dougsQuoteTotalTtc) : null
-              }
+              quoteInvoiceId={quoteInvoice?.id ?? null}
+              dougsQuoteId={quoteInvoice?.dougsQuoteId ?? null}
+              dougsQuoteReference={quoteInvoice?.dougsReference ?? null}
+              dougsQuoteStatus={quoteInvoice?.dougsStatus ?? null}
+              dougsQuotePushedAt={quoteInvoice?.invoicedAt?.toISOString() ?? null}
+              dougsQuoteTotalHt={quoteTotalHt}
+              dougsQuoteTotalTtc={quoteTotalTtc}
             />
           </SidebarSection>
           <SidebarSection title="Jalons de facturation">
             <BillingMilestonesSection
               projectId={id}
               projectValueHt={
-                project.dougsQuoteTotalHt != null
-                  ? Number(project.dougsQuoteTotalHt)
-                  : Number(project.valueAmount ?? project.budgetAmount ?? 0)
+                quoteTotalHt ?? Number(project.valueAmount ?? project.budgetAmount ?? 0)
               }
-              milestones={project.billingMilestones ?? []}
+              milestones={milestonesRows}
             />
           </SidebarSection>
         </div>

@@ -1,16 +1,12 @@
 /**
- * Cron quotidien : tire le statut + montants finaux des ressources
- * Dougs liées (devis projet, jalons facturés, factures coworking) et
- * met à jour le snapshot Paradeos. Évite à l'utilisateur de cliquer
- * "Rafraîchir" sur chaque entrée.
+ * Cron quotidien : tire le statut + montants finaux des invoices Dougs
+ * liées et met à jour le snapshot Paradeos sur la table `invoices`.
  *
  * Auth : `Authorization: Bearer <CRON_SECRET>` (Vercel le pose auto).
- *
  * Limitations Vercel Hobby : 1 exécution/jour max (cf. vercel.json).
  */
-import { coworkingInvoices } from "@/db/schema/coworking";
 import { dougsSessions } from "@/db/schema/dougs";
-import { type BillingMilestone, projects } from "@/db/schema/projects";
+import { invoices } from "@/db/schema/invoices";
 import { db } from "@/lib/db/server";
 import {
   DougsApiError,
@@ -24,7 +20,7 @@ import {
   pickDougsTtc,
   pickDougsVat,
 } from "@/lib/dougs/client";
-import { and, eq, isNotNull, ne, or } from "drizzle-orm";
+import { and, eq, isNotNull, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
@@ -47,139 +43,88 @@ async function sleep(ms: number) {
 type Stats = {
   quotesChecked: number;
   quotesUpdated: number;
-  milestonesChecked: number;
-  milestonesUpdated: number;
-  coworkingChecked: number;
-  coworkingUpdated: number;
+  invoicesChecked: number;
+  invoicesUpdated: number;
   errors: string[];
 };
 
 async function syncForUser(userId: string, stats: Stats): Promise<void> {
   const conn = await db();
 
-  // 1) Devis projet : refresh tant que pas REFUSED (terminal côté Dougs).
-  const projectsWithQuote = await conn
+  // 1) Devis (kind='quote', tant que pas REFUSED).
+  const quotes = await conn
     .select({
-      id: projects.id,
-      dougsQuoteId: projects.dougsQuoteId,
-      dougsQuoteStatus: projects.dougsQuoteStatus,
-      billingMilestones: projects.billingMilestones,
+      id: invoices.id,
+      dougsQuoteId: invoices.dougsQuoteId,
+      dougsStatus: invoices.dougsStatus,
     })
-    .from(projects)
-    .where(
-      and(
-        isNotNull(projects.dougsQuoteId),
-        or(eq(projects.dougsQuoteStatus, "REFUSED"), ne(projects.dougsQuoteStatus, "REFUSED")),
-      ),
-    );
+    .from(invoices)
+    .where(and(eq(invoices.kind, "quote"), isNotNull(invoices.dougsQuoteId)));
 
-  for (const p of projectsWithQuote) {
-    // Refresh devis
-    if (p.dougsQuoteId && p.dougsQuoteStatus !== "REFUSED") {
-      stats.quotesChecked++;
-      try {
-        const quote = await getDougsQuote(userId, p.dougsQuoteId);
-        await conn
-          .update(projects)
-          .set({
-            dougsQuoteReference: quote.reference ?? null,
-            dougsQuoteStatus: pickDougsStatus(quote),
-            dougsQuoteTotalHt: toNumeric(pickDougsHt(quote)),
-            dougsQuoteTotalVat: toNumeric(pickDougsVat(quote)),
-            dougsQuoteTotalTtc: toNumeric(pickDougsTtc(quote)),
-            dougsQuoteIssuedAt: toDate(pickDougsIssuedAt(quote)),
-            dougsQuoteSyncedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(projects.id, p.id));
-        stats.quotesUpdated++;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "unknown";
-        stats.errors.push(`quote ${p.id}: ${msg}`);
-        if (err instanceof DougsAuthError) return; // session HS, sortir
-      }
-      await sleep(150);
-    }
-
-    // 2) Jalons facturés (pas encore payés)
-    const milestones = (p.billingMilestones ?? []) as BillingMilestone[];
-    let milestonesChanged = false;
-    const updated: BillingMilestone[] = [];
-    for (const m of milestones) {
-      if (m.dougsInvoiceId && m.status !== "paid") {
-        stats.milestonesChecked++;
-        try {
-          const inv = await getDougsSalesInvoice(userId, m.dougsInvoiceId);
-          milestonesChanged = true;
-          stats.milestonesUpdated++;
-          const paidAt = pickDougsPaidAt(inv);
-          updated.push({
-            ...m,
-            dougsInvoiceReference: inv.reference ?? m.dougsInvoiceReference,
-            dougsStatus: pickDougsStatus(inv),
-            dougsTotalHt: pickDougsHt(inv),
-            dougsTotalVat: pickDougsVat(inv),
-            dougsTotalTtc: pickDougsTtc(inv),
-            dougsIssuedAt: pickDougsIssuedAt(inv),
-            dougsSyncedAt: new Date().toISOString(),
-            paidAt: paidAt ?? m.paidAt,
-            status: paidAt ? "paid" : m.status,
-          });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "unknown";
-          stats.errors.push(`milestone ${m.id}: ${msg}`);
-          updated.push(m);
-          if (err instanceof DougsAuthError) return;
-        }
-        await sleep(150);
-      } else {
-        updated.push(m);
-      }
-    }
-    if (milestonesChanged) {
-      await conn
-        .update(projects)
-        .set({ billingMilestones: updated, updatedAt: new Date() })
-        .where(eq(projects.id, p.id));
-    }
-  }
-
-  // 3) Factures coworking liées et pas payées
-  const cwInvoices = await conn
-    .select({
-      id: coworkingInvoices.id,
-      dougsInvoiceId: coworkingInvoices.dougsInvoiceId,
-      status: coworkingInvoices.status,
-    })
-    .from(coworkingInvoices)
-    .where(and(isNotNull(coworkingInvoices.dougsInvoiceId), ne(coworkingInvoices.status, "payee")));
-
-  for (const cw of cwInvoices) {
-    if (!cw.dougsInvoiceId) continue;
-    stats.coworkingChecked++;
+  for (const q of quotes) {
+    if (!q.dougsQuoteId) continue;
+    if (q.dougsStatus === "REFUSED") continue;
+    stats.quotesChecked++;
     try {
-      const inv = await getDougsSalesInvoice(userId, cw.dougsInvoiceId);
-      const paidAt = pickDougsPaidAt(inv);
-      const localStatus = paidAt && cw.status !== "payee" ? ("payee" as const) : cw.status;
+      const quote = await getDougsQuote(userId, q.dougsQuoteId);
       await conn
-        .update(coworkingInvoices)
+        .update(invoices)
         .set({
-          dougsInvoiceReference: inv.reference ?? null,
-          dougsInvoiceStatus: pickDougsStatus(inv),
-          dougsInvoiceTotalHt: toNumeric(pickDougsHt(inv)),
-          dougsInvoiceTotalVat: toNumeric(pickDougsVat(inv)),
-          dougsInvoiceTotalTtc: toNumeric(pickDougsTtc(inv)),
-          dougsInvoiceIssuedAt: toDate(pickDougsIssuedAt(inv)),
-          dougsInvoicePaidAt: toDate(paidAt),
-          dougsInvoiceSyncedAt: new Date(),
-          status: localStatus,
+          dougsReference: quote.reference ?? null,
+          dougsStatus: pickDougsStatus(quote),
+          dougsTotalHt: toNumeric(pickDougsHt(quote)),
+          dougsTotalVat: toNumeric(pickDougsVat(quote)),
+          dougsTotalTtc: toNumeric(pickDougsTtc(quote)),
+          dougsIssuedAt: toDate(pickDougsIssuedAt(quote)),
+          dougsSyncedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(coworkingInvoices.id, cw.id));
-      stats.coworkingUpdated++;
+        .where(eq(invoices.id, q.id));
+      stats.quotesUpdated++;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "unknown";
-      stats.errors.push(`coworking ${cw.id}: ${msg}`);
+      stats.errors.push(`quote ${q.id}: ${msg}`);
+      if (err instanceof DougsAuthError) return;
+    }
+    await sleep(150);
+  }
+
+  // 2) Factures (kind ≠ quote, status ≠ paid, dougs_invoice_id set).
+  const inv = await conn
+    .select({
+      id: invoices.id,
+      dougsInvoiceId: invoices.dougsInvoiceId,
+      status: invoices.status,
+    })
+    .from(invoices)
+    .where(and(isNotNull(invoices.dougsInvoiceId), ne(invoices.status, "paid")));
+
+  for (const r of inv) {
+    if (!r.dougsInvoiceId) continue;
+    stats.invoicesChecked++;
+    try {
+      const i = await getDougsSalesInvoice(userId, r.dougsInvoiceId);
+      const paidAt = pickDougsPaidAt(i);
+      await conn
+        .update(invoices)
+        .set({
+          dougsReference: i.reference ?? null,
+          dougsStatus: pickDougsStatus(i),
+          dougsTotalHt: toNumeric(pickDougsHt(i)),
+          dougsTotalVat: toNumeric(pickDougsVat(i)),
+          dougsTotalTtc: toNumeric(pickDougsTtc(i)),
+          dougsIssuedAt: toDate(pickDougsIssuedAt(i)),
+          dougsPaidAt: toDate(paidAt),
+          dougsSyncedAt: new Date(),
+          status: paidAt ? "paid" : r.status,
+          paidAt: toDate(paidAt) ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(invoices.id, r.id));
+      stats.invoicesUpdated++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "unknown";
+      stats.errors.push(`invoice ${r.id}: ${msg}`);
       if (err instanceof DougsAuthError) return;
       if (err instanceof DougsApiError) continue;
     }
@@ -197,23 +142,17 @@ export async function GET(request: Request) {
   const stats: Stats = {
     quotesChecked: 0,
     quotesUpdated: 0,
-    milestonesChecked: 0,
-    milestonesUpdated: 0,
-    coworkingChecked: 0,
-    coworkingUpdated: 0,
+    invoicesChecked: 0,
+    invoicesUpdated: 0,
     errors: [],
   };
 
   try {
     const conn = await db();
-    // Tous les users avec une session Dougs active. En pratique Parade
-    // = 1 user actif sur Dougs, mais on boucle au cas où.
     const sessions = await conn.select({ userId: dougsSessions.userId }).from(dougsSessions);
-
     for (const s of sessions) {
       await syncForUser(s.userId, stats);
     }
-
     return NextResponse.json({ ok: true, ...stats });
   } catch (err) {
     console.error("[cron sync-dougs-status]", err);

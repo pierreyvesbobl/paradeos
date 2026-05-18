@@ -2,19 +2,15 @@
 
 import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
-import {
-  setProjectBillingMilestoneStatus,
-  upsertProjectBillingMilestone,
-} from "@/lib/actions/billing-milestones";
-import { updateCoworkingInvoice } from "@/lib/actions/coworking";
 import { unlinkProjectDougsQuote } from "@/lib/actions/dougs-quotes";
 import {
-  relinkCoworkingInvoiceDougs,
-  relinkProjectDougsQuote,
-  relinkProjectMilestoneDougsInvoice,
-  unlinkCoworkingInvoiceDougs,
-  unlinkProjectMilestoneDougsInvoice,
-} from "@/lib/actions/dougs-refresh";
+  deleteInvoice,
+  linkProjectQuoteToDougs,
+  moveInvoiceDougsLink,
+  setInvoiceStatus,
+  unlinkInvoiceDougs,
+  upsertInvoice,
+} from "@/lib/actions/invoices";
 import { cn } from "@/lib/utils";
 import { ExternalLink, Pencil, X } from "lucide-react";
 import Link from "next/link";
@@ -39,6 +35,7 @@ const BADGE_CLS = "rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase track
 // ---------- Quote ----------
 
 type QuoteRow = {
+  invoiceId: string;
   dougsId: string;
   reference: string | null;
   status: string | null;
@@ -62,12 +59,19 @@ export function LinkedQuoteRow({
   function relink() {
     if (!newProjectId || newProjectId === quote.projectId) return;
     startTransition(async () => {
-      const res = await relinkProjectDougsQuote({
-        oldProjectId: quote.projectId,
-        newProjectId,
+      // Relink = unlink ancien projet + link nouveau projet avec même
+      // dougsQuoteId (re-fetch côté Dougs pour fraîcheur du snapshot).
+      const unlinkRes = await unlinkProjectDougsQuote({ projectId: quote.projectId });
+      if (!unlinkRes.ok) {
+        toast.error(unlinkRes.message);
+        return;
+      }
+      const linkRes = await linkProjectQuoteToDougs({
+        projectId: newProjectId,
+        dougsIdOrUrl: quote.dougsId,
       });
-      if (!res.ok) {
-        toast.error(res.message);
+      if (!linkRes.ok) {
+        toast.error(linkRes.message);
         return;
       }
       toast.success("Devis re-rattaché.");
@@ -152,74 +156,77 @@ export function LinkedQuoteRow({
   );
 }
 
-// ---------- Milestone ----------
+// ---------- Invoice (milestone | coworking | one_off) ----------
 
-type MilestoneRow = {
+type InvoiceRow = {
+  invoiceId: string;
   dougsId: string;
   reference: string | null;
-  projectId: string;
-  projectName: string;
-  entityName: string | null;
-  milestoneId: string;
-  milestoneLabel: string;
+  kind: "milestone" | "coworking" | "one_off";
+  label: string;
   amountHt: number;
-  status: "todo" | "invoiced" | "paid";
-  type: "acompte" | "intermediaire" | "solde";
-  percent: number | null;
-  vatRate: number;
+  status: "draft" | "sent" | "accepted" | "refused" | "paid";
+  projectId: string | null;
+  projectName: string | null;
+  coworkingContractId: string | null;
+  contractName: string | null;
+  entityName: string | null;
 };
 
-export function LinkedMilestoneRow({
-  milestone,
-  freeMilestones,
+type FreeInvoice = {
+  id: string;
+  kind: "milestone" | "coworking" | "one_off";
+  label: string;
+  amountHt: number;
+  projectName: string | null;
+  contractName: string | null;
+};
+
+export function LinkedInvoiceRow({
+  invoice,
+  freeInvoices,
 }: {
-  milestone: MilestoneRow;
-  freeMilestones: {
-    projectId: string;
-    projectName: string;
-    milestoneId: string;
-    label: string;
-    amountHt: number;
-  }[];
+  invoice: InvoiceRow;
+  freeInvoices: FreeInvoice[];
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [targetKey, setTargetKey] = useState<string | null>(null);
-  const [label, setLabel] = useState(milestone.milestoneLabel);
-  const [amountStr, setAmountStr] = useState(String(milestone.amountHt));
-  const [status, setStatus] = useState(milestone.status);
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const [label, setLabel] = useState(invoice.label);
+  const [amountStr, setAmountStr] = useState(String(invoice.amountHt));
+  const [status, setStatus] = useState<"draft" | "sent" | "paid">(
+    invoice.status === "paid" ? "paid" : invoice.status === "sent" ? "sent" : "draft",
+  );
 
-  const dirtyData =
-    label !== milestone.milestoneLabel ||
-    Number(amountStr.replace(",", ".")) !== milestone.amountHt ||
-    status !== milestone.status;
+  const dirty =
+    label !== invoice.label ||
+    Number(amountStr.replace(",", ".")) !== invoice.amountHt ||
+    status !== (invoice.status === "paid" ? "paid" : invoice.status === "sent" ? "sent" : "draft");
 
-  // Option synthétique pour combobox: "projectId|milestoneId".
-  const options = freeMilestones.map((m) => ({
-    id: `${m.projectId}|${m.milestoneId}`,
-    label: `${m.projectName} — ${m.label} (${formatEur(m.amountHt)})`,
-    searchValue: `${m.projectName} ${m.label} ${formatEur(m.amountHt)}`,
+  // Picker : on filtre les invoices libres du même kind par défaut
+  // (jalon → jalons libres, coworking → coworking libres, one_off → one_off).
+  // L'utilisateur peut tout de même choisir un autre kind via la recherche.
+  const options = freeInvoices.map((m) => ({
+    id: m.id,
+    label: `${m.kind === "milestone" ? "Jalon" : m.kind === "coworking" ? "Coworking" : "One-off"} · ${m.projectName ?? m.contractName ?? "?"} — ${m.label} (${formatEur(m.amountHt)})`,
+    searchValue: `${m.projectName ?? ""} ${m.contractName ?? ""} ${m.label} ${formatEur(m.amountHt)}`,
   }));
 
   function relink() {
-    if (!targetKey) return;
-    const [newProjectId, newMilestoneId] = targetKey.split("|");
-    if (!newProjectId || !newMilestoneId) return;
+    if (!targetId) return;
     startTransition(async () => {
-      const res = await relinkProjectMilestoneDougsInvoice({
-        oldProjectId: milestone.projectId,
-        oldMilestoneId: milestone.milestoneId,
-        newProjectId,
-        newMilestoneId,
+      const res = await moveInvoiceDougsLink({
+        fromInvoiceId: invoice.invoiceId,
+        toInvoiceId: targetId,
       });
       if (!res.ok) {
         toast.error(res.message);
         return;
       }
-      toast.success("Jalon re-rattaché.");
+      toast.success("Lien Dougs déplacé.");
       setEditing(false);
-      setTargetKey(null);
+      setTargetId(null);
       router.refresh();
     });
   }
@@ -235,31 +242,30 @@ export function LinkedMilestoneRow({
       return;
     }
     startTransition(async () => {
-      const r1 = await upsertProjectBillingMilestone({
-        projectId: milestone.projectId,
-        milestoneId: milestone.milestoneId,
-        type: milestone.type,
+      const r1 = await upsertInvoice({
+        id: invoice.invoiceId,
+        kind: invoice.kind,
+        projectId: invoice.projectId,
+        coworkingContractId: invoice.coworkingContractId,
         label: label.trim(),
-        percent: milestone.percent,
         amountHt,
-        vatRate: milestone.vatRate,
+        vatRate: 0.2,
+        status: invoice.status,
       });
       if (!r1.ok) {
         toast.error(r1.message);
         return;
       }
-      if (status !== milestone.status) {
-        const r2 = await setProjectBillingMilestoneStatus({
-          projectId: milestone.projectId,
-          milestoneId: milestone.milestoneId,
-          status,
-        });
+      const currentDb =
+        invoice.status === "paid" ? "paid" : invoice.status === "sent" ? "sent" : "draft";
+      if (status !== currentDb) {
+        const r2 = await setInvoiceStatus({ id: invoice.invoiceId, status });
         if (!r2.ok) {
           toast.error(r2.message);
           return;
         }
       }
-      toast.success("Jalon mis à jour.");
+      toast.success("Facture mise à jour.");
       setEditing(false);
       router.refresh();
     });
@@ -267,40 +273,59 @@ export function LinkedMilestoneRow({
 
   function unlink() {
     startTransition(async () => {
-      const res = await unlinkProjectMilestoneDougsInvoice({
-        projectId: milestone.projectId,
-        milestoneId: milestone.milestoneId,
-      });
+      const res = await unlinkInvoiceDougs({ invoiceId: invoice.invoiceId });
       if (!res.ok) {
         toast.error(res.message);
         return;
       }
-      toast.success("Jalon délié.");
+      toast.success("Facture déliée.");
       setEditing(false);
       router.refresh();
     });
   }
 
+  function remove() {
+    if (!window.confirm("Supprimer cette facture Paradeos ?")) return;
+    startTransition(async () => {
+      const res = await deleteInvoice({ id: invoice.invoiceId });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Facture supprimée.");
+      router.refresh();
+    });
+  }
+
+  const kindLabel =
+    invoice.kind === "milestone" ? "Jalon" : invoice.kind === "coworking" ? "Coworking" : "Facture";
+  const link =
+    invoice.kind === "milestone" && invoice.projectId
+      ? `/projets/${invoice.projectId}?tab=billing`
+      : invoice.kind === "coworking"
+        ? `/coworking/factures/${invoice.invoiceId}`
+        : null;
+
   return (
     <li className="text-sm">
       <div className={ROW_CLS}>
         <div className="min-w-0 flex-1">
-          <span className={BADGE_CLS}>Jalon</span>
-          <span className="ml-2 font-mono text-xs">{milestone.reference ?? "—"}</span>
-          <Link
-            href={`/projets/${milestone.projectId}?tab=billing`}
-            className="ml-2 font-medium hover:underline"
-          >
-            {milestone.projectName}
-          </Link>
+          <span className={BADGE_CLS}>{kindLabel}</span>
+          <span className="ml-2 font-mono text-xs">{invoice.reference ?? "—"}</span>
+          {link ? (
+            <Link href={link} className="ml-2 font-medium hover:underline">
+              {invoice.projectName ?? invoice.contractName ?? invoice.label}
+            </Link>
+          ) : (
+            <span className="ml-2 font-medium">{invoice.label}</span>
+          )}
           <span className="ml-2 text-muted-foreground">
-            {milestone.milestoneLabel} ·{" "}
-            <span className="tabular-nums">{formatEur(milestone.amountHt)}</span>
-            {milestone.entityName ? ` · ${milestone.entityName}` : ""}
+            {invoice.label} · <span className="tabular-nums">{formatEur(invoice.amountHt)}</span>
+            {invoice.entityName ? ` · ${invoice.entityName}` : ""}
           </span>
         </div>
         <a
-          href={DOUGS_INV_URL(milestone.dougsId)}
+          href={DOUGS_INV_URL(invoice.dougsId)}
           target="_blank"
           rel="noreferrer"
           className="text-muted-foreground hover:text-foreground"
@@ -313,7 +338,7 @@ export function LinkedMilestoneRow({
       {editing ? (
         <div className="space-y-3 border-t bg-muted/10 px-6 py-3">
           <div className="space-y-2">
-            <SectionLabel>Modifier le jalon</SectionLabel>
+            <SectionLabel>Modifier la facture</SectionLabel>
             <div className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_auto]">
               <input
                 type="text"
@@ -334,177 +359,15 @@ export function LinkedMilestoneRow({
               />
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value as MilestoneRow["status"])}
+                onChange={(e) => setStatus(e.target.value as "draft" | "sent" | "paid")}
                 disabled={pending}
                 className="h-8 rounded-md border bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
               >
-                <option value="todo">À facturer</option>
-                <option value="invoiced">Émis</option>
+                <option value="draft">À facturer</option>
+                <option value="sent">Émis</option>
                 <option value="paid">Payé</option>
               </select>
-              <Button type="button" size="sm" onClick={saveData} disabled={pending || !dirtyData}>
-                Enregistrer
-              </Button>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <SectionLabel>Changer le jalon cible</SectionLabel>
-            <div className="flex items-center gap-2">
-              <FkCombobox
-                value={targetKey}
-                onValueChange={setTargetKey}
-                options={options}
-                searchPlaceholder="Rechercher un jalon libre…"
-                placeholder="Choisir un autre jalon (tous projets)…"
-                disabled={pending}
-                className="flex-1"
-              />
-              <Button type="button" size="sm" onClick={relink} disabled={pending || !targetKey}>
-                Re-lier
-              </Button>
-            </div>
-          </div>
-          <FooterActions onUnlink={unlink} pending={pending} />
-        </div>
-      ) : null}
-    </li>
-  );
-}
-
-// ---------- Coworking ----------
-
-type CoworkingRow = {
-  dougsId: string;
-  reference: string | null;
-  coworkingInvoiceId: string;
-  invoiceName: string;
-  contractName: string | null;
-  amountHt: number;
-  status: "a_facturer" | "envoyee" | "payee";
-};
-
-export function LinkedCoworkingRow({
-  coworking,
-  freeCoworking,
-}: {
-  coworking: CoworkingRow;
-  freeCoworking: { id: string; label: string }[];
-}) {
-  const router = useRouter();
-  const [editing, setEditing] = useState(false);
-  const [pending, startTransition] = useTransition();
-  const [targetId, setTargetId] = useState<string | null>(null);
-  const [name, setName] = useState(coworking.invoiceName);
-  const [status, setStatus] = useState(coworking.status);
-
-  const dirtyData = name !== coworking.invoiceName || status !== coworking.status;
-
-  function relink() {
-    if (!targetId || targetId === coworking.coworkingInvoiceId) return;
-    startTransition(async () => {
-      const res = await relinkCoworkingInvoiceDougs({
-        oldCoworkingInvoiceId: coworking.coworkingInvoiceId,
-        newCoworkingInvoiceId: targetId,
-      });
-      if (!res.ok) {
-        toast.error(res.message);
-        return;
-      }
-      toast.success("Facture coworking re-rattachée.");
-      setEditing(false);
-      setTargetId(null);
-      router.refresh();
-    });
-  }
-
-  function saveData() {
-    if (!name.trim()) {
-      toast.error("Nom requis.");
-      return;
-    }
-    startTransition(async () => {
-      const res = await updateCoworkingInvoice({
-        id: coworking.coworkingInvoiceId,
-        name: name.trim(),
-        status,
-      });
-      if (!res.ok) {
-        toast.error(res.message);
-        return;
-      }
-      toast.success("Facture coworking mise à jour.");
-      setEditing(false);
-      router.refresh();
-    });
-  }
-
-  function unlink() {
-    startTransition(async () => {
-      const res = await unlinkCoworkingInvoiceDougs({
-        coworkingInvoiceId: coworking.coworkingInvoiceId,
-      });
-      if (!res.ok) {
-        toast.error(res.message);
-        return;
-      }
-      toast.success("Facture coworking déliée.");
-      setEditing(false);
-      router.refresh();
-    });
-  }
-
-  return (
-    <li className="text-sm">
-      <div className={ROW_CLS}>
-        <div className="min-w-0 flex-1">
-          <span className={BADGE_CLS}>Coworking</span>
-          <span className="ml-2 font-mono text-xs">{coworking.reference ?? "—"}</span>
-          <Link
-            href={`/coworking/factures/${coworking.coworkingInvoiceId}`}
-            className="ml-2 font-medium hover:underline"
-          >
-            {coworking.invoiceName}
-          </Link>
-          <span className="ml-2 text-muted-foreground">
-            {coworking.contractName ?? "—"} ·{" "}
-            <span className="tabular-nums">{formatEur(coworking.amountHt)}</span>
-          </span>
-        </div>
-        <a
-          href={DOUGS_INV_URL(coworking.dougsId)}
-          target="_blank"
-          rel="noreferrer"
-          className="text-muted-foreground hover:text-foreground"
-          aria-label="Ouvrir sur Dougs"
-        >
-          <ExternalLink className="size-3.5" />
-        </a>
-        <EditToggle editing={editing} onToggle={() => setEditing((v) => !v)} />
-      </div>
-      {editing ? (
-        <div className="space-y-3 border-t bg-muted/10 px-6 py-3">
-          <div className="space-y-2">
-            <SectionLabel>Modifier la facture</SectionLabel>
-            <div className="grid gap-2 sm:grid-cols-[2fr_1fr_auto]">
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Nom"
-                disabled={pending}
-                className="h-8 rounded-md border bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-              />
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as CoworkingRow["status"])}
-                disabled={pending}
-                className="h-8 rounded-md border bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="a_facturer">À facturer</option>
-                <option value="envoyee">Envoyée</option>
-                <option value="payee">Payée</option>
-              </select>
-              <Button type="button" size="sm" onClick={saveData} disabled={pending || !dirtyData}>
+              <Button type="button" size="sm" onClick={saveData} disabled={pending || !dirty}>
                 Enregistrer
               </Button>
             </div>
@@ -515,23 +378,35 @@ export function LinkedCoworkingRow({
               <FkCombobox
                 value={targetId}
                 onValueChange={setTargetId}
-                options={freeCoworking}
-                searchPlaceholder="Rechercher une facture coworking libre…"
-                placeholder="Choisir une autre facture coworking…"
+                options={options}
+                searchPlaceholder="Rechercher une facture libre…"
+                placeholder="Choisir une autre facture (toutes catégories)…"
                 disabled={pending}
                 className="flex-1"
               />
-              <Button
-                type="button"
-                size="sm"
-                onClick={relink}
-                disabled={pending || !targetId || targetId === coworking.coworkingInvoiceId}
-              >
+              <Button type="button" size="sm" onClick={relink} disabled={pending || !targetId}>
                 Re-lier
               </Button>
             </div>
           </div>
-          <FooterActions onUnlink={unlink} pending={pending} />
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={remove}
+              disabled={pending}
+              className="text-[11px] text-muted-foreground hover:text-destructive disabled:opacity-50"
+            >
+              Supprimer la facture
+            </button>
+            <button
+              type="button"
+              onClick={unlink}
+              disabled={pending}
+              className="text-[11px] text-muted-foreground hover:text-destructive disabled:opacity-50"
+            >
+              Délier ce Dougs
+            </button>
+          </div>
         </div>
       ) : null}
     </li>

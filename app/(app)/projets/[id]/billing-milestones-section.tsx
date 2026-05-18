@@ -4,17 +4,15 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { BillingMilestone, BillingMilestoneType } from "@/db/schema/projects";
+import type { Invoice } from "@/db/schema/invoices";
 import {
-  removeProjectBillingMilestone,
-  seedDefaultBillingMilestones,
-  setProjectBillingMilestoneStatus,
-  upsertProjectBillingMilestone,
-} from "@/lib/actions/billing-milestones";
-import {
-  linkProjectMilestoneDougsInvoice,
-  refreshProjectMilestoneDougsInvoice,
-} from "@/lib/actions/dougs-refresh";
+  deleteInvoice,
+  linkInvoiceToDougs,
+  refreshInvoiceDougs,
+  seedProjectMilestones,
+  setInvoiceStatus,
+  upsertInvoice,
+} from "@/lib/actions/invoices";
 import {
   Check,
   ExternalLink,
@@ -29,29 +27,72 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+type MilestoneType = "acompte" | "intermediaire" | "solde";
+type UiStatus = "todo" | "invoiced" | "paid";
+
+type MilestoneView = {
+  id: string;
+  type: MilestoneType;
+  label: string;
+  percent: number | null;
+  amountHt: number;
+  status: UiStatus;
+  dougsInvoiceId: string | null;
+  dougsInvoiceReference: string | null;
+  invoicedAt: string | null;
+  paidAt: string | null;
+};
+
 type Props = {
   projectId: string;
   projectValueHt: number;
-  milestones: BillingMilestone[];
+  milestones: Invoice[];
 };
 
-const TYPE_LABEL: Record<BillingMilestoneType, string> = {
+const TYPE_LABEL: Record<MilestoneType, string> = {
   acompte: "Acompte",
   intermediaire: "Intermédiaire",
   solde: "Solde",
 };
 
-const STATUS_BADGE = {
+const STATUS_BADGE: Record<UiStatus, string> = {
   todo: "border-amber-300 bg-amber-50 text-amber-700",
   invoiced: "border-indigo-300 bg-indigo-50 text-indigo-700",
   paid: "border-emerald-300 bg-emerald-50 text-emerald-700",
-} as const;
+};
 
-const STATUS_LABEL = {
+const STATUS_LABEL: Record<UiStatus, string> = {
   todo: "À facturer",
   invoiced: "Facturé",
   paid: "Payé",
-} as const;
+};
+
+function toUiStatus(s: Invoice["status"]): UiStatus {
+  if (s === "paid") return "paid";
+  if (s === "sent") return "invoiced";
+  return "todo";
+}
+
+function toDbStatus(s: UiStatus): "draft" | "sent" | "paid" {
+  if (s === "paid") return "paid";
+  if (s === "invoiced") return "sent";
+  return "draft";
+}
+
+function adapt(i: Invoice): MilestoneView {
+  return {
+    id: i.id,
+    type: (i.milestoneType as MilestoneType) ?? "intermediaire",
+    label: i.label,
+    percent: i.milestonePercent,
+    amountHt: Number(i.amountHt) || 0,
+    status: toUiStatus(i.status),
+    dougsInvoiceId: i.dougsInvoiceId,
+    dougsInvoiceReference: i.dougsReference,
+    invoicedAt: i.invoicedAt ? i.invoicedAt.toISOString() : null,
+    paidAt: i.paidAt ? i.paidAt.toISOString() : null,
+  };
+}
 
 function formatEur(n: number): string {
   return n.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
@@ -59,9 +100,8 @@ function formatEur(n: number): string {
 
 type Draft = {
   milestoneId: string | null;
-  type: BillingMilestoneType;
+  type: MilestoneType;
   label: string;
-  // Mode "percent" : on saisit % et amount se calcule. Mode "amount" : inverse.
   mode: "percent" | "amount";
   percent: number;
   amountHt: number;
@@ -84,9 +124,10 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
+  const rows = useMemo(() => milestones.map(adapt), [milestones]);
   const total = useMemo(
-    () => Math.round(milestones.reduce((s, m) => s + m.amountHt, 0) * 100) / 100,
-    [milestones],
+    () => Math.round(rows.reduce((s, m) => s + m.amountHt, 0) * 100) / 100,
+    [rows],
   );
   const pct = projectValueHt > 0 ? Math.round((total / projectValueHt) * 100) : null;
 
@@ -94,7 +135,7 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
     setDraft(emptyDraft(projectValueHt));
   }
 
-  function openEdit(m: BillingMilestone) {
+  function openEdit(m: MilestoneView) {
     setDraft({
       milestoneId: m.id,
       type: m.type,
@@ -108,7 +149,6 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
   function updateDraft(patch: Partial<Draft>) {
     if (!draft) return;
     const next = { ...draft, ...patch };
-    // Recalcul croisé en fonction du mode actif.
     if (next.mode === "percent" && projectValueHt > 0) {
       next.amountHt = Math.round(projectValueHt * (next.percent / 100) * 100) / 100;
     } else if (next.mode === "amount" && projectValueHt > 0) {
@@ -120,14 +160,16 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
   function save() {
     if (!draft) return;
     startTransition(async () => {
-      const res = await upsertProjectBillingMilestone({
+      const res = await upsertInvoice({
+        id: draft.milestoneId,
+        kind: "milestone",
         projectId,
-        milestoneId: draft.milestoneId,
-        type: draft.type,
         label: draft.label.trim(),
-        percent: draft.mode === "percent" ? draft.percent : null,
         amountHt: draft.amountHt,
         vatRate: 0.2,
+        status: "draft",
+        milestoneType: draft.type,
+        milestonePercent: draft.mode === "percent" ? Math.round(draft.percent) : null,
       });
       if (!res.ok) {
         toast.error(res.message);
@@ -141,7 +183,7 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
 
   function remove(id: string) {
     startTransition(async () => {
-      const res = await removeProjectBillingMilestone({ projectId, milestoneId: id });
+      const res = await deleteInvoice({ id });
       if (!res.ok) {
         toast.error(res.message);
         return;
@@ -154,14 +196,12 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
 
   function refreshDougs(id: string) {
     startTransition(async () => {
-      const res = await refreshProjectMilestoneDougsInvoice({ projectId, milestoneId: id });
+      const res = await refreshInvoiceDougs({ invoiceId: id });
       if (!res.ok) {
         toast.error(res.message);
         return;
       }
-      toast.success(
-        `Synchro Dougs : ${res.data.reference ?? "—"} · ${res.data.status ?? "—"}${res.data.paidAt ? " · payée" : ""}`,
-      );
+      toast.success("Synchro Dougs OK.");
       router.refresh();
     });
   }
@@ -172,29 +212,21 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
     const val = linkInput.trim();
     if (!val) return;
     startTransition(async () => {
-      const res = await linkProjectMilestoneDougsInvoice({
-        projectId,
-        milestoneId,
-        dougsIdOrUrl: val,
-      });
+      const res = await linkInvoiceToDougs({ invoiceId: milestoneId, dougsIdOrUrl: val });
       if (!res.ok) {
         toast.error(res.message);
         return;
       }
-      toast.success(`Facture Dougs liée : ${res.data.reference ?? "—"}`);
+      toast.success("Facture Dougs liée.");
       setLinkingId(null);
       setLinkInput("");
       router.refresh();
     });
   }
 
-  function setStatus(id: string, status: "todo" | "invoiced" | "paid") {
+  function setStatus(id: string, status: UiStatus) {
     startTransition(async () => {
-      const res = await setProjectBillingMilestoneStatus({
-        projectId,
-        milestoneId: id,
-        status,
-      });
+      const res = await setInvoiceStatus({ id, status: toDbStatus(status) });
       if (!res.ok) {
         toast.error(res.message);
         return;
@@ -205,7 +237,11 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
 
   function seedDefaults() {
     startTransition(async () => {
-      const res = await seedDefaultBillingMilestones({ projectId });
+      const res = await seedProjectMilestones({
+        projectId,
+        totalHt: projectValueHt,
+        acomptePercent: 40,
+      });
       if (!res.ok) {
         toast.error(res.message);
         return;
@@ -217,7 +253,7 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
 
   return (
     <div className="space-y-3">
-      {milestones.length === 0 && !draft ? (
+      {rows.length === 0 && !draft ? (
         <div className="rounded-md border border-dashed bg-muted/30 p-3 text-xs">
           <p className="mb-2 text-muted-foreground">
             Aucun jalon. Le total des jalons doit couvrir le montant projet.
@@ -242,9 +278,9 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
         </div>
       ) : null}
 
-      {milestones.length > 0 ? (
+      {rows.length > 0 ? (
         <ul className="divide-y rounded-md border bg-background">
-          {milestones.map((m) => (
+          {rows.map((m) => (
             <li key={m.id} className="space-y-2 px-3 py-2.5 text-xs">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
@@ -422,7 +458,7 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
         </ul>
       ) : null}
 
-      {milestones.length > 0 ? (
+      {rows.length > 0 ? (
         <div className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs">
           <div>
             <span>
@@ -455,7 +491,7 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
               <Label className="text-[10px] text-muted-foreground uppercase">Type</Label>
               <select
                 value={draft.type}
-                onChange={(e) => updateDraft({ type: e.target.value as BillingMilestoneType })}
+                onChange={(e) => updateDraft({ type: e.target.value as MilestoneType })}
                 disabled={pending}
                 className="h-8 w-full rounded-md border bg-background px-2 text-xs"
               >

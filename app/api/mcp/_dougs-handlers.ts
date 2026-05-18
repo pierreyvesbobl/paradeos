@@ -1,14 +1,12 @@
-import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { contacts as contactsTable } from "../../../db/schema/contacts";
-import { coworkingContracts, coworkingInvoices } from "../../../db/schema/coworking";
+import { coworkingContracts } from "../../../db/schema/coworking";
 import { entities as entitiesTable } from "../../../db/schema/entities";
-import { type BillingMilestone, projects } from "../../../db/schema/projects";
+import { invoices } from "../../../db/schema/invoices";
+import { projects } from "../../../db/schema/projects";
 import { db } from "../../../lib/db/server";
 import {
-  DougsApiError,
-  DougsAuthError,
   createDougsQuoteDraft,
   createDougsSalesInvoiceDraft,
   getDougsDraftUrl,
@@ -19,58 +17,51 @@ import {
 } from "../../../lib/dougs/client";
 
 /**
- * Outils MCP qui orchestrent : push Dougs + stockage du lien Paradeos.
+ * Outils MCP qui orchestrent : push Dougs + écriture dans invoices.
  * Atomicité : si Dougs throw, on n'écrit rien en DB.
  *
- * Pas de revalidatePath — l'agent ne déclenche pas de cache invalidation
- * UI. Le user rafraîchira la page si nécessaire.
+ * Pas de revalidatePath — l'agent ne déclenche pas de cache invalidation UI.
  */
 
-// ---------- Helpers internes ----------
+// ---------- Helper : clientData depuis une entité ----------
 
 async function buildClientDataFromEntity(
   userId: string,
   entityName: string,
-  fallbackEntity: {
+  fallback: {
     siren: string | null;
     vatNumber: string | null;
     address: unknown;
   },
   contactEmail: string | null,
 ): Promise<Record<string, unknown>> {
-  try {
-    const matches = await searchDougsClients(userId, entityName, true);
-    const best = matches[0];
-    if (best) {
-      return {
-        isBToB: best.isBtoB,
-        legalName: best.legalName ?? best.name,
-        siren: best.siren,
-        siret: null,
-        vatNumber: best.vatNumber,
-        firstName: best.firstName,
-        lastName: best.lastName,
-        address: best.address
-          ? {
-              street: best.address.street ?? "",
-              zipCode: best.address.zipcode ?? "",
-              city: best.address.city ?? "",
-              country: "France",
-            }
-          : { street: "", zipCode: "", city: "", country: "France" },
-        deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
-        others: [],
-        email: best.email ?? contactEmail ?? null,
-        phone: best.phone ?? null,
-        clientId: best.clientId,
-      };
-    }
-  } catch (err) {
-    if (err instanceof DougsAuthError) throw err;
-    if (!(err instanceof DougsApiError)) throw err;
+  const matches = await searchDougsClients(userId, entityName, true);
+  const best = matches[0];
+  if (best) {
+    return {
+      isBToB: best.isBtoB,
+      legalName: best.legalName ?? best.name,
+      siren: best.siren,
+      siret: null,
+      vatNumber: best.vatNumber,
+      firstName: best.firstName,
+      lastName: best.lastName,
+      address: best.address
+        ? {
+            street: best.address.street ?? "",
+            zipCode: best.address.zipcode ?? "",
+            city: best.address.city ?? "",
+            country: "France",
+          }
+        : { street: "", zipCode: "", city: "", country: "France" },
+      deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
+      others: [],
+      email: best.email ?? contactEmail ?? null,
+      phone: best.phone ?? null,
+      clientId: best.clientId,
+    };
   }
-  // Fallback : payload depuis l'entité Paradeos.
-  const localAddr = fallbackEntity.address as {
+  const localAddr = fallback.address as {
     street?: string;
     postalCode?: string;
     city?: string;
@@ -79,9 +70,9 @@ async function buildClientDataFromEntity(
   return {
     isBToB: true,
     legalName: entityName,
-    siren: fallbackEntity.siren ?? null,
+    siren: fallback.siren ?? null,
     siret: null,
-    vatNumber: fallbackEntity.vatNumber ?? null,
+    vatNumber: fallback.vatNumber ?? null,
     firstName: null,
     lastName: null,
     address: {
@@ -181,16 +172,37 @@ export async function pushProjectQuote(
     lines,
   });
 
-  await conn
-    .update(projects)
-    .set({
-      dougsQuoteId: updated.id,
-      dougsQuoteReference: updated.reference,
-      dougsQuoteStatus: updated.status ?? "DRAFT",
-      dougsQuotePushedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(projects.id, args.projectId));
+  const total = lines.reduce((sum, l) => sum + l.amount, 0);
+
+  // Upsert quote invoice (1 par projet).
+  const [existingQuote] = await conn
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(and(eq(invoices.projectId, args.projectId), eq(invoices.kind, "quote")))
+    .limit(1);
+
+  const quoteValues = {
+    label: `Devis ${project.name}`,
+    amountHt: total.toFixed(2),
+    vatRate: "0.2",
+    status: "sent" as const,
+    dougsQuoteId: updated.id,
+    dougsReference: updated.reference,
+    dougsStatus: updated.status ?? "DRAFT",
+    invoicedAt: new Date(),
+    dougsSyncedAt: new Date(),
+    updatedAt: new Date(),
+  };
+  if (existingQuote) {
+    await conn.update(invoices).set(quoteValues).where(eq(invoices.id, existingQuote.id));
+  } else {
+    await conn.insert(invoices).values({
+      kind: "quote",
+      projectId: args.projectId,
+      createdBy: ctx.userId,
+      ...quoteValues,
+    });
+  }
 
   const url = await getDougsQuoteUrl(ctx.userId, updated.id);
   return {
@@ -207,13 +219,9 @@ export const pushProjectMilestoneInvoiceSchema = z.object({
   projectId: z.string().uuid(),
   /** Si défini : facture l'existant. Sinon : crée un nouveau jalon. */
   milestoneId: z.string().uuid().optional(),
-  /** Pour création de jalon : type. Default acompte si percent < 50, solde si > 50, intermediaire sinon. */
   type: z.enum(["acompte", "intermediaire", "solde"]).optional(),
-  /** % du montant projet — utilisé pour calculer amountHt si pas fourni. */
   percent: z.number().min(0).max(150).optional(),
-  /** Montant HT direct si on ne veut pas passer par %. */
   amountHt: z.number().positive().optional(),
-  /** Label du jalon (pour création). */
   label: z.string().trim().max(120).optional(),
 });
 
@@ -245,57 +253,61 @@ export async function pushProjectMilestoneInvoice(
     throw new Error("Entité de facturation manquante sur le projet.");
   }
 
-  const milestones = (project.billingMilestones ?? []) as BillingMilestone[];
-  let milestone: BillingMilestone | null = null;
-  let milestoneIndex = -1;
+  // Trouver le total Dougs depuis le devis lié, pour calcul %.
+  const [quoteRow] = await conn
+    .select({ dougsTotalHt: invoices.dougsTotalHt })
+    .from(invoices)
+    .where(and(eq(invoices.projectId, args.projectId), eq(invoices.kind, "quote")))
+    .limit(1);
 
+  // Charger l'invoice (jalon) existant si milestoneId fourni.
+  let milestone: typeof invoices.$inferSelect | null = null;
   if (args.milestoneId) {
-    milestoneIndex = milestones.findIndex((m) => m.id === args.milestoneId);
-    if (milestoneIndex === -1) throw new Error("Jalon introuvable.");
-    milestone = milestones[milestoneIndex] ?? null;
+    const [m] = await conn
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.id, args.milestoneId), eq(invoices.kind, "milestone")))
+      .limit(1);
+    if (!m) throw new Error("Jalon introuvable.");
+    milestone = m;
+  }
+
+  let amountHt: number;
+  let label: string;
+  let mType: "acompte" | "intermediaire" | "solde";
+  let percent: number | null;
+
+  if (milestone) {
+    amountHt = Number(milestone.amountHt);
+    label = milestone.label;
+    mType = (milestone.milestoneType as "acompte" | "intermediaire" | "solde") ?? "intermediaire";
+    percent = milestone.milestonePercent;
   } else {
-    // Création d'un nouveau jalon à la volée.
     const valueHt =
-      Number(project.dougsQuoteTotalHt ?? project.valueAmount ?? project.budgetAmount ?? 0) || 0;
-    const amountHt =
+      Number(quoteRow?.dougsTotalHt ?? project.valueAmount ?? project.budgetAmount ?? 0) || 0;
+    amountHt =
       args.amountHt ?? (args.percent != null && valueHt > 0 ? (valueHt * args.percent) / 100 : 0);
-    if (amountHt <= 0)
+    if (amountHt <= 0) {
       throw new Error("amountHt ou percent (avec valueAmount > 0) requis pour créer un jalon.");
-    const percent = args.percent ?? (valueHt > 0 ? Math.round((amountHt / valueHt) * 100) : null);
-    const inferredType: "acompte" | "intermediaire" | "solde" =
+    }
+    percent = args.percent ?? (valueHt > 0 ? Math.round((amountHt / valueHt) * 100) : null);
+    mType =
       args.type ??
       (percent != null && percent < 50
         ? "acompte"
         : percent != null && percent >= 50 && percent < 95
           ? "intermediaire"
           : "solde");
-    const inferredLabel =
+    label =
       args.label ??
-      (inferredType === "acompte"
+      (mType === "acompte"
         ? `Acompte ${percent ?? ""} %`.trim()
-        : inferredType === "solde"
+        : mType === "solde"
           ? `Solde ${percent ?? "100"} %`.trim()
           : `Intermédiaire ${percent ?? ""} %`.trim());
-
-    milestone = {
-      id: randomUUID(),
-      type: inferredType,
-      label: inferredLabel,
-      percent,
-      amountHt: Math.round(amountHt * 100) / 100,
-      vatRate: 0.2,
-      status: "todo",
-      dougsInvoiceId: null,
-      dougsInvoiceReference: null,
-      invoicedAt: null,
-      paidAt: null,
-    };
-    milestones.push(milestone);
-    milestoneIndex = milestones.length - 1;
   }
 
-  if (!milestone) throw new Error("Jalon impossible à résoudre.");
-  if (milestone.amountHt <= 0) throw new Error("Montant du jalon = 0.");
+  if (amountHt <= 0) throw new Error("Montant du jalon = 0.");
 
   const clientData = await buildClientDataFromEntity(
     ctx.userId,
@@ -309,55 +321,75 @@ export async function pushProjectMilestoneInvoice(
   );
 
   const description =
-    milestone.percent != null
-      ? `${milestone.percent.toLocaleString("fr-FR")} % du projet "${project.name}".`
+    percent != null
+      ? `${percent.toLocaleString("fr-FR")} % du projet "${project.name}".`
       : `Facture liée au projet "${project.name}".`;
 
   const lines = [
     {
-      title: milestone.label,
+      title: label,
       description,
       unit: "forfait",
       quantity: 1,
-      unitAmount: milestone.amountHt,
-      vatRate: milestone.vatRate,
+      unitAmount: amountHt,
+      vatRate: 0.2,
       discount: 0,
       discountUnit: "%",
       reference: null,
-      amount: milestone.amountHt,
+      amount: amountHt,
       discountInEuros: 0,
       isPriceWithVat: false,
     },
   ];
 
   const draft = await createDougsSalesInvoiceDraft(ctx.userId);
-  await updateDougsSalesInvoice(ctx.userId, draft.id, {
-    ...draft,
-    clientData,
-    lines,
-  });
+  await updateDougsSalesInvoice(ctx.userId, draft.id, { ...draft, clientData, lines });
 
-  // Met à jour le jalon avec le lien Dougs + statut invoiced.
-  const updatedMilestones = [...milestones];
-  updatedMilestones[milestoneIndex] = {
-    ...milestone,
-    status: "invoiced",
-    dougsInvoiceId: draft.id,
-    dougsInvoiceReference: draft.reference,
-    invoicedAt: new Date().toISOString(),
-  };
-
-  await conn
-    .update(projects)
-    .set({ billingMilestones: updatedMilestones, updatedAt: new Date() })
-    .where(eq(projects.id, args.projectId));
+  let milestoneInvoiceId: string;
+  if (milestone) {
+    await conn
+      .update(invoices)
+      .set({
+        status: "sent",
+        invoicedAt: new Date(),
+        dougsInvoiceId: draft.id,
+        dougsReference: draft.reference,
+        dougsStatus: "DRAFT",
+        dougsSyncedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(invoices.id, milestone.id));
+    milestoneInvoiceId = milestone.id;
+  } else {
+    const [inserted] = await conn
+      .insert(invoices)
+      .values({
+        kind: "milestone",
+        projectId: args.projectId,
+        label,
+        amountHt: amountHt.toFixed(2),
+        vatRate: "0.2",
+        status: "sent",
+        milestoneType: mType,
+        milestonePercent: percent,
+        invoicedAt: new Date(),
+        dougsInvoiceId: draft.id,
+        dougsReference: draft.reference,
+        dougsStatus: "DRAFT",
+        dougsSyncedAt: new Date(),
+        createdBy: ctx.userId,
+      })
+      .returning({ id: invoices.id });
+    if (!inserted) throw new Error("Insertion jalon échouée.");
+    milestoneInvoiceId = inserted.id;
+  }
 
   const url = await getDougsDraftUrl(ctx.userId, draft.id);
   return {
     dougsInvoiceId: draft.id,
     reference: draft.reference,
-    milestoneId: milestone.id,
-    milestoneLabel: milestone.label,
+    milestoneId: milestoneInvoiceId,
+    milestoneLabel: label,
     url,
   };
 }
@@ -375,7 +407,7 @@ export async function pushCoworkingInvoiceMcp(
   const conn = await db();
   const [row] = await conn
     .select({
-      invoice: coworkingInvoices,
+      invoice: invoices,
       contract: coworkingContracts,
       contactFirstName: contactsTable.firstName,
       contactLastName: contactsTable.lastName,
@@ -386,15 +418,18 @@ export async function pushCoworkingInvoiceMcp(
       billToEntityVatNumber: entitiesTable.vatNumber,
       billToEntityAddress: entitiesTable.address,
     })
-    .from(coworkingInvoices)
-    .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
+    .from(invoices)
+    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
     .leftJoin(contactsTable, eq(contactsTable.id, coworkingContracts.contactId))
     .leftJoin(entitiesTable, eq(entitiesTable.id, coworkingContracts.billToEntityId))
-    .where(eq(coworkingInvoices.id, args.coworkingInvoiceId))
+    .where(and(eq(invoices.id, args.coworkingInvoiceId), eq(invoices.kind, "coworking")))
     .limit(1);
 
   if (!row || !row.contract) throw new Error("Facture coworking introuvable.");
   const { invoice, contract } = row;
+  if (!invoice.periodStart || !invoice.periodEnd) {
+    throw new Error("Période manquante sur la facture.");
+  }
   const isBtoB = Boolean(contract.billToEntityId);
   const searchName = isBtoB
     ? (row.billToEntityName ?? "")
@@ -414,8 +449,6 @@ export async function pushCoworkingInvoiceMcp(
       row.contactEmail,
     );
   } else {
-    // B2C : minimal client data depuis le contact (pas de recherche
-    // Dougs B2C nécessaire pour MVP).
     const addr = row.contactAddress as {
       street?: string;
       postalCode?: string;
@@ -450,8 +483,8 @@ export async function pushCoworkingInvoiceMcp(
     1,
     (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1,
   );
-  const desks = contract.desks;
-  const monthlyHt = Number(contract.unitPriceHt);
+  const desks = invoice.desks ?? contract.desks;
+  const monthlyHt = Number(invoice.unitPriceHt ?? contract.unitPriceHt);
   const vatRate = Number(invoice.vatRate);
   const lineAmount = desks * monthlyHt * months;
 
@@ -476,9 +509,17 @@ export async function pushCoworkingInvoiceMcp(
   await updateDougsSalesInvoice(ctx.userId, draft.id, { ...draft, clientData, lines });
 
   await conn
-    .update(coworkingInvoices)
-    .set({ dougsInvoiceId: draft.id, updatedAt: new Date() })
-    .where(eq(coworkingInvoices.id, args.coworkingInvoiceId));
+    .update(invoices)
+    .set({
+      status: "sent",
+      invoicedAt: new Date(),
+      dougsInvoiceId: draft.id,
+      dougsReference: draft.reference,
+      dougsStatus: "DRAFT",
+      dougsSyncedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, args.coworkingInvoiceId));
 
   const url = await getDougsDraftUrl(ctx.userId, draft.id);
   return { dougsInvoiceId: draft.id, reference: draft.reference, url };

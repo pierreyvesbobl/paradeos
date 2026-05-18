@@ -1,8 +1,9 @@
 "use server";
 
 import { contacts as contactsTable } from "@/db/schema/contacts";
-import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
+import { coworkingContracts } from "@/db/schema/coworking";
 import { entities as entitiesTable } from "@/db/schema/entities";
+import { invoices } from "@/db/schema/invoices";
 import { action } from "@/lib/actions/action";
 import { generateNextInvoiceForContract } from "@/lib/coworking/generate-invoice";
 import { db } from "@/lib/db/server";
@@ -16,10 +17,8 @@ import {
 } from "@/lib/dougs/client";
 import {
   createCoworkingContractSchema,
-  createCoworkingInvoiceSchema,
   monthsBetween,
   updateCoworkingContractSchema,
-  updateCoworkingInvoiceSchema,
 } from "@/lib/schemas/coworking";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -27,7 +26,9 @@ import { z } from "zod";
 
 const idSchema = z.object({ id: z.string().uuid() });
 
-// ---------- Contrats ----------
+// =====================================================================
+// Contrats coworking
+// =====================================================================
 
 export const createCoworkingContract = action(
   createCoworkingContractSchema,
@@ -105,102 +106,48 @@ export const deleteCoworkingContract = action(idSchema, async ({ input }) => {
   return { id: input.id };
 });
 
-// ---------- Factures ----------
-
-export const createCoworkingInvoice = action(
-  createCoworkingInvoiceSchema,
-  async ({ input, user }) => {
-    const conn = await db();
-    const [row] = await conn
-      .insert(coworkingInvoices)
-      .values({
-        contractId: input.contractId,
-        name: input.name,
-        invoiceDate: input.invoiceDate ?? null,
-        periodStart: input.periodStart,
-        periodEnd: input.periodEnd,
-        status: input.status ?? "a_facturer",
-        billedBy: input.billedBy ?? "parade",
-        desks: input.desks,
-        unitPriceHt: input.unitPriceHt,
-        vatRate: input.vatRate ?? "0.2",
-        notes: input.notes ?? null,
-        createdBy: user.id,
-      })
-      .returning({ id: coworkingInvoices.id });
-
-    revalidatePath("/coworking");
-    revalidatePath(`/coworking/contrats/${input.contractId}`);
-    return { id: row?.id };
-  },
-);
-
-export const updateCoworkingInvoice = action(updateCoworkingInvoiceSchema, async ({ input }) => {
-  const conn = await db();
-  const update: Record<string, unknown> = { updatedAt: new Date() };
-  if (input.name !== undefined) update.name = input.name;
-  if (input.invoiceDate !== undefined) update.invoiceDate = input.invoiceDate;
-  if (input.periodStart !== undefined) update.periodStart = input.periodStart;
-  if (input.periodEnd !== undefined) update.periodEnd = input.periodEnd;
-  if (input.status !== undefined) update.status = input.status;
-  if (input.billedBy !== undefined) update.billedBy = input.billedBy;
-  if (input.desks !== undefined) update.desks = input.desks;
-  if (input.unitPriceHt !== undefined) update.unitPriceHt = input.unitPriceHt;
-  if (input.vatRate !== undefined) update.vatRate = input.vatRate;
-  if (input.notes !== undefined) update.notes = input.notes;
-
-  await conn.update(coworkingInvoices).set(update).where(eq(coworkingInvoices.id, input.id));
-
-  revalidatePath("/coworking");
-  revalidatePath(`/coworking/factures/${input.id}`);
-  return { id: input.id };
-});
-
-export const deleteCoworkingInvoice = action(idSchema, async ({ input }) => {
-  const conn = await db();
-  await conn.delete(coworkingInvoices).where(eq(coworkingInvoices.id, input.id));
-  revalidatePath("/coworking");
-  return { id: input.id };
-});
-
-// ---------- Dougs : push d'une facture en brouillon ----------
+// =====================================================================
+// Push facture coworking vers Dougs (sales-invoice draft)
+// =====================================================================
 
 /**
- * Pousse la facture Paradeos vers Dougs en tant que brouillon
- * `sales-invoices-drafts`. Recherche le client (par entity.name si B2B,
- * sinon par contact.firstName+lastName), crée le draft, remplit lignes
- * et clientData. Stocke le `dougs_invoice_id` retourné.
- *
- * Ne **finalise pas** le brouillon — c'est PY qui valide depuis Dougs.
+ * Pousse la facture (invoice kind='coworking') vers Dougs en tant que
+ * brouillon. Recherche le client (B2B via entity, B2C via contact),
+ * crée le draft, remplit lignes + clientData. Stocke `dougs_invoice_id`
+ * sur l'invoice. Ne finalise pas — PY valide depuis Dougs.
  */
 export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user }) => {
   const conn = await db();
   const [row] = await conn
     .select({
-      invoice: coworkingInvoices,
+      invoice: invoices,
       contract: coworkingContracts,
       contactFirstName: contactsTable.firstName,
       contactLastName: contactsTable.lastName,
       contactEmail: contactsTable.email,
       contactAddress: contactsTable.address,
-      // Entité de facturation (B2B) — pilote isBtoB + clientData.
       billToEntityName: entitiesTable.name,
       billToEntitySiren: entitiesTable.siren,
       billToEntityVatNumber: entitiesTable.vatNumber,
       billToEntityAddress: entitiesTable.address,
     })
-    .from(coworkingInvoices)
-    .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
+    .from(invoices)
+    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
     .leftJoin(contactsTable, eq(contactsTable.id, coworkingContracts.contactId))
     .leftJoin(entitiesTable, eq(entitiesTable.id, coworkingContracts.billToEntityId))
-    .where(eq(coworkingInvoices.id, input.id))
+    .where(eq(invoices.id, input.id))
     .limit(1);
 
-  if (!row || !row.contract) throw new Error("Facture introuvable.");
+  if (!row || !row.contract) throw new Error("Facture coworking introuvable.");
   const { invoice, contract } = row;
+  if (invoice.kind !== "coworking") {
+    throw new Error("Cette facture n'est pas de type coworking.");
+  }
+  if (!invoice.periodStart || !invoice.periodEnd) {
+    throw new Error("Période manquante sur la facture.");
+  }
 
-  // B2B si le contrat pointe sur une entité de facturation, sinon B2C
-  // (au nom du contact qui occupe le poste).
+  // B2B si le contrat pointe vers une entité, sinon B2C (contact).
   const isBtoB = Boolean(contract.billToEntityId);
   const searchName = isBtoB
     ? (row.billToEntityName ?? "")
@@ -219,7 +166,6 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
     const matches = await searchDougsClients(user.id, searchName, isBtoB);
     const best = matches[0];
     if (best) {
-      // Match trouvé (Dougs existant ou Pappers).
       clientData = {
         isBToB: best.isBtoB,
         legalName: best.legalName ?? best.name,
@@ -243,8 +189,6 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
         clientId: best.clientId,
       };
     } else {
-      // Pas de match — payload minimal depuis nos données locales.
-      // B2B : adresse de l'entité. B2C : adresse du contact.
       const localAddr = (isBtoB ? row.billToEntityAddress : row.contactAddress) as {
         street?: string;
         postalCode?: string;
@@ -281,8 +225,8 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
   }
 
   const months = monthsBetween(invoice.periodStart, invoice.periodEnd);
-  const desks = contract.desks;
-  const monthlyHt = Number(contract.unitPriceHt);
+  const desks = invoice.desks ?? contract.desks;
+  const monthlyHt = Number(invoice.unitPriceHt ?? contract.unitPriceHt);
   const vatRate = Number(invoice.vatRate);
 
   const lines = [
@@ -319,13 +263,20 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
   }
 
   await conn
-    .update(coworkingInvoices)
-    .set({ dougsInvoiceId: draft.id, updatedAt: new Date() })
-    .where(eq(coworkingInvoices.id, input.id));
+    .update(invoices)
+    .set({
+      dougsInvoiceId: draft.id,
+      dougsReference: draft.reference,
+      dougsStatus: "DRAFT",
+      dougsSyncedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, input.id));
 
   const url = await getDougsDraftUrl(user.id, draft.id);
 
   revalidatePath("/coworking");
   revalidatePath(`/coworking/factures/${input.id}`);
+  revalidatePath("/compta");
   return { dougsId: draft.id, reference: draft.reference, url };
 });

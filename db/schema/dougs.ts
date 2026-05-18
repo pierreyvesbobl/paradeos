@@ -50,27 +50,6 @@ export const dougsSyncTokens = pgTable(
 
 export type DougsSyncToken = typeof dougsSyncTokens.$inferSelect;
 
-/**
- * Lien entre une facture d'avoir Dougs (montant négatif) et la facture
- * Dougs qu'elle annule. Permet à la page rapprochement de classer les
- * avoirs séparément des factures et de signaler qu'un avoir est rattaché.
- * Une avoir → au plus une facture d'origine (unique index).
- */
-export const dougsCreditNoteLinks = pgTable(
-  "dougs_credit_note_links",
-  {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    dougsCreditNoteId: text("dougs_credit_note_id").notNull(),
-    cancelsDougsInvoiceId: text("cancels_dougs_invoice_id").notNull(),
-    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
-  },
-  (t) => ({
-    creditNoteUnique: uniqueIndex("dougs_credit_note_links_cn_unique").on(t.dougsCreditNoteId),
-    invoiceIdx: index("dougs_credit_note_links_invoice_idx").on(t.cancelsDougsInvoiceId),
-  }),
-);
-
-export type DougsCreditNoteLink = typeof dougsCreditNoteLinks.$inferSelect;
-export type NewDougsCreditNoteLink = typeof dougsCreditNoteLinks.$inferInsert;
+// Les avoirs Dougs (factures d'avoir) sont stockés dans la table
+// `invoices` avec kind='credit_note' et cancels_invoice_id pointant vers
+// la facture annulée. Cf. migration 0043_invoices_unified.

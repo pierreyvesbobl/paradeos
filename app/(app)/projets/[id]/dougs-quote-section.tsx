@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { unlinkProjectDougsQuote } from "@/lib/actions/dougs-quotes";
-import { linkProjectDougsQuote, refreshProjectDougsQuote } from "@/lib/actions/dougs-refresh";
+import { linkProjectQuoteToDougs, refreshInvoiceDougs } from "@/lib/actions/invoices";
 import { ExternalLink, FileText, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -11,6 +11,8 @@ import { toast } from "sonner";
 
 type Props = {
   projectId: string;
+  /** Id de l'invoice kind='quote' liée — nécessaire pour refresh. */
+  quoteInvoiceId: string | null;
   dougsQuoteId: string | null;
   dougsQuoteReference: string | null;
   dougsQuoteStatus: string | null;
@@ -39,6 +41,7 @@ function formatEur(n: number | null | undefined): string {
  */
 export function DougsQuoteSection({
   projectId,
+  quoteInvoiceId,
   dougsQuoteId,
   dougsQuoteReference,
   dougsQuoteStatus,
@@ -52,13 +55,14 @@ export function DougsQuoteSection({
   const [showLink, setShowLink] = useState(false);
 
   function refresh() {
+    if (!quoteInvoiceId) return;
     startTransition(async () => {
-      const res = await refreshProjectDougsQuote({ projectId });
+      const res = await refreshInvoiceDougs({ invoiceId: quoteInvoiceId });
       if (!res.ok) {
         toast.error(res.message);
         return;
       }
-      toast.success(`Synchro : ${res.data.reference ?? "—"} · ${res.data.status ?? "—"}`);
+      toast.success("Synchro Dougs OK.");
       router.refresh();
     });
   }
@@ -80,7 +84,7 @@ export function DougsQuoteSection({
     const val = linkInput.trim();
     if (!val) return;
     startTransition(async () => {
-      const res = await linkProjectDougsQuote({ projectId, dougsIdOrUrl: val });
+      const res = await linkProjectQuoteToDougs({ projectId, dougsIdOrUrl: val });
       if (!res.ok) {
         toast.error(res.message);
         return;

@@ -1,8 +1,9 @@
 import { contacts } from "@/db/schema/contacts";
-import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
+import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
+import { invoices } from "@/db/schema/invoices";
 import { db } from "@/lib/db/server";
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 
 export type ContractListRow = {
   id: string;
@@ -54,6 +55,24 @@ export async function listCoworkingContracts(): Promise<ContractListRow[]> {
   }));
 }
 
+/**
+ * Mapping ancien statut UI ↔ nouveau statut DB :
+ *   a_facturer → draft
+ *   envoyee    → sent
+ *   payee      → paid
+ * On expose le statut historique pour minimiser le diff UI.
+ */
+function toOldCoworkingStatus(status: string): "a_facturer" | "envoyee" | "payee" {
+  switch (status) {
+    case "sent":
+      return "envoyee";
+    case "paid":
+      return "payee";
+    default:
+      return "a_facturer";
+  }
+}
+
 export type InvoiceListRow = {
   id: string;
   contractId: string;
@@ -72,49 +91,49 @@ export type InvoiceListRow = {
 
 export async function listCoworkingInvoices(): Promise<InvoiceListRow[]> {
   const conn = await db();
-  // Les `desks`/`unitPriceHt`/`vatRate` exposés viennent du **contrat**
-  // (rollup live, comme dans Notion). Les colonnes snapshot sur la table
-  // facture restent en DB en cas de suppression du contrat parent (cf. fallback).
   const rows = await conn
     .select({
-      id: coworkingInvoices.id,
-      contractId: coworkingInvoices.contractId,
+      id: invoices.id,
+      contractId: invoices.coworkingContractId,
       contractName: coworkingContracts.name,
       contactFirstName: contacts.firstName,
       contactLastName: contacts.lastName,
-      name: coworkingInvoices.name,
-      invoiceDate: coworkingInvoices.invoiceDate,
-      periodStart: coworkingInvoices.periodStart,
-      periodEnd: coworkingInvoices.periodEnd,
-      status: coworkingInvoices.status,
-      billedBy: coworkingInvoices.billedBy,
+      label: invoices.label,
+      invoicedAt: invoices.invoicedAt,
+      periodStart: invoices.periodStart,
+      periodEnd: invoices.periodEnd,
+      status: invoices.status,
+      billedBy: invoices.billedBy,
       contractDesks: coworkingContracts.desks,
       contractUnitPriceHt: coworkingContracts.unitPriceHt,
-      snapshotDesks: coworkingInvoices.desks,
-      snapshotUnitPriceHt: coworkingInvoices.unitPriceHt,
-      vatRate: coworkingInvoices.vatRate,
+      snapshotDesks: invoices.desks,
+      snapshotUnitPriceHt: invoices.unitPriceHt,
+      vatRate: invoices.vatRate,
     })
-    .from(coworkingInvoices)
-    .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
+    .from(invoices)
+    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
     .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId))
-    .orderBy(desc(coworkingInvoices.periodStart));
+    .where(eq(invoices.kind, "coworking"))
+    .orderBy(desc(invoices.periodStart));
 
   return rows.map((r) => ({
     id: r.id,
-    contractId: r.contractId,
+    contractId: r.contractId ?? "",
     contractName: r.contractName ?? "(contrat supprimé)",
     contactName:
       r.contactFirstName || r.contactLastName
         ? `${r.contactFirstName ?? ""} ${r.contactLastName ?? ""}`.trim()
         : null,
-    name: r.name,
-    invoiceDate: r.invoiceDate,
-    periodStart: r.periodStart,
-    periodEnd: r.periodEnd,
-    status: r.status,
-    billedBy: r.billedBy,
-    desks: r.contractDesks ?? r.snapshotDesks,
-    unitPriceHt: r.contractUnitPriceHt ?? r.snapshotUnitPriceHt,
+    name: r.label,
+    invoiceDate: r.invoicedAt
+      ? `${r.invoicedAt.getFullYear()}-${String(r.invoicedAt.getMonth() + 1).padStart(2, "0")}-${String(r.invoicedAt.getDate()).padStart(2, "0")}`
+      : null,
+    periodStart: r.periodStart ?? "",
+    periodEnd: r.periodEnd ?? "",
+    status: toOldCoworkingStatus(r.status),
+    billedBy: (r.billedBy as "parade" | "g_and_o") ?? "parade",
+    desks: r.contractDesks ?? r.snapshotDesks ?? 1,
+    unitPriceHt: r.contractUnitPriceHt ?? r.snapshotUnitPriceHt ?? "0",
     vatRate: r.vatRate,
   }));
 }
@@ -148,11 +167,34 @@ export async function getCoworkingContractWithInvoices(id: string) {
 
   if (!contract) return null;
 
-  const invoices = await conn
+  const cwInvoices = await conn
     .select()
-    .from(coworkingInvoices)
-    .where(eq(coworkingInvoices.contractId, id))
-    .orderBy(asc(coworkingInvoices.periodStart));
+    .from(invoices)
+    .where(and(eq(invoices.coworkingContractId, id), eq(invoices.kind, "coworking")))
+    .orderBy(asc(invoices.periodStart));
+
+  // On expose les invoices avec les anciens noms de champs pour
+  // minimiser le diff dans les pages /coworking/contrats/[id].
+  const adapted = cwInvoices.map((i) => ({
+    ...i,
+    name: i.label,
+    contractId: i.coworkingContractId,
+    invoiceDate: i.invoicedAt
+      ? `${i.invoicedAt.getFullYear()}-${String(i.invoicedAt.getMonth() + 1).padStart(2, "0")}-${String(i.invoicedAt.getDate()).padStart(2, "0")}`
+      : null,
+    status: toOldCoworkingStatus(i.status),
+    desks: i.desks ?? 1,
+    unitPriceHt: i.unitPriceHt ?? "0",
+    dougsInvoiceId: i.dougsInvoiceId,
+    dougsInvoiceReference: i.dougsReference,
+    dougsInvoiceStatus: i.dougsStatus,
+    dougsInvoiceTotalHt: i.dougsTotalHt,
+    dougsInvoiceTotalVat: i.dougsTotalVat,
+    dougsInvoiceTotalTtc: i.dougsTotalTtc,
+    dougsInvoiceIssuedAt: i.dougsIssuedAt,
+    dougsInvoicePaidAt: i.dougsPaidAt,
+    dougsInvoiceSyncedAt: i.dougsSyncedAt,
+  }));
 
   return {
     contract: {
@@ -162,7 +204,7 @@ export async function getCoworkingContractWithInvoices(id: string) {
           ? `${contract.contactFirstName ?? ""} ${contract.contactLastName ?? ""}`.trim()
           : null,
     },
-    invoices,
+    invoices: adapted,
   };
 }
 
@@ -170,7 +212,7 @@ export async function getCoworkingInvoice(id: string) {
   const conn = await db();
   const [row] = await conn
     .select({
-      invoice: coworkingInvoices,
+      invoice: invoices,
       contractName: coworkingContracts.name,
       contractId: coworkingContracts.id,
       contractDesks: coworkingContracts.desks,
@@ -178,25 +220,40 @@ export async function getCoworkingInvoice(id: string) {
       contactFirstName: contacts.firstName,
       contactLastName: contacts.lastName,
     })
-    .from(coworkingInvoices)
-    .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
+    .from(invoices)
+    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
     .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId))
-    .where(eq(coworkingInvoices.id, id))
+    .where(and(eq(invoices.id, id), eq(invoices.kind, "coworking")))
     .limit(1);
 
   if (!row) return null;
-  // `desks` / `unitPriceHt` exposés = valeurs **vivantes** du contrat
-  // (Notion-style rollup). On overwrite le snapshot.
+
+  const i = row.invoice;
+  // On expose les champs avec les anciens noms pour minimiser le diff.
   return {
-    ...row.invoice,
-    desks: row.contractDesks ?? row.invoice.desks,
-    unitPriceHt: row.contractUnitPriceHt ?? row.invoice.unitPriceHt,
+    ...i,
+    name: i.label,
+    contractId: i.coworkingContractId,
+    invoiceDate: i.invoicedAt
+      ? `${i.invoicedAt.getFullYear()}-${String(i.invoicedAt.getMonth() + 1).padStart(2, "0")}-${String(i.invoicedAt.getDate()).padStart(2, "0")}`
+      : null,
+    desks: row.contractDesks ?? i.desks ?? 1,
+    unitPriceHt: row.contractUnitPriceHt ?? i.unitPriceHt ?? "0",
+    status: toOldCoworkingStatus(i.status),
     contractName: row.contractName ?? "(contrat supprimé)",
-    contractId: row.contractId,
     contactName:
       row.contactFirstName || row.contactLastName
         ? `${row.contactFirstName ?? ""} ${row.contactLastName ?? ""}`.trim()
         : null,
+    dougsInvoiceId: i.dougsInvoiceId,
+    dougsInvoiceReference: i.dougsReference,
+    dougsInvoiceStatus: i.dougsStatus,
+    dougsInvoiceTotalHt: i.dougsTotalHt,
+    dougsInvoiceTotalVat: i.dougsTotalVat,
+    dougsInvoiceTotalTtc: i.dougsTotalTtc,
+    dougsInvoiceIssuedAt: i.dougsIssuedAt,
+    dougsInvoicePaidAt: i.dougsPaidAt,
+    dougsInvoiceSyncedAt: i.dougsSyncedAt,
   };
 }
 

@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { type DateRange, DateRangePicker } from "@/components/ui/date-range-picker";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { updateCoworkingContract, updateCoworkingInvoice } from "@/lib/actions/coworking";
+import { updateCoworkingContract } from "@/lib/actions/coworking";
+import { updateCoworkingInvoice } from "@/lib/actions/invoices";
 import {
   type CoworkingContractStatus,
   type CoworkingInvoiceBilledBy,
@@ -509,7 +510,13 @@ export function InvoiceStatusEditor({ id, value }: { id: string; value: Coworkin
       labels={coworkingInvoiceStatusLabels}
       variantOf={(v) => invoiceStatusVariant[v]}
       onSave={async (status) => {
-        const res = await updateCoworkingInvoice({ id, status });
+        const dbStatus =
+          status === "envoyee"
+            ? ("sent" as const)
+            : status === "payee"
+              ? ("paid" as const)
+              : ("draft" as const);
+        const res = await updateCoworkingInvoice({ id, status: dbStatus });
         return res.ok ? { ok: true } : { ok: false, message: res.message };
       }}
     />

@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { createCoworkingInvoice, updateCoworkingInvoice } from "@/lib/actions/coworking";
+import { createCoworkingInvoice, updateCoworkingInvoice } from "@/lib/actions/invoices";
 import { formatEuro } from "@/lib/format";
 import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import {
@@ -77,23 +77,41 @@ export function InvoiceForm({ mode, defaultValues, onDone }: Props) {
     e.preventDefault();
     setErrors({});
     startTransition(async () => {
-      const payload = {
-        contractId: defaultValues.contractId,
-        name,
-        invoiceDate: invoiceDate || null,
-        periodStart,
-        periodEnd,
-        status,
-        billedBy,
-        desks,
-        unitPriceHt,
-        vatRate,
-        notes: notes || null,
-      };
+      // Mapping UI (anciens noms) → DB (nouveaux noms unifiés).
+      const dbStatus =
+        status === "envoyee"
+          ? ("sent" as const)
+          : status === "payee"
+            ? ("paid" as const)
+            : ("draft" as const);
       const result =
         mode === "create"
-          ? await createCoworkingInvoice(payload)
-          : await updateCoworkingInvoice({ ...payload, id: defaultValues.id ?? "" });
+          ? await createCoworkingInvoice({
+              contractId: defaultValues.contractId,
+              name,
+              invoiceDate: invoiceDate || null,
+              periodStart,
+              periodEnd,
+              status: dbStatus,
+              billedBy,
+              desks,
+              unitPriceHt: Number(unitPriceHt) || 0,
+              vatRate: Number(vatRate) || 0.2,
+              notes: notes || null,
+            })
+          : await updateCoworkingInvoice({
+              id: defaultValues.id ?? "",
+              name,
+              invoiceDate: invoiceDate || null,
+              periodStart,
+              periodEnd,
+              status: dbStatus,
+              billedBy,
+              desks,
+              unitPriceHt: Number(unitPriceHt) || 0,
+              vatRate: Number(vatRate) || 0.2,
+              notes: notes || null,
+            });
 
       if (!result.ok) {
         if (result.fieldErrors) setErrors(result.fieldErrors);
@@ -179,7 +197,7 @@ export function InvoiceForm({ mode, defaultValues, onDone }: Props) {
             onChange={(e) => setVatRate(e.target.value)}
             disabled={pending}
           />
-          <p className="text-muted-foreground text-[11px]">Décimal (ex: 0.2 = 20%).</p>
+          <p className="text-[11px] text-muted-foreground">Décimal (ex: 0.2 = 20%).</p>
         </div>
       </div>
 

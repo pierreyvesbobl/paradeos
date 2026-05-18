@@ -1,4 +1,4 @@
-import type { BillingMilestone } from "@/db/schema/projects";
+import type { Invoice } from "@/db/schema/invoices";
 import { CheckCircle2, ExternalLink, FileText, Hourglass, Wallet } from "lucide-react";
 import Link from "next/link";
 
@@ -9,7 +9,7 @@ type Props = {
   dougsQuoteTotalHt: number | null;
   dougsQuoteReference: string | null;
   dougsQuoteId: string | null;
-  milestones: BillingMilestone[];
+  milestones: Invoice[];
 };
 
 function formatEur(n: number): string {
@@ -37,11 +37,11 @@ export function BillingSummary({
   const total = fromDougs ? dougsQuoteTotalHt : projectValueHt;
 
   const invoiced = milestones
-    .filter((m) => m.status === "invoiced" || m.status === "paid")
-    .reduce((s, m) => s + (m.amountHt || 0), 0);
+    .filter((m) => m.status === "sent" || m.status === "paid")
+    .reduce((s, m) => s + (Number(m.amountHt) || 0), 0);
   const paid = milestones
     .filter((m) => m.status === "paid")
-    .reduce((s, m) => s + (m.amountHt || 0), 0);
+    .reduce((s, m) => s + (Number(m.amountHt) || 0), 0);
   const remaining = Math.max(0, total - invoiced);
 
   const pctInvoiced = total > 0 ? Math.round((invoiced / total) * 100) : 0;

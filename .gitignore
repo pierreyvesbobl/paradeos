@@ -45,3 +45,4 @@ supabase/.env
 
 # claude code local state
 .claude/
+backups/

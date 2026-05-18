@@ -1,6 +1,7 @@
 import { contacts } from "@/db/schema/contacts";
-import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
+import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
+import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
@@ -13,13 +14,12 @@ import {
 import { asc, desc, eq } from "drizzle-orm";
 import { ExternalLink, FileText, Receipt } from "lucide-react";
 import Link from "next/link";
-import { LinkedCoworkingRow, LinkedMilestoneRow, LinkedQuoteRow } from "./linked-row-editor";
+import { LinkedInvoiceRow, LinkedQuoteRow } from "./linked-row-editor";
 import {
   type CoworkingInvoiceOption,
   LinkCoworkingContractButton,
-  LinkCoworkingInvoiceButton,
   LinkCreditNotePicker,
-  LinkMilestoneButton,
+  LinkInvoiceButton,
   LinkProjectAsMilestoneButton,
   LinkQuoteButton,
   ManualLinkCoworkingInvoice,
@@ -68,37 +68,40 @@ export async function RapprochementView({ debug }: { debug?: string }) {
   }));
 
   // Toutes les factures coworking (liées ou non) pour le picker manuel.
-  // On les expose toutes pour permettre de ré-attribuer un mauvais lien.
   const coworkingInvoiceRows = await conn
     .select({
-      id: coworkingInvoices.id,
-      invoiceDate: coworkingInvoices.invoiceDate,
-      periodStart: coworkingInvoices.periodStart,
-      periodEnd: coworkingInvoices.periodEnd,
-      desks: coworkingInvoices.desks,
-      unitPriceHt: coworkingInvoices.unitPriceHt,
-      dougsInvoiceId: coworkingInvoices.dougsInvoiceId,
+      id: invoices.id,
+      invoicedAt: invoices.invoicedAt,
+      periodStart: invoices.periodStart,
+      periodEnd: invoices.periodEnd,
+      desks: invoices.desks,
+      unitPriceHt: invoices.unitPriceHt,
+      dougsInvoiceId: invoices.dougsInvoiceId,
       contractName: coworkingContracts.name,
       entityName: entities.name,
       contactFirstName: contacts.firstName,
       contactLastName: contacts.lastName,
     })
-    .from(coworkingInvoices)
-    .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
+    .from(invoices)
+    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
     .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
     .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId))
-    .orderBy(desc(coworkingInvoices.invoiceDate), desc(coworkingInvoices.periodStart));
+    .where(eq(invoices.kind, "coworking"))
+    .orderBy(desc(invoices.invoicedAt), desc(invoices.periodStart));
 
-  function fmtDate(d: string | null | undefined): string | null {
+  function fmtDate(d: Date | string | null | undefined): string | null {
     if (!d) return null;
+    if (d instanceof Date) {
+      return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+    }
     const [y, m, day] = d.split("-");
     return y && m && day ? `${day}/${m}/${y}` : d;
   }
 
   const coworkingInvoiceOptions: CoworkingInvoiceOption[] = coworkingInvoiceRows.map((c) => {
     const contactName = `${c.contactFirstName ?? ""} ${c.contactLastName ?? ""}`.trim() || null;
-    const issued = fmtDate(c.invoiceDate);
-    const periodLabel = c.periodStart.slice(0, 7);
+    const issued = fmtDate(c.invoicedAt);
+    const periodLabel = (c.periodStart ?? "").slice(0, 7);
     return {
       id: c.id,
       // Label = "Contrat · période (émise le DD/MM/YYYY)" si invoiceDate
@@ -109,10 +112,10 @@ export async function RapprochementView({ debug }: { debug?: string }) {
         : `${c.contractName ?? "(contrat supprimé)"} · ${periodLabel} (non émise)`,
       contractName: c.contractName ?? "(contrat supprimé)",
       clientName: c.entityName ?? contactName,
-      invoiceDate: c.invoiceDate,
-      periodStart: c.periodStart,
-      periodEnd: c.periodEnd,
-      amountHt: Number(c.unitPriceHt) * c.desks,
+      invoiceDate: c.invoicedAt ? c.invoicedAt.toISOString().slice(0, 10) : null,
+      periodStart: c.periodStart ?? "",
+      periodEnd: c.periodEnd ?? "",
+      amountHt: (Number(c.unitPriceHt) || 0) * (c.desks ?? 0),
       alreadyLinked: Boolean(c.dougsInvoiceId),
     };
   });
@@ -145,7 +148,7 @@ export async function RapprochementView({ debug }: { debug?: string }) {
   // Liste des entrées Dougs déjà rattachées (lue sur les snapshots locaux,
   // sans appel API). Affichée dans une section dépliable en bas.
   const linked = await getLinkedDougsEntries();
-  const linkedTotal = linked.quotes.length + linked.milestones.length + linked.coworking.length;
+  const linkedTotal = linked.quotes.length + linked.invoices.length;
 
   return (
     <div className="space-y-6">
@@ -311,24 +314,19 @@ export async function RapprochementView({ debug }: { debug?: string }) {
                     ) : (
                       <ul className="space-y-1.5">
                         {s.candidates.map((c) => {
-                          if (c.kind === "milestone") {
+                          if (c.kind === "invoice") {
                             return (
                               <li
-                                key={`m-${c.milestoneId}`}
+                                key={`i-${c.invoiceId}`}
                                 className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs"
                               >
                                 <div className="min-w-0 flex-1">
                                   <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                                    Jalon
+                                    Facture
                                   </span>
-                                  <Link
-                                    href={`/projets/${c.projectId}?tab=billing`}
-                                    className="ml-2 font-medium hover:underline"
-                                  >
-                                    {c.projectName}
-                                  </Link>
+                                  <span className="ml-2 font-medium">{c.label}</span>
                                   <span className="ml-2 text-muted-foreground">
-                                    {c.label} · {c.entityName ?? "—"} ·{" "}
+                                    {c.entityName ?? c.contractName ?? c.projectName ?? "—"} ·{" "}
                                     <span className="tabular-nums">{formatEur(c.amountHt)}</span>
                                   </span>
                                 </div>
@@ -337,51 +335,11 @@ export async function RapprochementView({ debug }: { debug?: string }) {
                                 >
                                   {(c.score.total * 100).toFixed(0)} %
                                 </span>
-                                <LinkMilestoneButton
-                                  projectId={c.projectId}
-                                  milestoneId={c.milestoneId}
-                                  dougsId={s.dougs.id}
-                                />
+                                <LinkInvoiceButton invoiceId={c.invoiceId} dougsId={s.dougs.id} />
                               </li>
                             );
                           }
-                          if (c.kind === "coworking") {
-                            return (
-                              <li
-                                key={`c-${c.coworkingInvoiceId}`}
-                                className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                                    Coworking
-                                  </span>
-                                  <Link
-                                    href={`/coworking/factures/${c.coworkingInvoiceId}`}
-                                    className="ml-2 font-medium hover:underline"
-                                  >
-                                    {c.name}
-                                  </Link>
-                                  <span className="ml-2 text-muted-foreground">
-                                    {c.contractName ?? "—"} ·{" "}
-                                    <span className="tabular-nums">{formatEur(c.amountHt)}</span>
-                                    {c.invoiceDate
-                                      ? ` · émise ${new Date(c.invoiceDate).toLocaleDateString("fr-FR")}`
-                                      : " · non émise"}
-                                  </span>
-                                </div>
-                                <span
-                                  className={`rounded-full border px-2 py-0.5 text-[10px] tabular-nums ${scoreTone(c.score.total)}`}
-                                >
-                                  {(c.score.total * 100).toFixed(0)} %
-                                </span>
-                                <LinkCoworkingInvoiceButton
-                                  coworkingInvoiceId={c.coworkingInvoiceId}
-                                  dougsId={s.dougs.id}
-                                />
-                              </li>
-                            );
-                          }
-                          if (c.kind === "coworking-contract") {
+                          if (c.kind === "new_coworking_invoice") {
                             return (
                               <li
                                 key={`cc-${c.contractId}`}
@@ -416,8 +374,7 @@ export async function RapprochementView({ debug }: { debug?: string }) {
                               </li>
                             );
                           }
-                          // kind === "project" : projet sans jalon → on
-                          // crée un jalon à la volée avec le % détecté.
+                          // kind === "new_project_milestone"
                           return (
                             <li
                               key={`p-${c.projectId}`}
@@ -550,8 +507,7 @@ export async function RapprochementView({ debug }: { debug?: string }) {
               <span className="text-muted-foreground">▸</span>
               Déjà rattachés ({linkedTotal})
               <span className="text-muted-foreground text-xs">
-                · {linked.quotes.length} devis · {linked.milestones.length} jalons ·{" "}
-                {linked.coworking.length} coworking
+                · {linked.quotes.length} devis · {linked.invoices.length} factures
               </span>
             </summary>
             <div className="border-t">
@@ -563,29 +519,20 @@ export async function RapprochementView({ debug }: { debug?: string }) {
                 <ul className="divide-y">
                   {linked.quotes.map((q) => (
                     <LinkedQuoteRow
-                      key={`q-${q.projectId}-${q.dougsId}`}
+                      key={`q-${q.invoiceId}`}
                       quote={q}
-                      projectOptions={projectOptions.map((p) => ({
+                      projectOptions={linked.freeQuoteProjects.map((p) => ({
                         id: p.id,
                         name: p.name,
                         entityName: p.entityName,
                       }))}
                     />
                   ))}
-                  {linked.milestones.map((m) => (
-                    <LinkedMilestoneRow
-                      key={`m-${m.projectId}-${m.milestoneId}`}
-                      milestone={m}
-                      freeMilestones={linked.freeMilestones}
-                    />
-                  ))}
-                  {linked.coworking.map((c) => (
-                    <LinkedCoworkingRow
-                      key={`c-${c.coworkingInvoiceId}`}
-                      coworking={c}
-                      freeCoworking={coworkingInvoiceOptions
-                        .filter((o) => !o.alreadyLinked)
-                        .map((o) => ({ id: o.id, label: o.label }))}
+                  {linked.invoices.map((i) => (
+                    <LinkedInvoiceRow
+                      key={`i-${i.invoiceId}`}
+                      invoice={i}
+                      freeInvoices={linked.freeInvoices}
                     />
                   ))}
                 </ul>

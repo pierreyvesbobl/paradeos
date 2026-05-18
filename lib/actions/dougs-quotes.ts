@@ -2,6 +2,7 @@
 
 import { contacts as contactsTable } from "@/db/schema/contacts";
 import { entities as entitiesTable } from "@/db/schema/entities";
+import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
@@ -14,7 +15,7 @@ import {
   searchDougsClients,
   updateDougsQuote,
 } from "@/lib/dougs/client";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -59,7 +60,9 @@ function computeLineDiscountInEuros(line: QuoteLineInput): number {
  * la première fois, fait un PUT update les fois suivantes tant que le
  * devis Dougs reste en DRAFT.
  *
- * Ne **finalise pas** — PY valide et envoie depuis l'UI Dougs.
+ * Le devis est stocké côté Paradeos dans `invoices` avec kind='quote'
+ * (1 par projet). Ne **finalise pas** côté Dougs : PY valide et envoie
+ * depuis l'UI Dougs.
  */
 export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }) => {
   const conn = await db();
@@ -90,6 +93,17 @@ export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }
     throw new Error("Entité de facturation manquante sur le projet.");
   }
   if (!row.entityName) throw new Error("Nom d'entité manquant.");
+
+  // Quote invoice : 1 par projet (kind='quote').
+  const [existingQuote] = await conn
+    .select({
+      id: invoices.id,
+      dougsQuoteId: invoices.dougsQuoteId,
+      dougsStatus: invoices.dougsStatus,
+    })
+    .from(invoices)
+    .where(and(eq(invoices.projectId, input.projectId), eq(invoices.kind, "quote")))
+    .limit(1);
 
   // Projets client = B2B par construction (entityId requis).
   const isBtoB = true;
@@ -179,10 +193,10 @@ export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }
   try {
     // Re-push : on update si on a déjà un draft Dougs et qu'il est encore
     // en DRAFT (sinon Dougs refuse le PUT).
-    const existing = project.dougsQuoteId;
-    if (existing && (project.dougsQuoteStatus ?? "DRAFT") === "DRAFT") {
-      const current = await getDougsQuoteDraft(user.id, existing);
-      const updated = await updateDougsQuote(user.id, existing, {
+    const existingDougsId = existingQuote?.dougsQuoteId ?? null;
+    if (existingDougsId && (existingQuote?.dougsStatus ?? "DRAFT") === "DRAFT") {
+      const current = await getDougsQuoteDraft(user.id, existingDougsId);
+      const updated = await updateDougsQuote(user.id, existingDougsId, {
         ...current,
         subject: input.subject,
         thankYouNote: input.thankYouNote,
@@ -213,16 +227,30 @@ export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }
     throw err;
   }
 
-  await conn
-    .update(projects)
-    .set({
-      dougsQuoteId: quoteId,
-      dougsQuoteReference: reference,
-      dougsQuoteStatus: status,
-      dougsQuotePushedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(projects.id, input.projectId));
+  const total = lines.reduce((sum, l) => sum + l.amount, 0);
+  const updateValues = {
+    label: `Devis ${project.name}`,
+    amountHt: total.toFixed(2),
+    vatRate: "0.2",
+    status: "sent" as const,
+    dougsQuoteId: quoteId,
+    dougsReference: reference,
+    dougsStatus: status,
+    invoicedAt: new Date(),
+    dougsSyncedAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  if (existingQuote) {
+    await conn.update(invoices).set(updateValues).where(eq(invoices.id, existingQuote.id));
+  } else {
+    await conn.insert(invoices).values({
+      kind: "quote",
+      projectId: input.projectId,
+      createdBy: user.id,
+      ...updateValues,
+    });
+  }
 
   const url = await getDougsQuoteUrl(user.id, quoteId);
   revalidatePath(`/projets/${input.projectId}`);
@@ -231,23 +259,32 @@ export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }
 
 /**
  * Coupe le lien projet ↔ devis Dougs (sans supprimer le devis côté
- * Dougs). Permet de repartir d'un brouillon vide via "Pousser sur Dougs".
+ * Dougs). Efface le snapshot mais garde l'invoice row pour pouvoir
+ * re-pusher. Si tu veux complètement supprimer le devis local, utilise
+ * deleteInvoice depuis lib/actions/invoices.ts.
  */
 export const unlinkProjectDougsQuote = action(
   z.object({ projectId: z.string().uuid() }),
   async ({ input }) => {
     const conn = await db();
     await conn
-      .update(projects)
+      .update(invoices)
       .set({
         dougsQuoteId: null,
-        dougsQuoteReference: null,
-        dougsQuoteStatus: null,
-        dougsQuotePushedAt: null,
+        dougsReference: null,
+        dougsStatus: null,
+        dougsTotalHt: null,
+        dougsTotalVat: null,
+        dougsTotalTtc: null,
+        dougsIssuedAt: null,
+        dougsSyncedAt: null,
+        status: "draft",
+        invoicedAt: null,
         updatedAt: new Date(),
       })
-      .where(eq(projects.id, input.projectId));
+      .where(and(eq(invoices.projectId, input.projectId), eq(invoices.kind, "quote")));
     revalidatePath(`/projets/${input.projectId}`);
+    revalidatePath("/compta");
     return { ok: true };
   },
 );

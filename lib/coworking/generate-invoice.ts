@@ -1,9 +1,10 @@
 import "server-only";
 
-import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
+import { coworkingContracts } from "@/db/schema/coworking";
+import { invoices } from "@/db/schema/invoices";
 import { db } from "@/lib/db/server";
 import { coworkingBillingFrequencyMonths } from "@/lib/schemas/coworking";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 type Result =
   | { ok: true; created: true; id: string; periodStart: string; periodEnd: string; name: string }
@@ -43,13 +44,15 @@ export async function generateNextInvoiceForContract(opts: {
   const months = coworkingBillingFrequencyMonths[contract.billingFrequency];
 
   const [last] = await conn
-    .select({ periodEnd: coworkingInvoices.periodEnd })
-    .from(coworkingInvoices)
-    .where(eq(coworkingInvoices.contractId, contractId))
-    .orderBy(desc(coworkingInvoices.periodStart))
+    .select({ periodEnd: invoices.periodEnd })
+    .from(invoices)
+    .where(and(eq(invoices.coworkingContractId, contractId), eq(invoices.kind, "coworking")))
+    .orderBy(desc(invoices.periodStart))
     .limit(1);
 
-  const refDate = last ? addDays(parseDate(last.periodEnd), 1) : parseDate(contract.startDate);
+  const refDate = last?.periodEnd
+    ? addDays(parseDate(last.periodEnd), 1)
+    : parseDate(contract.startDate);
   const periodStart = firstOfMonth(refDate);
   const periodEnd = lastOfMonth(addMonths(periodStart, months - 1));
 
@@ -58,23 +61,25 @@ export async function generateNextInvoiceForContract(opts: {
   }
 
   const periodLabel = labelForPeriod(periodStart, contract.billingFrequency);
+  const amountHt = Number(contract.unitPriceHt) * contract.desks * months;
 
   const [row] = await conn
-    .insert(coworkingInvoices)
+    .insert(invoices)
     .values({
-      contractId,
-      name: periodLabel,
-      invoiceDate: null,
+      kind: "coworking",
+      coworkingContractId: contractId,
+      label: periodLabel,
+      amountHt: amountHt.toFixed(2),
+      vatRate: "0.2",
+      status: "draft",
       periodStart: fmtDate(periodStart),
       periodEnd: fmtDate(periodEnd),
-      status: "a_facturer",
-      billedBy: "parade",
       desks: contract.desks,
       unitPriceHt: contract.unitPriceHt,
-      vatRate: "0.2",
+      billedBy: "parade",
       createdBy,
     })
-    .returning({ id: coworkingInvoices.id });
+    .returning({ id: invoices.id });
 
   if (!row) return { ok: false, message: "Insert sans retour." };
 

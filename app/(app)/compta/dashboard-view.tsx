@@ -1,8 +1,9 @@
-import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
+import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
-import { type BillingMilestone, projects } from "@/db/schema/projects";
+import { invoices } from "@/db/schema/invoices";
+import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
-import { asc, eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { ArrowRight, FileText, Receipt } from "lucide-react";
 import Link from "next/link";
 import { type ComptaPeriod, PeriodSelector } from "./period-selector";
@@ -24,35 +25,19 @@ function kpiToneClasses(tone: KpiTone): string {
   }
 }
 
-type PendingMilestone = {
-  kind: "milestone";
-  projectId: string;
-  projectName: string;
-  entityName: string | null;
-  milestoneId: string;
-  label: string;
-  amountHt: number;
-  status: "todo" | "invoiced";
-};
-
-type PendingCoworking = {
-  kind: "coworking";
+type PendingItem = {
   invoiceId: string;
-  name: string;
+  kind: "milestone" | "coworking" | "one_off";
+  label: string;
+  projectId: string | null;
+  projectName: string | null;
+  coworkingContractId: string | null;
   contractName: string | null;
   entityName: string | null;
   amountHt: number;
-  status: "a_facturer" | "envoyee";
-  periodStart: string;
+  status: "draft" | "sent";
 };
 
-type PendingItem = PendingMilestone | PendingCoworking;
-
-/**
- * Calcule la fenêtre [start, end[ correspondant au preset. `null` = pas
- * de borne (tout). On compare ensuite les dates milestones/factures en
- * `>= start && < end` (end = jour suivant la dernière date incluse).
- */
 function periodWindow(period: ComptaPeriod): {
   start: Date | null;
   end: Date | null;
@@ -63,35 +48,15 @@ function periodWindow(period: ComptaPeriod): {
   const m = now.getMonth();
   switch (period) {
     case "current_month":
-      return {
-        start: new Date(y, m, 1),
-        end: new Date(y, m + 1, 1),
-        label: "mois en cours",
-      };
+      return { start: new Date(y, m, 1), end: new Date(y, m + 1, 1), label: "mois en cours" };
     case "last_month":
-      return {
-        start: new Date(y, m - 1, 1),
-        end: new Date(y, m, 1),
-        label: "mois dernier",
-      };
+      return { start: new Date(y, m - 1, 1), end: new Date(y, m, 1), label: "mois dernier" };
     case "last_3_months":
-      return {
-        start: new Date(y, m - 2, 1),
-        end: new Date(y, m + 1, 1),
-        label: "3 derniers mois",
-      };
+      return { start: new Date(y, m - 2, 1), end: new Date(y, m + 1, 1), label: "3 derniers mois" };
     case "current_year":
-      return {
-        start: new Date(y, 0, 1),
-        end: new Date(y + 1, 0, 1),
-        label: "année en cours",
-      };
+      return { start: new Date(y, 0, 1), end: new Date(y + 1, 0, 1), label: "année en cours" };
     case "last_year":
-      return {
-        start: new Date(y - 1, 0, 1),
-        end: new Date(y, 0, 1),
-        label: "année dernière",
-      };
+      return { start: new Date(y - 1, 0, 1), end: new Date(y, 0, 1), label: "année dernière" };
     case "all":
       return { start: null, end: null, label: "tout" };
     default:
@@ -103,149 +68,88 @@ function periodWindow(period: ComptaPeriod): {
   }
 }
 
-function inWindow(value: Date | null, window: { start: Date | null; end: Date | null }): boolean {
+function inWindow(value: Date | null, win: { start: Date | null; end: Date | null }): boolean {
   if (!value) return false;
-  if (window.start && value < window.start) return false;
-  if (window.end && value >= window.end) return false;
+  if (win.start && value < win.start) return false;
+  if (win.end && value >= win.end) return false;
   return true;
-}
-
-function parseDate(raw: string | Date | null | undefined): Date | null {
-  if (!raw) return null;
-  if (raw instanceof Date) return raw;
-  const d = new Date(raw);
-  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 export async function DashboardView({ period }: { period: ComptaPeriod }) {
   const conn = await db();
-  const window = periodWindow(period);
+  const win = periodWindow(period);
 
-  // Tous les projets client (peu importe le statut) — on filtre les
-  // jalons par leur propre status pour calculer les agrégats.
-  const projectRows = await conn
+  // Toutes les invoices facturables (jalons, coworking, one_off — pas
+  // les quotes ni les credit_notes pour le dashboard "facturé").
+  const rows = await conn
     .select({
-      id: projects.id,
-      name: projects.name,
-      entityName: entities.name,
-      milestones: projects.billingMilestones,
-    })
-    .from(projects)
-    .leftJoin(entities, eq(entities.id, projects.entityId))
-    .where(eq(projects.kind, "client"))
-    .orderBy(asc(projects.name));
-
-  // Toutes les factures coworking (avec contrat + entité de facturation).
-  const cwRows = await conn
-    .select({
-      id: coworkingInvoices.id,
-      name: coworkingInvoices.name,
-      desks: coworkingInvoices.desks,
-      unitPriceHt: coworkingInvoices.unitPriceHt,
-      status: coworkingInvoices.status,
-      periodStart: coworkingInvoices.periodStart,
-      invoiceDate: coworkingInvoices.invoiceDate,
-      dougsPaidAt: coworkingInvoices.dougsInvoicePaidAt,
+      id: invoices.id,
+      kind: invoices.kind,
+      label: invoices.label,
+      amountHt: invoices.amountHt,
+      status: invoices.status,
+      invoicedAt: invoices.invoicedAt,
+      paidAt: invoices.paidAt,
+      projectId: invoices.projectId,
+      coworkingContractId: invoices.coworkingContractId,
+      projectName: projects.name,
+      projectEntityName: entities.name,
       contractName: coworkingContracts.name,
-      entityName: entities.name,
     })
-    .from(coworkingInvoices)
-    .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
-    .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId));
+    .from(invoices)
+    .leftJoin(projects, eq(projects.id, invoices.projectId))
+    .leftJoin(entities, eq(entities.id, projects.entityId))
+    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
+    .where(inArray(invoices.kind, ["milestone", "coworking", "one_off"]));
 
-  // Agrégats HT.
-  let billedHt = 0; // émise ou payée (projets: invoiced+paid, coworking: envoyee+payee)
-  let cashedHt = 0; // payée
-  let toBillHt = 0; // à facturer (projets: todo, coworking: a_facturer)
-  let toCashHt = 0; // émise non payée (projets: invoiced, coworking: envoyee)
-
+  let billedHt = 0;
+  let cashedHt = 0;
+  let toBillHt = 0;
+  let toCashHt = 0;
   const pending: PendingItem[] = [];
 
-  for (const p of projectRows) {
-    const ms: BillingMilestone[] = Array.isArray(p.milestones) ? p.milestones : [];
-    for (const mi of ms) {
-      const amount = Number(mi.amountHt) || 0;
-      const invoicedAt = parseDate(mi.invoicedAt);
-      const paidAt = parseDate(mi.paidAt);
-      if (mi.status === "todo") {
-        toBillHt += amount;
-        pending.push({
-          kind: "milestone",
-          projectId: p.id,
-          projectName: p.name,
-          entityName: p.entityName,
-          milestoneId: mi.id,
-          label: mi.label,
-          amountHt: amount,
-          status: "todo",
-        });
-      } else if (mi.status === "invoiced") {
-        if (inWindow(invoicedAt, window)) billedHt += amount;
-        toCashHt += amount;
-        pending.push({
-          kind: "milestone",
-          projectId: p.id,
-          projectName: p.name,
-          entityName: p.entityName,
-          milestoneId: mi.id,
-          label: mi.label,
-          amountHt: amount,
-          status: "invoiced",
-        });
-      } else if (mi.status === "paid") {
-        // Facturé : on prend invoicedAt si dispo, sinon paidAt en
-        // fallback (jalon marqué payé sans étape "émis" intermédiaire).
-        if (inWindow(invoicedAt ?? paidAt, window)) billedHt += amount;
-        if (inWindow(paidAt, window)) cashedHt += amount;
-      }
-    }
-  }
-
-  for (const c of cwRows) {
-    const amount = (Number(c.unitPriceHt) || 0) * c.desks;
-    const invoiceDate = parseDate(c.invoiceDate);
-    const paidAt = parseDate(c.dougsPaidAt) ?? invoiceDate;
-    if (c.status === "a_facturer") {
+  for (const r of rows) {
+    const amount = Number(r.amountHt) || 0;
+    const status = r.status;
+    if (status === "draft") {
       toBillHt += amount;
       pending.push({
-        kind: "coworking",
-        invoiceId: c.id,
-        name: c.name,
-        contractName: c.contractName,
-        entityName: c.entityName,
+        invoiceId: r.id,
+        kind: r.kind as PendingItem["kind"],
+        label: r.label,
+        projectId: r.projectId,
+        projectName: r.projectName,
+        coworkingContractId: r.coworkingContractId,
+        contractName: r.contractName,
+        entityName: r.projectEntityName,
         amountHt: amount,
-        status: "a_facturer",
-        periodStart: c.periodStart,
+        status: "draft",
       });
-    } else if (c.status === "envoyee") {
-      if (inWindow(invoiceDate, window)) billedHt += amount;
+    } else if (status === "sent") {
+      if (inWindow(r.invoicedAt, win)) billedHt += amount;
       toCashHt += amount;
       pending.push({
-        kind: "coworking",
-        invoiceId: c.id,
-        name: c.name,
-        contractName: c.contractName,
-        entityName: c.entityName,
+        invoiceId: r.id,
+        kind: r.kind as PendingItem["kind"],
+        label: r.label,
+        projectId: r.projectId,
+        projectName: r.projectName,
+        coworkingContractId: r.coworkingContractId,
+        contractName: r.contractName,
+        entityName: r.projectEntityName,
         amountHt: amount,
-        status: "envoyee",
-        periodStart: c.periodStart,
+        status: "sent",
       });
-    } else if (c.status === "payee") {
-      if (inWindow(invoiceDate, window)) billedHt += amount;
-      if (inWindow(paidAt, window)) cashedHt += amount;
+    } else if (status === "paid") {
+      const issued = r.invoicedAt ?? r.paidAt;
+      if (inWindow(issued, win)) billedHt += amount;
+      if (inWindow(r.paidAt, win)) cashedHt += amount;
     }
   }
 
-  // Tri liste d'attente : à facturer d'abord (action immédiate), puis
-  // émises non payées (relance), montant décroissant à statut égal.
-  const statusOrder: Record<PendingItem["status"], number> = {
-    todo: 0,
-    a_facturer: 0,
-    invoiced: 1,
-    envoyee: 1,
-  };
+  // Tri : draft (action) en haut, puis sent (relance), montant décroissant.
   pending.sort((a, b) => {
-    const so = statusOrder[a.status] - statusOrder[b.status];
+    const so = (a.status === "draft" ? 0 : 1) - (b.status === "draft" ? 0 : 1);
     if (so !== 0) return so;
     return b.amountHt - a.amountHt;
   });
@@ -263,13 +167,13 @@ export async function DashboardView({ period }: { period: ComptaPeriod }) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard tone="neutral" label="Facturé" value={billedHt} hint={`Sur ${window.label}`} />
-        <KpiCard tone="ok" label="Encaissé" value={cashedHt} hint={`Sur ${window.label}`} />
+        <KpiCard tone="neutral" label="Facturé" value={billedHt} hint={`Sur ${win.label}`} />
+        <KpiCard tone="ok" label="Encaissé" value={cashedHt} hint={`Sur ${win.label}`} />
         <KpiCard
           tone="warn"
           label="Reste à facturer"
           value={toBillHt}
-          hint="Jalons todo + à facturer"
+          hint="Toutes les factures status=draft"
         />
         <KpiCard
           tone="warn"
@@ -284,7 +188,7 @@ export async function DashboardView({ period }: { period: ComptaPeriod }) {
           <div>
             <h2 className="font-medium text-sm">En attente ({pending.length})</h2>
             <p className="text-muted-foreground text-xs">
-              Jalons et factures à facturer ou en attente d'encaissement.
+              Factures à émettre ou en attente d'encaissement.
             </p>
           </div>
           <span className="text-muted-foreground text-xs tabular-nums">
@@ -296,10 +200,7 @@ export async function DashboardView({ period }: { period: ComptaPeriod }) {
         ) : (
           <ul className="divide-y">
             {pending.map((p) => (
-              <PendingRow
-                key={p.kind === "milestone" ? `m-${p.milestoneId}` : `c-${p.invoiceId}`}
-                item={p}
-              />
+              <PendingRow key={p.invoiceId} item={p} />
             ))}
           </ul>
         )}
@@ -328,84 +229,42 @@ function KpiCard({
   );
 }
 
-function statusBadge(status: PendingItem["status"]): { label: string; classes: string } {
-  switch (status) {
-    case "todo":
-      return {
-        label: "À facturer",
-        classes: "border-slate-300 bg-slate-50 text-slate-700",
-      };
-    case "a_facturer":
-      return {
-        label: "À facturer",
-        classes: "border-slate-300 bg-slate-50 text-slate-700",
-      };
-    case "invoiced":
-      return {
-        label: "Émis",
-        classes: "border-amber-300 bg-amber-50 text-amber-700",
-      };
-    case "envoyee":
-      return {
-        label: "Émis",
-        classes: "border-amber-300 bg-amber-50 text-amber-700",
-      };
+function statusBadge(status: "draft" | "sent"): { label: string; classes: string } {
+  if (status === "draft") {
+    return { label: "À facturer", classes: "border-slate-300 bg-slate-50 text-slate-700" };
   }
+  return { label: "Émis", classes: "border-amber-300 bg-amber-50 text-amber-700" };
 }
 
 function PendingRow({ item }: { item: PendingItem }) {
   const badge = statusBadge(item.status);
-  if (item.kind === "milestone") {
-    return (
-      <li className="flex items-center justify-between gap-3 px-6 py-3 text-sm">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-              <FileText className="-mt-0.5 mr-1 inline size-3" />
-              Jalon
-            </span>
-            <Link
-              href={`/projets/${item.projectId}?tab=billing`}
-              className="truncate font-medium hover:underline"
-            >
-              {item.projectName}
-            </Link>
-            <span className="truncate text-muted-foreground text-xs">
-              {item.label}
-              {item.entityName ? ` · ${item.entityName}` : ""}
-            </span>
-          </div>
-        </div>
-        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${badge.classes}`}>
-          {badge.label}
-        </span>
-        <span className="w-24 text-right font-medium tabular-nums">{formatEur(item.amountHt)}</span>
-        <Link
-          href={`/projets/${item.projectId}?tab=billing`}
-          aria-label="Ouvrir le projet"
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <ArrowRight className="size-4" />
-        </Link>
-      </li>
-    );
-  }
+  const targetLink =
+    item.kind === "coworking"
+      ? `/coworking/factures/${item.invoiceId}`
+      : item.projectId
+        ? `/projets/${item.projectId}?tab=billing`
+        : null;
+  const kindBadge =
+    item.kind === "milestone" ? "Jalon" : item.kind === "coworking" ? "Coworking" : "Facture";
+  const icon = item.kind === "coworking" ? Receipt : FileText;
+  const Icon = icon;
   return (
     <li className="flex items-center justify-between gap-3 px-6 py-3 text-sm">
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-            <Receipt className="-mt-0.5 mr-1 inline size-3" />
-            Coworking
+            <Icon className="-mt-0.5 mr-1 inline size-3" />
+            {kindBadge}
           </span>
-          <Link
-            href={`/coworking/factures/${item.invoiceId}`}
-            className="truncate font-medium hover:underline"
-          >
-            {item.name}
-          </Link>
+          {targetLink ? (
+            <Link href={targetLink} className="truncate font-medium hover:underline">
+              {item.projectName ?? item.contractName ?? item.label}
+            </Link>
+          ) : (
+            <span className="truncate font-medium">{item.label}</span>
+          )}
           <span className="truncate text-muted-foreground text-xs">
-            {item.contractName ?? "—"}
+            {item.label}
             {item.entityName ? ` · ${item.entityName}` : ""}
           </span>
         </div>
@@ -414,13 +273,15 @@ function PendingRow({ item }: { item: PendingItem }) {
         {badge.label}
       </span>
       <span className="w-24 text-right font-medium tabular-nums">{formatEur(item.amountHt)}</span>
-      <Link
-        href={`/coworking/factures/${item.invoiceId}`}
-        aria-label="Ouvrir la facture"
-        className="text-muted-foreground hover:text-foreground"
-      >
-        <ArrowRight className="size-4" />
-      </Link>
+      {targetLink ? (
+        <Link
+          href={targetLink}
+          aria-label="Ouvrir"
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <ArrowRight className="size-4" />
+        </Link>
+      ) : null}
     </li>
   );
 }

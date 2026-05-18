@@ -9,8 +9,9 @@ import { z } from "zod";
  * exposent les données partagées.
  */
 import { contacts } from "../db/schema/contacts";
-import { coworkingContracts, coworkingInvoices } from "../db/schema/coworking";
+import { coworkingContracts } from "../db/schema/coworking";
 import { entities } from "../db/schema/entities";
+import { invoices as invoicesTable } from "../db/schema/invoices";
 import { meetingProposals, meetings } from "../db/schema/meetings";
 import { notes } from "../db/schema/notes";
 import { projects } from "../db/schema/projects";
@@ -903,21 +904,21 @@ export async function getCoworkingContract(args: z.infer<typeof getCoworkingCont
 
   const invoiceRows = await conn
     .select({
-      id: coworkingInvoices.id,
-      name: coworkingInvoices.name,
-      periodStart: coworkingInvoices.periodStart,
-      periodEnd: coworkingInvoices.periodEnd,
-      invoiceDate: coworkingInvoices.invoiceDate,
-      status: coworkingInvoices.status,
-      billedBy: coworkingInvoices.billedBy,
-      desks: coworkingInvoices.desks,
-      unitPriceHt: coworkingInvoices.unitPriceHt,
-      vatRate: coworkingInvoices.vatRate,
-      dougsInvoiceId: coworkingInvoices.dougsInvoiceId,
+      id: invoicesTable.id,
+      name: invoicesTable.label,
+      periodStart: invoicesTable.periodStart,
+      periodEnd: invoicesTable.periodEnd,
+      invoiceDate: invoicesTable.invoicedAt,
+      status: invoicesTable.status,
+      billedBy: invoicesTable.billedBy,
+      desks: invoicesTable.desks,
+      unitPriceHt: invoicesTable.unitPriceHt,
+      vatRate: invoicesTable.vatRate,
+      dougsInvoiceId: invoicesTable.dougsInvoiceId,
     })
-    .from(coworkingInvoices)
-    .where(eq(coworkingInvoices.contractId, args.id))
-    .orderBy(asc(coworkingInvoices.periodStart));
+    .from(invoicesTable)
+    .where(and(eq(invoicesTable.coworkingContractId, args.id), eq(invoicesTable.kind, "coworking")))
+    .orderBy(asc(invoicesTable.periodStart));
 
   return { contract, invoices: invoiceRows };
 }
@@ -1014,32 +1015,51 @@ export const listCoworkingInvoicesSchema = z.object({
   limit: z.number().int().positive().max(200).optional(),
 });
 
+// Mapping API publique (anciennes valeurs) ↔ DB (nouvelles).
+function toDbStatusCoworking(s: "a_facturer" | "envoyee" | "payee"): "draft" | "sent" | "paid" {
+  if (s === "envoyee") return "sent";
+  if (s === "payee") return "paid";
+  return "draft";
+}
+function fromDbStatusCoworking(s: string): "a_facturer" | "envoyee" | "payee" {
+  if (s === "sent") return "envoyee";
+  if (s === "paid") return "payee";
+  return "a_facturer";
+}
+
 export async function listCoworkingInvoices(args: z.infer<typeof listCoworkingInvoicesSchema>) {
   const conn = db();
-  const conds = [];
-  if (args.contractId) conds.push(eq(coworkingInvoices.contractId, args.contractId));
-  if (args.status) conds.push(eq(coworkingInvoices.status, args.status));
-  return conn
+  const conds = [eq(invoicesTable.kind, "coworking" as const)];
+  if (args.contractId) conds.push(eq(invoicesTable.coworkingContractId, args.contractId));
+  if (args.status) conds.push(eq(invoicesTable.status, toDbStatusCoworking(args.status)));
+  const rows = await conn
     .select({
-      id: coworkingInvoices.id,
-      contractId: coworkingInvoices.contractId,
+      id: invoicesTable.id,
+      contractId: invoicesTable.coworkingContractId,
       contractName: coworkingContracts.name,
-      name: coworkingInvoices.name,
-      periodStart: coworkingInvoices.periodStart,
-      periodEnd: coworkingInvoices.periodEnd,
-      invoiceDate: coworkingInvoices.invoiceDate,
-      status: coworkingInvoices.status,
-      billedBy: coworkingInvoices.billedBy,
-      desks: coworkingInvoices.desks,
-      unitPriceHt: coworkingInvoices.unitPriceHt,
-      vatRate: coworkingInvoices.vatRate,
-      dougsInvoiceId: coworkingInvoices.dougsInvoiceId,
+      name: invoicesTable.label,
+      periodStart: invoicesTable.periodStart,
+      periodEnd: invoicesTable.periodEnd,
+      invoiceDate: invoicesTable.invoicedAt,
+      status: invoicesTable.status,
+      billedBy: invoicesTable.billedBy,
+      desks: invoicesTable.desks,
+      unitPriceHt: invoicesTable.unitPriceHt,
+      vatRate: invoicesTable.vatRate,
+      dougsInvoiceId: invoicesTable.dougsInvoiceId,
     })
-    .from(coworkingInvoices)
-    .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
-    .where(conds.length ? and(...conds) : undefined)
-    .orderBy(desc(coworkingInvoices.periodStart))
+    .from(invoicesTable)
+    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoicesTable.coworkingContractId))
+    .where(and(...conds))
+    .orderBy(desc(invoicesTable.periodStart))
     .limit(args.limit ?? DEFAULT_LIMIT);
+  return rows.map((r) => ({
+    ...r,
+    status: fromDbStatusCoworking(r.status),
+    invoiceDate: r.invoiceDate
+      ? `${r.invoiceDate.getFullYear()}-${String(r.invoiceDate.getMonth() + 1).padStart(2, "0")}-${String(r.invoiceDate.getDate()).padStart(2, "0")}`
+      : null,
+  }));
 }
 
 export const createCoworkingInvoiceSchema = z.object({
@@ -1065,9 +1085,6 @@ export async function createCoworkingInvoice(
   ctx: UserContext,
 ) {
   const conn = db();
-  // Snapshot des valeurs du contrat (desks + prix). Si ces valeurs
-  // changent ensuite, la query d'affichage côté Next pull live depuis
-  // le contrat, mais on garde le snapshot en fallback DB.
   const [contract] = await conn
     .select({ desks: coworkingContracts.desks, unitPriceHt: coworkingContracts.unitPriceHt })
     .from(coworkingContracts)
@@ -1075,23 +1092,26 @@ export async function createCoworkingInvoice(
     .limit(1);
   if (!contract) throw new Error("Contrat introuvable.");
 
+  const amountHt = Number(contract.unitPriceHt) * contract.desks;
   const [row] = await conn
-    .insert(coworkingInvoices)
+    .insert(invoicesTable)
     .values({
-      contractId: args.contractId,
-      name: args.name,
-      invoiceDate: args.invoiceDate ?? null,
+      kind: "coworking",
+      coworkingContractId: args.contractId,
+      label: args.name,
+      amountHt: amountHt.toFixed(2),
+      vatRate: args.vatRate ?? "0.2",
+      status: toDbStatusCoworking(args.status ?? "a_facturer"),
       periodStart: args.periodStart,
       periodEnd: args.periodEnd,
-      status: args.status ?? "a_facturer",
-      billedBy: args.billedBy ?? "parade",
       desks: contract.desks,
       unitPriceHt: contract.unitPriceHt,
-      vatRate: args.vatRate ?? "0.2",
+      billedBy: args.billedBy ?? "parade",
+      invoicedAt: args.invoiceDate ? new Date(args.invoiceDate) : null,
       notes: args.notes ?? null,
       createdBy: ctx.userId,
     })
-    .returning({ id: coworkingInvoices.id, name: coworkingInvoices.name });
+    .returning({ id: invoicesTable.id, name: invoicesTable.label });
   return row;
 }
 
@@ -1123,20 +1143,17 @@ export const updateCoworkingInvoiceSchema = z.object({
 export async function updateCoworkingInvoice(args: z.infer<typeof updateCoworkingInvoiceSchema>) {
   const conn = db();
   const update: Record<string, unknown> = { updatedAt: new Date() };
-  for (const key of [
-    "name",
-    "invoiceDate",
-    "periodStart",
-    "periodEnd",
-    "status",
-    "billedBy",
-    "vatRate",
-    "notes",
-  ] as const) {
-    const v = (args as Record<string, unknown>)[key];
-    if (v !== undefined) update[key] = v;
+  if (args.name !== undefined) update.label = args.name;
+  if (args.invoiceDate !== undefined) {
+    update.invoicedAt = args.invoiceDate ? new Date(args.invoiceDate) : null;
   }
-  await conn.update(coworkingInvoices).set(update).where(eq(coworkingInvoices.id, args.id));
+  if (args.periodStart !== undefined) update.periodStart = args.periodStart;
+  if (args.periodEnd !== undefined) update.periodEnd = args.periodEnd;
+  if (args.status !== undefined) update.status = toDbStatusCoworking(args.status);
+  if (args.billedBy !== undefined) update.billedBy = args.billedBy;
+  if (args.vatRate !== undefined) update.vatRate = args.vatRate;
+  if (args.notes !== undefined) update.notes = args.notes;
+  await conn.update(invoicesTable).set(update).where(eq(invoicesTable.id, args.id));
   return { id: args.id };
 }
 
@@ -1169,33 +1186,42 @@ export async function generateNextCoworkingInvoice(
   const months = contract.billingFrequency === "monthly" ? 1 : 3;
 
   const [last] = await conn
-    .select({ periodEnd: coworkingInvoices.periodEnd })
-    .from(coworkingInvoices)
-    .where(eq(coworkingInvoices.contractId, args.contractId))
-    .orderBy(desc(coworkingInvoices.periodStart))
+    .select({ periodEnd: invoicesTable.periodEnd })
+    .from(invoicesTable)
+    .where(
+      and(
+        eq(invoicesTable.coworkingContractId, args.contractId),
+        eq(invoicesTable.kind, "coworking"),
+      ),
+    )
+    .orderBy(desc(invoicesTable.periodStart))
     .limit(1);
 
-  const refDate = last ? addDays(parseDate(last.periodEnd), 1) : parseDate(contract.startDate);
+  const refDate = last?.periodEnd
+    ? addDays(parseDate(last.periodEnd), 1)
+    : parseDate(contract.startDate);
   const periodStart = firstOfMonth(refDate);
   const periodEnd = lastOfMonth(addMonths(periodStart, months - 1));
   const label = periodLabel(periodStart, contract.billingFrequency);
+  const amountHt = Number(contract.unitPriceHt) * contract.desks * months;
 
   const [row] = await conn
-    .insert(coworkingInvoices)
+    .insert(invoicesTable)
     .values({
-      contractId: args.contractId,
-      name: label,
-      invoiceDate: null,
+      kind: "coworking",
+      coworkingContractId: args.contractId,
+      label,
+      amountHt: amountHt.toFixed(2),
+      vatRate: "0.2",
+      status: "draft",
       periodStart: fmtDate(periodStart),
       periodEnd: fmtDate(periodEnd),
-      status: "a_facturer",
-      billedBy: "parade",
       desks: contract.desks,
       unitPriceHt: contract.unitPriceHt,
-      vatRate: "0.2",
+      billedBy: "parade",
       createdBy: ctx.userId,
     })
-    .returning({ id: coworkingInvoices.id, name: coworkingInvoices.name });
+    .returning({ id: invoicesTable.id, name: invoicesTable.label });
   return {
     ...row,
     periodStart: fmtDate(periodStart),
