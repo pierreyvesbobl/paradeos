@@ -71,6 +71,7 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
   const coworkingInvoiceRows = await conn
     .select({
       id: coworkingInvoices.id,
+      invoiceDate: coworkingInvoices.invoiceDate,
       periodStart: coworkingInvoices.periodStart,
       periodEnd: coworkingInvoices.periodEnd,
       desks: coworkingInvoices.desks,
@@ -85,15 +86,29 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
     .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
     .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
     .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId))
-    .orderBy(desc(coworkingInvoices.periodStart));
+    .orderBy(desc(coworkingInvoices.invoiceDate), desc(coworkingInvoices.periodStart));
+
+  function fmtDate(d: string | null | undefined): string | null {
+    if (!d) return null;
+    const [y, m, day] = d.split("-");
+    return y && m && day ? `${day}/${m}/${y}` : d;
+  }
 
   const coworkingInvoiceOptions: CoworkingInvoiceOption[] = coworkingInvoiceRows.map((c) => {
     const contactName = `${c.contactFirstName ?? ""} ${c.contactLastName ?? ""}`.trim() || null;
+    const issued = fmtDate(c.invoiceDate);
+    const periodLabel = c.periodStart.slice(0, 7);
     return {
       id: c.id,
-      label: `${c.contractName ?? "(contrat supprimé)"} · ${c.periodStart.slice(0, 7)}`,
+      // Label = "Contrat · période (émise le DD/MM/YYYY)" si invoiceDate
+      // dispo, sinon juste "Contrat · période". L'émission est la donnée
+      // la plus utile pour rapprocher avec la date Dougs.
+      label: issued
+        ? `${c.contractName ?? "(contrat supprimé)"} · ${periodLabel} (émise ${issued})`
+        : `${c.contractName ?? "(contrat supprimé)"} · ${periodLabel} (non émise)`,
       contractName: c.contractName ?? "(contrat supprimé)",
       clientName: c.entityName ?? contactName,
+      invoiceDate: c.invoiceDate,
       periodStart: c.periodStart,
       periodEnd: c.periodEnd,
       amountHt: Number(c.unitPriceHt) * c.desks,

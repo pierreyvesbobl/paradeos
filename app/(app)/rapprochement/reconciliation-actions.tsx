@@ -55,11 +55,13 @@ export type ProjectOption = {
 
 export type CoworkingInvoiceOption = {
   id: string;
-  /** Label combiné: "Contract — YYYY-MM" pour searchValue. */
+  /** Label complet affiché dans le combobox. */
   label: string;
-  /** Détails de l'option pour searchValue + tooltip. */
+  /** Détails pour searchValue + tooltip. */
   contractName: string;
   clientName: string | null;
+  /** Date d'émission (YYYY-MM-DD) si la facture est déjà émise. */
+  invoiceDate: string | null;
   periodStart: string;
   periodEnd: string;
   amountHt: number;
@@ -419,10 +421,10 @@ export function ManualLinkCoworkingInvoice({
         onValueChange={setSelected}
         options={invoices.map((i) => ({
           id: i.id,
-          label: `${i.contractName} · ${i.periodStart.slice(0, 7)}${i.alreadyLinked ? " · ⚠ déjà liée" : ""}`,
-          searchValue: `${i.contractName} ${i.clientName ?? ""} ${i.periodStart} ${i.periodEnd}`,
+          label: `${i.label}${i.alreadyLinked ? " · ⚠ déjà liée" : ""}`,
+          searchValue: `${i.contractName} ${i.clientName ?? ""} ${i.periodStart} ${i.periodEnd} ${i.invoiceDate ?? ""}`,
         }))}
-        searchPlaceholder="Rechercher (contrat, client, période)…"
+        searchPlaceholder="Rechercher (contrat, client, période, date)…"
         placeholder="Choisir une facture coworking…"
         disabled={pending}
         className="flex-1"
