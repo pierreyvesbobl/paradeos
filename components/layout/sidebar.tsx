@@ -1,10 +1,10 @@
 import {
   Briefcase,
   Building2,
+  Calculator,
   Calendar,
   CheckSquare,
   Clock,
-  GitMerge,
   Home,
   Mic,
   School,
@@ -33,7 +33,7 @@ const items: NavItem[] = [
   { label: "Notes", href: "/notes", icon: StickyNote },
   { label: "Meetings", href: "/meetings", icon: Mic },
   { label: "Coworking", href: "/coworking", icon: School },
-  { label: "Rapprochement", href: "/rapprochement", icon: GitMerge },
+  { label: "Compta", href: "/compta", icon: Calculator },
 ];
 
 export function Sidebar() {
