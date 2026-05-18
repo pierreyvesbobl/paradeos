@@ -53,6 +53,20 @@ export type ProjectOption = {
   valueAmount: number | null;
 };
 
+export type CoworkingInvoiceOption = {
+  id: string;
+  /** Label combiné: "Contract — YYYY-MM" pour searchValue. */
+  label: string;
+  /** Détails de l'option pour searchValue + tooltip. */
+  contractName: string;
+  clientName: string | null;
+  periodStart: string;
+  periodEnd: string;
+  amountHt: number;
+  /** Indique si la facture est déjà liée à un Dougs. Affichée différemment. */
+  alreadyLinked: boolean;
+};
+
 export function LinkQuoteButton({
   projectId,
   dougsId,
@@ -327,6 +341,91 @@ export function ManualLinkInvoice({
         pending={pending}
         selected={selected}
         onChange={setSelected}
+      />
+      <Button type="button" size="sm" onClick={submit} disabled={pending || !selected}>
+        Lier
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          setOpen(false);
+          setSelected(null);
+        }}
+        disabled={pending}
+      >
+        Annuler
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Picker manuel pour lier une facture Dougs à une coworking_invoice
+ * existante (matching auto raté, ou facture déjà liée à un mauvais
+ * Dougs qu'on veut ré-attribuer).
+ *
+ * On expose toutes les factures coworking (y compris déjà liées) — la
+ * badge `alreadyLinked` indique celles qui écrasent un lien existant.
+ */
+export function ManualLinkCoworkingInvoice({
+  dougsId,
+  invoices,
+}: {
+  dougsId: string;
+  invoices: CoworkingInvoiceOption[];
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  function submit() {
+    if (!selected) return;
+    startTransition(async () => {
+      const res = await linkCoworkingInvoiceDougs({
+        coworkingInvoiceId: selected,
+        dougsIdOrUrl: dougsId,
+      });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(`Facture Dougs liée : ${res.data.reference ?? "—"}`);
+      setOpen(false);
+      setSelected(null);
+      router.refresh();
+    });
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+      >
+        <Link2 className="size-3" />
+        Lier manuellement à une facture coworking existante…
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 p-2">
+      <FkCombobox
+        value={selected}
+        onValueChange={setSelected}
+        options={invoices.map((i) => ({
+          id: i.id,
+          label: `${i.contractName} · ${i.periodStart.slice(0, 7)}${i.alreadyLinked ? " · ⚠ déjà liée" : ""}`,
+          searchValue: `${i.contractName} ${i.clientName ?? ""} ${i.periodStart} ${i.periodEnd}`,
+        }))}
+        searchPlaceholder="Rechercher (contrat, client, période)…"
+        placeholder="Choisir une facture coworking…"
+        disabled={pending}
+        className="flex-1"
       />
       <Button type="button" size="sm" onClick={submit} disabled={pending || !selected}>
         Lier

@@ -1,19 +1,23 @@
 import { PageHeader } from "@/components/page-header";
+import { contacts } from "@/db/schema/contacts";
+import { coworkingContracts, coworkingInvoices } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
 import { DougsAuthError } from "@/lib/dougs/client";
 import { getInvoiceSuggestions, getQuoteSuggestions } from "@/lib/dougs/reconciliation";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { ExternalLink, FileText, Receipt } from "lucide-react";
 import Link from "next/link";
 import {
+  type CoworkingInvoiceOption,
   LinkCoworkingContractButton,
   LinkCoworkingInvoiceButton,
   LinkMilestoneButton,
   LinkProjectAsMilestoneButton,
   LinkQuoteButton,
+  ManualLinkCoworkingInvoice,
   ManualLinkInvoice,
   ManualLinkQuote,
   type ProjectOption,
@@ -61,6 +65,41 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
     entityName: p.entityName,
     valueAmount: Number(p.valueAmount ?? p.budgetAmount ?? 0) || null,
   }));
+
+  // Toutes les factures coworking (liées ou non) pour le picker manuel.
+  // On les expose toutes pour permettre de ré-attribuer un mauvais lien.
+  const coworkingInvoiceRows = await conn
+    .select({
+      id: coworkingInvoices.id,
+      periodStart: coworkingInvoices.periodStart,
+      periodEnd: coworkingInvoices.periodEnd,
+      desks: coworkingInvoices.desks,
+      unitPriceHt: coworkingInvoices.unitPriceHt,
+      dougsInvoiceId: coworkingInvoices.dougsInvoiceId,
+      contractName: coworkingContracts.name,
+      entityName: entities.name,
+      contactFirstName: contacts.firstName,
+      contactLastName: contacts.lastName,
+    })
+    .from(coworkingInvoices)
+    .leftJoin(coworkingContracts, eq(coworkingContracts.id, coworkingInvoices.contractId))
+    .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
+    .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId))
+    .orderBy(desc(coworkingInvoices.periodStart));
+
+  const coworkingInvoiceOptions: CoworkingInvoiceOption[] = coworkingInvoiceRows.map((c) => {
+    const contactName = `${c.contactFirstName ?? ""} ${c.contactLastName ?? ""}`.trim() || null;
+    return {
+      id: c.id,
+      label: `${c.contractName ?? "(contrat supprimé)"} · ${c.periodStart.slice(0, 7)}`,
+      contractName: c.contractName ?? "(contrat supprimé)",
+      clientName: c.entityName ?? contactName,
+      periodStart: c.periodStart,
+      periodEnd: c.periodEnd,
+      amountHt: Number(c.unitPriceHt) * c.desks,
+      alreadyLinked: Boolean(c.dougsInvoiceId),
+    };
+  });
 
   let quoteSuggestions: Awaited<ReturnType<typeof getQuoteSuggestions>> = [];
   let invoiceSuggestions: Awaited<ReturnType<typeof getInvoiceSuggestions>> = [];
@@ -387,7 +426,13 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
                         })}
                       </ul>
                     )}
-                    <ManualLinkInvoice dougsId={s.dougs.id} projects={projectOptions} />
+                    <div className="flex flex-col gap-1.5">
+                      <ManualLinkInvoice dougsId={s.dougs.id} projects={projectOptions} />
+                      <ManualLinkCoworkingInvoice
+                        dougsId={s.dougs.id}
+                        invoices={coworkingInvoiceOptions}
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>
