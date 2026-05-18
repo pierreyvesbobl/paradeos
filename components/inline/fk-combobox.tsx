@@ -126,7 +126,19 @@ export function FkCombobox({
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[--radix-popover-trigger-width] min-w-72 p-0">
-        <Command>
+        <Command
+          filter={(value, q) => {
+            // cmdk par défaut est case-insensitive mais accent-sensitive.
+            // Normalisation NFD pour matcher "Bénédicte" avec "benedicte".
+            if (!q) return 1;
+            const strip = (s: string) =>
+              s
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/\p{Diacritic}/gu, "");
+            return strip(value).includes(strip(q)) ? 1 : 0;
+          }}
+        >
           <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
           <CommandList>
             <CommandEmpty>

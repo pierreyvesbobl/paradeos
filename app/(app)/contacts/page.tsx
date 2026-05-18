@@ -20,7 +20,7 @@ import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply"
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
 import { contactQualificationEnum, contactQualificationLabels } from "@/lib/schemas/coworking";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
-import { type SQL, and, asc, desc, ilike, or, sql } from "drizzle-orm";
+import { type SQL, and, asc, desc, or, sql } from "drizzle-orm";
 import { ArrowRight, Plus, Users } from "lucide-react";
 import Link from "next/link";
 import {
@@ -113,11 +113,15 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
 
   const conditions: SQL[] = [...filterConditions];
   if (query) {
+    // ILIKE est case-insensitive mais accent-sensitive : sans unaccent,
+    // chercher "benedicte" ne matche pas "Bénédicte". unaccent()
+    // (migration 0041) normalise des deux côtés.
+    const pattern = `%${query}%`;
     const like = or(
-      ilike(contacts.firstName, `%${query}%`),
-      ilike(contacts.lastName, `%${query}%`),
-      ilike(contacts.email, `%${query}%`),
-      ilike(entities.name, `%${query}%`),
+      sql`unaccent(${contacts.firstName}) ilike unaccent(${pattern})`,
+      sql`unaccent(${contacts.lastName}) ilike unaccent(${pattern})`,
+      sql`unaccent(coalesce(${contacts.email}, '')) ilike unaccent(${pattern})`,
+      sql`unaccent(coalesce(${entities.name}, '')) ilike unaccent(${pattern})`,
     );
     if (like) conditions.push(like);
   }
