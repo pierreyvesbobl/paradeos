@@ -645,6 +645,7 @@ export const linkDougsCreditNote = action(
         .update(invoices)
         .set({
           cancelsInvoiceId: cancelled?.id ?? null,
+          cancelsDougsInvoiceId: input.originalInvoiceId,
           updatedAt: new Date(),
         })
         .where(eq(invoices.id, existing.id));
@@ -656,6 +657,7 @@ export const linkDougsCreditNote = action(
         status: "sent",
         dougsInvoiceId: input.creditNoteId,
         cancelsInvoiceId: cancelled?.id ?? null,
+        cancelsDougsInvoiceId: input.originalInvoiceId,
         createdBy: user.id,
       });
     }
@@ -696,7 +698,11 @@ export const unlinkDougsCreditNote = action(
     const conn = await db();
     await conn
       .update(invoices)
-      .set({ cancelsInvoiceId: null, updatedAt: new Date() })
+      .set({
+        cancelsInvoiceId: null,
+        cancelsDougsInvoiceId: null,
+        updatedAt: new Date(),
+      })
       .where(
         and(eq(invoices.kind, "credit_note"), eq(invoices.dougsInvoiceId, input.creditNoteId)),
       );

@@ -4,7 +4,9 @@ import postgres from "postgres";
 loadEnv({ path: ".env.local" });
 
 async function main() {
-  const sql = postgres(process.env.DATABASE_URL!, {
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) throw new Error("DATABASE_URL manquant.");
+  const sql = postgres(dbUrl, {
     prepare: false,
     max: 1,
     onnotice: () => {},

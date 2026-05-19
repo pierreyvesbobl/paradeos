@@ -67,8 +67,14 @@ export const invoices = pgTable(
     coworkingContractId: uuid("coworking_contract_id").references(() => coworkingContracts.id, {
       onDelete: "set null",
     }),
-    /** Pour kind=credit_note, pointe vers la facture annulée. */
+    /** Pour kind=credit_note, pointe vers la facture annulée (côté Paradeos).
+     *  Null si la facture Dougs annulée n'a pas (ou plus) de Paradeos
+     *  correspondante. Pour cet usage, voir aussi `cancelsDougsInvoiceId`. */
     cancelsInvoiceId: uuid("cancels_invoice_id"),
+    /** Pour kind=credit_note, ID Dougs de la facture annulée. Toujours
+     *  set quand on lie un avoir à une facture, même si pas de Paradeos
+     *  correspondante. Permet la traçabilité visuelle malgré le cascade. */
+    cancelsDougsInvoiceId: text("cancels_dougs_invoice_id"),
 
     // Identité
     label: text("label").notNull(),

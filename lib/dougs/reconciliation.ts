@@ -633,6 +633,7 @@ export async function getInvoiceSuggestions(
             id: invoices.id,
             dougsInvoiceId: invoices.dougsInvoiceId,
             cancelsInvoiceId: invoices.cancelsInvoiceId,
+            cancelsDougsInvoiceId: invoices.cancelsDougsInvoiceId,
           })
           .from(invoices)
           .where(eq(invoices.kind, "credit_note"))
@@ -643,12 +644,9 @@ export async function getInvoiceSuggestions(
       .map((r) => [r.dougsInvoiceId as string, r]),
   );
 
-  // Le cancels_invoice_id pointe vers une invoice Paradeos qui peut
-  // n'avoir plus de dougs_invoice_id (suite au cascade). On résout en
-  // remontant : si l'invoice annulée a un dougs_invoice_id, on l'utilise.
-  // Sinon, on cherche dans tous les invoices celui qui aurait l'ID
-  // Dougs annulé (avant cascade) — non, on ne peut plus. On affiche
-  // juste l'invoice Paradeos.
+  // Détails de la facture annulée (côté Paradeos, optionnel) si on a
+  // cancels_invoice_id. Permet d'afficher le label/montant en plus de
+  // la référence Dougs.
   const cancelledInvoiceIds = Array.from(creditNoteRowByDougsId.values())
     .map((r) => r.cancelsInvoiceId)
     .filter((x): x is string => !!x);
@@ -659,7 +657,6 @@ export async function getInvoiceSuggestions(
             id: invoices.id,
             label: invoices.label,
             amountHt: invoices.amountHt,
-            dougsInvoiceId: invoices.dougsInvoiceId,
             dougsReference: invoices.dougsReference,
           })
           .from(invoices)
@@ -668,9 +665,16 @@ export async function getInvoiceSuggestions(
     cancelledInvoiceRows.filter((r) => cancelledInvoiceIds.includes(r.id)).map((r) => [r.id, r]),
   );
 
+  // Index aussi les factures Dougs (du run en cours) par leur ID pour
+  // pouvoir afficher la référence / nom client à partir du seul Dougs ID.
+  const dougsInvoicesById = new Map(dougsInvoicesNormal.map((i) => [i.id, i]));
+
   const creditNotes: CreditNoteEntry[] = enrichedCreditNotes.map((cn) => {
     const row = creditNoteRowByDougsId.get(cn.id);
-    const cancelled = row?.cancelsInvoiceId ? cancelledById.get(row.cancelsInvoiceId) : null;
+    const cancelledLocal = row?.cancelsInvoiceId ? cancelledById.get(row.cancelsInvoiceId) : null;
+    const dougsCancelled = row?.cancelsDougsInvoiceId
+      ? dougsInvoicesById.get(row.cancelsDougsInvoiceId)
+      : null;
     return {
       dougs: {
         id: cn.id,
@@ -681,18 +685,22 @@ export async function getInvoiceSuggestions(
         clientName: pickDougsClientName(cn) ?? "—",
         createdAt: cn.createdAt ?? null,
       },
-      link: row?.cancelsInvoiceId
+      link: row?.cancelsDougsInvoiceId
         ? {
-            // On garde l'API stable côté UI : on expose le dougs_invoice_id
-            // si on peut le retrouver, sinon l'invoice paradeos id.
-            cancelsDougsInvoiceId: cancelled?.dougsInvoiceId ?? row.cancelsInvoiceId,
-            invoice: cancelled
+            cancelsDougsInvoiceId: row.cancelsDougsInvoiceId,
+            invoice: cancelledLocal
               ? {
-                  reference: cancelled.dougsReference ?? null,
-                  clientName: cancelled.label,
-                  totalHt: Number(cancelled.amountHt) || null,
+                  reference: cancelledLocal.dougsReference ?? null,
+                  clientName: cancelledLocal.label,
+                  totalHt: Number(cancelledLocal.amountHt) || null,
                 }
-              : null,
+              : dougsCancelled
+                ? {
+                    reference: dougsCancelled.reference ?? null,
+                    clientName: pickDougsClientName(dougsCancelled) ?? "—",
+                    totalHt: pickHt(dougsCancelled),
+                  }
+                : null,
           }
         : null,
     };
