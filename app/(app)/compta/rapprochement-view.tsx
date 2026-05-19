@@ -11,7 +11,7 @@ import {
   getLinkedDougsEntries,
   getQuoteSuggestions,
 } from "@/lib/dougs/reconciliation";
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
 import { ExternalLink, FileText, Receipt } from "lucide-react";
 import Link from "next/link";
 import { LinkedInvoiceRow, LinkedQuoteRow } from "./linked-row-editor";
@@ -85,7 +85,13 @@ export async function RapprochementView({ debug }: { debug?: string }) {
     .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
     .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
     .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId))
-    .where(eq(invoices.kind, "coworking"))
+    .where(
+      and(
+        eq(invoices.kind, "coworking"),
+        // Exclut G&O du picker manuel de rapprochement.
+        or(ne(invoices.billedBy, "g_and_o"), isNull(invoices.billedBy)),
+      ),
+    )
     .orderBy(desc(invoices.invoicedAt), desc(invoices.periodStart));
 
   function fmtDate(d: Date | string | null | undefined): string | null {

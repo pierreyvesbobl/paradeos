@@ -297,6 +297,7 @@ export async function getInvoiceSuggestions(
       kind: invoices.kind,
       label: invoices.label,
       amountHt: invoices.amountHt,
+      billedBy: invoices.billedBy,
       projectId: invoices.projectId,
       coworkingContractId: invoices.coworkingContractId,
       milestonePercent: invoices.milestonePercent,
@@ -334,10 +335,14 @@ export async function getInvoiceSuggestions(
       ),
     );
 
-  // Filtre côté JS pour kind ∈ {milestone, coworking, one_off}.
-  const candidatesData = unlinkedInvoiceCandidates.filter(
-    (c) => c.kind === "milestone" || c.kind === "coworking" || c.kind === "one_off",
-  );
+  // Filtre côté JS pour kind ∈ {milestone, coworking, one_off}. Exclut
+  // aussi les factures coworking facturées par G&O (billedBy='g_and_o')
+  // qui ne doivent ni remonter dans le matching ni dans les KPIs.
+  const candidatesData = unlinkedInvoiceCandidates.filter((c) => {
+    if (c.kind !== "milestone" && c.kind !== "coworking" && c.kind !== "one_off") return false;
+    if (c.kind === "coworking" && c.billedBy === "g_and_o") return false;
+    return true;
+  });
 
   // Pour les coworking, on a besoin de l'entité de facturation (billToEntity)
   // qui n'a pas été ramenée par le join (la colonne entities ci-dessus
@@ -714,6 +719,7 @@ export async function getLinkedDougsEntries(): Promise<LinkedDougsEntries> {
       label: invoices.label,
       amountHt: invoices.amountHt,
       status: invoices.status,
+      billedBy: invoices.billedBy,
       projectId: invoices.projectId,
       coworkingContractId: invoices.coworkingContractId,
       dougsInvoiceId: invoices.dougsInvoiceId,
@@ -734,6 +740,8 @@ export async function getLinkedDougsEntries(): Promise<LinkedDougsEntries> {
   const freeInvoices: LinkedDougsEntries["freeInvoices"] = [];
 
   for (const r of rows) {
+    // Exclut les factures coworking facturées par G&O.
+    if (r.kind === "coworking" && r.billedBy === "g_and_o") continue;
     if (r.kind === "quote") {
       if (r.dougsQuoteId && r.projectId) {
         quotes.push({

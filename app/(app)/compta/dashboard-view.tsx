@@ -3,7 +3,7 @@ import { entities } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { ArrowRight, FileText, Receipt } from "lucide-react";
 import Link from "next/link";
 import { type ComptaPeriod, PeriodSelector } from "./period-selector";
@@ -100,7 +100,13 @@ export async function DashboardView({ period }: { period: ComptaPeriod }) {
     .leftJoin(projects, eq(projects.id, invoices.projectId))
     .leftJoin(entities, eq(entities.id, projects.entityId))
     .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
-    .where(inArray(invoices.kind, ["milestone", "coworking", "one_off"]));
+    .where(
+      and(
+        inArray(invoices.kind, ["milestone", "coworking", "one_off"]),
+        // Exclut les factures coworking facturées par G&O des KPIs.
+        or(ne(invoices.billedBy, "g_and_o"), isNull(invoices.billedBy)),
+      ),
+    );
 
   let billedHt = 0;
   let cashedHt = 0;
