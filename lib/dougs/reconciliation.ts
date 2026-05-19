@@ -395,7 +395,25 @@ export async function getInvoiceSuggestions(
   const linkedDougsIds = new Set(
     linkedRows.map((r) => r.dougsInvoiceId).filter((x): x is string => !!x),
   );
-  const unlinkedDougsList = dougsInvoicesNormal.filter((i) => !linkedDougsIds.has(i.id));
+
+  // Factures Dougs annulées par un avoir : on les exclut du flux de
+  // matching pour qu'elles n'apparaissent plus comme candidates. Sans
+  // ça, après linkDougsCreditNote la facture annulée revenait dans la
+  // liste "non liées" puisque son lien Paradeos avait été cleared par
+  // le cascade. (cf. cancels_dougs_invoice_id sur les credit_notes).
+  const cancelledDougsIdsRows = await conn
+    .select({ cancelsDougsInvoiceId: invoices.cancelsDougsInvoiceId })
+    .from(invoices)
+    .where(eq(invoices.kind, "credit_note"));
+  const cancelledDougsIds = new Set(
+    cancelledDougsIdsRows
+      .map((r) => r.cancelsDougsInvoiceId)
+      .filter((x): x is string => !!x),
+  );
+
+  const unlinkedDougsList = dougsInvoicesNormal.filter(
+    (i) => !linkedDougsIds.has(i.id) && !cancelledDougsIds.has(i.id),
+  );
 
   // Enrichissement (le list endpoint n'envoie pas clientData complet).
   const unlinkedDougsInvoices: (DougsSalesInvoice & { id: string })[] = await pMap(
@@ -707,6 +725,7 @@ export async function getInvoiceSuggestions(
   });
 
   const invoiceOptions: DougsInvoiceOption[] = dougsInvoicesNormal
+    .filter((i) => !cancelledDougsIds.has(i.id))
     .map((i) => ({
       id: i.id,
       reference: i.reference ?? null,
