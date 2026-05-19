@@ -1092,7 +1092,15 @@ export async function createCoworkingInvoice(
     .limit(1);
   if (!contract) throw new Error("Contrat introuvable.");
 
-  const amountHt = Number(contract.unitPriceHt) * contract.desks;
+  // Période × prix mensuel — mensuel × 1, trimestriel × 3 si on couvre
+  // 3 mois. On dérive `months` de la période passée en arg.
+  const startD = new Date(`${args.periodStart}T00:00:00`);
+  const endD = new Date(`${args.periodEnd}T00:00:00`);
+  const months = Math.max(
+    1,
+    (endD.getFullYear() - startD.getFullYear()) * 12 + (endD.getMonth() - startD.getMonth()) + 1,
+  );
+  const amountHt = Number(contract.unitPriceHt) * contract.desks * months;
   const [row] = await conn
     .insert(invoicesTable)
     .values({

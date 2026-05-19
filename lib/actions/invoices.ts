@@ -17,6 +17,7 @@ import {
   pickDougsTtc,
   pickDougsVat,
 } from "@/lib/dougs/client";
+import { monthsBetween } from "@/lib/schemas/coworking";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -254,7 +255,11 @@ const createCoworkingSchema = z.object({
 
 export const createCoworkingInvoice = action(createCoworkingSchema, async ({ input, user }) => {
   const conn = await db();
-  const amountHt = Math.round(input.desks * input.unitPriceHt * 100) / 100;
+  // Période × prix mensuel : 3 mois pour un trimestre, 1 pour un mois.
+  // Sans le facteur "mois", une facture trimestrielle stockait le tiers
+  // du vrai montant.
+  const months = monthsBetween(input.periodStart, input.periodEnd);
+  const amountHt = Math.round(input.desks * input.unitPriceHt * months * 100) / 100;
   const [row] = await conn
     .insert(invoices)
     .values({
@@ -311,17 +316,31 @@ export const updateCoworkingInvoice = action(updateCoworkingSchema, async ({ inp
   if (input.vatRate !== undefined) update.vatRate = toNumeric(input.vatRate);
   if (input.notes !== undefined) update.notes = input.notes;
 
-  // Recalcule amountHt si desks ou unitPriceHt change.
-  if (input.desks !== undefined || input.unitPriceHt !== undefined) {
+  // Recalcule amountHt si desks, unitPriceHt ou la période change.
+  // Période × prix mensuel : un trimestre vaut 3 × mensuel.
+  if (
+    input.desks !== undefined ||
+    input.unitPriceHt !== undefined ||
+    input.periodStart !== undefined ||
+    input.periodEnd !== undefined
+  ) {
     const [existing] = await conn
-      .select({ desks: invoices.desks, unitPriceHt: invoices.unitPriceHt })
+      .select({
+        desks: invoices.desks,
+        unitPriceHt: invoices.unitPriceHt,
+        periodStart: invoices.periodStart,
+        periodEnd: invoices.periodEnd,
+      })
       .from(invoices)
       .where(eq(invoices.id, input.id))
       .limit(1);
     if (existing) {
       const desks = input.desks ?? existing.desks ?? 1;
       const unit = Number(input.unitPriceHt ?? existing.unitPriceHt ?? 0);
-      update.amountHt = toNumeric(desks * unit);
+      const periodStart = input.periodStart ?? existing.periodStart ?? "";
+      const periodEnd = input.periodEnd ?? existing.periodEnd ?? "";
+      const months = periodStart && periodEnd ? monthsBetween(periodStart, periodEnd) : 1;
+      update.amountHt = toNumeric(desks * unit * months);
     }
   }
 
@@ -881,7 +900,8 @@ export const linkCoworkingContractAsNewInvoice = action(
     const periodEndStr = toISO(periodEnd);
 
     const paid = pickDougsPaidAt(invoice);
-    const amountHt = Number(contract.unitPriceHt) * contract.desks;
+    const months = contract.billingFrequency === "quarterly" ? 3 : 1;
+    const amountHt = Number(contract.unitPriceHt) * contract.desks * months;
 
     const [row] = await conn
       .insert(invoices)
