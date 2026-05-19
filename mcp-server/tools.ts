@@ -141,7 +141,9 @@ export async function getProject(args: z.infer<typeof getProjectSchema>) {
 export const listTasksSchema = z.object({
   projectId: z.string().uuid().optional(),
   assigneeId: z.string().uuid().optional(),
-  status: z.enum(["todo", "in_progress", "blocked", "done", "cancelled"]).optional(),
+  status: z
+    .enum(["todo", "in_progress", "awaiting_client", "blocked", "done", "cancelled"])
+    .optional(),
   openOnly: z.boolean().optional(),
   limit: z.number().int().positive().max(200).optional(),
 });

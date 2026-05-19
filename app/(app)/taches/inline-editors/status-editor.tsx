@@ -12,6 +12,7 @@ import { toast } from "sonner";
 const statusVariant: Record<TaskStatus, "default" | "secondary" | "outline" | "destructive"> = {
   todo: "outline",
   in_progress: "default",
+  awaiting_client: "secondary",
   blocked: "destructive",
   done: "secondary",
   cancelled: "outline",

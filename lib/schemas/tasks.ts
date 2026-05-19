@@ -1,11 +1,19 @@
 import { z } from "zod";
 
-export const taskStatusEnum = z.enum(["todo", "in_progress", "blocked", "done", "cancelled"]);
+export const taskStatusEnum = z.enum([
+  "todo",
+  "in_progress",
+  "awaiting_client",
+  "blocked",
+  "done",
+  "cancelled",
+]);
 export type TaskStatus = z.infer<typeof taskStatusEnum>;
 
 export const taskStatusLabels: Record<TaskStatus, string> = {
   todo: "À faire",
   in_progress: "En cours",
+  awaiting_client: "En attente client",
   blocked: "Bloquée",
   done: "Terminée",
   cancelled: "Annulée",

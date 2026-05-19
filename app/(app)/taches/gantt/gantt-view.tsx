@@ -84,6 +84,7 @@ type DragState = {
 const STATUS_BORDER: Record<TaskStatus, string> = {
   todo: "border-l-foreground/30",
   in_progress: "border-l-blue-500",
+  awaiting_client: "border-l-violet-500",
   blocked: "border-l-amber-500",
   done: "border-l-emerald-500",
   cancelled: "border-l-slate-400",

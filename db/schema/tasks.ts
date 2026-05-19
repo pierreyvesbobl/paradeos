@@ -6,6 +6,7 @@ import { users } from "./users";
 export const taskStatus = pgEnum("task_status", [
   "todo",
   "in_progress",
+  "awaiting_client",
   "blocked",
   "done",
   "cancelled",
