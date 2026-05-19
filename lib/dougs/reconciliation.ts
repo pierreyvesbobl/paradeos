@@ -236,18 +236,6 @@ export type InvoiceCandidate =
       detectedPercent: number | null;
       amountHt: number;
       score: MatchScore;
-    }
-  | {
-      // Pas d'invoice existante → propose d'en créer une à la volée
-      // pour un contrat coworking.
-      kind: "new_coworking_invoice";
-      contractId: string;
-      contractName: string;
-      entityName: string | null;
-      monthlyHt: number;
-      desks: number;
-      amountHt: number;
-      score: MatchScore;
     };
 
 export type InvoiceSuggestion = {
@@ -447,25 +435,7 @@ export async function getInvoiceSuggestions(
     .leftJoin(entities, eq(entities.id, projects.entityId))
     .where(eq(projects.kind, "client"));
 
-  // 4. Contrats coworking (pour candidat "new_coworking_invoice").
-  const allCoworkingContracts = await conn
-    .select({
-      id: coworkingContracts.id,
-      name: coworkingContracts.name,
-      desks: coworkingContracts.desks,
-      unitPriceHt: coworkingContracts.unitPriceHt,
-      startDate: coworkingContracts.startDate,
-      billingFrequency: coworkingContracts.billingFrequency,
-      status: coworkingContracts.status,
-      billToEntityName: entities.name,
-      contactFirstName: contacts.firstName,
-      contactLastName: contacts.lastName,
-    })
-    .from(coworkingContracts)
-    .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
-    .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId));
-
-  // 5. Pour chaque facture Dougs non liée, score contre les candidats.
+  // 4. Pour chaque facture Dougs non liée, score contre les candidats.
   const out: InvoiceSuggestion[] = [];
   for (const inv of unlinkedDougsInvoices) {
     const dougsAmount = pickHt(inv) ?? pickTtc(inv);
@@ -549,54 +519,7 @@ export async function getInvoiceSuggestions(
       }
     }
 
-    // 5c. "Nouveau coworking" : contrat coworking sans facture Paradeos
-    //     pour la période, si le total mensuel × N mois colle à l'amount.
-    const newCoworkingScored: InvoiceCandidate[] = [];
-    if (typeof dougsAmount === "number" && dougsAmount > 0) {
-      // Skip contrats qui ont déjà un candidat invoice existante.
-      const contractIdsWithCandidate = new Set(
-        existingScored
-          .map((s) => {
-            const m = candidatesData.find((c) => c.id === s.invoiceId);
-            return m?.coworkingContractId ?? null;
-          })
-          .filter((x): x is string => !!x),
-      );
-      for (const ct of allCoworkingContracts) {
-        if (ct.status === "termine") continue;
-        if (contractIdsWithCandidate.has(ct.id)) continue;
-        const monthlyHt = Number(ct.unitPriceHt) * ct.desks;
-        if (monthlyHt <= 0) continue;
-        // Deux ratios standards : 1 mois ou 3 mois (mensuel / trimestriel).
-        const expectedMonthly = monthlyHt;
-        const expectedQuarterly = monthlyHt * 3;
-        const closer =
-          Math.abs(dougsAmount - expectedMonthly) <= Math.abs(dougsAmount - expectedQuarterly)
-            ? expectedMonthly
-            : expectedQuarterly;
-        const amountSim = similarityAmountPartial(dougsAmount, closer).score;
-        const fromContact = `${ct.contactFirstName ?? ""} ${ct.contactLastName ?? ""}`.trim();
-        const nameSim = similarityName(
-          dougsClientName,
-          ct.billToEntityName ?? (fromContact || null),
-        );
-        const dateSim = similarityDate(inv.createdAt ?? null, ct.startDate);
-        const total = Math.round((nameSim * 0.5 + amountSim * 0.3 + dateSim * 0.2) * 1000) / 1000;
-        if (total < 0.3) continue;
-        newCoworkingScored.push({
-          kind: "new_coworking_invoice",
-          contractId: ct.id,
-          contractName: ct.name,
-          entityName: ct.billToEntityName ?? (fromContact || null),
-          monthlyHt,
-          desks: ct.desks,
-          amountHt: dougsAmount,
-          score: { total, name: nameSim, amount: amountSim, date: dateSim },
-        });
-      }
-    }
-
-    const all = [...existingScored, ...newProjectScored, ...newCoworkingScored]
+    const all = [...existingScored, ...newProjectScored]
       .sort((a, b) => b.score.total - a.score.total)
       .slice(0, 4);
 

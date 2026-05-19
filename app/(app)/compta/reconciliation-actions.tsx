@@ -3,7 +3,6 @@
 import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
 import {
-  linkCoworkingContractAsNewInvoice,
   linkDougsCreditNote,
   linkInvoiceToDougs,
   linkProjectAsNewMilestone,
@@ -171,40 +170,6 @@ export function LinkProjectAsMilestoneButton({
     >
       <Plus className="size-3.5" />
       {pending ? "Création…" : label}
-    </Button>
-  );
-}
-
-export function LinkCoworkingContractButton({
-  contractId,
-  dougsId,
-}: { contractId: string; dougsId: string }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      disabled={pending}
-      onClick={() => {
-        startTransition(async () => {
-          const res = await linkCoworkingContractAsNewInvoice({
-            contractId,
-            dougsIdOrUrl: dougsId,
-          });
-          if (!res.ok) {
-            toast.error(res.message);
-            return;
-          }
-          toast.success("Facture coworking créée.");
-          router.refresh();
-        });
-      }}
-      className="gap-1.5"
-    >
-      <Plus className="size-3.5" />
-      {pending ? "Création…" : "Créer facture"}
     </Button>
   );
 }

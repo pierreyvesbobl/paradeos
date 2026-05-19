@@ -17,7 +17,6 @@ import Link from "next/link";
 import { LinkedInvoiceRow, LinkedQuoteRow } from "./linked-row-editor";
 import {
   type CoworkingInvoiceOption,
-  LinkCoworkingContractButton,
   LinkCreditNotePicker,
   LinkInvoiceButton,
   LinkProjectAsMilestoneButton,
@@ -336,41 +335,6 @@ export async function RapprochementView({ debug }: { debug?: string }) {
                                   {(c.score.total * 100).toFixed(0)} %
                                 </span>
                                 <LinkInvoiceButton invoiceId={c.invoiceId} dougsId={s.dougs.id} />
-                              </li>
-                            );
-                          }
-                          if (c.kind === "new_coworking_invoice") {
-                            return (
-                              <li
-                                key={`cc-${c.contractId}`}
-                                className="flex items-center justify-between gap-2 rounded-md border border-teal-200 bg-teal-50/30 px-3 py-2 text-xs dark:border-teal-900 dark:bg-teal-950/20"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] text-teal-700 uppercase tracking-wide dark:bg-teal-900 dark:text-teal-300">
-                                    Contrat coworking
-                                  </span>
-                                  <Link
-                                    href={`/coworking/contrats/${c.contractId}`}
-                                    className="ml-2 font-medium hover:underline"
-                                  >
-                                    {c.contractName}
-                                  </Link>
-                                  <span className="ml-2 text-muted-foreground">
-                                    {c.entityName ?? "—"} · {c.desks} poste
-                                    {c.desks > 1 ? "s" : ""} × {formatEur(c.monthlyHt / c.desks)}
-                                    /mois · attendu {formatEur(c.amountHt)}
-                                  </span>
-                                </div>
-                                <span
-                                  className={`rounded-full border px-2 py-0.5 text-[10px] tabular-nums ${scoreTone(c.score.total)}`}
-                                  title={`Nom ${(c.score.name * 100).toFixed(0)} % · Montant ${(c.score.amount * 100).toFixed(0)} % · Date ${(c.score.date * 100).toFixed(0)} %`}
-                                >
-                                  {(c.score.total * 100).toFixed(0)} %
-                                </span>
-                                <LinkCoworkingContractButton
-                                  contractId={c.contractId}
-                                  dougsId={s.dougs.id}
-                                />
                               </li>
                             );
                           }
