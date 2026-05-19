@@ -406,9 +406,7 @@ export async function getInvoiceSuggestions(
     .from(invoices)
     .where(eq(invoices.kind, "credit_note"));
   const cancelledDougsIds = new Set(
-    cancelledDougsIdsRows
-      .map((r) => r.cancelsDougsInvoiceId)
-      .filter((x): x is string => !!x),
+    cancelledDougsIdsRows.map((r) => r.cancelsDougsInvoiceId).filter((x): x is string => !!x),
   );
 
   const unlinkedDougsList = dougsInvoicesNormal.filter(
