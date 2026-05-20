@@ -3,12 +3,13 @@
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
-type Tab = "dashboard" | "rapprochement";
+type Tab = "dashboard" | "signed" | "rapprochement";
 
 export function ComptaTabs({ current }: { current: Tab }) {
   return (
     <nav className="-mb-px flex gap-1 border-b">
       <TabLink href="/compta?tab=dashboard" label="Dashboard" active={current === "dashboard"} />
+      <TabLink href="/compta?tab=signed" label="Devis signés" active={current === "signed"} />
       <TabLink
         href="/compta?tab=rapprochement"
         label="Rapprochement"
