@@ -217,6 +217,15 @@ export function buildDougsQuoteUrl(
  * Le détail endpoint /sales-invoices/{id} renvoie parfois le format
  * compact aussi (vérifié 2026-05). Donc on doit toujours lire les deux.
  */
+type DougsOperationAttachment = {
+  operation?: {
+    date?: string | null;
+    validatedAt?: string | null;
+    deleted?: boolean | null;
+    excluded?: boolean | null;
+  } | null;
+};
+
 type DougsPayloadAny = {
   totalNetAmount?: number | null;
   totalAmountWithVat?: number | null;
@@ -229,6 +238,7 @@ type DougsPayloadAny = {
   date?: string | null;
   status?: string | null;
   paymentStatus?: string | null;
+  operationAttachments?: DougsOperationAttachment[] | null;
   clientName?: string | null;
   clientData?: {
     legalName?: string | null;
@@ -259,7 +269,20 @@ export function pickDougsVat(o: DougsPayloadAny): number | null {
 }
 
 export function pickDougsPaidAt(o: DougsPayloadAny): string | null {
-  return o.paidAt ?? null;
+  // Sur les factures réconciliées via rapprochement bancaire, Dougs laisse
+  // `paidAt: null` mais expose la vraie date dans operationAttachments[].
+  // On prend la date de virement la plus ancienne (cas paiement en
+  // plusieurs fois → première rentrée d'argent), en ignorant les
+  // opérations supprimées/exclues.
+  if (o.paidAt) return o.paidAt;
+  const ops = Array.isArray(o.operationAttachments) ? o.operationAttachments : [];
+  const dates = ops
+    .map((a) => a?.operation)
+    .filter((op): op is NonNullable<typeof op> => !!op && !op.deleted && !op.excluded)
+    .map((op) => op.date ?? op.validatedAt ?? null)
+    .filter((d): d is string => typeof d === "string" && d.length > 0)
+    .sort();
+  return dates[0] ?? null;
 }
 
 export function pickDougsIssuedAt(o: DougsPayloadAny): string | null {
