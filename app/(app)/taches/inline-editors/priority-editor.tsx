@@ -6,7 +6,7 @@ import { patchTask } from "@/lib/actions/tasks";
 import { type TaskPriority, taskPriorityEnum, taskPriorityLabels } from "@/lib/schemas/tasks";
 import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 const priorityVariant: Record<TaskPriority, "default" | "secondary" | "outline" | "destructive"> = {
@@ -20,19 +20,24 @@ export function TaskPriorityEditor({ id, value }: { id: string; value: TaskPrior
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [displayValue, setDisplayValue] = useState(value);
+  useEffect(() => setDisplayValue(value), [value]);
 
   function pick(next: TaskPriority) {
-    if (next === value) {
+    if (next === displayValue) {
       setOpen(false);
       return;
     }
+    const prev = displayValue;
+    setDisplayValue(next);
+    setOpen(false);
     startTransition(async () => {
       const res = await patchTask({ id, priority: next });
       if (!res.ok) {
+        setDisplayValue(prev);
         toast.error(res.message);
         return;
       }
-      setOpen(false);
       router.refresh();
     });
   }
@@ -45,8 +50,8 @@ export function TaskPriorityEditor({ id, value }: { id: string; value: TaskPrior
           disabled={pending}
           className="cursor-pointer rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Badge variant={priorityVariant[value]} className="cursor-pointer">
-            {taskPriorityLabels[value]}
+          <Badge variant={priorityVariant[displayValue]} className="cursor-pointer">
+            {taskPriorityLabels[displayValue]}
           </Badge>
         </button>
       </PopoverTrigger>
@@ -60,7 +65,7 @@ export function TaskPriorityEditor({ id, value }: { id: string; value: TaskPrior
                 className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm hover:bg-muted"
               >
                 <span>{taskPriorityLabels[opt]}</span>
-                {opt === value ? <Check className="size-3.5" /> : null}
+                {opt === displayValue ? <Check className="size-3.5" /> : null}
               </button>
             </li>
           ))}

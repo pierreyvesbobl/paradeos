@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { Check, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useState, useTransition } from "react";
+import { type ReactNode, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import type { Saver } from "./types";
 
@@ -69,19 +69,30 @@ export function InlineFk({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
+  // Optimistic — affichage du value choisi avant la fin de l'action.
+  const [displayValue, setDisplayValue] = useState(value);
+  useEffect(() => setDisplayValue(value), [value]);
 
   function pick(next: string | null) {
-    if ((next ?? null) === (value?.id ?? null)) {
+    if ((next ?? null) === (displayValue?.id ?? null)) {
       setOpen(false);
       return;
     }
+    const prev = displayValue;
+    const nextOption = next ? (options.find((o) => o.id === next) ?? null) : null;
+    setDisplayValue(
+      nextOption
+        ? { id: nextOption.id, label: nextOption.label, leading: nextOption.leading }
+        : null,
+    );
+    setOpen(false);
     startTransition(async () => {
       const res = await onSave(next);
       if (!res.ok) {
+        setDisplayValue(prev);
         toast.error(res.message);
         return;
       }
-      setOpen(false);
       router.refresh();
     });
   }
@@ -95,8 +106,10 @@ export function InlineFk({
           toast.error("Création impossible.");
           return;
         }
+        setDisplayValue({ id: created.id, label: created.label });
         const res = await onSave(created.id);
         if (!res.ok) {
+          setDisplayValue(value);
           toast.error(res.message);
           return;
         }
@@ -130,11 +143,11 @@ export function InlineFk({
           )}
         >
           {triggerVariant === "leading-only" ? (
-            (value?.leading ?? <span className="text-muted-foreground">{placeholder}</span>)
-          ) : value ? (
+            (displayValue?.leading ?? <span className="text-muted-foreground">{placeholder}</span>)
+          ) : displayValue ? (
             <span className="inline-flex items-center gap-1.5">
-              {value.leading}
-              <span>{value.label}</span>
+              {displayValue.leading}
+              <span>{displayValue.label}</span>
             </span>
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
@@ -165,7 +178,7 @@ export function InlineFk({
                 <CommandItem onSelect={() => pick(null)} value="__aucun__">
                   <X className="size-3.5 text-muted-foreground" />
                   <span className="text-muted-foreground">{clearLabel}</span>
-                  {value === null ? <Check className="ml-auto size-3.5" /> : null}
+                  {displayValue === null ? <Check className="ml-auto size-3.5" /> : null}
                 </CommandItem>
               ) : null}
               {options.map((opt) => (
@@ -178,7 +191,7 @@ export function InlineFk({
                     <span className="inline-flex shrink-0 items-center">{opt.leading}</span>
                   ) : null}
                   <span>{opt.label}</span>
-                  {opt.id === value?.id ? <Check className="ml-auto size-3.5" /> : null}
+                  {opt.id === displayValue?.id ? <Check className="ml-auto size-3.5" /> : null}
                 </CommandItem>
               ))}
             </CommandGroup>

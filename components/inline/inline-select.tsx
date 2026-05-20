@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import type { Saver } from "./types";
 
@@ -25,20 +25,26 @@ export function InlineSelect<T extends string>({ value, options, onSave, trigger
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  const current = options.find((o) => o.value === value);
+  // Optimistic — bascule l'affichage tout de suite (cf. inline-text.tsx).
+  const [displayValue, setDisplayValue] = useState(value);
+  useEffect(() => setDisplayValue(value), [value]);
+  const current = options.find((o) => o.value === displayValue);
 
   function pick(next: T) {
-    if (next === value) {
+    if (next === displayValue) {
       setOpen(false);
       return;
     }
+    const prev = displayValue;
+    setDisplayValue(next);
+    setOpen(false);
     startTransition(async () => {
       const res = await onSave(next);
       if (!res.ok) {
+        setDisplayValue(prev);
         toast.error(res.message);
         return;
       }
-      setOpen(false);
       router.refresh();
     });
   }
@@ -64,7 +70,7 @@ export function InlineSelect<T extends string>({ value, options, onSave, trigger
                 className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm hover:bg-muted"
               >
                 <span>{opt.label}</span>
-                {opt.value === value ? <Check className="size-3.5" /> : null}
+                {opt.value === displayValue ? <Check className="size-3.5" /> : null}
               </button>
             </li>
           ))}

@@ -3,7 +3,7 @@
 import { DateInput } from "@/components/ui/date-input";
 import { formatDate } from "@/lib/format";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import type { Saver } from "./types";
 
@@ -31,14 +31,19 @@ type Props = {
 export function InlineDate({ value, onSave, placeholder = "—" }: Props) {
   const router = useRouter();
   const initial = toIso(value);
+  const [displayValue, setDisplayValue] = useState<string | null>(initial);
+  useEffect(() => setDisplayValue(initial), [initial]);
   const [pending, startTransition] = useTransition();
 
   function commit(next: string) {
     const nextOrNull = next === "" ? null : next;
-    if ((nextOrNull ?? null) === (initial ?? null)) return;
+    if ((nextOrNull ?? null) === (displayValue ?? null)) return;
+    const prev = displayValue;
+    setDisplayValue(nextOrNull);
     startTransition(async () => {
       const res = await onSave(nextOrNull);
       if (!res.ok) {
+        setDisplayValue(prev);
         toast.error(res.message);
         return;
       }
@@ -48,7 +53,7 @@ export function InlineDate({ value, onSave, placeholder = "—" }: Props) {
 
   return (
     <DateInput
-      value={initial ?? ""}
+      value={displayValue ?? ""}
       onValueChange={commit}
       disabled={pending}
       trigger={
@@ -57,8 +62,8 @@ export function InlineDate({ value, onSave, placeholder = "—" }: Props) {
           disabled={pending}
           className="-mx-1.5 rounded-sm px-1.5 py-0.5 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {value ? (
-            <span className="text-sm">{formatDate(value)}</span>
+          {displayValue ? (
+            <span className="text-sm">{formatDate(displayValue)}</span>
           ) : (
             <span className="text-muted-foreground text-sm">{placeholder}</span>
           )}
