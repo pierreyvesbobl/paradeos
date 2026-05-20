@@ -24,11 +24,13 @@ const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
  *   documentée Google).
  * - `calendar.readonly` : lire les calendriers et events de l'user
  *   (affichage en lecture seule dans /planning).
+ * - `gmail.readonly` : lire les emails pour structurer le contexte
+ *   projet et alimenter l'extraction d'actions LLM.
  *
- * `drive.readonly` et `calendar.readonly` sont des "restricted scopes"
- * — en mode "Testing" de l'écran de consentement OAuth, pas de
- * validation Google requise. Pour passer en "Production", review
- * annuelle nécessaire.
+ * `drive.readonly`, `calendar.readonly` et `gmail.readonly` sont des
+ * "restricted scopes" — en mode "Testing" de l'écran de consentement
+ * OAuth, pas de validation Google requise (limité à 100 test-users).
+ * Pour passer en "Production", review annuelle nécessaire.
  */
 export const GOOGLE_OAUTH_SCOPES = [
   "openid",
@@ -37,6 +39,7 @@ export const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
   "https://www.googleapis.com/auth/drive.readonly",
   "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/gmail.readonly",
 ];
 
 /** Alias historique — gardé pour la compat avec d'éventuels callers. */
@@ -49,12 +52,18 @@ export const REQUIRED_DRIVE_SCOPES = [
 
 export const REQUIRED_CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
 
+export const REQUIRED_GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
+
 export function hasRequiredDriveScopes(grantedScopes: string[]): boolean {
   return REQUIRED_DRIVE_SCOPES.every((s) => grantedScopes.includes(s));
 }
 
 export function hasRequiredCalendarScopes(grantedScopes: string[]): boolean {
   return REQUIRED_CALENDAR_SCOPES.every((s) => grantedScopes.includes(s));
+}
+
+export function hasRequiredGmailScopes(grantedScopes: string[]): boolean {
+  return REQUIRED_GMAIL_SCOPES.every((s) => grantedScopes.includes(s));
 }
 
 function getOAuthEnv() {
