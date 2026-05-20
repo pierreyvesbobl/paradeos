@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { dougsSessions } from "../../db/schema/dougs";
 import { db } from "../db/server";
+import { fetchWithTimeout } from "../net/fetch-with-timeout";
 import { decryptCookie } from "./crypto";
 
 /**
@@ -68,13 +69,19 @@ async function dougsFetch(
     );
   }
   const path = pathTemplate.replace("{companyId}", session.companyId);
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetchWithTimeout(`${BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
       Cookie: session.cookie,
     },
+    // Dougs derrière Cloudflare → si Cloudflare met du temps à répondre,
+    // sans borne la page reste ouverte jusqu'à la limite Vercel. 8 s :
+    // un peu plus que Drive parce que Dougs est régulièrement lent sur
+    // les list endpoints, mais assez court pour ne pas bloquer l'UI.
+    timeoutMs: 8000,
+    label: `Dougs ${init?.method ?? "GET"} ${pathTemplate}`,
   });
   if (res.status === 401 || res.status === 403) {
     throw new DougsAuthError(

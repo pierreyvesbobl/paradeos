@@ -44,42 +44,42 @@ export async function getProjectTimeStats(projectId: string): Promise<{
 }> {
   const conn = await db();
 
-  const [totalsRow] = await conn
-    .select({
-      actualMinutes: sumActualMin,
-      plannedMinutes: sumPlannedMin,
-    })
-    .from(timeEntries)
-    .where(eq(timeEntries.projectId, projectId));
-
-  const byTask = await conn
-    .select({
-      taskId: tasks.id,
-      taskTitle: tasks.title,
-      actualMinutes: sumActualMin,
-      plannedMinutes: sumPlannedMin,
-    })
-    .from(timeEntries)
-    .leftJoin(tasks, eq(timeEntries.taskId, tasks.id))
-    .where(eq(timeEntries.projectId, projectId))
-    .groupBy(tasks.id, tasks.title)
-    .orderBy(desc(sumActualMin));
-
-  const byUser = await conn
-    .select({
-      userId: users.id,
-      userName: users.fullName,
-      actualMinutes: sumActualMin,
-      plannedMinutes: sumPlannedMin,
-    })
-    .from(timeEntries)
-    .innerJoin(users, eq(timeEntries.userId, users.id))
-    .where(eq(timeEntries.projectId, projectId))
-    .groupBy(users.id, users.fullName)
-    .orderBy(desc(sumActualMin));
+  const [totalsRows, byTask, byUser] = await Promise.all([
+    conn
+      .select({
+        actualMinutes: sumActualMin,
+        plannedMinutes: sumPlannedMin,
+      })
+      .from(timeEntries)
+      .where(eq(timeEntries.projectId, projectId)),
+    conn
+      .select({
+        taskId: tasks.id,
+        taskTitle: tasks.title,
+        actualMinutes: sumActualMin,
+        plannedMinutes: sumPlannedMin,
+      })
+      .from(timeEntries)
+      .leftJoin(tasks, eq(timeEntries.taskId, tasks.id))
+      .where(eq(timeEntries.projectId, projectId))
+      .groupBy(tasks.id, tasks.title)
+      .orderBy(desc(sumActualMin)),
+    conn
+      .select({
+        userId: users.id,
+        userName: users.fullName,
+        actualMinutes: sumActualMin,
+        plannedMinutes: sumPlannedMin,
+      })
+      .from(timeEntries)
+      .innerJoin(users, eq(timeEntries.userId, users.id))
+      .where(eq(timeEntries.projectId, projectId))
+      .groupBy(users.id, users.fullName)
+      .orderBy(desc(sumActualMin)),
+  ]);
 
   return {
-    totals: totalsRow ?? { actualMinutes: 0, plannedMinutes: 0 },
+    totals: totalsRows[0] ?? { actualMinutes: 0, plannedMinutes: 0 },
     byTask,
     byUser,
   };

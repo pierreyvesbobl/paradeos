@@ -1,5 +1,7 @@
 import "server-only";
 
+import { fetchWithTimeout } from "@/lib/net/fetch-with-timeout";
+
 /**
  * Wrappers fins autour de l'API Google Drive v3 — fetch direct, sans
  * `googleapis` (lourd, et 90 % du SDK ne sert pas ici).
@@ -25,39 +27,22 @@ type DriveFile = {
   parents?: string[];
 };
 
-// Google Drive API peut occasionnellement pendre (cold cache côté Google,
-// throttling soft). Sans timeout explicite, le Suspense Server Component
-// reste bloqué jusqu'à la limite Vercel (10 s sur Hobby), donnant l'effet
-// "la page tourne dans le vide". 6 s = compromis : assez pour les calls
-// lents légitimes, assez court pour ne pas bloquer la page entière.
-const DRIVE_FETCH_TIMEOUT_MS = 6000;
-
 async function driveFetch<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), DRIVE_FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${API_BASE}${path}`, {
-      ...init,
-      headers: {
-        ...init?.headers,
-        authorization: `Bearer ${accessToken}`,
-      },
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Drive API ${res.status} : ${text}`);
-    }
-    return (await res.json()) as T;
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      throw new Error(`Drive API timeout (${DRIVE_FETCH_TIMEOUT_MS}ms) sur ${path}`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
+  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      ...init?.headers,
+      authorization: `Bearer ${accessToken}`,
+    },
+    cache: "no-store",
+    timeoutMs: 6000,
+    label: `Drive API ${path.split("?")[0]}`,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Drive API ${res.status} : ${text}`);
   }
+  return (await res.json()) as T;
 }
 
 /**

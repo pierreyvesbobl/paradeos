@@ -1,5 +1,7 @@
 import "server-only";
 
+import { fetchWithTimeout } from "@/lib/net/fetch-with-timeout";
+
 /**
  * Wrappers fins autour de Google Calendar v3. Fetch direct, sans SDK.
  * Tous les helpers attendent un `accessToken` valide.
@@ -45,10 +47,12 @@ export type GoogleEvent = {
 };
 
 async function calFetch<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
     ...init,
     headers: { ...init?.headers, authorization: `Bearer ${accessToken}` },
     cache: "no-store",
+    timeoutMs: 6000,
+    label: `Calendar API ${path.split("?")[0]}`,
   });
   if (!res.ok) {
     const text = await res.text();

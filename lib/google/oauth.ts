@@ -9,6 +9,8 @@
  *   - Revoke    : https://oauth2.googleapis.com/revoke
  */
 
+import { fetchWithTimeout } from "@/lib/net/fetch-with-timeout";
+
 const AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
@@ -135,27 +137,14 @@ export async function refreshAccessToken(refreshToken: string): Promise<RefreshR
     refresh_token: refreshToken,
     grant_type: "refresh_token",
   });
-  // Timeout 5s : sans ça, un Google OAuth lent bloquait la requête Server
-  // Component complète (donc la page projet) jusqu'à la limite Vercel.
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-  let res: Response;
-  try {
-    res = await fetch(TOKEN_URL, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body,
-      cache: "no-store",
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      throw new Error("Refresh token Google : timeout (5 s).");
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
+  const res = await fetchWithTimeout(TOKEN_URL, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body,
+    cache: "no-store",
+    timeoutMs: 5000,
+    label: "Google OAuth refresh",
+  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Refresh token Google échoué (${res.status}) : ${text}`);
