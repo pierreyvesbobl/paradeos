@@ -3,8 +3,8 @@
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Banknote, Cloud, KeyRound } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useState } from "react";
 
 const TABS = [
   { value: "compta", label: "Compta", icon: Banknote },
@@ -25,24 +25,23 @@ type Props = {
  * OAuth Google.
  */
 export function IntegrationsTabs({ compta, google, api }: Props) {
-  const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const tabParam = params.get("tab");
-  const value: TabValue = TABS.some((t) => t.value === tabParam)
+  const initialValue: TabValue = TABS.some((t) => t.value === tabParam)
     ? (tabParam as TabValue)
     : "compta";
+  // Switch client uniquement — voir project-tabs.tsx pour le rationale.
+  const [value, setValue] = useState<TabValue>(initialValue);
 
-  const handleChange = useCallback(
-    (next: string) => {
-      const sp = new URLSearchParams(params.toString());
-      if (next === "compta") sp.delete("tab");
-      else sp.set("tab", next);
-      const qs = sp.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    },
-    [router, pathname, params],
-  );
+  const handleChange = useCallback((next: string) => {
+    setValue(next as TabValue);
+    const sp = new URLSearchParams(window.location.search);
+    if (next === "compta") sp.delete("tab");
+    else sp.set("tab", next);
+    const qs = sp.toString();
+    const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState(null, "", url);
+  }, []);
 
   const contents: Record<TabValue, React.ReactNode> = { compta, google, api };
 

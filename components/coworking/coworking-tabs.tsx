@@ -3,8 +3,8 @@
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Receipt, Users } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useState } from "react";
 
 const TABS = [
   { value: "invoices", label: "Factures", icon: Receipt },
@@ -30,24 +30,25 @@ export function CoworkingTabs({
   invoicesCount,
   coworkersCount,
 }: Props) {
-  const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const tabParam = params.get("tab");
-  const value: TabValue = TABS.some((t) => t.value === tabParam)
+  const initialValue: TabValue = TABS.some((t) => t.value === tabParam)
     ? (tabParam as TabValue)
     : "invoices";
+  // Switch tab purement client (Radix) — pas de round-trip Next.js qui
+  // re-render le Server Component complet. URL mise à jour via history
+  // pour rester partageable au reload.
+  const [value, setValue] = useState<TabValue>(initialValue);
 
-  const handleChange = useCallback(
-    (next: string) => {
-      const sp = new URLSearchParams(params.toString());
-      if (next === "invoices") sp.delete("tab");
-      else sp.set("tab", next);
-      const qs = sp.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    },
-    [router, pathname, params],
-  );
+  const handleChange = useCallback((next: string) => {
+    setValue(next as TabValue);
+    const sp = new URLSearchParams(window.location.search);
+    if (next === "invoices") sp.delete("tab");
+    else sp.set("tab", next);
+    const qs = sp.toString();
+    const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState(null, "", url);
+  }, []);
 
   const counts: Record<TabValue, number> = {
     contracts: contractsCount,

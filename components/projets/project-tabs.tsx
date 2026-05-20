@@ -3,8 +3,8 @@
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart3, FolderOpen, Info, ListTodo, Receipt, StickyNote, Video } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useState } from "react";
 
 const ALL_TABS = [
   { value: "overview", label: "Vue d'ensemble", icon: Info },
@@ -45,26 +45,34 @@ export function ProjectTabs({
   billing,
   time,
 }: Props) {
-  const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const tabParam = params.get("tab");
 
   // Onglet facturation masqué pour les projets non-client.
   const tabs = ALL_TABS.filter((t) => t.value !== "billing" || billing !== null);
-  const value: TabValue = tabs.some((t) => t.value === tabParam)
+  const initialValue: TabValue = tabs.some((t) => t.value === tabParam)
     ? (tabParam as TabValue)
     : defaultTab;
 
+  // Onglet en state local pour switcher sans round-trip serveur.
+  // Avant : router.replace(?tab=…) re-render TOUTE la page Server
+  // Component à chaque clic (2-3 s sur une fiche projet chargée). Le
+  // contenu de tous les tabs est déjà rendu en props → switch instantané
+  // via Radix. L'URL est juste maj via history.replaceState pour rester
+  // partageable au reload (pas de navigation Next.js).
+  const [value, setValue] = useState<TabValue>(initialValue);
+
   const handleChange = useCallback(
     (next: string) => {
-      const sp = new URLSearchParams(params.toString());
+      setValue(next as TabValue);
+      const sp = new URLSearchParams(window.location.search);
       if (next === defaultTab) sp.delete("tab");
       else sp.set("tab", next);
       const qs = sp.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+      window.history.replaceState(null, "", url);
     },
-    [router, pathname, params, defaultTab],
+    [defaultTab],
   );
 
   const contents: Record<TabValue, React.ReactNode> = {
