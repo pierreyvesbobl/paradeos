@@ -32,6 +32,23 @@ function toDate(iso: string | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Mapping Dougs status → invoice_status local pour les devis. Doit
+ * rester cohérent avec le cron sync-dougs-status.
+ */
+function mapDougsQuoteStatus(dougs: string | null): "draft" | "sent" | "accepted" | "refused" {
+  switch ((dougs ?? "").toUpperCase()) {
+    case "ACCEPTED":
+      return "accepted";
+    case "REFUSED":
+      return "refused";
+    case "DRAFT":
+      return "draft";
+    default:
+      return "sent"; // PENDING ou inconnu
+  }
+}
+
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 /**
@@ -492,16 +509,19 @@ export const refreshInvoiceDougs = action(
       if (inv.kind === "quote") {
         if (!inv.dougsQuoteId) throw new Error("Pas de devis Dougs lié.");
         const q = await getDougsQuote(user.id, inv.dougsQuoteId);
+        const dougsStatus = pickDougsStatus(q);
         await conn
           .update(invoices)
           .set({
             dougsReference: q.reference ?? null,
-            dougsStatus: pickDougsStatus(q),
+            dougsStatus,
             dougsTotalHt: toNumeric(pickDougsHt(q)),
             dougsTotalVat: toNumeric(pickDougsVat(q)),
             dougsTotalTtc: toNumeric(pickDougsTtc(q)),
             dougsIssuedAt: toDate(pickDougsIssuedAt(q)),
             dougsSyncedAt: new Date(),
+            // Sync status local depuis Dougs (ACCEPTED → accepted, etc.).
+            status: mapDougsQuoteStatus(dougsStatus),
             updatedAt: new Date(),
           })
           .where(eq(invoices.id, input.invoiceId));
@@ -509,18 +529,22 @@ export const refreshInvoiceDougs = action(
         if (!inv.dougsInvoiceId) throw new Error("Pas de facture Dougs liée.");
         const i = await getDougsSalesInvoice(user.id, inv.dougsInvoiceId);
         const paid = pickDougsPaidAt(i);
+        const dougsStatus = pickDougsStatus(i);
+        const isPaidDougs = (dougsStatus ?? "").toLowerCase() === "paid" || paid !== null;
         await conn
           .update(invoices)
           .set({
             dougsReference: i.reference ?? null,
-            dougsStatus: pickDougsStatus(i),
+            dougsStatus,
             dougsTotalHt: toNumeric(pickDougsHt(i)),
             dougsTotalVat: toNumeric(pickDougsVat(i)),
             dougsTotalTtc: toNumeric(pickDougsTtc(i)),
             dougsIssuedAt: toDate(pickDougsIssuedAt(i)),
             dougsPaidAt: toDate(paid),
             dougsSyncedAt: new Date(),
-            status: paid ? "paid" : "sent",
+            // Dougs paymentStatus="paid" OU paidAt présent → on bascule.
+            status: isPaidDougs ? "paid" : "sent",
+            // Dougs est source de vérité pour paid_at.
             paidAt: toDate(paid),
             updatedAt: new Date(),
           })
@@ -575,17 +599,22 @@ export const refreshAllDougsLinks = action(z.object({}), async ({ user }) => {
     try {
       const inv = await getDougsSalesInvoice(user.id, r.dougsInvoiceId);
       const paid = pickDougsPaidAt(inv);
+      const dougsStatus = pickDougsStatus(inv);
+      const isPaidDougs = (dougsStatus ?? "").toLowerCase() === "paid" || paid !== null;
       await conn
         .update(invoices)
         .set({
           dougsReference: inv.reference ?? null,
-          dougsStatus: pickDougsStatus(inv),
+          dougsStatus,
           dougsTotalHt: toNumeric(pickDougsHt(inv)),
           dougsTotalVat: toNumeric(pickDougsVat(inv)),
           dougsTotalTtc: toNumeric(pickDougsTtc(inv)),
           dougsIssuedAt: toDate(pickDougsIssuedAt(inv)),
           dougsPaidAt: toDate(paid),
           dougsSyncedAt: new Date(),
+          // Sync status local : Dougs source de vérité pour "payé".
+          status: isPaidDougs ? "paid" : undefined,
+          paidAt: isPaidDougs ? toDate(paid) : undefined,
           updatedAt: new Date(),
         })
         .where(eq(invoices.id, r.id));
@@ -600,16 +629,19 @@ export const refreshAllDougsLinks = action(z.object({}), async ({ user }) => {
     if (!r.dougsQuoteId) continue;
     try {
       const q = await getDougsQuote(user.id, r.dougsQuoteId);
+      const dougsStatus = pickDougsStatus(q);
       await conn
         .update(invoices)
         .set({
           dougsReference: q.reference ?? null,
-          dougsStatus: pickDougsStatus(q),
+          dougsStatus,
           dougsTotalHt: toNumeric(pickDougsHt(q)),
           dougsTotalVat: toNumeric(pickDougsVat(q)),
           dougsTotalTtc: toNumeric(pickDougsTtc(q)),
           dougsIssuedAt: toDate(pickDougsIssuedAt(q)),
           dougsSyncedAt: new Date(),
+          // Sync status local depuis Dougs (ACCEPTED → accepted, etc.).
+          status: mapDougsQuoteStatus(dougsStatus),
           updatedAt: new Date(),
         })
         .where(eq(invoices.id, r.id));
@@ -976,15 +1008,21 @@ export const linkProjectQuoteToDougs = action(
       .where(and(eq(invoices.projectId, input.projectId), eq(invoices.kind, "quote")))
       .limit(1);
 
+    const dougsStatus = pickDougsStatus(quote);
+    const localStatus = mapDougsQuoteStatus(dougsStatus);
     const snap = {
       dougsQuoteId: dougsId,
       dougsReference: quote.reference ?? null,
-      dougsStatus: pickDougsStatus(quote),
+      dougsStatus,
       dougsTotalHt: toNumeric(pickDougsHt(quote)),
       dougsTotalVat: toNumeric(pickDougsVat(quote)),
       dougsTotalTtc: toNumeric(pickDougsTtc(quote)),
       dougsIssuedAt: toDate(pickDougsIssuedAt(quote)),
       dougsSyncedAt: new Date(),
+      // On aligne le status local au status Dougs dès le link
+      // (avant : forcé à 'sent', donc un devis déjà ACCEPTED côté
+      // Dougs restait 'sent' jusqu'au prochain cron quotidien).
+      status: localStatus,
       updatedAt: new Date(),
     };
 
@@ -1003,7 +1041,6 @@ export const linkProjectQuoteToDougs = action(
         label: `Devis ${proj.name}`,
         amountHt: toNumeric(pickDougsHt(quote)) ?? "0",
         vatRate: "0.2",
-        status: "sent",
         ...snap,
         createdBy: user.id,
       });

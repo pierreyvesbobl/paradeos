@@ -3,8 +3,12 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { unlinkProjectDougsQuote } from "@/lib/actions/dougs-quotes";
-import { linkProjectQuoteToDougs, refreshInvoiceDougs } from "@/lib/actions/invoices";
-import { ExternalLink, FileText, Link2, RefreshCw, Trash2 } from "lucide-react";
+import {
+  linkProjectQuoteToDougs,
+  refreshInvoiceDougs,
+  setInvoiceStatus,
+} from "@/lib/actions/invoices";
+import { CheckCircle2, ExternalLink, FileText, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -13,6 +17,9 @@ type Props = {
   projectId: string;
   /** Id de l'invoice kind='quote' liée — nécessaire pour refresh. */
   quoteInvoiceId: string | null;
+  /** Status local (mis à jour par cron + actions). Permet l'override
+   *  manuel quand l'utilisateur a signé offline mais Dougs reste PENDING. */
+  localStatus: "draft" | "sent" | "accepted" | "refused" | "paid" | null;
   dougsQuoteId: string | null;
   dougsQuoteReference: string | null;
   dougsQuoteStatus: string | null;
@@ -42,6 +49,7 @@ function formatEur(n: number | null | undefined): string {
 export function DougsQuoteSection({
   projectId,
   quoteInvoiceId,
+  localStatus,
   dougsQuoteId,
   dougsQuoteReference,
   dougsQuoteStatus,
@@ -53,6 +61,19 @@ export function DougsQuoteSection({
   const [pending, startTransition] = useTransition();
   const [linkInput, setLinkInput] = useState("");
   const [showLink, setShowLink] = useState(false);
+
+  function markAccepted() {
+    if (!quoteInvoiceId) return;
+    startTransition(async () => {
+      const res = await setInvoiceStatus({ id: quoteInvoiceId, status: "accepted" });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Devis marqué comme accepté.");
+      router.refresh();
+    });
+  }
 
   function refresh() {
     if (!quoteInvoiceId) return;
@@ -137,6 +158,23 @@ export function DougsQuoteSection({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            {/* Override manuel : utile quand le devis a été signé hors
+                Dougs et qu'on attend la mise à jour côté Dougs.
+                Visible tant que le devis n'est pas déjà accepté ou refusé. */}
+            {localStatus !== "accepted" && localStatus !== "refused" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={markAccepted}
+                disabled={pending}
+                className="h-7 gap-1 px-2 text-[11px]"
+                title="Forcer le statut accepté (override local, indépendant de Dougs)"
+              >
+                <CheckCircle2 className="size-3" />
+                Marquer signé
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="sm"

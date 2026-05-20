@@ -401,6 +401,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
             <DougsQuoteSection
               projectId={id}
               quoteInvoiceId={quoteInvoice?.id ?? null}
+              localStatus={quoteInvoice?.status ?? null}
               dougsQuoteId={quoteInvoice?.dougsQuoteId ?? null}
               dougsQuoteReference={quoteInvoice?.dougsReference ?? null}
               dougsQuoteStatus={quoteInvoice?.dougsStatus ?? null}
