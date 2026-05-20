@@ -8,6 +8,7 @@ import { TaskToggle } from "@/app/(app)/taches/task-toggle";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { DriveFolderSection } from "@/components/drive/drive-folder-section";
+import { EmailsTab } from "@/components/emails/emails-tab";
 import { EmptyState } from "@/components/empty-state";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
@@ -237,6 +238,12 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   const meetingsContent = (
     <Suspense fallback={<TabSkeleton lines={3} />}>
       <ProjectMeetingsSection projectId={id} />
+    </Suspense>
+  );
+
+  const emailsContent = (
+    <Suspense fallback={<TabSkeleton lines={3} />}>
+      <EmailsTab linkKind="project" linkId={id} />
     </Suspense>
   );
 
@@ -603,6 +610,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         tasks={tasksContent}
         notes={notesContent}
         meetings={meetingsContent}
+        emails={emailsContent}
         files={filesContent}
         billing={billingContent}
         time={timeContent}

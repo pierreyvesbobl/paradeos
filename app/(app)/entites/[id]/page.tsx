@@ -1,5 +1,6 @@
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
+import { EmailsTab } from "@/components/emails/emails-tab";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { asc, eq } from "drizzle-orm";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import {
   EntAddressField,
   EntKind,
@@ -172,6 +174,10 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
         notes={notesList}
         attachmentsByNote={attachmentsByNote}
       />
+
+      <Suspense fallback={null}>
+        <EmailsTab linkKind="entity" linkId={id} />
+      </Suspense>
     </div>
   );
 }

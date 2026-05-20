@@ -6,6 +6,7 @@ import {
   CheckSquare,
   Clock,
   Home,
+  Mail,
   Mic,
   School,
   Sparkles,
@@ -32,6 +33,7 @@ const items: NavItem[] = [
   { label: "Temps", href: "/temps", icon: Clock },
   { label: "Notes", href: "/notes", icon: StickyNote },
   { label: "Meetings", href: "/meetings", icon: Mic },
+  { label: "Emails", href: "/emails", icon: Mail },
   { label: "Coworking", href: "/coworking", icon: School },
   { label: "Compta", href: "/compta", icon: Calculator },
 ];

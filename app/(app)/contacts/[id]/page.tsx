@@ -1,5 +1,6 @@
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
+import { EmailsTab } from "@/components/emails/emails-tab";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
@@ -11,6 +12,7 @@ import { asc, eq } from "drizzle-orm";
 import { ExternalLink, Mail, MapPin, Phone } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import {
   ContAddress,
   ContEmail,
@@ -177,6 +179,10 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
         notes={notesList}
         attachmentsByNote={attachmentsByNote}
       />
+
+      <Suspense fallback={null}>
+        <EmailsTab linkKind="contact" linkId={id} />
+      </Suspense>
     </div>
   );
 }

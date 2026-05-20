@@ -2,7 +2,16 @@
 
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, FolderOpen, Info, ListTodo, Receipt, StickyNote, Video } from "lucide-react";
+import {
+  BarChart3,
+  FolderOpen,
+  Info,
+  ListTodo,
+  Mail,
+  Receipt,
+  StickyNote,
+  Video,
+} from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
@@ -11,6 +20,7 @@ const ALL_TABS = [
   { value: "tasks", label: "Tâches", icon: ListTodo },
   { value: "notes", label: "Notes", icon: StickyNote },
   { value: "meetings", label: "Meetings", icon: Video },
+  { value: "emails", label: "Emails", icon: Mail },
   { value: "files", label: "Fichiers", icon: FolderOpen },
   { value: "billing", label: "Facturation", icon: Receipt },
   { value: "time", label: "Temps & marge", icon: BarChart3 },
@@ -24,6 +34,7 @@ type Props = {
   tasks: React.ReactNode;
   notes: React.ReactNode;
   meetings: React.ReactNode;
+  emails: React.ReactNode;
   files: React.ReactNode;
   /** Null = onglet caché (projets non-client). */
   billing: React.ReactNode | null;
@@ -41,6 +52,7 @@ export function ProjectTabs({
   tasks,
   notes,
   meetings,
+  emails,
   files,
   billing,
   time,
@@ -80,6 +92,7 @@ export function ProjectTabs({
     tasks,
     notes,
     meetings,
+    emails,
     files,
     billing,
     time,
