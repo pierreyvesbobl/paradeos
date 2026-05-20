@@ -234,10 +234,20 @@ export function extractBodies(payload: GmailMessagePart | undefined): {
 
   function walk(part: GmailMessagePart) {
     const mime = part.mimeType ?? "";
-    if (mime === "text/plain" && part.body?.data && !text) {
-      text = Buffer.from(part.body.data, "base64url").toString("utf8");
-    } else if (mime === "text/html" && part.body?.data && !html) {
-      html = Buffer.from(part.body.data, "base64url").toString("utf8");
+    const data = part.body?.data;
+    // Strict type guard : Gmail spécifie string, mais certains payloads
+    // (notamment ceux avec attachment) peuvent renvoyer un autre type
+    // qui fait planter Buffer.from. On skippe silencieusement.
+    if (typeof data === "string" && data.length > 0) {
+      try {
+        if (mime === "text/plain" && !text) {
+          text = Buffer.from(data, "base64url").toString("utf8");
+        } else if (mime === "text/html" && !html) {
+          html = Buffer.from(data, "base64url").toString("utf8");
+        }
+      } catch {
+        // Body invalide / encodage exotique → on tombe sur le snippet.
+      }
     }
     for (const sub of part.parts ?? []) walk(sub);
   }

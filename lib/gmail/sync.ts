@@ -119,6 +119,11 @@ async function upsertThreadAndMessage(
     return acc;
   }, []);
 
+  // 1. Upsert thread — toutes les colonnes overwrite. Les valeurs
+  // dérivées (message_count, last_message_at, snippet) sont recalculées
+  // au step 3 en agrégat. On reste simple sur les colonnes simples pour
+  // éviter les expressions SQL paramétrées avec Dates qui faisaient
+  // planter postgres-js.
   const [threadRow] = await conn
     .insert(gmailThreads)
     .values({
@@ -135,11 +140,11 @@ async function upsertThreadAndMessage(
     .onConflictDoUpdate({
       target: [gmailThreads.userId, gmailThreads.gmailThreadId],
       set: {
-        subject: subject ?? sql`${gmailThreads.subject}`,
-        snippet: metaMessage.snippet ?? sql`${gmailThreads.snippet}`,
-        lastMessageAt: sql`greatest(coalesce(${gmailThreads.lastMessageAt}, ${internalDate}), ${internalDate})`,
-        // participants/labels/messageCount sont recalculés après en post-process.
-        hasUnread: sql`${gmailThreads.hasUnread} or ${isUnread}`,
+        subject: subject ?? null,
+        snippet: metaMessage.snippet ?? null,
+        labels,
+        // Les autres champs (lastMessageAt, messageCount, hasUnread) sont
+        // recalculés au step 3 depuis l'agrégat des messages.
         updatedAt: new Date(),
       },
     })
@@ -147,7 +152,11 @@ async function upsertThreadAndMessage(
   if (!threadRow) throw new Error("Échec upsert gmail_thread");
   const threadIdLocal = threadRow.id;
 
-  // 2. Upsert message.
+  // 2. Upsert message. Full overwrite côté champs ; si on revient avec
+  // un body après être passé en metadata only, c'est l'upgrade qu'on
+  // veut. extractionStatus passe en "pending" si on récupère un body,
+  // sinon reste "skipped". Si déjà "extracted", on ne le repasse pas en
+  // arrière — géré séparément ci-dessous via une UPDATE simple.
   const inserted = await conn
     .insert(gmailMessages)
     .values({
@@ -171,17 +180,30 @@ async function upsertThreadAndMessage(
       target: [gmailMessages.userId, gmailMessages.gmailMessageId],
       set: {
         labels,
-        // Si on remonte une 2e fois avec body cette fois, on l'upgrade.
-        bodyText: body?.text ?? sql`${gmailMessages.bodyText}`,
-        bodyHtml: body?.html ?? sql`${gmailMessages.bodyHtml}`,
-        extractionStatus: sql`case
-          when ${gmailMessages.extractionStatus} = 'extracted' then ${gmailMessages.extractionStatus}
-          else ${extractionStatus}::gmail_extraction_status
-        end`,
+        // Upgrade body uniquement si on a un nouveau (sinon on garde
+        // l'ancien — pas de downgrade vers null).
+        ...(body?.text != null ? { bodyText: body.text } : {}),
+        ...(body?.html != null ? { bodyHtml: body.html } : {}),
+        // Idem pour extractionStatus : on n'écrase pas "extracted" par
+        // "pending"/"skipped". On laisse l'update tel quel ici ; un
+        // garde-fou plus simple : on update via une 2e requête.
         updatedAt: new Date(),
       },
     })
     .returning({ id: gmailMessages.id });
+
+  // 2bis. Upgrade extractionStatus si on vient de récupérer un body et
+  // que le row n'est pas déjà extracted. UPDATE simple, plus sûr qu'une
+  // expression CASE inlinée dans onConflictDoUpdate.
+  if (extractionStatus === "pending") {
+    await conn.execute(sql`
+      update public.gmail_messages
+      set extraction_status = 'pending'::gmail_extraction_status
+      where user_id = ${userId}
+        and gmail_message_id = ${metaMessage.id}
+        and extraction_status = 'skipped'
+    `);
+  }
 
   // 3. Recalcule l'agrégat thread (count + last_message_at + snippet).
   await conn.execute(sql`
@@ -379,25 +401,33 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
   }
 
   // ─── 5. Persiste l'état de sync ────────────────────────────────────
+  // Calcule les valeurs finales d'abord (sans interpolation SQL avec
+  // column refs, qui causait des soucis postgres-js sur les Dates).
+  const nextLastHistoryId = touchedHistoryId ?? stateRow?.lastHistoryId ?? null;
+  const nextLastFullSyncAt =
+    isBootstrap && !nextCursor ? new Date() : (stateRow?.lastFullSyncAt ?? null);
+  const nextBootstrapCursor = isBootstrap ? (nextCursor ?? null) : null;
+  const nextLastError = result.errors.length ? result.errors.slice(0, 5).join(" | ") : null;
+  const nextIncrementalAt = new Date();
+
   await conn
     .insert(gmailSyncState)
     .values({
       userId,
-      lastHistoryId: touchedHistoryId,
-      lastIncrementalAt: new Date(),
-      bootstrapCursor: isBootstrap ? (nextCursor ?? null) : null,
-      lastFullSyncAt: isBootstrap && !nextCursor ? new Date() : (stateRow?.lastFullSyncAt ?? null),
-      lastError: result.errors.length ? result.errors.slice(0, 5).join(" | ") : null,
+      lastHistoryId: nextLastHistoryId,
+      lastIncrementalAt: nextIncrementalAt,
+      bootstrapCursor: nextBootstrapCursor,
+      lastFullSyncAt: nextLastFullSyncAt,
+      lastError: nextLastError,
     })
     .onConflictDoUpdate({
       target: gmailSyncState.userId,
       set: {
-        lastHistoryId: touchedHistoryId ?? sql`${gmailSyncState.lastHistoryId}`,
-        lastIncrementalAt: new Date(),
-        bootstrapCursor: isBootstrap ? (nextCursor ?? null) : null,
-        lastFullSyncAt:
-          isBootstrap && !nextCursor ? new Date() : sql`${gmailSyncState.lastFullSyncAt}`,
-        lastError: result.errors.length ? result.errors.slice(0, 5).join(" | ") : null,
+        lastHistoryId: nextLastHistoryId,
+        lastIncrementalAt: nextIncrementalAt,
+        bootstrapCursor: nextBootstrapCursor,
+        lastFullSyncAt: nextLastFullSyncAt,
+        lastError: nextLastError,
         updatedAt: new Date(),
       },
     });
