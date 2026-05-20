@@ -36,6 +36,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { BillingMilestonesSection } from "./billing-milestones-section";
 import { BillingSummary } from "./billing-summary";
 import { DougsQuoteSection } from "./dougs-quote-section";
@@ -227,10 +228,22 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     />
   );
 
-  const meetingsContent = <ProjectMeetingsSection projectId={id} />;
+  // ProjectMeetingsSection et DriveFolderSection font des appels externes
+  // (DB + Google Drive API) qui ne doivent pas bloquer le rendu initial
+  // de la page. Les tabs étant client, leur contenu est rendu côté serveur
+  // pour TOUS les onglets — donc même si l'user reste sur "overview", le
+  // Drive API call est exécuté. Suspense permet à la page de stream sans
+  // les attendre.
+  const meetingsContent = (
+    <Suspense fallback={<TabSkeleton lines={3} />}>
+      <ProjectMeetingsSection projectId={id} />
+    </Suspense>
+  );
 
   const filesContent = (
-    <DriveFolderSection subjectType="project" subjectId={id} defaultFolderName={project.name} />
+    <Suspense fallback={<TabSkeleton lines={4} />}>
+      <DriveFolderSection subjectType="project" subjectId={id} defaultFolderName={project.name} />
+    </Suspense>
   );
 
   const overviewContent = (
@@ -664,6 +677,21 @@ function CompactMargin({ amount, pct }: { amount: number; pct: number | null }) 
         {formatEuro(Math.abs(amount))}
       </p>
       {pct != null ? <p className="text-[10px] text-muted-foreground">{pct.toFixed(1)}%</p> : null}
+    </div>
+  );
+}
+
+function TabSkeleton({ lines = 3 }: { lines?: number }) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: lines }).map((_, i) => (
+        <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: skeleton statique, index stable
+          key={i}
+          className="h-8 animate-pulse rounded bg-muted/50"
+          style={{ width: `${100 - i * 8}%` }}
+        />
+      ))}
     </div>
   );
 }

@@ -56,15 +56,26 @@ export type Profitability = {
 export async function getProjectProfitability(projectId: string): Promise<Profitability> {
   const conn = await db();
 
-  const [project] = await conn
-    .select({
-      billingType: projects.billingType,
-      budgetAmount: projects.budgetAmount,
-      hourlyRate: projects.hourlyRate,
-    })
-    .from(projects)
-    .where(eq(projects.id, projectId))
-    .limit(1);
+  // Project + agg en parallèle (avant : séquentiel, 2× le temps).
+  const [[project], [agg]] = await Promise.all([
+    conn
+      .select({
+        billingType: projects.billingType,
+        budgetAmount: projects.budgetAmount,
+        hourlyRate: projects.hourlyRate,
+      })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1),
+    conn
+      .select({
+        actualMinutes: sumActualMinutes,
+        costAmount: sumActualCost,
+      })
+      .from(timeEntries)
+      .innerJoin(users, eq(timeEntries.userId, users.id))
+      .where(eq(timeEntries.projectId, projectId)),
+  ]);
 
   if (!project) {
     return {
@@ -79,15 +90,6 @@ export async function getProjectProfitability(projectId: string): Promise<Profit
       effectiveHourlyRate: null,
     };
   }
-
-  const [agg] = await conn
-    .select({
-      actualMinutes: sumActualMinutes,
-      costAmount: sumActualCost,
-    })
-    .from(timeEntries)
-    .innerJoin(users, eq(timeEntries.userId, users.id))
-    .where(eq(timeEntries.projectId, projectId));
 
   const billingType = project.billingType;
   const budgetAmount = Number(project.budgetAmount ?? 0);

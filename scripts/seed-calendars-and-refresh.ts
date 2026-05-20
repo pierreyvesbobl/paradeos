@@ -220,7 +220,7 @@ async function main() {
             (${paradeosId}, ${e.id}, ${e.iCalUID ?? null}, ${e.summary ?? null},
              ${e.description ?? null}, ${e.location ?? null}, ${range.startAt},
              ${range.endAt}, ${range.allDay}, ${e.status ?? null}, ${e.htmlLink ?? null},
-             ${e.organizer?.email ?? null}, ${sql.json(e.attendees ?? null)},
+             ${e.organizer?.email ?? null}, ${sql.json((e.attendees ?? null) as Parameters<typeof sql.json>[0])},
              ${e.recurringEventId ?? null},
              ${e.updated ? new Date(e.updated) : null}, now())
           on conflict (google_calendar_id, google_event_id) do nothing
