@@ -135,12 +135,27 @@ export async function refreshAccessToken(refreshToken: string): Promise<RefreshR
     refresh_token: refreshToken,
     grant_type: "refresh_token",
   });
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body,
-    cache: "no-store",
-  });
+  // Timeout 5s : sans ça, un Google OAuth lent bloquait la requête Server
+  // Component complète (donc la page projet) jusqu'à la limite Vercel.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  let res: Response;
+  try {
+    res = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Refresh token Google : timeout (5 s).");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Refresh token Google échoué (${res.status}) : ${text}`);
