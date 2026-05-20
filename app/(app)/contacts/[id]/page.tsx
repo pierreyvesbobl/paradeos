@@ -41,11 +41,15 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
 
   if (!row) notFound();
   const { contact, entity } = row;
-  const entityList = await conn
-    .select({ id: entities.id, name: entities.name })
-    .from(entities)
-    .orderBy(asc(entities.name));
-  const notesList = await getNotesForSubject("contact", id);
+
+  // Requêtes en parallèle (3 round-trips → 1).
+  const [entityList, notesList] = await Promise.all([
+    conn
+      .select({ id: entities.id, name: entities.name })
+      .from(entities)
+      .orderBy(asc(entities.name)),
+    getNotesForSubject("contact", id),
+  ]);
   const attachmentRows = await getAttachmentsForNotes(notesList.map((n) => n.id));
   const attachmentsByNote: Record<string, typeof attachmentRows> = {};
   for (const a of attachmentRows) {

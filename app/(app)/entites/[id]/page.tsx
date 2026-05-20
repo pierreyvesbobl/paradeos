@@ -31,25 +31,29 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
   const [entity] = await conn.select().from(entities).where(eq(entities.id, id)).limit(1);
 
   if (!entity) notFound();
-  const notesList = await getNotesForSubject("entity", id);
+
+  // Requêtes en parallèle (3 round-trips → 1) ; les attachments dépendent
+  // de notesList et restent séquentielles mais ne bloquent pas linkedContacts.
+  const [notesList, linkedContacts] = await Promise.all([
+    getNotesForSubject("entity", id),
+    conn
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        email: contacts.email,
+        jobTitle: contacts.jobTitle,
+      })
+      .from(contacts)
+      .where(eq(contacts.entityId, id))
+      .orderBy(asc(contacts.lastName)),
+  ]);
   const attachmentRows = await getAttachmentsForNotes(notesList.map((n) => n.id));
   const attachmentsByNote: Record<string, typeof attachmentRows> = {};
   for (const a of attachmentRows) {
     if (!attachmentsByNote[a.noteId]) attachmentsByNote[a.noteId] = [];
     attachmentsByNote[a.noteId]?.push(a);
   }
-
-  const linkedContacts = await conn
-    .select({
-      id: contacts.id,
-      firstName: contacts.firstName,
-      lastName: contacts.lastName,
-      email: contacts.email,
-      jobTitle: contacts.jobTitle,
-    })
-    .from(contacts)
-    .where(eq(contacts.entityId, id))
-    .orderBy(asc(contacts.lastName));
 
   const address = entity.address ?? null;
 

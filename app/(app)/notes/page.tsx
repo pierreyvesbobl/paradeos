@@ -47,10 +47,33 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
   const sortDir = sortState?.dir ?? "desc";
 
   const conn = await db();
-  const authors = await conn
+  const authorsPromise = conn
     .select({ id: usersTable.id, fullName: usersTable.fullName })
     .from(usersTable)
     .orderBy(asc(usersTable.fullName));
+
+  // Les filterConditions ne dépendent pas de `authors` (juste de l'URL).
+  // On lance authors + notesList en parallèle.
+  const FILTER_KEYS = ["kind", "subjectType", "authorId", "occurredAt"];
+  const filters = parseFiltersFromSearchParams(params, FILTER_KEYS);
+  const filterColumns = [
+    { key: "kind", column: notesTable.kind, kind: "enum" as const },
+    { key: "subjectType", column: notesTable.subjectType, kind: "enum" as const },
+    { key: "authorId", column: notesTable.authorId, kind: "enum" as const },
+    { key: "occurredAt", column: notesTable.occurredAt, kind: "date" as const },
+  ];
+  const filterConditions = applyFilters(filters, filterColumns);
+
+  const [authors, notesList] = await Promise.all([
+    authorsPromise,
+    getRecentNotes({
+      conditions: filterConditions,
+      query: query || undefined,
+      limit: 200,
+      sortField,
+      sortDir,
+    }),
+  ]);
 
   const FILTER_DEFS = [
     {
@@ -76,26 +99,6 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
     },
     { key: "occurredAt", label: "Date", type: "date" as const },
   ];
-
-  const filters = parseFiltersFromSearchParams(
-    params,
-    FILTER_DEFS.map((d) => d.key),
-  );
-  const filterColumns = [
-    { key: "kind", column: notesTable.kind, kind: "enum" as const },
-    { key: "subjectType", column: notesTable.subjectType, kind: "enum" as const },
-    { key: "authorId", column: notesTable.authorId, kind: "enum" as const },
-    { key: "occurredAt", column: notesTable.occurredAt, kind: "date" as const },
-  ];
-  const filterConditions = applyFilters(filters, filterColumns);
-
-  const notesList = await getRecentNotes({
-    conditions: filterConditions,
-    query: query || undefined,
-    limit: 200,
-    sortField,
-    sortDir,
-  });
 
   const attachmentRows = await getAttachmentsForNotes(notesList.map((n) => n.id));
   const attachmentsByNote: Record<string, typeof attachmentRows> = {};
