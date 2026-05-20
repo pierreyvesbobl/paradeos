@@ -7,10 +7,26 @@ import type { NoteKind, NoteSubjectType } from "@/lib/schemas/notes";
 import { noteKindLabels } from "@/lib/schemas/notes";
 import { cn } from "@/lib/utils";
 import { MessageCircle, Paperclip, Phone, StickyNote, Users } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { DeleteNoteButton } from "./delete-note-button";
 import { NoteDialog } from "./note-dialog";
-import { TiptapNoteEditor } from "./tiptap-note-editor";
+
+// Tiptap pèse ~270 kB gzip — on le charge à la demande (uniquement
+// quand la Dialog est ouverte) au lieu de l'inclure dans le bundle de
+// chaque page projet/contact/entité/tâche/notes.
+const TiptapNoteEditor = dynamic(
+  () => import("./tiptap-note-editor").then((m) => m.TiptapNoteEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="h-32 animate-pulse rounded bg-muted/40"
+        aria-label="Chargement de l'éditeur"
+      />
+    ),
+  },
+);
 
 const KIND_ICON: Record<NoteKind, React.ComponentType<{ className?: string }>> = {
   memo: StickyNote,

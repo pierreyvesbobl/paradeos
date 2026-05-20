@@ -82,65 +82,84 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   if (!row) notFound();
   const { project, entity, ownerId, ownerName, ownerAvatarUrl } = row;
 
-  // Devis + jalons depuis la table invoices unifiée (cf. migration 0043).
-  const [quoteInvoice] = await conn
-    .select()
-    .from(invoices)
-    .where(and(eq(invoices.projectId, id), eq(invoices.kind, "quote")))
-    .limit(1);
-  const milestonesRows = await conn
-    .select()
-    .from(invoices)
-    .where(and(eq(invoices.projectId, id), eq(invoices.kind, "milestone")))
-    .orderBy(asc(invoices.createdAt));
+  // Toutes les requêtes restantes en parallèle (10 awaits séquentiels →
+  // 1 round-trip parallèle). Les notesList → attachments restent séquentielles
+  // mais ne bloquent pas les autres branches.
+  const notesPromise = getNotesForSubject("project", id).then(async (n) => ({
+    list: n,
+    attachments: await getAttachmentsForNotes(n.map((x) => x.id)),
+  }));
 
-  const entityList = await conn
-    .select({ id: entities.id, name: entities.name })
-    .from(entities)
-    .orderBy(asc(entities.name));
-  const timeStats = await getProjectTimeStats(id);
-  const profitability = await getProjectProfitability(id);
-  const notesList = await getNotesForSubject("project", id);
-  const attachmentRows = await getAttachmentsForNotes(notesList.map((n) => n.id));
+  const [
+    quoteInvoiceRows,
+    milestonesRows,
+    entityList,
+    timeStats,
+    profitability,
+    notesData,
+    projectTasks,
+    userOptions,
+    contactOptions,
+    projectMemberRows,
+    projectContactRows,
+  ] = await Promise.all([
+    conn
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.projectId, id), eq(invoices.kind, "quote")))
+      .limit(1),
+    conn
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.projectId, id), eq(invoices.kind, "milestone")))
+      .orderBy(asc(invoices.createdAt)),
+    conn
+      .select({ id: entities.id, name: entities.name })
+      .from(entities)
+      .orderBy(asc(entities.name)),
+    getProjectTimeStats(id),
+    getProjectProfitability(id),
+    notesPromise,
+    conn
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        status: tasks.status,
+        priority: tasks.priority,
+        dueDate: tasks.dueDate,
+        assigneeId: tasks.assigneeId,
+        assigneeName: users.fullName,
+        assigneeAvatarUrl: users.avatarUrl,
+      })
+      .from(tasks)
+      .leftJoin(users, eq(tasks.assigneeId, users.id))
+      .where(eq(tasks.projectId, id))
+      .orderBy(asc(tasks.dueDate), asc(tasks.title)),
+    conn
+      .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
+      .from(users)
+      .orderBy(asc(users.fullName)),
+    conn
+      .select({
+        id: contactsTable.id,
+        firstName: contactsTable.firstName,
+        lastName: contactsTable.lastName,
+        email: contactsTable.email,
+      })
+      .from(contactsTable)
+      .orderBy(asc(contactsTable.lastName), asc(contactsTable.firstName)),
+    getProjectMembers(id),
+    getProjectContacts(id),
+  ]);
+
+  const quoteInvoice = quoteInvoiceRows[0];
+  const notesList = notesData.list;
+  const attachmentRows = notesData.attachments;
   const attachmentsByNote: Record<string, typeof attachmentRows> = {};
   for (const a of attachmentRows) {
     if (!attachmentsByNote[a.noteId]) attachmentsByNote[a.noteId] = [];
     attachmentsByNote[a.noteId]?.push(a);
   }
-
-  const [projectTasks, userOptions, contactOptions, projectMemberRows, projectContactRows] =
-    await Promise.all([
-      conn
-        .select({
-          id: tasks.id,
-          title: tasks.title,
-          status: tasks.status,
-          priority: tasks.priority,
-          dueDate: tasks.dueDate,
-          assigneeId: tasks.assigneeId,
-          assigneeName: users.fullName,
-          assigneeAvatarUrl: users.avatarUrl,
-        })
-        .from(tasks)
-        .leftJoin(users, eq(tasks.assigneeId, users.id))
-        .where(eq(tasks.projectId, id))
-        .orderBy(asc(tasks.dueDate), asc(tasks.title)),
-      conn
-        .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
-        .from(users)
-        .orderBy(asc(users.fullName)),
-      conn
-        .select({
-          id: contactsTable.id,
-          firstName: contactsTable.firstName,
-          lastName: contactsTable.lastName,
-          email: contactsTable.email,
-        })
-        .from(contactsTable)
-        .orderBy(asc(contactsTable.lastName), asc(contactsTable.firstName)),
-      getProjectMembers(id),
-      getProjectContacts(id),
-    ]);
 
   const openTasks = projectTasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
   const doneTasks = projectTasks.filter((t) => t.status === "done");

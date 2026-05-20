@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/page-header";
+import { Suspense } from "react";
 import { ComptaTabs } from "./compta-tabs";
 import { DashboardView } from "./dashboard-view";
 import type { ComptaPeriod } from "./period-selector";
@@ -38,8 +39,52 @@ export default async function ComptaPage({ searchParams }: { searchParams: Searc
       {tab === "dashboard" ? (
         <DashboardView period={period} />
       ) : (
-        <RapprochementView debug={debug} />
+        <Suspense fallback={<RapprochementSkeleton />}>
+          <RapprochementView debug={debug} />
+        </Suspense>
       )}
+    </div>
+  );
+}
+
+/**
+ * Squelette affiché immédiatement pendant que les 50+ appels Dougs API
+ * du matcher s'exécutent. Sans Suspense, l'utilisateur voyait une page
+ * blanche pendant 3-5s.
+ */
+function RapprochementSkeleton() {
+  return (
+    <div className="space-y-6 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-muted-foreground">Synchronisation Dougs en cours…</p>
+        <div className="h-8 w-32 animate-pulse rounded-md bg-muted" />
+      </div>
+      <div className="rounded-lg border bg-card">
+        <div className="border-b px-6 py-4">
+          <div className="h-4 w-48 animate-pulse rounded bg-muted" />
+        </div>
+        <ul className="divide-y">
+          {[0, 1, 2, 3].map((i) => (
+            <li key={i} className="space-y-2 px-6 py-4">
+              <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-1/2 animate-pulse rounded bg-muted/70" />
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="rounded-lg border bg-card">
+        <div className="border-b px-6 py-4">
+          <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+        </div>
+        <ul className="divide-y">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <li key={i} className="space-y-2 px-6 py-4">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-1/2 animate-pulse rounded bg-muted/70" />
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

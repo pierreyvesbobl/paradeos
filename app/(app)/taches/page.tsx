@@ -121,15 +121,17 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
   }
 
   // Notion filters (filtres riches additionnels) — récupère les options
-  // dynamiques avant de parser/appliquer les filtres URL.
-  const projectOptionsForFilter = await (await db())
-    .select({ id: projects.id, name: projects.name })
-    .from(projects)
-    .orderBy(asc(projects.name));
-  const userOptionsForFilter = await (await db())
-    .select({ id: users.id, fullName: users.fullName })
-    .from(users)
-    .orderBy(asc(users.fullName));
+  // dynamiques avant de parser/appliquer les filtres URL. En parallèle.
+  const [projectOptionsForFilter, userOptionsForFilter] = await Promise.all([
+    conn
+      .select({ id: projects.id, name: projects.name })
+      .from(projects)
+      .orderBy(asc(projects.name)),
+    conn
+      .select({ id: users.id, fullName: users.fullName })
+      .from(users)
+      .orderBy(asc(users.fullName)),
+  ]);
 
   const FILTER_DEFS = [
     {

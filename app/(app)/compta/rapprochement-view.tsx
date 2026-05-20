@@ -45,19 +45,59 @@ export async function RapprochementView({ debug }: { debug?: string }) {
   const user = await requireUser();
   const conn = await db();
 
-  // Liste de tous les projets client pour le picker manuel.
-  const projectRows = await conn
-    .select({
-      id: projects.id,
-      name: projects.name,
-      valueAmount: projects.valueAmount,
-      budgetAmount: projects.budgetAmount,
-      entityName: entities.name,
-    })
-    .from(projects)
-    .leftJoin(entities, eq(entities.id, projects.entityId))
-    .where(eq(projects.kind, "client"))
-    .orderBy(asc(projects.name));
+  // Requêtes DB locales et Dougs API en parallèle (4 round-trips → 1).
+  // Les 2 appels Dougs (getQuoteSuggestions / getInvoiceSuggestions)
+  // dominent le temps total : ~3-5s combinés pour ~50 enrichissements.
+  const dougsPromise = Promise.all([
+    getQuoteSuggestions(user.id),
+    getInvoiceSuggestions(user.id, { debug: debugMode }),
+  ]).catch((err) => {
+    if (err instanceof DougsAuthError) return err;
+    throw err;
+  });
+
+  const [projectRows, coworkingInvoiceRows, linked, dougsResult] = await Promise.all([
+    conn
+      .select({
+        id: projects.id,
+        name: projects.name,
+        valueAmount: projects.valueAmount,
+        budgetAmount: projects.budgetAmount,
+        entityName: entities.name,
+      })
+      .from(projects)
+      .leftJoin(entities, eq(entities.id, projects.entityId))
+      .where(eq(projects.kind, "client"))
+      .orderBy(asc(projects.name)),
+    conn
+      .select({
+        id: invoices.id,
+        invoicedAt: invoices.invoicedAt,
+        periodStart: invoices.periodStart,
+        periodEnd: invoices.periodEnd,
+        desks: invoices.desks,
+        unitPriceHt: invoices.unitPriceHt,
+        dougsInvoiceId: invoices.dougsInvoiceId,
+        contractName: coworkingContracts.name,
+        entityName: entities.name,
+        contactFirstName: contacts.firstName,
+        contactLastName: contacts.lastName,
+      })
+      .from(invoices)
+      .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
+      .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
+      .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId))
+      .where(
+        and(
+          eq(invoices.kind, "coworking"),
+          // Exclut G&O du picker manuel de rapprochement.
+          or(ne(invoices.billedBy, "g_and_o"), isNull(invoices.billedBy)),
+        ),
+      )
+      .orderBy(desc(invoices.invoicedAt), desc(invoices.periodStart)),
+    getLinkedDougsEntries(),
+    dougsPromise,
+  ]);
 
   const projectOptions: ProjectOption[] = projectRows.map((p) => ({
     id: p.id,
@@ -65,34 +105,6 @@ export async function RapprochementView({ debug }: { debug?: string }) {
     entityName: p.entityName,
     valueAmount: Number(p.valueAmount ?? p.budgetAmount ?? 0) || null,
   }));
-
-  // Toutes les factures coworking (liées ou non) pour le picker manuel.
-  const coworkingInvoiceRows = await conn
-    .select({
-      id: invoices.id,
-      invoicedAt: invoices.invoicedAt,
-      periodStart: invoices.periodStart,
-      periodEnd: invoices.periodEnd,
-      desks: invoices.desks,
-      unitPriceHt: invoices.unitPriceHt,
-      dougsInvoiceId: invoices.dougsInvoiceId,
-      contractName: coworkingContracts.name,
-      entityName: entities.name,
-      contactFirstName: contacts.firstName,
-      contactLastName: contacts.lastName,
-    })
-    .from(invoices)
-    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
-    .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
-    .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId))
-    .where(
-      and(
-        eq(invoices.kind, "coworking"),
-        // Exclut G&O du picker manuel de rapprochement.
-        or(ne(invoices.billedBy, "g_and_o"), isNull(invoices.billedBy)),
-      ),
-    )
-    .orderBy(desc(invoices.invoicedAt), desc(invoices.periodStart));
 
   function fmtDate(d: Date | string | null | undefined): string | null {
     if (!d) return null;
@@ -133,26 +145,15 @@ export async function RapprochementView({ debug }: { debug?: string }) {
   };
   let authError: string | null = null;
 
-  try {
-    [quoteSuggestions, invoiceResult] = await Promise.all([
-      getQuoteSuggestions(user.id),
-      getInvoiceSuggestions(user.id, { debug: debugMode }),
-    ]);
-  } catch (err) {
-    if (err instanceof DougsAuthError) {
-      authError = err.message;
-    } else {
-      throw err;
-    }
+  if (dougsResult instanceof DougsAuthError) {
+    authError = dougsResult.message;
+  } else {
+    [quoteSuggestions, invoiceResult] = dougsResult;
   }
 
   const invoiceSuggestions = invoiceResult.invoices;
   const creditNotes = invoiceResult.creditNotes;
   const invoiceOptions = invoiceResult.invoiceOptions;
-
-  // Liste des entrées Dougs déjà rattachées (lue sur les snapshots locaux,
-  // sans appel API). Affichée dans une section dépliable en bas.
-  const linked = await getLinkedDougsEntries();
   const linkedTotal = linked.quotes.length + linked.invoices.length;
 
   return (
