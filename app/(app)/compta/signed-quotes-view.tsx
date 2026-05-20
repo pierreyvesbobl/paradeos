@@ -5,6 +5,8 @@ import { db } from "@/lib/db/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { ArrowRight, CheckCircle2, FileSignature, Hourglass, Wallet } from "lucide-react";
 import Link from "next/link";
+import { type ComptaPeriod, PeriodSelector } from "./period-selector";
+import { inWindow, periodWindow } from "./period-window";
 
 function formatEur(n: number): string {
   return n.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
@@ -24,13 +26,14 @@ type ProjectRow = {
   remainingHt: number;
 };
 
-export async function SignedQuotesView() {
+export async function SignedQuotesView({ period }: { period: ComptaPeriod }) {
   const conn = await db();
+  const win = periodWindow(period);
 
-  // Devis "signés" : invoice kind=quote avec status='accepted' OU
-  // dougsStatus='ACCEPTED'. On prend large pour couvrir les anciens
-  // imports où le mapping de statut ne s'est pas fait.
-  const signedQuotes = await conn
+  // Devis "signés" : invoice kind=quote avec status='accepted'.
+  // Filtrage par période = date de signature/émission (invoicedAt avec
+  // fallback dougsIssuedAt). "Tout" => pas de filtre.
+  const allSigned = await conn
     .select({
       invoiceId: invoices.id,
       projectId: invoices.projectId,
@@ -41,11 +44,17 @@ export async function SignedQuotesView() {
       reference: invoices.reference,
       dougsReference: invoices.dougsReference,
       issuedAt: invoices.invoicedAt,
+      dougsIssuedAt: invoices.dougsIssuedAt,
     })
     .from(invoices)
     .leftJoin(projects, eq(projects.id, invoices.projectId))
     .leftJoin(entities, eq(entities.id, projects.entityId))
     .where(and(eq(invoices.kind, "quote"), eq(invoices.status, "accepted")));
+
+  const signedQuotes =
+    win.start === null && win.end === null
+      ? allSigned
+      : allSigned.filter((q) => inWindow(q.issuedAt ?? q.dougsIssuedAt ?? null, win));
 
   const projectIds = signedQuotes.map((q) => q.projectId).filter((id): id is string => id !== null);
 
@@ -106,9 +115,12 @@ export async function SignedQuotesView() {
 
   return (
     <div className="space-y-6">
-      <p className="text-muted-foreground text-sm">
-        Suivi des devis signés (status accepted) et de leur progression de facturation.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <PeriodSelector current={period} />
+        <p className="text-[11px] text-muted-foreground">
+          Filtre par date de signature (émission du devis).
+        </p>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard

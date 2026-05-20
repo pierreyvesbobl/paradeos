@@ -7,6 +7,7 @@ import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { ArrowRight, FileText, Receipt } from "lucide-react";
 import Link from "next/link";
 import { type ComptaPeriod, PeriodSelector } from "./period-selector";
+import { inWindow, periodWindow } from "./period-window";
 
 function formatEur(n: number): string {
   return n.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
@@ -37,43 +38,6 @@ type PendingItem = {
   amountHt: number;
   status: "draft" | "sent";
 };
-
-function periodWindow(period: ComptaPeriod): {
-  start: Date | null;
-  end: Date | null;
-  label: string;
-} {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  switch (period) {
-    case "current_month":
-      return { start: new Date(y, m, 1), end: new Date(y, m + 1, 1), label: "mois en cours" };
-    case "last_month":
-      return { start: new Date(y, m - 1, 1), end: new Date(y, m, 1), label: "mois dernier" };
-    case "last_3_months":
-      return { start: new Date(y, m - 2, 1), end: new Date(y, m + 1, 1), label: "3 derniers mois" };
-    case "current_year":
-      return { start: new Date(y, 0, 1), end: new Date(y + 1, 0, 1), label: "année en cours" };
-    case "last_year":
-      return { start: new Date(y - 1, 0, 1), end: new Date(y, 0, 1), label: "année dernière" };
-    case "all":
-      return { start: null, end: null, label: "tout" };
-    default:
-      return {
-        start: new Date(y, m - 11, 1),
-        end: new Date(y, m + 1, 1),
-        label: "12 derniers mois",
-      };
-  }
-}
-
-function inWindow(value: Date | null, win: { start: Date | null; end: Date | null }): boolean {
-  if (!value) return false;
-  if (win.start && value < win.start) return false;
-  if (win.end && value >= win.end) return false;
-  return true;
-}
 
 export async function DashboardView({ period }: { period: ComptaPeriod }) {
   const conn = await db();

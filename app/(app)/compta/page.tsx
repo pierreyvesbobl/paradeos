@@ -42,7 +42,7 @@ export default async function ComptaPage({ searchParams }: { searchParams: Searc
       {tab === "dashboard" ? (
         <DashboardView period={period} />
       ) : tab === "signed" ? (
-        <SignedQuotesView />
+        <SignedQuotesView period={period} />
       ) : (
         <Suspense fallback={<RapprochementSkeleton />}>
           <RapprochementView debug={debug} />
