@@ -15,7 +15,7 @@ import {
   updateDougsSalesInvoice,
 } from "@/lib/dougs/client";
 import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 
 /**
@@ -176,6 +176,7 @@ export const pushProjectMilestoneToDougs = action(
       .where(eq(invoices.id, input.invoiceId));
 
     const url = await getDougsDraftUrl(user.id, draft.id);
+    revalidateTag(`dougs:${user.id}`);
     revalidatePath(`/projets/${invoice.projectId}`);
     revalidatePath("/compta");
     return { dougsId: draft.id, reference: draft.reference, url };

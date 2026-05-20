@@ -7,14 +7,12 @@ import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
 import {
-  type DougsQuote,
-  type DougsSalesInvoice,
-  getDougsQuote,
-  getDougsSalesInvoice,
-  listDougsQuotes,
-  listDougsSalesInvoices,
-  pickDougsClientName,
-} from "@/lib/dougs/client";
+  cachedGetDougsQuote,
+  cachedGetDougsSalesInvoice,
+  cachedListDougsQuotes,
+  cachedListDougsSalesInvoices,
+} from "@/lib/dougs/cache";
+import { type DougsQuote, type DougsSalesInvoice, pickDougsClientName } from "@/lib/dougs/client";
 import {
   type MatchScore,
   scoreMatch,
@@ -137,7 +135,7 @@ export async function getQuoteSuggestions(userId: string): Promise<QuoteSuggesti
   const candidates = allClientProjects.filter((p) => !projectsWithQuote.has(p.id));
 
   // Fetch devis Dougs, exclut ceux déjà liés.
-  const dougsQuotes = await listDougsQuotes(userId, { limit: 200 });
+  const dougsQuotes = await cachedListDougsQuotes(userId, { limit: 200 });
   const unlinkedQuotesList = dougsQuotes.filter((q) => !linkedQuoteIds.has(q.id));
 
   // Enrichissement avec détail.
@@ -145,7 +143,7 @@ export async function getQuoteSuggestions(userId: string): Promise<QuoteSuggesti
     unlinkedQuotesList.slice(0, 50),
     async (q) => {
       try {
-        const detail = await getDougsQuote(userId, q.id);
+        const detail = await cachedGetDougsQuote(userId, q.id);
         return { ...q, ...detail, id: q.id } as DougsQuote & { id: string };
       } catch (err) {
         console.warn(
@@ -369,7 +367,7 @@ export async function getInvoiceSuggestions(
   }
 
   // 2. Liste Dougs et split factures / avoirs.
-  const dougsInvoicesAll = await listDougsSalesInvoices(userId, { limit: 200 });
+  const dougsInvoicesAll = await cachedListDougsSalesInvoices(userId, { limit: 200 });
   const dougsInvoicesNormal: typeof dougsInvoicesAll = [];
   const dougsCreditNotes: typeof dougsInvoicesAll = [];
   for (const i of dougsInvoicesAll) {
@@ -411,7 +409,7 @@ export async function getInvoiceSuggestions(
     unlinkedDougsList.slice(0, 50),
     async (i) => {
       try {
-        const detail = await getDougsSalesInvoice(userId, i.id);
+        const detail = await cachedGetDougsSalesInvoice(userId, i.id);
         return { ...i, ...detail, id: i.id } as DougsSalesInvoice & { id: string };
       } catch (err) {
         console.warn(
@@ -553,7 +551,7 @@ export async function getInvoiceSuggestions(
     dougsCreditNotes,
     async (i) => {
       try {
-        const detail = await getDougsSalesInvoice(userId, i.id);
+        const detail = await cachedGetDougsSalesInvoice(userId, i.id);
         return { ...i, ...detail, id: i.id } as DougsSalesInvoice & { id: string };
       } catch (err) {
         console.warn(

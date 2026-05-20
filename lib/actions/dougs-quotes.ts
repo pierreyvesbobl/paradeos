@@ -16,7 +16,7 @@ import {
   updateDougsQuote,
 } from "@/lib/dougs/client";
 import { and, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 
 const lineSchema = z.object({
@@ -253,6 +253,9 @@ export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }
   }
 
   const url = await getDougsQuoteUrl(user.id, quoteId);
+  // Bust le cache Dougs (lib/dougs/cache.ts) : le push crée un nouveau
+  // brouillon côté Dougs, la liste cached ne le contient pas encore.
+  revalidateTag(`dougs:${user.id}`);
   revalidatePath(`/projets/${input.projectId}`);
   return { dougsId: quoteId, reference, status, url };
 });

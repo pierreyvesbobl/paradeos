@@ -19,7 +19,7 @@ import {
 } from "@/lib/dougs/client";
 import { monthsBetween } from "@/lib/schemas/coworking";
 import { and, eq, isNotNull } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 
 function toNumeric(n: number | null | undefined): string | null {
@@ -534,6 +534,10 @@ export const refreshInvoiceDougs = action(
       throw err;
     }
 
+    // Bust le tag spécifique du Dougs entry pour que les caches détail
+    // (cachedGetDougsSalesInvoice / cachedGetDougsQuote) renvoient frais.
+    if (inv.dougsInvoiceId) revalidateTag(`dougs-invoice:${inv.dougsInvoiceId}`);
+    if (inv.dougsQuoteId) revalidateTag(`dougs-quote:${inv.dougsQuoteId}`);
     revalidatePathsForInvoice(inv.projectId, inv.coworkingContractId, input.invoiceId);
     revalidatePath("/compta");
     return { ok: true as const };
@@ -616,6 +620,9 @@ export const refreshAllDougsLinks = action(z.object({}), async ({ user }) => {
     }
   }
 
+  // Bust le cache Dougs (lib/dougs/cache.ts) pour que la prochaine
+  // visite voie les statuts/montants fraîchement synchronisés.
+  revalidateTag(`dougs:${user.id}`);
   revalidatePath("/compta");
   return { updated, errors };
 });

@@ -21,7 +21,7 @@ import {
   updateCoworkingContractSchema,
 } from "@/lib/schemas/coworking";
 import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 
 const idSchema = z.object({ id: z.string().uuid() });
@@ -275,6 +275,7 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
 
   const url = await getDougsDraftUrl(user.id, draft.id);
 
+  revalidateTag(`dougs:${user.id}`);
   revalidatePath("/coworking");
   revalidatePath(`/coworking/factures/${input.id}`);
   revalidatePath("/compta");
