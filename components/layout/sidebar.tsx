@@ -5,6 +5,7 @@ import {
   Calendar,
   CheckSquare,
   Clock,
+  FileText,
   Home,
   Mail,
   Mic,
@@ -34,6 +35,7 @@ const items: NavItem[] = [
   { label: "Notes", href: "/notes", icon: StickyNote },
   { label: "Meetings", href: "/meetings", icon: Mic },
   { label: "Emails", href: "/emails", icon: Mail },
+  { label: "Factures", href: "/factures", icon: FileText },
   { label: "Coworking", href: "/coworking", icon: School },
   { label: "Compta", href: "/compta", icon: Calculator },
 ];

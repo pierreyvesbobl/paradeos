@@ -31,6 +31,17 @@ export const SETTING_KEYS = {
    * Default : enabled. À mettre à "false" si le coût LLM explose.
    */
   GMAIL_EXTRACTION_ENABLED: "GMAIL_EXTRACTION_ENABLED",
+  /**
+   * ID du dossier Drive racine où l'agent classe les factures d'achat.
+   * Sous ce dossier, l'agent crée la hiérarchie <year>/<supplier>/.
+   * Sans cette valeur, le classement est désactivé.
+   */
+  INVOICE_FILING_ROOT_FOLDER_ID: "INVOICE_FILING_ROOT_FOLDER_ID",
+  /**
+   * Kill switch : si "false", on n'auto-file plus les factures détectées
+   * (les rows pending restent en attente). Default : enabled.
+   */
+  INVOICE_FILING_ENABLED: "INVOICE_FILING_ENABLED",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

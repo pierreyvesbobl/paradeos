@@ -267,6 +267,58 @@ export async function listHistory(
   );
 }
 
+// ─── messages.attachments.get ──────────────────────────────────────────
+
+/**
+ * Télécharge le contenu binaire d'une PJ. Gmail renvoie un payload
+ * JSON avec `data` en base64url + `size`. On décode en Buffer pour
+ * pouvoir le pousser ailleurs (Drive upload, parse PDF…).
+ */
+export async function getAttachment(
+  accessToken: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<{ data: Buffer; size: number }> {
+  const res = await gmailFetch<{ data: string; size: number }>(
+    `/users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    accessToken,
+  );
+  return {
+    data: Buffer.from(res.data, "base64url"),
+    size: res.size,
+  };
+}
+
+/**
+ * Walk le payload Gmail et collecte toutes les PJ avec leur métadonnée
+ * (filename + mimeType + attachmentId pour download ultérieur). Skip
+ * les parts inline sans filename.
+ */
+export type GmailAttachmentRef = {
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+};
+
+export function collectAttachments(payload: GmailMessagePart | undefined): GmailAttachmentRef[] {
+  const out: GmailAttachmentRef[] = [];
+  if (!payload) return out;
+  function walk(part: GmailMessagePart) {
+    if (part.filename && part.body?.attachmentId) {
+      out.push({
+        attachmentId: part.body.attachmentId,
+        filename: part.filename,
+        mimeType: part.mimeType ?? "application/octet-stream",
+        size: part.body.size ?? 0,
+      });
+    }
+    for (const sub of part.parts ?? []) walk(sub);
+  }
+  walk(payload);
+  return out;
+}
+
 // ─── Helpers de parsing ─────────────────────────────────────────────────
 
 /** Extrait la valeur d'un header (case-insensitive) depuis un payload. */

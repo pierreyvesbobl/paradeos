@@ -7,6 +7,7 @@ import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import {
   type GmailMessage,
+  collectAttachments,
   extractBodies,
   getHeader,
   getMessage,
@@ -19,6 +20,7 @@ import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { GENERIC_EMAIL_DOMAINS, domainFromEmail, extractDomain } from "./domain";
 import { extractAndSaveEmailProposals } from "./extract-and-save";
+import { processInvoiceFiling, queueInvoiceCandidates } from "./invoice-filer";
 import {
   autoTagThreadByParticipants,
   loadGmailLabelCache,
@@ -40,6 +42,8 @@ const SKIP_LABELS = new Set(["SPAM", "TRASH"]);
  * au prochain sync.
  */
 const MAX_EXTRACTIONS_PER_RUN = 10;
+/** Cap classement de factures par run (chaque appel = download PJ + LLM + upload ~10s). */
+const MAX_INVOICE_FILINGS_PER_RUN = 5;
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -61,6 +65,12 @@ export type GmailSyncResult = {
   extractionsSkipped: number;
   /** Total des propositions créées (toutes extractions confondues). */
   proposalsCreated: number;
+  /** Factures PDF classées avec succès sur ce run. */
+  invoicesFiled: number;
+  /** Factures écartées (non-facture, champs manquants, confidence faible…). */
+  invoicesRejected: number;
+  /** Erreurs techniques pendant le classement (download/upload/LLM). */
+  invoicesErrored: number;
   errors: string[];
   newHistoryId: number | null;
   hasMore: boolean;
@@ -124,7 +134,7 @@ async function upsertThreadAndMessage(
   metaMessage: GmailMessage,
   body: { text: string | null; html: string | null } | null,
   extractionStatus: "skipped" | "pending",
-): Promise<{ threadIdLocal: string; isNewMessage: boolean }> {
+): Promise<{ threadIdLocal: string; messageIdLocal: string | null; isNewMessage: boolean }> {
   const conn = await db();
   const payload = metaMessage.payload;
   const fromHeader = getHeader(payload, "From");
@@ -254,7 +264,11 @@ async function upsertThreadAndMessage(
     where gt.id = ${threadIdLocal}
   `);
 
-  return { threadIdLocal, isNewMessage: inserted.length > 0 };
+  return {
+    threadIdLocal,
+    messageIdLocal: inserted[0]?.id ?? null,
+    isNewMessage: inserted.length > 0,
+  };
 }
 
 /**
@@ -273,6 +287,9 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
     extractionsDone: 0,
     extractionsSkipped: 0,
     proposalsCreated: 0,
+    invoicesFiled: 0,
+    invoicesRejected: 0,
+    invoicesErrored: 0,
     errors: [],
     newHistoryId: null,
     hasMore: false,
@@ -411,13 +428,24 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
         extractionStatus = "pending";
         result.bodiesFetched++;
         // On utilise les headers du full (plus complets).
-        const { threadIdLocal } = await upsertThreadAndMessage(
+        const { threadIdLocal, messageIdLocal } = await upsertThreadAndMessage(
           userId,
           full,
           body,
           extractionStatus,
         );
         touchedThreads.add(threadIdLocal);
+        // Queue les PJ PDF candidates au classement facture (idempotent).
+        if (messageIdLocal) {
+          try {
+            const refs = collectAttachments(full.payload);
+            await queueInvoiceCandidates({ userId, messageIdLocal, refs });
+          } catch (err) {
+            result.errors.push(
+              `queue invoice ${m.id}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
       } else {
         const { threadIdLocal } = await upsertThreadAndMessage(userId, meta, null, "skipped");
         touchedThreads.add(threadIdLocal);
@@ -520,6 +548,30 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
         await sleep(SLEEP_MS_BETWEEN_CALLS);
       } catch (err) {
         result.errors.push(`extract ${pm.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+
+  // ─── 4ter. Classement automatique des factures (kill switch) ─────
+  const filingEnabled = (await getSetting(SETTING_KEYS.INVOICE_FILING_ENABLED)) !== "false";
+  if (filingEnabled) {
+    const { invoiceFilings } = await import("@/db/schema/invoice-filings");
+    const pendingFilings = await conn
+      .select({ id: invoiceFilings.id })
+      .from(invoiceFilings)
+      .where(and(eq(invoiceFilings.userId, userId), eq(invoiceFilings.status, "pending")))
+      .limit(MAX_INVOICE_FILINGS_PER_RUN);
+    for (const pf of pendingFilings) {
+      try {
+        const r = await processInvoiceFiling(pf.id);
+        if (r.status === "filed") result.invoicesFiled++;
+        else if (r.status === "rejected") result.invoicesRejected++;
+        else result.invoicesErrored++;
+      } catch (err) {
+        result.invoicesErrored++;
+        result.errors.push(
+          `file invoice ${pf.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
   }

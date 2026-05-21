@@ -14,6 +14,7 @@ import { GmailSection } from "./gmail-section";
 import { GoogleCalendarSection } from "./google-calendar-section";
 import { GoogleDriveSection } from "./google-drive-section";
 import { IntegrationsTabs } from "./integrations-tabs";
+import { InvoiceFilingSection } from "./invoice-filing-section";
 import { LlmConfigForm } from "./llm-config-form";
 import { OauthCallbackToast } from "./oauth-callback-toast";
 
@@ -70,6 +71,7 @@ export default async function IntegrationsSettingsPage({
       <GoogleDriveSection userId={user.id} />
       <GoogleCalendarSection userId={user.id} />
       <GmailSection userId={user.id} />
+      <InvoiceFilingSection userId={user.id} />
       {isAdmin ? <DriveTranscriptsSection /> : null}
     </>
   );

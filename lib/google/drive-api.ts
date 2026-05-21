@@ -194,3 +194,119 @@ export async function resolveFolderPath(
 }
 
 export type { DriveFile };
+
+// ─── Création de dossiers + upload (pour l'agent factures) ─────────────
+
+/**
+ * Cherche un sous-dossier par nom dans un dossier parent. Retourne null
+ * si pas trouvé. Insensible à la casse exacte (Drive match exact dans
+ * la query mais on tolère les variations d'espaces côté nom). Filtre
+ * les dossiers en corbeille.
+ */
+export async function findFolderByName(
+  parentId: string,
+  name: string,
+  accessToken: string,
+): Promise<DriveFile | null> {
+  // Échape les apostrophes / quotes dans le nom pour la query Drive.
+  const safeName = name.replace(/'/g, "\\'");
+  const q = `name = '${safeName}' and mimeType = '${FOLDER_MIME}' and '${parentId}' in parents and trashed = false`;
+  const res = await driveFetch<{ files?: DriveFile[] }>(
+    `/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,parents)&pageSize=10&${SHARED_DRIVE_PARAMS}`,
+    accessToken,
+  );
+  return res.files?.[0] ?? null;
+}
+
+/** Crée un dossier dans `parentId`. Retourne le DriveFile créé. */
+export async function createFolder(
+  parentId: string,
+  name: string,
+  accessToken: string,
+): Promise<DriveFile> {
+  return driveFetch<DriveFile>(
+    `/files?fields=id,name,mimeType,parents&${SHARED_DRIVE_PARAMS}`,
+    accessToken,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name,
+        mimeType: FOLDER_MIME,
+        parents: [parentId],
+      }),
+    },
+  );
+}
+
+/** Idempotent : retourne le dossier existant ou le crée. */
+export async function findOrCreateFolder(
+  parentId: string,
+  name: string,
+  accessToken: string,
+): Promise<DriveFile> {
+  const existing = await findFolderByName(parentId, name, accessToken);
+  if (existing) return existing;
+  return createFolder(parentId, name, accessToken);
+}
+
+/**
+ * Upload un fichier (binaire) dans un dossier Drive via multipart upload.
+ * `content` est un Buffer (binaire). `mimeType` ex. "application/pdf".
+ * Retourne le DriveFile créé (id, webViewLink…).
+ */
+export async function uploadFile(args: {
+  parentId: string;
+  filename: string;
+  mimeType: string;
+  content: Buffer;
+  accessToken: string;
+}): Promise<DriveFile> {
+  const { parentId, filename, mimeType, content, accessToken } = args;
+
+  // Multipart upload Drive API : 2 parts (metadata JSON + raw binary).
+  // Boundary unique pour ce request.
+  const boundary = `paradeos-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const metadata = JSON.stringify({
+    name: filename,
+    parents: [parentId],
+    mimeType,
+  });
+
+  const preamble =
+    `--${boundary}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Type: ${mimeType}\r\n` +
+    "Content-Transfer-Encoding: binary\r\n\r\n";
+  const epilogue = `\r\n--${boundary}--`;
+
+  const body = Buffer.concat([
+    Buffer.from(preamble, "utf8"),
+    content,
+    Buffer.from(epilogue, "utf8"),
+  ]);
+
+  // Upload endpoint distinct du /drive/v3 standard.
+  const res = await fetchWithTimeout(
+    `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,webViewLink,parents&${SHARED_DRIVE_PARAMS}`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+        "Content-Length": String(body.length),
+      },
+      body: new Uint8Array(body),
+      cache: "no-store",
+      // Upload peut prendre du temps pour les gros PDFs — 20s de marge.
+      timeoutMs: 20_000,
+      label: "Drive API upload",
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Drive upload ${res.status} : ${text}`);
+  }
+  return (await res.json()) as DriveFile;
+}
