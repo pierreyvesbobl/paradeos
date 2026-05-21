@@ -313,23 +313,15 @@ export async function autoTagThreadByParticipants(threadIdLocal: string): Promis
   if (involvedEmails.size === 0) return;
   const involvedList = [...involvedEmails];
 
-  // Match contacts.
+  // Match contacts (sert uniquement à dériver les projets/entités —
+  // on NE crée PAS de tag contact pour éviter la pollution de la liste
+  // de labels Gmail quand le CRM contient des centaines de contacts).
   const matchedContacts = await conn
-    .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
+    .select({ id: contacts.id })
     .from(contacts)
     .where(inArray(contacts.email, involvedList));
 
-  // Ensure tag contact + tag entité éventuelle + tag projets.
   const tagIdsToApply: string[] = [];
-  for (const c of matchedContacts) {
-    const tag = await ensureCrmTag({
-      userId,
-      kind: "contact",
-      targetId: c.id,
-      displayName: `${c.firstName} ${c.lastName}`,
-    });
-    tagIdsToApply.push(tag.id);
-  }
 
   // Projets via project_contacts.
   if (matchedContacts.length > 0) {
@@ -629,28 +621,10 @@ export async function backfillCrmTags(userId: string): Promise<{
     }
   }
 
-  // 2. Contacts
-  const contactRows = await conn
-    .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
-    .from(contacts);
-  for (const c of contactRows) {
-    try {
-      const tag = await ensureCrmTag({
-        userId,
-        kind: "contact",
-        targetId: c.id,
-        displayName: `${c.firstName} ${c.lastName}`,
-      });
-      stats.contactsTagged++;
-      if (!tag.gmailLabelId) {
-        const labelId = await getOrCreateGmailLabel(accessToken, tag.labelName, cache);
-        await conn.update(gmailTags).set({ gmailLabelId: labelId }).where(eq(gmailTags.id, tag.id));
-        stats.labelsCreated++;
-      }
-    } catch (err) {
-      stats.errors.push(`contact ${c.id}: ${err instanceof Error ? err.message : err}`);
-    }
-  }
+  // 2. Contacts : volontairement skippés. Les contacts servent à
+  // dériver les tags projet (via project_contacts) au moment du sync,
+  // mais on ne crée pas un label Gmail par contact (risque de
+  // saturation : un CRM avec 200 contacts = 200 labels supplémentaires).
 
   // 3. Entités
   const entityRows = await conn.select({ id: entities.id, name: entities.name }).from(entities);

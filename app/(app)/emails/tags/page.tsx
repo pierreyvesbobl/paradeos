@@ -19,7 +19,6 @@ export default async function EmailTagsPage() {
       <TagsManagement
         categories={tags.filter((t) => t.kind === "category")}
         projects={tags.filter((t) => t.kind === "project")}
-        contacts={tags.filter((t) => t.kind === "contact")}
         entities={tags.filter((t) => t.kind === "entity")}
       />
     </div>

@@ -9,18 +9,7 @@ import {
   deleteTagAction,
   renameTagAction,
 } from "@/lib/actions/gmail";
-import {
-  Briefcase,
-  Building2,
-  Check,
-  Pencil,
-  Plus,
-  Tag,
-  Trash2,
-  User,
-  Wand2,
-  X,
-} from "lucide-react";
+import { Briefcase, Building2, Check, Pencil, Plus, Tag, Trash2, Wand2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -38,11 +27,10 @@ type TagRow = {
 type Props = {
   categories: TagRow[];
   projects: TagRow[];
-  contacts: TagRow[];
   entities: TagRow[];
 };
 
-export function TagsManagement({ categories, projects, contacts, entities }: Props) {
+export function TagsManagement({ categories, projects, entities }: Props) {
   const [pending, startTransition] = useTransition();
 
   function backfill() {
@@ -52,10 +40,10 @@ export function TagsManagement({ categories, projects, contacts, entities }: Pro
         toast.error(res.message);
         return;
       }
-      const { projectsTagged, contactsTagged, entitiesTagged, labelsCreated, errors } = res.data;
+      const { projectsTagged, entitiesTagged, labelsCreated, errors } = res.data;
       const errSuffix = errors.length ? ` · ${errors.length} erreur(s)` : "";
       toast.success(
-        `Tags CRM : ${projectsTagged} projet(s), ${contactsTagged} contact(s), ${entitiesTagged} entité(s). ${labelsCreated} label(s) Gmail créé(s)${errSuffix}.`,
+        `Tags CRM : ${projectsTagged} projet(s), ${entitiesTagged} entité(s). ${labelsCreated} label(s) Gmail créé(s)${errSuffix}.`,
       );
     });
   }
@@ -68,9 +56,9 @@ export function TagsManagement({ categories, projects, contacts, entities }: Pro
           <div>
             <h2 className="font-medium text-sm">Initialiser les tags CRM</h2>
             <p className="mt-1 text-muted-foreground text-xs">
-              Crée un label Gmail "Paradeos/Projets/X" pour chaque projet, contact et entité du CRM,
-              dans la limite de ton compte Google. Idempotent — relance sans risque après avoir
-              ajouté de nouveaux records.
+              Crée un label Gmail "Paradeos/Projets/X" et "Paradeos/Entités/X" pour chaque projet et
+              entité du CRM (les contacts sont exclus pour éviter de saturer la liste de labels).
+              Idempotent — relance sans risque après avoir ajouté de nouveaux records.
             </p>
           </div>
           <Button type="button" onClick={backfill} disabled={pending} size="sm" className="gap-1.5">
@@ -85,7 +73,6 @@ export function TagsManagement({ categories, projects, contacts, entities }: Pro
 
       {/* Tags CRM (read-only ici, gérés depuis leurs fiches) */}
       <CrmSection title="Projets" icon={Briefcase} tags={projects} kindHref="projets" />
-      <CrmSection title="Contacts" icon={User} tags={contacts} kindHref="contacts" />
       <CrmSection title="Entités" icon={Building2} tags={entities} kindHref="entites" />
     </div>
   );
