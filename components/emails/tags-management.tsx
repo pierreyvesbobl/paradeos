@@ -25,15 +25,24 @@ type TagRow = {
 };
 
 type Props = {
+  scopesOk: boolean;
   categories: TagRow[];
   projects: TagRow[];
   entities: TagRow[];
 };
 
-export function TagsManagement({ categories, projects, entities }: Props) {
+export function TagsManagement({ scopesOk, categories, projects, entities }: Props) {
   const [pending, startTransition] = useTransition();
+  const [lastErrors, setLastErrors] = useState<string[]>([]);
+
+  // Compteur de tags sans gmail_label_id (label Gmail pas encore créé).
+  const pendingLabelsCount =
+    projects.filter((t) => !t.gmailLabelId).length +
+    entities.filter((t) => !t.gmailLabelId).length +
+    categories.filter((t) => !t.gmailLabelId).length;
 
   function backfill() {
+    setLastErrors([]);
     startTransition(async () => {
       const res = await backfillCrmTagsAction({});
       if (!res.ok) {
@@ -41,9 +50,15 @@ export function TagsManagement({ categories, projects, entities }: Props) {
         return;
       }
       const { projectsTagged, entitiesTagged, labelsCreated, errors } = res.data;
-      const errSuffix = errors.length ? ` · ${errors.length} erreur(s)` : "";
+      if (errors.length > 0) {
+        setLastErrors(errors);
+        toast.error(
+          `Backfill : ${labelsCreated} label(s) créé(s), ${errors.length} erreur(s). Détails ci-dessous.`,
+        );
+        return;
+      }
       toast.success(
-        `Tags CRM : ${projectsTagged} projet(s), ${entitiesTagged} entité(s). ${labelsCreated} label(s) Gmail créé(s)${errSuffix}.`,
+        `Tags CRM : ${projectsTagged} projet(s), ${entitiesTagged} entité(s). ${labelsCreated} label(s) Gmail créé(s).`,
       );
     });
   }
@@ -60,12 +75,43 @@ export function TagsManagement({ categories, projects, entities }: Props) {
               entité du CRM (les contacts sont exclus pour éviter de saturer la liste de labels).
               Idempotent — relance sans risque après avoir ajouté de nouveaux records.
             </p>
+            {pendingLabelsCount > 0 ? (
+              <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
+                {pendingLabelsCount} tag(s) en base sans label Gmail. Re-clique "Lancer" pour
+                retenter la création côté Gmail.
+              </p>
+            ) : null}
           </div>
-          <Button type="button" onClick={backfill} disabled={pending} size="sm" className="gap-1.5">
+          <Button
+            type="button"
+            onClick={backfill}
+            disabled={pending || !scopesOk}
+            size="sm"
+            className="gap-1.5"
+            title={
+              !scopesOk
+                ? "Reconnecte Google avec le scope gmail.modify pour activer ce bouton"
+                : undefined
+            }
+          >
             <Wand2 className={`size-3.5 ${pending ? "animate-spin" : ""}`} />
             Lancer
           </Button>
         </div>
+
+        {lastErrors.length > 0 ? (
+          <details className="mt-3 rounded border border-rose-300 bg-rose-50 p-2 text-rose-900 text-xs dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200">
+            <summary className="cursor-pointer font-medium">
+              {lastErrors.length} erreur(s) lors du dernier backfill
+            </summary>
+            <ul className="mt-2 space-y-1 font-mono text-[10px]">
+              {lastErrors.slice(0, 20).map((e) => (
+                <li key={e}>{e}</li>
+              ))}
+              {lastErrors.length > 20 ? <li>… +{lastErrors.length - 20} autre(s)</li> : null}
+            </ul>
+          </details>
+        ) : null}
       </section>
 
       {/* Catégories libres */}
