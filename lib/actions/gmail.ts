@@ -5,17 +5,21 @@ import { googleAccounts } from "@/db/schema/google-accounts";
 import { users } from "@/db/schema/users";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
-import { manualLinkThread, rebuildAllAutoLinks, unlinkThread } from "@/lib/gmail/link";
 import { purgeGmailData, syncIncremental } from "@/lib/gmail/sync";
+import {
+  applyTagToThread,
+  autoTagThreadByParticipants,
+  backfillCrmTags,
+  createCategoryTag,
+  deleteTag,
+  removeTagFromThread,
+  renameTag,
+} from "@/lib/gmail/tags";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-/**
- * Trouve un user admin avec compte Google connecté ET scope gmail.
- * La sync est mono-tenant en pratique — on impersonate l'admin.
- */
 async function getGmailUserId(): Promise<string | null> {
   const conn = await db();
   const rows = await conn
@@ -29,10 +33,6 @@ async function getGmailUserId(): Promise<string | null> {
   return null;
 }
 
-/**
- * Déclenche un run de sync à la demande (bouton "Sync now"). Idempotent
- * — peut être appelé plusieurs fois pour drainer le bootstrap.
- */
 export const triggerGmailSync = action(z.object({}), async ({ user }) => {
   const targetUserId = (await getGmailUserId()) ?? user.id;
   const result = await syncIncremental(targetUserId);
@@ -48,62 +48,129 @@ export const triggerGmailSync = action(z.object({}), async ({ user }) => {
   };
 });
 
-export const linkThreadToSubject = action(
+// ─── Tags : appliquer / retirer sur un thread ─────────────────────────
+
+export const addTagToThread = action(
   z.object({
     threadId: z.string().uuid(),
-    linkKind: z.enum(["project", "contact", "entity"]),
-    linkId: z.string().uuid(),
+    tagId: z.string().uuid(),
   }),
   async ({ input, user }) => {
-    await manualLinkThread({ ...input, createdBy: user.id });
+    const targetUserId = (await getGmailUserId()) ?? user.id;
+    await applyTagToThread({
+      userId: targetUserId,
+      threadIdLocal: input.threadId,
+      tagId: input.tagId,
+      source: "manual",
+      createdBy: user.id,
+    });
     revalidatePath("/emails");
     revalidatePath(`/emails/${input.threadId}`);
-    if (input.linkKind === "project") revalidatePath(`/projets/${input.linkId}`);
-    if (input.linkKind === "contact") revalidatePath(`/contacts/${input.linkId}`);
-    if (input.linkKind === "entity") revalidatePath(`/entites/${input.linkId}`);
     return { ok: true as const };
   },
 );
 
-export const unlinkThreadFromSubject = action(
+export const removeTagAction = action(
   z.object({
     threadId: z.string().uuid(),
-    linkKind: z.enum(["project", "contact", "entity"]),
-    linkId: z.string().uuid(),
+    tagId: z.string().uuid(),
   }),
-  async ({ input }) => {
-    await unlinkThread(input);
+  async ({ input, user }) => {
+    const targetUserId = (await getGmailUserId()) ?? user.id;
+    await removeTagFromThread({
+      userId: targetUserId,
+      threadIdLocal: input.threadId,
+      tagId: input.tagId,
+    });
     revalidatePath("/emails");
     revalidatePath(`/emails/${input.threadId}`);
-    if (input.linkKind === "project") revalidatePath(`/projets/${input.linkId}`);
-    if (input.linkKind === "contact") revalidatePath(`/contacts/${input.linkId}`);
-    if (input.linkKind === "entity") revalidatePath(`/entites/${input.linkId}`);
     return { ok: true as const };
   },
 );
 
-/**
- * Re-run l'auto-linking sur tous les threads. Utile après un import de
- * contacts ou un changement de website d'entité.
- */
-export const rebuildAutoLinks = action(z.object({}), async ({ user }) => {
+// ─── CRUD catégories ──────────────────────────────────────────────────
+
+export const createCategoryTagAction = action(
+  z.object({
+    name: z.string().min(1).max(80),
+    color: z.string().optional(),
+  }),
+  async ({ input, user }) => {
+    const targetUserId = (await getGmailUserId()) ?? user.id;
+    const tag = await createCategoryTag({
+      userId: targetUserId,
+      name: input.name,
+      color: input.color,
+    });
+    revalidatePath("/emails/tags");
+    revalidatePath("/emails");
+    return tag;
+  },
+);
+
+export const renameTagAction = action(
+  z.object({
+    tagId: z.string().uuid(),
+    newName: z.string().min(1).max(80),
+  }),
+  async ({ input, user }) => {
+    const targetUserId = (await getGmailUserId()) ?? user.id;
+    await renameTag({ userId: targetUserId, tagId: input.tagId, newName: input.newName });
+    revalidatePath("/emails/tags");
+    return { ok: true as const };
+  },
+);
+
+export const deleteTagAction = action(
+  z.object({ tagId: z.string().uuid() }),
+  async ({ input, user }) => {
+    const targetUserId = (await getGmailUserId()) ?? user.id;
+    await deleteTag(targetUserId, input.tagId);
+    revalidatePath("/emails/tags");
+    revalidatePath("/emails");
+    return { ok: true as const };
+  },
+);
+
+// ─── Backfill / réindex / purge ───────────────────────────────────────
+
+export const backfillCrmTagsAction = action(z.object({}), async ({ user }) => {
   const targetUserId = (await getGmailUserId()) ?? user.id;
-  const n = await rebuildAllAutoLinks(targetUserId);
-  revalidatePath("/emails");
-  return { rebuilt: n };
+  const stats = await backfillCrmTags(targetUserId);
+  revalidatePath("/emails/tags");
+  revalidatePath("/settings/integrations");
+  return stats;
 });
 
-/**
- * Purge totale des données Gmail locales pour l'admin Gmail (ou le user
- * courant en fallback). Le prochain sync repartira en bootstrap.
- */
+export const rebuildAutoLinks = action(z.object({}), async ({ user }) => {
+  const targetUserId = (await getGmailUserId()) ?? user.id;
+  // Re-tag tous les threads du user via les participants.
+  const conn = await db();
+  const { gmailThreads } = await import("@/db/schema/gmail");
+  const rows = await conn
+    .select({ id: gmailThreads.id })
+    .from(gmailThreads)
+    .where(eq(gmailThreads.userId, targetUserId));
+  for (const r of rows) {
+    try {
+      await autoTagThreadByParticipants(r.id);
+    } catch {
+      // continue
+    }
+  }
+  revalidatePath("/emails");
+  return { rebuilt: rows.length };
+});
+
 export const purgeLocalGmail = action(z.object({}), async ({ user }) => {
   const targetUserId = (await getGmailUserId()) ?? user.id;
   await purgeGmailData(targetUserId);
-  // S'assure que la ligne sync_state est aussi reset.
   const conn = await db();
   await conn.delete(gmailSyncState).where(eq(gmailSyncState.userId, targetUserId));
   revalidatePath("/emails");
   revalidatePath("/settings/integrations");
   return { ok: true as const };
 });
+
+// Alias gardés pour compat avec les composants UI (à supprimer plus tard).
+export { triggerGmailSync as syncGmail };

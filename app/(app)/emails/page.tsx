@@ -6,13 +6,13 @@ import { SearchInputWithClear } from "@/components/ui/search-input";
 import { requireUser } from "@/lib/auth/server";
 import { formatDate } from "@/lib/format";
 import { listThreads } from "@/lib/gmail/queries";
-import { Mail } from "lucide-react";
+import { Mail, Tag } from "lucide-react";
 import Link from "next/link";
 
 type SearchParams = Promise<{
   q?: string | string[];
   filter?: string | string[];
-  project?: string | string[];
+  tag?: string | string[];
 }>;
 
 export default async function EmailsPage({ searchParams }: { searchParams: SearchParams }) {
@@ -20,15 +20,15 @@ export default async function EmailsPage({ searchParams }: { searchParams: Searc
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const filter = typeof params.filter === "string" ? params.filter : "all";
-  const projectId = typeof params.project === "string" ? params.project : undefined;
+  const tagId = typeof params.tag === "string" ? params.tag : undefined;
 
   const threads = await listThreads(
     user.id,
     {
       query: q || undefined,
-      linkedOnly: filter === "linked",
-      unlinkedOnly: filter === "unlinked",
-      projectId,
+      taggedOnly: filter === "tagged",
+      untaggedOnly: filter === "untagged",
+      tagId,
     },
     { limit: 100 },
   );
@@ -37,7 +37,15 @@ export default async function EmailsPage({ searchParams }: { searchParams: Searc
     <div className="space-y-6">
       <PageHeader
         title="Emails"
-        description="Threads Gmail synchronisés, liés aux projets / contacts / entités."
+        description="Threads Gmail synchronisés, tagués automatiquement (contact/entité/projet) et manuellement (catégories)."
+        actions={
+          <Button asChild variant="outline" size="sm" className="gap-1.5">
+            <Link href="/emails/tags">
+              <Tag className="size-3.5" />
+              Gérer les tags
+            </Link>
+          </Button>
+        }
       />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -48,16 +56,16 @@ export default async function EmailsPage({ searchParams }: { searchParams: Searc
             placeholder="Rechercher dans le sujet ou le snippet…"
           />
           {filter !== "all" ? <input type="hidden" name="filter" value={filter} /> : null}
-          {projectId ? <input type="hidden" name="project" value={projectId} /> : null}
+          {tagId ? <input type="hidden" name="tag" value={tagId} /> : null}
         </form>
         <div className="flex items-center gap-1">
-          {(["all", "linked", "unlinked"] as const).map((f) => {
+          {(["all", "tagged", "untagged"] as const).map((f) => {
             const sp = new URLSearchParams();
             if (q) sp.set("q", q);
             if (f !== "all") sp.set("filter", f);
-            if (projectId) sp.set("project", projectId);
+            if (tagId) sp.set("tag", tagId);
             const href = `/emails${sp.toString() ? `?${sp.toString()}` : ""}`;
-            const label = f === "all" ? "Tous" : f === "linked" ? "Liés" : "Non liés";
+            const label = f === "all" ? "Tous" : f === "tagged" ? "Tagués" : "Non tagués";
             return (
               <Button
                 key={f}
@@ -102,7 +110,7 @@ export default async function EmailsPage({ searchParams }: { searchParams: Searc
                     >
                       {t.subject || "(sans objet)"}
                     </p>
-                    <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="flex shrink-0 items-center gap-1.5 text-muted-foreground text-xs">
                       {t.messageCount > 1 ? (
                         <Badge variant="outline" className="text-[10px]">
                           {t.messageCount}

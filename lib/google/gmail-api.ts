@@ -132,6 +132,92 @@ export async function getThread(
   );
 }
 
+/**
+ * Add / remove labels en bulk sur tous les messages d'un thread.
+ * `threads.modify` est plus efficace que d'itérer sur `messages.modify`
+ * (1 call au lieu de N). Quota = 10 units.
+ */
+export async function modifyThreadLabels(
+  accessToken: string,
+  threadId: string,
+  args: { addLabelIds?: string[]; removeLabelIds?: string[] },
+): Promise<GmailThread> {
+  return gmailFetch<GmailThread>(
+    `/users/me/threads/${encodeURIComponent(threadId)}/modify`,
+    accessToken,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        addLabelIds: args.addLabelIds ?? [],
+        removeLabelIds: args.removeLabelIds ?? [],
+      }),
+    },
+  );
+}
+
+// ─── labels.list / labels.create / labels.delete ────────────────────────
+
+export type GmailLabel = {
+  id: string;
+  name: string;
+  /** "system" pour Inbox, Trash etc. ; "user" pour les labels créés par l'utilisateur. */
+  type?: "system" | "user";
+  /** Visibilité dans l'UI Gmail. */
+  messageListVisibility?: "show" | "hide";
+  labelListVisibility?: "labelShow" | "labelShowIfUnread" | "labelHide";
+  color?: { textColor?: string; backgroundColor?: string };
+};
+
+export async function listLabels(accessToken: string): Promise<GmailLabel[]> {
+  const res = await gmailFetch<{ labels?: GmailLabel[] }>("/users/me/labels", accessToken);
+  return res.labels ?? [];
+}
+
+/**
+ * Crée un label Gmail. Pour les labels nichés (`Paradeos/Projet/X`),
+ * Gmail crée auto les parents s'ils n'existent pas. Si le label existe
+ * déjà, retourne le 409 → le caller doit fallback sur listLabels.
+ */
+export async function createLabel(
+  accessToken: string,
+  args: {
+    name: string;
+    color?: { textColor: string; backgroundColor: string };
+    labelListVisibility?: "labelShow" | "labelShowIfUnread" | "labelHide";
+    messageListVisibility?: "show" | "hide";
+  },
+): Promise<GmailLabel> {
+  return gmailFetch<GmailLabel>("/users/me/labels", accessToken, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: args.name,
+      labelListVisibility: args.labelListVisibility ?? "labelShow",
+      messageListVisibility: args.messageListVisibility ?? "show",
+      color: args.color,
+    }),
+  });
+}
+
+export async function deleteLabel(accessToken: string, labelId: string): Promise<void> {
+  await gmailFetch<void>(`/users/me/labels/${encodeURIComponent(labelId)}`, accessToken, {
+    method: "DELETE",
+  });
+}
+
+export async function updateLabel(
+  accessToken: string,
+  labelId: string,
+  args: { name?: string; color?: { textColor: string; backgroundColor: string } },
+): Promise<GmailLabel> {
+  return gmailFetch<GmailLabel>(`/users/me/labels/${encodeURIComponent(labelId)}`, accessToken, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(args),
+  });
+}
+
 // ─── history.list ───────────────────────────────────────────────────────
 
 export type GmailHistoryItem = {

@@ -5,7 +5,6 @@ import {
   index,
   integer,
   jsonb,
-  numeric,
   pgEnum,
   pgTable,
   text,
@@ -22,12 +21,11 @@ export const gmailExtractionStatus = pgEnum("gmail_extraction_status", [
   "failed",
 ]);
 
-export const gmailLinkKind = pgEnum("gmail_link_kind", ["project", "contact", "entity"]);
-
-export const gmailLinkSource = pgEnum("gmail_link_source", [
-  "auto_contact", // sender/recipient = contact CRM
-  "auto_llm", // proposition LLM acceptée
-  "manual",
+export const gmailTagKind = pgEnum("gmail_tag_kind", [
+  "project",
+  "contact",
+  "entity",
+  "category", // tag libre : "Compta", "Annexe", "Admin"…
 ]);
 
 /**
@@ -103,27 +101,64 @@ export const gmailMessages = pgTable(
 );
 
 /**
- * Liens polymorphes thread → sujet CRM. Pas de FK sur `linkId`
- * (polymorphe) — la cohérence est gérée côté app.
+ * Tags Gmail — miroir des labels Gmail. Inclut :
+ *   - `project` / `contact` / `entity` : tags auto-créés à partir des
+ *     records CRM. `targetId` pointe vers le record.
+ *   - `category` : tag libre ("Compta", "Annexe"…). `targetId` est null.
+ *
+ * `gmailLabelId` est rempli au premier sync ou au premier push. Si
+ * null, c'est que le label n'a pas encore été créé côté Gmail.
  */
-export const gmailLinks = pgTable(
-  "gmail_links",
+export const gmailTags = pgTable(
+  "gmail_tags",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: gmailTagKind("kind").notNull(),
+    targetId: uuid("target_id"),
+    labelName: text("label_name").notNull(),
+    gmailLabelId: text("gmail_label_id"),
+    color: text("color"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    targetUnique: uniqueIndex("gmail_tags_target_unique").on(
+      table.userId,
+      table.kind,
+      table.targetId,
+    ),
+    labelNameUnique: uniqueIndex("gmail_tags_label_name_unique").on(table.userId, table.labelName),
+    userKindIdx: index("gmail_tags_user_kind_idx").on(table.userId, table.kind),
+  }),
+);
+
+/**
+ * M2M thread × tag. `source` indique d'où vient l'association :
+ *   - `auto` : Paradeos l'a posé (match contact email à la sync)
+ *   - `gmail` : remonté du label Gmail (l'utilisateur l'a tagué dans Gmail)
+ *   - `manual` : ajouté via UI Paradeos
+ */
+export const gmailThreadTags = pgTable(
+  "gmail_thread_tags",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     threadId: uuid("thread_id")
       .notNull()
       .references(() => gmailThreads.id, { onDelete: "cascade" }),
-    linkKind: gmailLinkKind("link_kind").notNull(),
-    linkId: uuid("link_id").notNull(),
-    source: gmailLinkSource("source").notNull(),
-    confidence: numeric("confidence", { precision: 4, scale: 3 }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => gmailTags.id, { onDelete: "cascade" }),
+    source: text("source").notNull().default("gmail"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
   },
   (table) => ({
-    unique: uniqueIndex("gmail_links_unique").on(table.threadId, table.linkKind, table.linkId),
-    threadIdx: index("gmail_links_thread_idx").on(table.threadId),
-    targetIdx: index("gmail_links_target_idx").on(table.linkKind, table.linkId),
+    unique: uniqueIndex("gmail_thread_tags_unique").on(table.threadId, table.tagId),
+    threadIdx: index("gmail_thread_tags_thread_idx").on(table.threadId),
+    tagIdx: index("gmail_thread_tags_tag_idx").on(table.tagId),
   }),
 );
 
@@ -149,7 +184,9 @@ export type GmailThread = typeof gmailThreads.$inferSelect;
 export type NewGmailThread = typeof gmailThreads.$inferInsert;
 export type GmailMessage = typeof gmailMessages.$inferSelect;
 export type NewGmailMessage = typeof gmailMessages.$inferInsert;
-export type GmailLink = typeof gmailLinks.$inferSelect;
-export type NewGmailLink = typeof gmailLinks.$inferInsert;
+export type GmailTag = typeof gmailTags.$inferSelect;
+export type NewGmailTag = typeof gmailTags.$inferInsert;
+export type GmailThreadTag = typeof gmailThreadTags.$inferSelect;
+export type NewGmailThreadTag = typeof gmailThreadTags.$inferInsert;
 export type GmailSyncState = typeof gmailSyncState.$inferSelect;
 export type NewGmailSyncState = typeof gmailSyncState.$inferInsert;

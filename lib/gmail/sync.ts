@@ -17,7 +17,12 @@ import {
 } from "@/lib/google/gmail-api";
 import { eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { GENERIC_EMAIL_DOMAINS, domainFromEmail, extractDomain } from "./domain";
-import { autoLinkThread } from "./link";
+import {
+  autoTagThreadByParticipants,
+  loadGmailLabelCache,
+  pushThreadTagsToGmail,
+  syncThreadLabelsFromGmail,
+} from "./tags";
 
 const BOOTSTRAP_QUERY = "newer_than:90d";
 const MAX_MESSAGES_PER_RUN = 50;
@@ -403,12 +408,57 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
     }
   }
 
-  // ─── 4. Auto-link les threads touchés ─────────────────────────────
+  // ─── 4. Auto-tag les threads touchés ─────────────────────────────
+  // (a) Auto-tag par participants : pose les tags project/contact/entity
+  //     côté Paradeos (idempotent).
+  // (b) Sync labels Gmail → thread_tags : lit les labels Gmail du thread,
+  //     insère un thread_tag pour chaque label Paradeos/ déjà connu.
+  let labelCache: Awaited<ReturnType<typeof loadGmailLabelCache>> | null = null;
   for (const tid of touchedThreads) {
     try {
-      await autoLinkThread(tid);
+      await autoTagThreadByParticipants(tid);
     } catch (err) {
-      result.errors.push(`autolink ${tid}: ${err instanceof Error ? err.message : String(err)}`);
+      result.errors.push(`autotag ${tid}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    // Pour la sync labels Gmail, on a besoin du cache labels.list (1 call
+    // par run, partagé). On le construit lazy.
+    if (!labelCache) {
+      try {
+        labelCache = await loadGmailLabelCache(accessToken);
+      } catch (err) {
+        result.errors.push(`labels cache: ${err instanceof Error ? err.message : String(err)}`);
+        labelCache = new Map();
+      }
+    }
+    try {
+      // Récupère tous les label_ids des messages du thread (déjà stockés
+      // dans gmail_messages.labels par l'upsert ci-dessus).
+      const msgs = await conn
+        .select({ labels: gmailMessages.labels })
+        .from(gmailMessages)
+        .where(eq(gmailMessages.threadId, tid));
+      const allLabelIds = new Set<string>();
+      for (const m of msgs) for (const l of m.labels ?? []) allLabelIds.add(l);
+      await syncThreadLabelsFromGmail({
+        userId,
+        threadIdLocal: tid,
+        gmailLabelIds: [...allLabelIds],
+        cache: labelCache,
+      });
+    } catch (err) {
+      result.errors.push(`sync labels ${tid}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    // Push les tags auto vers Gmail pour qu'ils soient visibles côté
+    // Gmail UI (objectif : "rapprochement direct dans Gmail").
+    try {
+      await pushThreadTagsToGmail({
+        userId,
+        threadIdLocal: tid,
+        cache: labelCache,
+        accessToken,
+      });
+    } catch (err) {
+      result.errors.push(`push tags ${tid}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

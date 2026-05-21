@@ -1,69 +1,34 @@
 import { Breadcrumbs } from "@/components/breadcrumbs";
-import { LinkPicker } from "@/components/emails/link-picker";
+import { TagChip } from "@/components/emails/tag-chip";
+import { TagPicker } from "@/components/emails/tag-picker";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
-import { contacts as contactsTable } from "@/db/schema/contacts";
-import { entities as entitiesTable } from "@/db/schema/entities";
-import { projects as projectsTable } from "@/db/schema/projects";
 import { requireUser } from "@/lib/auth/server";
-import { db } from "@/lib/db/server";
 import { formatDate } from "@/lib/format";
-import { getThreadDetail } from "@/lib/gmail/queries";
-import { asc } from "drizzle-orm";
+import { getThreadDetail, listAllTags } from "@/lib/gmail/queries";
 import { ExternalLink } from "lucide-react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 type Params = Promise<{ threadId: string }>;
 
-const SOURCE_LABEL: Record<string, string> = {
-  auto_contact: "Auto · contact",
-  auto_llm: "Auto · LLM",
-  manual: "Manuel",
-};
-
-const LINK_KIND_LABEL: Record<string, string> = {
-  project: "Projet",
-  contact: "Contact",
-  entity: "Entité",
-};
-
-function linkKindHref(linkKind: "project" | "contact" | "entity", id: string): string {
-  if (linkKind === "project") return `/projets/${id}`;
-  if (linkKind === "contact") return `/contacts/${id}`;
-  return `/entites/${id}`;
+function targetHrefFor(
+  kind: "project" | "contact" | "entity" | "category",
+  targetId: string | null,
+): string | null {
+  if (!targetId) return null;
+  if (kind === "project") return `/projets/${targetId}`;
+  if (kind === "contact") return `/contacts/${targetId}`;
+  if (kind === "entity") return `/entites/${targetId}`;
+  return null;
 }
 
 export default async function ThreadDetailPage({ params }: { params: Params }) {
   const { threadId } = await params;
-  await requireUser();
+  const user = await requireUser();
   const detail = await getThreadDetail(threadId);
   if (!detail) notFound();
 
-  // Options pour le picker. Limité à ~200 pour l'autocomplete.
-  const conn = await db();
-  const [projectOpts, contactOpts, entityOpts] = await Promise.all([
-    conn
-      .select({ id: projectsTable.id, name: projectsTable.name })
-      .from(projectsTable)
-      .orderBy(asc(projectsTable.name))
-      .limit(500),
-    conn
-      .select({
-        id: contactsTable.id,
-        firstName: contactsTable.firstName,
-        lastName: contactsTable.lastName,
-        email: contactsTable.email,
-      })
-      .from(contactsTable)
-      .orderBy(asc(contactsTable.lastName), asc(contactsTable.firstName))
-      .limit(500),
-    conn
-      .select({ id: entitiesTable.id, name: entitiesTable.name })
-      .from(entitiesTable)
-      .orderBy(asc(entitiesTable.name))
-      .limit(500),
-  ]);
+  const allTags = await listAllTags(user.id);
 
   return (
     <div className="space-y-6">
@@ -131,14 +96,11 @@ export default async function ThreadDetailPage({ params }: { params: Params }) {
               </header>
 
               {m.bodyText ? (
-                <pre className="whitespace-pre-wrap break-words text-sm text-foreground/90">
+                <pre className="whitespace-pre-wrap break-words text-foreground/90 text-sm">
                   {m.bodyText}
                 </pre>
               ) : m.bodyHtml ? (
                 <iframe
-                  // body_html déjà fourni par Gmail — sandbox empêche le JS
-                  // et la nav. On l'affiche tel quel, c'est ce que voit
-                  // l'utilisateur dans Gmail.
                   title={`Message ${m.gmailMessageId}`}
                   sandbox=""
                   srcDoc={m.bodyHtml}
@@ -154,42 +116,35 @@ export default async function ThreadDetailPage({ params }: { params: Params }) {
           ))}
         </section>
 
-        {/* Side panel : liens */}
+        {/* Side panel : tags */}
         <aside className="space-y-3">
           <section className="space-y-2 rounded-md border bg-card p-4">
-            <h3 className="font-medium text-sm">Liens</h3>
-            {detail.links.length === 0 ? (
-              <p className="text-muted-foreground text-xs italic">Aucun lien.</p>
+            <h3 className="font-medium text-sm">Tags</h3>
+            {detail.tags.length === 0 ? (
+              <p className="text-muted-foreground text-xs italic">Aucun tag.</p>
             ) : (
-              <ul className="space-y-1.5">
-                {detail.links.map((l) => (
-                  <li key={l.id} className="flex items-center justify-between gap-2 text-xs">
-                    <Link
-                      href={linkKindHref(l.linkKind, l.linkId)}
-                      className="min-w-0 flex-1 truncate hover:underline"
-                    >
-                      <span className="text-muted-foreground">{LINK_KIND_LABEL[l.linkKind]} ·</span>{" "}
-                      {l.label ?? l.linkId.slice(0, 8)}
-                    </Link>
-                    <Badge variant="outline" className="shrink-0 text-[10px]">
-                      {SOURCE_LABEL[l.source] ?? l.source}
-                    </Badge>
-                  </li>
+              <div className="flex flex-wrap gap-1.5">
+                {detail.tags.map((t) => (
+                  <TagChip
+                    key={t.threadTagId}
+                    threadId={threadId}
+                    tagId={t.tagId}
+                    kind={t.kind}
+                    labelName={t.labelName}
+                    source={t.source}
+                    targetHref={targetHrefFor(t.kind, t.targetId)}
+                  />
                 ))}
-              </ul>
+              </div>
             )}
-            <LinkPicker
+            <TagPicker
               threadId={threadId}
-              existingLinks={detail.links.map((l) => ({
-                linkKind: l.linkKind,
-                linkId: l.linkId,
+              allTags={allTags.map((t) => ({
+                id: t.id,
+                kind: t.kind,
+                labelName: t.labelName,
               }))}
-              projects={projectOpts}
-              contacts={contactOpts.map((c) => ({
-                id: c.id,
-                label: `${c.firstName} ${c.lastName}${c.email ? ` · ${c.email}` : ""}`,
-              }))}
-              entities={entityOpts}
+              appliedTagIds={detail.tags.map((t) => t.tagId)}
             />
           </section>
 

@@ -1,11 +1,8 @@
 import "server-only";
 
-import { contacts } from "@/db/schema/contacts";
-import { entities } from "@/db/schema/entities";
-import { gmailLinks, gmailMessages, gmailThreads } from "@/db/schema/gmail";
-import { projects } from "@/db/schema/projects";
+import { gmailMessages, gmailTags, gmailThreadTags, gmailThreads } from "@/db/schema/gmail";
 import { db } from "@/lib/db/server";
-import { type SQL, and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { type SQL, and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 
 export type GmailThreadRow = {
   id: string;
@@ -18,7 +15,10 @@ export type GmailThreadRow = {
   participants: unknown;
 };
 
-/** Threads liés à un sujet (projet/contact/entité). */
+/**
+ * Threads tagués avec un tag dont kind=`linkKind` et target_id=linkId
+ * (équivalent de l'ancien `listThreadsForSubject` via gmail_links).
+ */
 export async function listThreadsForSubject(
   linkKind: "project" | "contact" | "entity",
   linkId: string,
@@ -37,8 +37,9 @@ export async function listThreadsForSubject(
       participants: gmailThreads.participants,
     })
     .from(gmailThreads)
-    .innerJoin(gmailLinks, eq(gmailLinks.threadId, gmailThreads.id))
-    .where(and(eq(gmailLinks.linkKind, linkKind), eq(gmailLinks.linkId, linkId)))
+    .innerJoin(gmailThreadTags, eq(gmailThreadTags.threadId, gmailThreads.id))
+    .innerJoin(gmailTags, eq(gmailTags.id, gmailThreadTags.tagId))
+    .where(and(eq(gmailTags.kind, linkKind), eq(gmailTags.targetId, linkId)))
     .orderBy(desc(gmailThreads.lastMessageAt))
     .limit(opts.limit ?? 20)
     .offset(opts.offset ?? 0);
@@ -46,12 +47,12 @@ export async function listThreadsForSubject(
 
 export type GmailThreadFilters = {
   query?: string;
-  linkedOnly?: boolean;
-  unlinkedOnly?: boolean;
-  projectId?: string;
+  taggedOnly?: boolean;
+  untaggedOnly?: boolean;
+  tagId?: string;
 };
 
-/** Timeline globale avec filtres (recherche + lié/non-lié). */
+/** Timeline globale avec filtres. */
 export async function listThreads(
   userId: string,
   filters: GmailThreadFilters = {},
@@ -65,22 +66,21 @@ export async function listThreads(
     const orCond = or(ilike(gmailThreads.subject, pattern), ilike(gmailThreads.snippet, pattern));
     if (orCond) conditions.push(orCond);
   }
-  if (filters.linkedOnly) {
+  if (filters.taggedOnly) {
     conditions.push(
-      sql`exists (select 1 from public.gmail_links where thread_id = ${gmailThreads.id})`,
+      sql`exists (select 1 from public.gmail_thread_tags where thread_id = ${gmailThreads.id})`,
     );
   }
-  if (filters.unlinkedOnly) {
+  if (filters.untaggedOnly) {
     conditions.push(
-      sql`not exists (select 1 from public.gmail_links where thread_id = ${gmailThreads.id})`,
+      sql`not exists (select 1 from public.gmail_thread_tags where thread_id = ${gmailThreads.id})`,
     );
   }
-  if (filters.projectId) {
+  if (filters.tagId) {
     conditions.push(
-      sql`exists (select 1 from public.gmail_links
+      sql`exists (select 1 from public.gmail_thread_tags
                   where thread_id = ${gmailThreads.id}
-                  and link_kind = 'project'
-                  and link_id = ${filters.projectId})`,
+                  and tag_id = ${filters.tagId})`,
     );
   }
 
@@ -101,6 +101,16 @@ export async function listThreads(
     .limit(opts.limit ?? 50)
     .offset(opts.offset ?? 0);
 }
+
+export type ThreadTagRow = {
+  threadTagId: string;
+  tagId: string;
+  kind: "project" | "contact" | "entity" | "category";
+  targetId: string | null;
+  labelName: string;
+  source: string;
+  color: string | null;
+};
 
 export type ThreadDetail = {
   thread: {
@@ -126,17 +136,9 @@ export type ThreadDetail = {
     isDraft: boolean;
     extractionStatus: string;
   }>;
-  links: Array<{
-    id: string;
-    linkKind: "project" | "contact" | "entity";
-    linkId: string;
-    source: string;
-    confidence: string | null;
-    label: string | null;
-  }>;
+  tags: ThreadTagRow[];
 };
 
-/** Détail d'un thread : messages chronologiques + liens résolus. */
 export async function getThreadDetail(threadIdLocal: string): Promise<ThreadDetail | null> {
   const conn = await db();
   const [threadRow] = await conn
@@ -146,45 +148,27 @@ export async function getThreadDetail(threadIdLocal: string): Promise<ThreadDeta
     .limit(1);
   if (!threadRow) return null;
 
-  const [messageRows, linkRows] = await Promise.all([
+  const [messageRows, tagRows] = await Promise.all([
     conn
       .select()
       .from(gmailMessages)
       .where(eq(gmailMessages.threadId, threadIdLocal))
       .orderBy(gmailMessages.internalDate),
-    conn.select().from(gmailLinks).where(eq(gmailLinks.threadId, threadIdLocal)),
+    conn
+      .select({
+        threadTagId: gmailThreadTags.id,
+        tagId: gmailTags.id,
+        kind: gmailTags.kind,
+        targetId: gmailTags.targetId,
+        labelName: gmailTags.labelName,
+        source: gmailThreadTags.source,
+        color: gmailTags.color,
+      })
+      .from(gmailThreadTags)
+      .innerJoin(gmailTags, eq(gmailTags.id, gmailThreadTags.tagId))
+      .where(eq(gmailThreadTags.threadId, threadIdLocal))
+      .orderBy(asc(gmailTags.kind), asc(gmailTags.labelName)),
   ]);
-
-  // Résout les labels (nom du projet/contact/entité) pour l'affichage.
-  const projectIds = linkRows.filter((l) => l.linkKind === "project").map((l) => l.linkId);
-  const contactIds = linkRows.filter((l) => l.linkKind === "contact").map((l) => l.linkId);
-  const entityIds = linkRows.filter((l) => l.linkKind === "entity").map((l) => l.linkId);
-
-  const [projectLabels, contactLabels, entityLabels] = await Promise.all([
-    projectIds.length
-      ? conn
-          .select({ id: projects.id, name: projects.name })
-          .from(projects)
-          .where(inArray(projects.id, projectIds))
-      : Promise.resolve([]),
-    contactIds.length
-      ? conn
-          .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
-          .from(contacts)
-          .where(inArray(contacts.id, contactIds))
-      : Promise.resolve([]),
-    entityIds.length
-      ? conn
-          .select({ id: entities.id, name: entities.name })
-          .from(entities)
-          .where(inArray(entities.id, entityIds))
-      : Promise.resolve([]),
-  ]);
-
-  const labelMap = new Map<string, string>();
-  for (const p of projectLabels) labelMap.set(`project:${p.id}`, p.name);
-  for (const c of contactLabels) labelMap.set(`contact:${c.id}`, `${c.firstName} ${c.lastName}`);
-  for (const e of entityLabels) labelMap.set(`entity:${e.id}`, e.name);
 
   return {
     thread: {
@@ -210,18 +194,49 @@ export async function getThreadDetail(threadIdLocal: string): Promise<ThreadDeta
       isDraft: m.isDraft,
       extractionStatus: m.extractionStatus,
     })),
-    links: linkRows.map((l) => ({
-      id: l.id,
-      linkKind: l.linkKind,
-      linkId: l.linkId,
-      source: l.source,
-      confidence: l.confidence,
-      label: labelMap.get(`${l.linkKind}:${l.linkId}`) ?? null,
-    })),
+    tags: tagRows,
   };
 }
 
-/** Compte les threads liés à un sujet (pour le badge sur les tabs). */
+/** Liste tous les tags d'un user (pour le picker + page tags). */
+export async function listAllTags(
+  userId: string,
+  kind?: "project" | "contact" | "entity" | "category",
+): Promise<
+  Array<{
+    id: string;
+    kind: "project" | "contact" | "entity" | "category";
+    targetId: string | null;
+    labelName: string;
+    gmailLabelId: string | null;
+    color: string | null;
+    threadCount: number;
+  }>
+> {
+  const conn = await db();
+  const conditions: SQL[] = [eq(gmailTags.userId, userId)];
+  if (kind) conditions.push(eq(gmailTags.kind, kind));
+
+  const rows = await conn
+    .select({
+      id: gmailTags.id,
+      kind: gmailTags.kind,
+      targetId: gmailTags.targetId,
+      labelName: gmailTags.labelName,
+      gmailLabelId: gmailTags.gmailLabelId,
+      color: gmailTags.color,
+      threadCount: sql<number>`(
+        select count(*)::int from public.gmail_thread_tags
+        where tag_id = ${gmailTags.id}
+      )`,
+    })
+    .from(gmailTags)
+    .where(and(...conditions))
+    .orderBy(asc(gmailTags.kind), asc(gmailTags.labelName));
+
+  return rows;
+}
+
 export async function countThreadsForSubject(
   linkKind: "project" | "contact" | "entity",
   linkId: string,
@@ -229,7 +244,8 @@ export async function countThreadsForSubject(
   const conn = await db();
   const [row] = await conn
     .select({ n: sql<number>`count(*)::int` })
-    .from(gmailLinks)
-    .where(and(eq(gmailLinks.linkKind, linkKind), eq(gmailLinks.linkId, linkId)));
+    .from(gmailThreadTags)
+    .innerJoin(gmailTags, eq(gmailTags.id, gmailThreadTags.tagId))
+    .where(and(eq(gmailTags.kind, linkKind), eq(gmailTags.targetId, linkId)));
   return row?.n ?? 0;
 }
