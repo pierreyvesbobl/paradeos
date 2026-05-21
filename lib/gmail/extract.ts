@@ -89,15 +89,15 @@ function buildSystemPrompt(args: { existingCategories: string[] }): string {
 Règles :
 - Reste factuel. Pas de paraphrase, pas d'extrapolation.
 - Si un champ n'est pas explicite, retourne null (ou tableau vide pour les listes).
-- Pour proposedCategoryTags : reste minimaliste. 0 à 2 catégories max. PRÉFÉRER une catégorie de la liste existante si elle correspond. Ne propose une nouvelle catégorie que si le sujet est vraiment hors de tout ce qui existe.
+- Pour proposedCategoryTags : reste minimaliste. 0 à 2 catégories max. UNIQUEMENT depuis la liste des catégories existantes ci-dessous. **NE JAMAIS** proposer une catégorie qui n'est pas dans la liste — si aucune ne correspond, retourne un tableau vide. La taxonomie est gérée par l'utilisateur, pas par toi.
 - Pour proposedTasks : uniquement les ACTIONS EXPLICITES ("merci de m'envoyer", "peux-tu vérifier", "il faut faire X"). Pas de tâches déduites/imaginées.
 - dueDate au format YYYY-MM-DD si une date concrète est mentionnée.
 - sensitiveDetected = true si tu repères des mots de passe, clés API, numéros bancaires, etc.
 
 ${
   args.existingCategories.length > 0
-    ? `Catégories existantes (à privilégier si pertinent) :\n${args.existingCategories.map((c) => `- ${c}`).join("\n")}`
-    : "Aucune catégorie existante encore."
+    ? `Catégories existantes (UNIQUEMENT celles-ci, jamais en inventer) :\n${args.existingCategories.map((c) => `- ${c}`).join("\n")}`
+    : "Aucune catégorie existante. Retourne donc proposedCategoryTags = []."
 }`;
 }
 

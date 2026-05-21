@@ -6,7 +6,7 @@ import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
-import { applyTagToThread, createCategoryTag } from "@/lib/gmail/tags";
+import { applyTagToThread } from "@/lib/gmail/tags";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -79,14 +79,14 @@ export const acceptEmailProposal = action(
         .returning({ id: tasks.id });
       createdEntityId = inserted?.id ?? null;
     } else if (proposal.kind === "category_tag") {
-      const name = String(payload.name ?? "").trim();
-      if (!name) throw new Error("Nom de catégorie vide.");
-      let tagId = proposal.matchedId;
+      // matchedId est toujours set (cf. extract-and-save : on n'accepte
+      // pas de catégorie non-existante). Garde-fou si une vieille
+      // proposition pré-changement traîne.
+      const tagId = proposal.matchedId;
       if (!tagId) {
-        // Crée la catégorie si elle n'existe pas encore (proposition LLM
-        // d'une nouvelle catégorie).
-        const tag = await createCategoryTag({ userId: targetUserId, name });
-        tagId = tag.id;
+        throw new Error(
+          "Catégorie introuvable. Crée-la d'abord depuis /emails/tags avant de l'appliquer.",
+        );
       }
       await applyTagToThread({
         userId: targetUserId,

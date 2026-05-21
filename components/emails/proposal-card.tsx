@@ -167,7 +167,7 @@ function describeProposal(p: Proposal): string {
   }
   if (p.kind === "category_tag") {
     const name = String(p.payload.name ?? "");
-    return p.matchedTagLabel ? (p.matchedTagLabel.split("/").pop() ?? name) : `Créer « ${name} »`;
+    return p.matchedTagLabel ? (p.matchedTagLabel.split("/").pop() ?? name) : name;
   }
   // project_link
   return p.matchedProjectName ?? String(p.payload.projectName ?? "Projet");
@@ -184,9 +184,7 @@ function describeDetails(p: Proposal): string {
     return parts.join(" · ") || "—";
   }
   if (p.kind === "category_tag") {
-    return p.matchedTagLabel
-      ? "Catégorie existante — sera appliquée au thread."
-      : "Nouvelle catégorie — sera créée + appliquée.";
+    return "Catégorie existante — sera appliquée au thread.";
   }
   return p.matchedProjectName
     ? "Lie le thread à ce projet (label Gmail ajouté)."

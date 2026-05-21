@@ -111,12 +111,14 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     });
   }
 
-  // 2. Catégories proposées
+  // 2. Catégories proposées — UNIQUEMENT si elles existent déjà en base.
+  // Le LLM est consigné de ne proposer que des catégories existantes
+  // (cf. prompt), mais en défense en profondeur on filtre ici aussi :
+  // pas de nouvelle catégorie créée par le LLM, jamais. La taxonomie
+  // reste 100% gérée par l'utilisateur depuis /emails/tags.
   for (const cat of result.proposedCategoryTags) {
     const name = cat.trim();
     if (!name) continue;
-    // Cherche un tag catégorie existant avec ce nom (suffix après le
-    // dernier "/").
     const [existing] = await conn
       .select({ id: gmailTags.id })
       .from(gmailTags)
@@ -128,12 +130,13 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
         ),
       )
       .limit(1);
+    if (!existing) continue;
     rows.push({
       messageId,
       kind: "category_tag",
-      payload: { name, isNew: !existing },
-      matchedId: existing?.id ?? null,
-      matchConfidence: existing ? "1.000" : null,
+      payload: { name },
+      matchedId: existing.id,
+      matchConfidence: "1.000",
     });
   }
 
