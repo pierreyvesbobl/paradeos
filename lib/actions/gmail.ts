@@ -42,6 +42,7 @@ export const triggerGmailSync = action(z.object({}), async ({ user }) => {
     mode: result.mode,
     inserted: result.inserted,
     bodiesFetched: result.bodiesFetched,
+    skippedNotFound: result.skippedNotFound,
     hasMore: result.hasMore,
     errors: result.errors,
   };

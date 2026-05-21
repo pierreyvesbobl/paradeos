@@ -32,6 +32,9 @@ export type GmailSyncResult = {
   inserted: number;
   updated: number;
   bodiesFetched: number;
+  /** 404 Gmail = messages disparus entre list et get. Compté à part
+   *  pour ne pas polluer `errors[]` avec un cas attendu. */
+  skippedNotFound: number;
   errors: string[];
   newHistoryId: number | null;
   hasMore: boolean;
@@ -239,6 +242,7 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
     inserted: 0,
     updated: 0,
     bodiesFetched: 0,
+    skippedNotFound: 0,
     errors: [],
     newHistoryId: null,
     hasMore: false,
@@ -387,6 +391,14 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
       await sleep(SLEEP_MS_BETWEEN_CALLS);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      // 404 Gmail = message disparu entre listMessages et getMessage
+      // (spam auto-purgé, suppression manuelle, archivage par filtre).
+      // Attendu en pratique → skip silencieusement, on l'a marqué
+      // "vu" via le track historyId du loop.
+      if (msg.includes("Gmail API 404")) {
+        result.skippedNotFound++;
+        continue;
+      }
       result.errors.push(`message ${m.id}: ${msg}`);
     }
   }

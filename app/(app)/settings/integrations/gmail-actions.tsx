@@ -20,11 +20,12 @@ export function GmailActions() {
         toast.error(res.message);
         return;
       }
-      const { mode, inserted, bodiesFetched, hasMore, errors } = res.data;
+      const { mode, inserted, bodiesFetched, skippedNotFound, hasMore, errors } = res.data;
       const errSuffix = errors.length ? ` · ${errors.length} erreur(s)` : "";
       const tailSuffix = hasMore ? " · à continuer" : "";
+      const skippedSuffix = skippedNotFound > 0 ? ` · ${skippedNotFound} dispar(s)` : "";
       toast.success(
-        `Sync ${mode} : ${inserted} nouveau(x), ${bodiesFetched} body(s) téléchargé(s)${tailSuffix}${errSuffix}.`,
+        `Sync ${mode} : ${inserted} nouveau(x), ${bodiesFetched} body(s)${skippedSuffix}${tailSuffix}${errSuffix}.`,
       );
       router.refresh();
     });
