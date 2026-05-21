@@ -1,10 +1,12 @@
-import { gmailSyncState, gmailThreads } from "@/db/schema/gmail";
+import { emailProposals, gmailMessages, gmailSyncState, gmailThreads } from "@/db/schema/gmail";
 import { db } from "@/lib/db/server";
 import { formatDate } from "@/lib/format";
 import { getGoogleAccount } from "@/lib/google/account";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
-import { eq, sql } from "drizzle-orm";
+import { SETTING_KEYS, getSetting } from "@/lib/settings";
+import { and, eq, sql } from "drizzle-orm";
 import { GmailActions } from "./gmail-actions";
+import { GmailExtractionToggle } from "./gmail-extraction-toggle";
 
 /**
  * Section UI pour Gmail. Réutilise le même flow OAuth que Drive/Calendar
@@ -29,19 +31,37 @@ export async function GmailSection({ userId }: { userId: string }) {
   let lastSync: Date | null = null;
   let bootstrapPending = false;
   let lastError: string | null = null;
+  let pendingProposals = 0;
+  let extractedMessages = 0;
+  let extractionEnabled = true;
   if (account && scopesOk) {
     const conn = await db();
-    const [count, state] = await Promise.all([
+    const [count, state, propCount, extCount, extEnabledSetting] = await Promise.all([
       conn
         .select({ n: sql<number>`count(*)::int` })
         .from(gmailThreads)
         .where(eq(gmailThreads.userId, userId)),
       conn.select().from(gmailSyncState).where(eq(gmailSyncState.userId, userId)).limit(1),
+      conn
+        .select({ n: sql<number>`count(*)::int` })
+        .from(emailProposals)
+        .innerJoin(gmailMessages, eq(gmailMessages.id, emailProposals.messageId))
+        .where(and(eq(gmailMessages.userId, userId), eq(emailProposals.status, "pending"))),
+      conn
+        .select({ n: sql<number>`count(*)::int` })
+        .from(gmailMessages)
+        .where(
+          and(eq(gmailMessages.userId, userId), eq(gmailMessages.extractionStatus, "pending")),
+        ),
+      getSetting(SETTING_KEYS.GMAIL_EXTRACTION_ENABLED),
     ]);
     threadCount = count[0]?.n ?? 0;
     lastSync = state[0]?.lastIncrementalAt ?? null;
     bootstrapPending = Boolean(state[0]?.bootstrapCursor);
     lastError = state[0]?.lastError ?? null;
+    pendingProposals = propCount[0]?.n ?? 0;
+    extractedMessages = extCount[0]?.n ?? 0;
+    extractionEnabled = extEnabledSetting !== "false";
   }
 
   return (
@@ -122,6 +142,33 @@ export async function GmailSection({ userId }: { userId: string }) {
             </p>
           ) : null}
           <GmailActions />
+
+          {/* Extraction LLM (Phase 2) */}
+          <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-medium text-xs">Extraction LLM des emails</h3>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  À chaque sync, les emails matchés CRM sont analysés (10 max par run) et le LLM
+                  propose tâches / catégories / liens projet. Coût indicatif : ~0,01-0,05€ par email
+                  selon le modèle.
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {pendingProposals > 0 ? (
+                    <a className="font-medium underline" href="/emails/propositions">
+                      {pendingProposals} proposition(s) en attente
+                    </a>
+                  ) : (
+                    "Aucune proposition en attente."
+                  )}
+                  {extractedMessages > 0
+                    ? ` · ${extractedMessages} message(s) en file d'extraction.`
+                    : ""}
+                </p>
+              </div>
+              <GmailExtractionToggle enabled={extractionEnabled} />
+            </div>
+          </div>
         </div>
       )}
     </section>

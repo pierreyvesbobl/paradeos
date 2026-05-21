@@ -15,8 +15,10 @@ import {
   listMessages,
   parseAddressList,
 } from "@/lib/google/gmail-api";
-import { eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { SETTING_KEYS, getSetting } from "@/lib/settings";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { GENERIC_EMAIL_DOMAINS, domainFromEmail, extractDomain } from "./domain";
+import { extractAndSaveEmailProposals } from "./extract-and-save";
 import {
   autoTagThreadByParticipants,
   loadGmailLabelCache,
@@ -27,6 +29,12 @@ import {
 const BOOTSTRAP_QUERY = "newer_than:90d";
 const MAX_MESSAGES_PER_RUN = 50;
 const SLEEP_MS_BETWEEN_CALLS = 100;
+/**
+ * Cap LLM extractions par run pour borner le temps (chaque extraction
+ * ~2-3s) et le coût. Les messages restant en `pending` seront repris
+ * au prochain sync.
+ */
+const MAX_EXTRACTIONS_PER_RUN = 10;
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -40,6 +48,12 @@ export type GmailSyncResult = {
   /** 404 Gmail = messages disparus entre list et get. Compté à part
    *  pour ne pas polluer `errors[]` avec un cas attendu. */
   skippedNotFound: number;
+  /** Extractions LLM réussies sur ce run. */
+  extractionsDone: number;
+  /** Extractions skip (pas de body, sensitive detected, désactivé…). */
+  extractionsSkipped: number;
+  /** Total des propositions créées (toutes extractions confondues). */
+  proposalsCreated: number;
   errors: string[];
   newHistoryId: number | null;
   hasMore: boolean;
@@ -248,6 +262,9 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
     updated: 0,
     bodiesFetched: 0,
     skippedNotFound: 0,
+    extractionsDone: 0,
+    extractionsSkipped: 0,
+    proposalsCreated: 0,
     errors: [],
     newHistoryId: null,
     hasMore: false,
@@ -459,6 +476,33 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
       });
     } catch (err) {
       result.errors.push(`push tags ${tid}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // ─── 4bis. Extraction LLM des messages en `pending` ────────────────
+  // On limite à MAX_EXTRACTIONS_PER_RUN pour borner le coût et le temps
+  // de sync. Les messages non-traités cette fois seront repris au sync
+  // suivant (extraction_status='pending' reste indexé).
+  const extractionEnabled = (await getSetting(SETTING_KEYS.GMAIL_EXTRACTION_ENABLED)) !== "false";
+  if (extractionEnabled) {
+    const pendingMessages = await conn
+      .select({ id: gmailMessages.id })
+      .from(gmailMessages)
+      .where(and(eq(gmailMessages.userId, userId), eq(gmailMessages.extractionStatus, "pending")))
+      .limit(MAX_EXTRACTIONS_PER_RUN);
+    for (const pm of pendingMessages) {
+      try {
+        const r = await extractAndSaveEmailProposals(pm.id);
+        if (r.skipped) {
+          result.extractionsSkipped++;
+        } else {
+          result.extractionsDone++;
+          result.proposalsCreated += r.count;
+        }
+        await sleep(SLEEP_MS_BETWEEN_CALLS);
+      } catch (err) {
+        result.errors.push(`extract ${pm.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
 

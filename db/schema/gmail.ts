@@ -5,6 +5,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   text,
@@ -179,6 +180,45 @@ export const gmailSyncState = pgTable("gmail_sync_state", {
   lastError: text("last_error"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
+
+// ─── Phase 2 : propositions LLM extraites des emails matchés ─────────
+
+export const emailProposalKind = pgEnum("email_proposal_kind", [
+  "task",
+  "category_tag",
+  "project_link",
+]);
+
+export const emailProposalStatus = pgEnum("email_proposal_status", [
+  "pending",
+  "accepted",
+  "rejected",
+]);
+
+export const emailProposals = pgTable(
+  "email_proposals",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => gmailMessages.id, { onDelete: "cascade" }),
+    kind: emailProposalKind("kind").notNull(),
+    payload: jsonb("payload").notNull(),
+    matchedId: uuid("matched_id"),
+    matchConfidence: numeric("match_confidence", { precision: 4, scale: 3 }),
+    status: emailProposalStatus("status").notNull().default("pending"),
+    createdEntityId: uuid("created_entity_id"),
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    messageIdx: index("email_proposals_message_idx").on(table.messageId),
+  }),
+);
+
+export type EmailProposal = typeof emailProposals.$inferSelect;
+export type NewEmailProposal = typeof emailProposals.$inferInsert;
 
 export type GmailThread = typeof gmailThreads.$inferSelect;
 export type NewGmailThread = typeof gmailThreads.$inferInsert;

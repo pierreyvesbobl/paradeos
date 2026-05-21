@@ -16,6 +16,7 @@ import {
   renameTag,
 } from "@/lib/gmail/tags";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
+import { SETTING_KEYS, setSetting } from "@/lib/settings";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -171,6 +172,20 @@ export const purgeLocalGmail = action(z.object({}), async ({ user }) => {
   revalidatePath("/settings/integrations");
   return { ok: true as const };
 });
+
+/** Toggle l'extraction LLM des emails (kill switch coût). */
+export const setGmailExtractionEnabled = action(
+  z.object({ enabled: z.boolean() }),
+  async ({ input, user }) => {
+    await setSetting(
+      SETTING_KEYS.GMAIL_EXTRACTION_ENABLED,
+      input.enabled ? "true" : "false",
+      user.id,
+    );
+    revalidatePath("/settings/integrations");
+    return { ok: true as const, enabled: input.enabled };
+  },
+);
 
 // Alias gardés pour compat avec les composants UI (à supprimer plus tard).
 export { triggerGmailSync as syncGmail };

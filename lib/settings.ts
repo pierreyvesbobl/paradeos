@@ -25,6 +25,12 @@ export const SETTING_KEYS = {
    * (Google Docs ou texte) → meeting + extraction LLM auto.
    */
   MEETINGS_DRIVE_FOLDER_ID: "MEETINGS_DRIVE_FOLDER_ID",
+  /**
+   * Kill switch coût : si "false", l'extraction LLM des emails est
+   * désactivée (le sync continue mais ne traite pas les pending).
+   * Default : enabled. À mettre à "false" si le coût LLM explose.
+   */
+  GMAIL_EXTRACTION_ENABLED: "GMAIL_EXTRACTION_ENABLED",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

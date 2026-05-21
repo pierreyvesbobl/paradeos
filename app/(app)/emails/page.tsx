@@ -6,7 +6,7 @@ import { SearchInputWithClear } from "@/components/ui/search-input";
 import { requireUser } from "@/lib/auth/server";
 import { formatDate } from "@/lib/format";
 import { listThreads } from "@/lib/gmail/queries";
-import { Mail, Tag } from "lucide-react";
+import { Inbox, Mail, Tag } from "lucide-react";
 import Link from "next/link";
 
 type SearchParams = Promise<{
@@ -39,12 +39,20 @@ export default async function EmailsPage({ searchParams }: { searchParams: Searc
         title="Emails"
         description="Threads Gmail synchronisés, tagués automatiquement (contact/entité/projet) et manuellement (catégories)."
         actions={
-          <Button asChild variant="outline" size="sm" className="gap-1.5">
-            <Link href="/emails/tags">
-              <Tag className="size-3.5" />
-              Gérer les tags
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link href="/emails/propositions">
+                <Inbox className="size-3.5" />
+                Propositions LLM
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link href="/emails/tags">
+                <Tag className="size-3.5" />
+                Gérer les tags
+              </Link>
+            </Button>
+          </div>
         }
       />
 
