@@ -26,9 +26,14 @@ import {
   syncThreadLabelsFromGmail,
 } from "./tags";
 
-const BOOTSTRAP_QUERY = "newer_than:90d";
+// `-in:spam -in:trash` exclut les emails dans la corbeille et le dossier
+// spam de Gmail. `-in:promotions` filtre l'onglet Promotions (newsletters
+// marketing) — désactivable plus tard si on veut le contexte client.
+const BOOTSTRAP_QUERY = "newer_than:90d -in:spam -in:trash";
 const MAX_MESSAGES_PER_RUN = 50;
 const SLEEP_MS_BETWEEN_CALLS = 100;
+/** Labels Gmail qui causent un skip silencieux à l'ingestion. */
+const SKIP_LABELS = new Set(["SPAM", "TRASH"]);
 /**
  * Cap LLM extractions par run pour borner le temps (chaque extraction
  * ~2-3s) et le coût. Les messages restant en `pending` seront repris
@@ -48,6 +53,8 @@ export type GmailSyncResult = {
   /** 404 Gmail = messages disparus entre list et get. Compté à part
    *  pour ne pas polluer `errors[]` avec un cas attendu. */
   skippedNotFound: number;
+  /** Messages skip parce qu'ils ont un label SPAM ou TRASH. */
+  skippedSpam: number;
   /** Extractions LLM réussies sur ce run. */
   extractionsDone: number;
   /** Extractions skip (pas de body, sensitive detected, désactivé…). */
@@ -262,6 +269,7 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
     updated: 0,
     bodiesFetched: 0,
     skippedNotFound: 0,
+    skippedSpam: 0,
     extractionsDone: 0,
     extractionsSkipped: 0,
     proposalsCreated: 0,
@@ -382,6 +390,16 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
   for (const m of toFetch) {
     try {
       const meta = await getMessage(accessToken, m.id, "metadata");
+      // Skip silencieux des spams / trash. En bootstrap on filtre déjà
+      // via la query Gmail, mais en incrémental (history.list) il n'y a
+      // pas de filtre — un message qui passe en spam après ingestion
+      // pourrait remonter ici, et un message ajouté directement en spam
+      // ne doit pas entrer.
+      const labels = meta.labelIds ?? [];
+      if (labels.some((l) => SKIP_LABELS.has(l))) {
+        result.skippedSpam++;
+        continue;
+      }
       const matched = messageMatchesCrm(meta, matchers);
 
       let body: { text: string | null; html: string | null } | null = null;
@@ -540,6 +558,28 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
 
   result.newHistoryId = touchedHistoryId;
   return result;
+}
+
+/**
+ * Supprime les threads dont TOUS les messages ont un label SPAM ou
+ * TRASH. Utilisé pour nettoyer les emails déjà importés avant qu'on
+ * ajoute le filtrage à l'ingestion.
+ */
+export async function cleanupSpamThreads(userId: string): Promise<{ deletedThreads: number }> {
+  const conn = await db();
+  // 1. Récupère les thread_ids dont CHAQUE message est SPAM ou TRASH.
+  const rows = await conn.execute<{ thread_id: string }>(sql`
+    select thread_id
+    from public.gmail_messages
+    where user_id = ${userId}
+    group by thread_id
+    having bool_and('SPAM' = any(labels) or 'TRASH' = any(labels))
+  `);
+  const threadIds = (rows as unknown as Array<{ thread_id: string }>).map((r) => r.thread_id);
+  if (threadIds.length === 0) return { deletedThreads: 0 };
+  // 2. Delete cascade : messages + thread_tags partent avec le thread.
+  await conn.delete(gmailThreads).where(inArray(gmailThreads.id, threadIds));
+  return { deletedThreads: threadIds.length };
 }
 
 /**

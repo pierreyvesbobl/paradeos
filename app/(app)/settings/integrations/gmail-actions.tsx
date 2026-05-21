@@ -2,8 +2,13 @@
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { purgeLocalGmail, rebuildAutoLinks, triggerGmailSync } from "@/lib/actions/gmail";
-import { RefreshCw, Trash2, Wand2 } from "lucide-react";
+import {
+  cleanupSpamAction,
+  purgeLocalGmail,
+  rebuildAutoLinks,
+  triggerGmailSync,
+} from "@/lib/actions/gmail";
+import { Filter, RefreshCw, Trash2, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -20,12 +25,35 @@ export function GmailActions() {
         toast.error(res.message);
         return;
       }
-      const { mode, inserted, bodiesFetched, skippedNotFound, hasMore, errors } = res.data;
+      const { mode, inserted, bodiesFetched, skippedNotFound, skippedSpam, hasMore, errors } =
+        res.data;
       const errSuffix = errors.length ? ` · ${errors.length} erreur(s)` : "";
       const tailSuffix = hasMore ? " · à continuer" : "";
-      const skippedSuffix = skippedNotFound > 0 ? ` · ${skippedNotFound} dispar(s)` : "";
+      const skippedSuffix = [
+        skippedNotFound > 0 ? `${skippedNotFound} dispar(s)` : "",
+        skippedSpam > 0 ? `${skippedSpam} spam(s)` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      const skipFull = skippedSuffix ? ` · ${skippedSuffix}` : "";
       toast.success(
-        `Sync ${mode} : ${inserted} nouveau(x), ${bodiesFetched} body(s)${skippedSuffix}${tailSuffix}${errSuffix}.`,
+        `Sync ${mode} : ${inserted} nouveau(x), ${bodiesFetched} body(s)${skipFull}${tailSuffix}${errSuffix}.`,
+      );
+      router.refresh();
+    });
+  }
+
+  function cleanSpam() {
+    startTransition(async () => {
+      const res = await cleanupSpamAction({});
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(
+        res.data.deletedThreads > 0
+          ? `${res.data.deletedThreads} thread(s) spam/trash supprimé(s).`
+          : "Aucun spam à nettoyer.",
       );
       router.refresh();
     });
@@ -73,6 +101,18 @@ export function GmailActions() {
       >
         <Wand2 className="size-3.5" />
         Recalculer les liens
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={cleanSpam}
+        disabled={pending}
+        className="gap-1.5"
+        title="Supprime les threads dont tous les messages sont SPAM ou TRASH"
+      >
+        <Filter className="size-3.5" />
+        Nettoyer les spams
       </Button>
       <Button
         type="button"

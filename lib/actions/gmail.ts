@@ -5,7 +5,7 @@ import { googleAccounts } from "@/db/schema/google-accounts";
 import { users } from "@/db/schema/users";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
-import { purgeGmailData, syncIncremental } from "@/lib/gmail/sync";
+import { cleanupSpamThreads, purgeGmailData, syncIncremental } from "@/lib/gmail/sync";
 import {
   applyTagToThread,
   autoTagThreadByParticipants,
@@ -44,6 +44,7 @@ export const triggerGmailSync = action(z.object({}), async ({ user }) => {
     inserted: result.inserted,
     bodiesFetched: result.bodiesFetched,
     skippedNotFound: result.skippedNotFound,
+    skippedSpam: result.skippedSpam,
     hasMore: result.hasMore,
     errors: result.errors,
   };
@@ -161,6 +162,18 @@ export const rebuildAutoLinks = action(z.object({}), async ({ user }) => {
   }
   revalidatePath("/emails");
   return { rebuilt: rows.length };
+});
+
+/**
+ * Nettoie les threads déjà importés dont tous les messages sont SPAM
+ * ou TRASH (utile une fois après le déploiement du filtrage à l'ingestion).
+ */
+export const cleanupSpamAction = action(z.object({}), async ({ user }) => {
+  const targetUserId = (await getGmailUserId()) ?? user.id;
+  const r = await cleanupSpamThreads(targetUserId);
+  revalidatePath("/emails");
+  revalidatePath("/settings/integrations");
+  return r;
 });
 
 export const purgeLocalGmail = action(z.object({}), async ({ user }) => {
