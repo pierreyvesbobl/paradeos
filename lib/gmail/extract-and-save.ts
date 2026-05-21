@@ -3,6 +3,7 @@ import "server-only";
 import { emailProposals, gmailMessages, gmailTags } from "@/db/schema/gmail";
 import { db } from "@/lib/db/server";
 import { extractEmail } from "@/lib/gmail/extract";
+import { applyTagToThread } from "@/lib/gmail/tags";
 import { fuzzyMatchProject } from "@/lib/meetings/extract";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -17,6 +18,8 @@ import { and, eq, sql } from "drizzle-orm";
  */
 export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   count: number;
+  /** Tags projet appliqués directement (sans proposition à valider). */
+  autoAppliedProjectLinks: number;
   skipped: boolean;
   reason?: string;
 }> {
@@ -26,7 +29,8 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     .from(gmailMessages)
     .where(eq(gmailMessages.id, messageId))
     .limit(1);
-  if (!msg) return { count: 0, skipped: true, reason: "message introuvable" };
+  if (!msg)
+    return { count: 0, autoAppliedProjectLinks: 0, skipped: true, reason: "message introuvable" };
 
   // On a besoin d'un body pour extraire — un message en `skipped` n'a
   // pas de body stocké.
@@ -35,7 +39,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       .update(gmailMessages)
       .set({ extractionStatus: "failed" })
       .where(eq(gmailMessages.id, messageId));
-    return { count: 0, skipped: true, reason: "pas de body" };
+    return { count: 0, autoAppliedProjectLinks: 0, skipped: true, reason: "pas de body" };
   }
 
   // Catégories existantes pour ce user → injectées dans le prompt LLM
@@ -74,7 +78,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       .update(gmailMessages)
       .set({ extractionStatus: "failed" })
       .where(eq(gmailMessages.id, messageId));
-    return { count: 0, skipped: true, reason: "sensitive detected" };
+    return { count: 0, autoAppliedProjectLinks: 0, skipped: true, reason: "sensitive detected" };
   }
 
   // Wipe les anciennes propositions du message + ré-injecte.
@@ -133,17 +137,46 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     });
   }
 
-  // 3. Project link inféré
+  // 3. Project link inféré → auto-apply (pas de proposition à valider).
+  // L'auto-tag par contact match du sync gère déjà 90% des cas ; cette
+  // branche couvre les emails où le LLM détecte un projet du contenu
+  // au-delà du contact (ex. "concernant le projet X" mentionné dans un
+  // email qui n'a pas de contact CRM dans les participants).
+  let autoAppliedProjectLinks = 0;
   if (result.proposedProjectName) {
     const match = await fuzzyMatchProject(result.proposedProjectName);
     if (match) {
-      rows.push({
-        messageId,
-        kind: "project_link",
-        payload: { projectName: result.proposedProjectName, projectId: match.id },
-        matchedId: match.id,
-        matchConfidence: match.confidence.toFixed(3),
-      });
+      // Cherche le gmail_tag projet correspondant.
+      const [projectTag] = await conn
+        .select({ id: gmailTags.id })
+        .from(gmailTags)
+        .where(
+          and(
+            eq(gmailTags.userId, msg.userId),
+            eq(gmailTags.kind, "project"),
+            eq(gmailTags.targetId, match.id),
+          ),
+        )
+        .limit(1);
+      if (projectTag) {
+        try {
+          await applyTagToThread({
+            userId: msg.userId,
+            threadIdLocal: msg.threadId,
+            tagId: projectTag.id,
+            source: "auto",
+          });
+          autoAppliedProjectLinks++;
+        } catch {
+          // Push Gmail peut échouer (token, quota…) — on n'invalide pas
+          // l'extraction pour autant, le tag DB est déjà posé.
+        }
+      }
+      // Si le tag projet n'existe pas encore en base, on n'auto-applique
+      // pas (sinon il faudrait aussi créer le label Gmail à la volée
+      // pendant le sync, ce qui ajoute du coût). L'utilisateur peut
+      // déclencher "Initialiser les tags CRM" depuis /emails/tags pour
+      // créer tous les labels manquants.
     }
   }
 
@@ -162,5 +195,5 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     })
     .where(eq(gmailMessages.id, messageId));
 
-  return { count: rows.length, skipped: false };
+  return { count: rows.length, autoAppliedProjectLinks, skipped: false };
 }

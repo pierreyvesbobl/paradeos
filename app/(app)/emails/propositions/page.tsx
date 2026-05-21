@@ -80,7 +80,7 @@ export default async function EmailPropositionsPage() {
           <Breadcrumbs items={[{ label: "Emails", href: "/emails" }, { label: "Propositions" }]} />
         }
         title="Propositions LLM"
-        description="Tâches, tags et liens projets extraits par le LLM depuis les emails matchés CRM. Accept / reject manuellement."
+        description="Tâches et catégories à valider, extraites par le LLM depuis les emails matchés CRM. Les liens projet inférés s'appliquent automatiquement (pas de validation requise)."
       />
 
       {rows.length === 0 ? (
