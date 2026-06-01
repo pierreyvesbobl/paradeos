@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/page-header";
 import { ProjectContactsField } from "@/components/projects/project-contacts-field";
 import { ProjectMembersField } from "@/components/projects/project-members-field";
 import { ProjectMeetingsSection } from "@/components/projets/project-meetings-section";
+import { ProjectSecretsSection } from "@/components/projets/project-secrets-section";
 import { ProjectTabs } from "@/components/projets/project-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import { deleteProjectAndRedirect } from "@/lib/actions/projects";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { getProjectProfitability } from "@/lib/db/queries/profitability";
 import { getProjectContacts, getProjectMembers } from "@/lib/db/queries/project-members";
+import { getProjectSecretsList } from "@/lib/db/queries/project-secrets";
 import { getProjectTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
 import { formatDuration, formatEuro } from "@/lib/format";
@@ -104,6 +106,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     contactOptions,
     projectMemberRows,
     projectContactRows,
+    secretsList,
   ] = await Promise.all([
     conn
       .select()
@@ -152,6 +155,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       .orderBy(asc(contactsTable.lastName), asc(contactsTable.firstName)),
     getProjectMembers(id),
     getProjectContacts(id),
+    getProjectSecretsList(id),
   ]);
 
   const quoteInvoice = quoteInvoiceRows[0];
@@ -430,6 +434,8 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       </div>
     ) : null;
 
+  const secretsContent = <ProjectSecretsSection projectId={id} secrets={secretsList} />;
+
   const timeContent = (
     <div className="grid gap-6 lg:grid-cols-2">
       <SidebarSection title="Temps passé">
@@ -613,6 +619,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         emails={emailsContent}
         files={filesContent}
         billing={billingContent}
+        secrets={secretsContent}
         time={timeContent}
       />
     </div>
@@ -697,7 +704,7 @@ function TabSkeleton({ lines = 3 }: { lines?: number }) {
         <div
           // biome-ignore lint/suspicious/noArrayIndexKey: skeleton statique, index stable
           key={i}
-          className="h-8 animate-pulse rounded bg-muted/50"
+          className="h-8 animate-pulse rounded bg-muted-foreground/15"
           style={{ width: `${100 - i * 8}%` }}
         />
       ))}

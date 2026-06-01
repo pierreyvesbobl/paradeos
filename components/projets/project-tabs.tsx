@@ -6,6 +6,7 @@ import {
   BarChart3,
   FolderOpen,
   Info,
+  KeyRound,
   ListTodo,
   Mail,
   Receipt,
@@ -23,6 +24,7 @@ const ALL_TABS = [
   { value: "emails", label: "Emails", icon: Mail },
   { value: "files", label: "Fichiers", icon: FolderOpen },
   { value: "billing", label: "Facturation", icon: Receipt },
+  { value: "secrets", label: "Secrets", icon: KeyRound },
   { value: "time", label: "Temps & marge", icon: BarChart3 },
 ] as const;
 
@@ -38,6 +40,7 @@ type Props = {
   files: React.ReactNode;
   /** Null = onglet caché (projets non-client). */
   billing: React.ReactNode | null;
+  secrets: React.ReactNode;
   time: React.ReactNode;
 };
 
@@ -55,6 +58,7 @@ export function ProjectTabs({
   emails,
   files,
   billing,
+  secrets,
   time,
 }: Props) {
   const params = useSearchParams();
@@ -95,6 +99,7 @@ export function ProjectTabs({
     emails,
     files,
     billing,
+    secrets,
     time,
   };
 
