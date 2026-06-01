@@ -273,12 +273,7 @@ export async function uploadFile(args: {
     mimeType,
   });
 
-  const preamble =
-    `--${boundary}\r\n` +
-    `Content-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
-    `--${boundary}\r\n` +
-    `Content-Type: ${mimeType}\r\n` +
-    "Content-Transfer-Encoding: binary\r\n\r\n";
+  const preamble = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\nContent-Transfer-Encoding: binary\r\n\r\n`;
   const epilogue = `\r\n--${boundary}--`;
 
   const body = Buffer.concat([
