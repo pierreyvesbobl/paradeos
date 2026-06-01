@@ -86,9 +86,15 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   if (!row) notFound();
   const { project, entity, ownerId, ownerName, ownerAvatarUrl } = row;
 
-  // Toutes les requêtes restantes en parallèle (10 awaits séquentiels →
-  // 1 round-trip parallèle). Les notesList → attachments restent séquentielles
-  // mais ne bloquent pas les autres branches.
+  // Requêtes en 2 vagues parallèles séquentielles. Un Promise.all de
+  // 12+ queries sur le pooler Supabase 6543 (transaction mode) déclenche
+  // des ETIMEDOUT côté Supavisor — au-delà de ~8 queries concurrentes,
+  // le pooler n'arrive plus à les router et la page hang en prod. En
+  // splittant on reste largement sous le seuil. La vague 1 contient
+  // toutes les data spécifiques au projet (rendu immédiat). La vague 2
+  // contient les listes globales (entities/users/contacts) utilisées
+  // par les dropdowns d'édition — peu critiques pour le first paint mais
+  // toujours awaited car les composants client en ont besoin synchrones.
   const notesPromise = getNotesForSubject("project", id).then(async (n) => ({
     list: n,
     attachments: await getAttachmentsForNotes(n.map((x) => x.id)),
@@ -97,13 +103,10 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   const [
     quoteInvoiceRows,
     milestonesRows,
-    entityList,
     timeStats,
     profitability,
     notesData,
     projectTasks,
-    userOptions,
-    contactOptions,
     projectMemberRows,
     projectContactRows,
     secretsList,
@@ -118,10 +121,6 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       .from(invoices)
       .where(and(eq(invoices.projectId, id), eq(invoices.kind, "milestone")))
       .orderBy(asc(invoices.createdAt)),
-    conn
-      .select({ id: entities.id, name: entities.name })
-      .from(entities)
-      .orderBy(asc(entities.name)),
     getProjectTimeStats(id),
     getProjectProfitability(id),
     notesPromise,
@@ -140,6 +139,16 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       .leftJoin(users, eq(tasks.assigneeId, users.id))
       .where(eq(tasks.projectId, id))
       .orderBy(asc(tasks.dueDate), asc(tasks.title)),
+    getProjectMembers(id),
+    getProjectContacts(id),
+    getProjectSecretsList(id),
+  ]);
+
+  const [entityList, userOptions, contactOptions] = await Promise.all([
+    conn
+      .select({ id: entities.id, name: entities.name })
+      .from(entities)
+      .orderBy(asc(entities.name)),
     conn
       .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
       .from(users)
@@ -153,9 +162,6 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       })
       .from(contactsTable)
       .orderBy(asc(contactsTable.lastName), asc(contactsTable.firstName)),
-    getProjectMembers(id),
-    getProjectContacts(id),
-    getProjectSecretsList(id),
   ]);
 
   const quoteInvoice = quoteInvoiceRows[0];
