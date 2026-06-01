@@ -21,7 +21,7 @@ const TiptapNoteEditor = dynamic(
     ssr: false,
     loading: () => (
       <div
-        className="h-32 animate-pulse rounded bg-muted/40"
+        className="h-32 animate-pulse rounded bg-muted-foreground/15"
         aria-label="Chargement de l'éditeur"
       />
     ),

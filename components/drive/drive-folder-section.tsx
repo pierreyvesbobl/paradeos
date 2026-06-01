@@ -1,11 +1,8 @@
-import { driveFolders } from "@/db/schema/drive-folders";
 import { requireUser } from "@/lib/auth/server";
 import { getDriveFolderForSubject } from "@/lib/db/queries/drive-folders";
-import { db } from "@/lib/db/server";
 import { getGoogleAccount, getValidAccessToken } from "@/lib/google/account";
-import { type DriveFile, listFolderChildren, resolveFolderPath } from "@/lib/google/drive-api";
+import { type DriveFile, listFolderChildren } from "@/lib/google/drive-api";
 import type { DriveFileSubjectType } from "@/lib/schemas/drive-files";
-import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { DriveFolderActions } from "./drive-folder-actions";
 import { DriveFolderChildrenList } from "./drive-folder-children-list";
@@ -73,8 +70,8 @@ export async function DriveFolderSection({
     );
   }
 
-  let displayPath = link.folderPath;
-  let localPath = link.folderLocalPath;
+  const displayPath = link.folderPath;
+  const localPath = link.folderLocalPath;
   let children: DriveFile[] = [];
   let listError: string | null = null;
   try {
@@ -82,30 +79,13 @@ export async function DriveFolderSection({
     if (accessToken) {
       children = await listFolderChildren(link.folderId, accessToken);
 
-      // Lazy fix : recalcule les chemins si l'un d'eux manque (cas
-      // typique : link initial fait avant `drive.readonly`, ou avant
-      // que la détection des raccourcis n'existe). On persiste pour ne
-      // pas refaire le calcul à chaque rendu.
-      if (!displayPath || !localPath) {
-        try {
-          const resolved = await resolveFolderPath(link.folderId, accessToken);
-          if (resolved) {
-            displayPath = resolved.displayPath;
-            localPath = resolved.localPath;
-            const conn = await db();
-            await conn
-              .update(driveFolders)
-              .set({
-                folderPath: resolved.displayPath,
-                folderLocalPath: resolved.localPath,
-                updatedAt: new Date(),
-              })
-              .where(eq(driveFolders.id, link.id));
-          }
-        } catch (err) {
-          console.warn("[drive folder section] resolve path failed", err);
-        }
-      }
+      // Note : la résolution du chemin (resolveFolderPath) faisait jusqu'à
+      // 30 appels Drive API séquentiels et bloquait le rendu de la fiche
+      // projet pendant 30 s à 2 min quand le chemin n'avait jamais été
+      // résolu — et puisqu'un résultat null n'était pas persisté, la
+      // cascade se déclenchait à CHAQUE rendu. Si tu en as besoin,
+      // déclenche la résolution explicitement via une server action / un
+      // bouton « Calculer le chemin », pas dans le render path.
     }
   } catch (err) {
     // `console.warn` plutôt que `error` pour ne pas trigger l'overlay

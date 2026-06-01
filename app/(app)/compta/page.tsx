@@ -62,30 +62,30 @@ function RapprochementSkeleton() {
     <div className="space-y-6 text-sm">
       <div className="flex items-center justify-between gap-3">
         <p className="text-muted-foreground">Synchronisation Dougs en cours…</p>
-        <div className="h-8 w-32 animate-pulse rounded-md bg-muted" />
+        <div className="h-8 w-32 animate-pulse rounded-md bg-muted-foreground/15" />
       </div>
       <div className="rounded-lg border bg-card">
         <div className="border-b px-6 py-4">
-          <div className="h-4 w-48 animate-pulse rounded bg-muted" />
+          <div className="h-4 w-48 animate-pulse rounded bg-muted-foreground/15" />
         </div>
         <ul className="divide-y">
           {[0, 1, 2, 3].map((i) => (
             <li key={i} className="space-y-2 px-6 py-4">
-              <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-              <div className="h-3 w-1/2 animate-pulse rounded bg-muted/70" />
+              <div className="h-4 w-2/3 animate-pulse rounded bg-muted-foreground/15" />
+              <div className="h-3 w-1/2 animate-pulse rounded bg-muted-foreground/10" />
             </li>
           ))}
         </ul>
       </div>
       <div className="rounded-lg border bg-card">
         <div className="border-b px-6 py-4">
-          <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+          <div className="h-4 w-40 animate-pulse rounded bg-muted-foreground/15" />
         </div>
         <ul className="divide-y">
           {[0, 1, 2, 3, 4].map((i) => (
             <li key={i} className="space-y-2 px-6 py-4">
-              <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-              <div className="h-3 w-1/2 animate-pulse rounded bg-muted/70" />
+              <div className="h-4 w-3/4 animate-pulse rounded bg-muted-foreground/15" />
+              <div className="h-3 w-1/2 animate-pulse rounded bg-muted-foreground/10" />
             </li>
           ))}
         </ul>
