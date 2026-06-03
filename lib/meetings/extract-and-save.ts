@@ -40,7 +40,18 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
     matchConfidence: string | null;
   }[] = [];
 
-  for (const e of result.proposedEntities) {
+  // Dédup intra-extraction : le LLM peut citer la même société / le même
+  // contact / le même projet plusieurs fois dans un transcript. Sans ce
+  // garde-fou on créerait N propositions identiques → N entités à
+  // l'acceptation en masse. On garde la 1re occurrence par nom normalisé.
+  const norm = (s: string) => s.trim().toLowerCase();
+  const dedupedEntities = dedupeBy(result.proposedEntities, (e) => norm(e.name));
+  const dedupedContacts = dedupeBy(result.proposedContacts, (c) =>
+    norm(`${c.firstName} ${c.lastName}`),
+  );
+  const dedupedProjects = dedupeBy(result.proposedProjects, (p) => norm(p.name));
+
+  for (const e of dedupedEntities) {
     const match = await fuzzyMatchEntity(e.name);
     proposalsRows.push({
       meetingId: meeting.id,
@@ -50,7 +61,7 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
       matchConfidence: match ? match.confidence.toFixed(3) : null,
     });
   }
-  for (const c of result.proposedContacts) {
+  for (const c of dedupedContacts) {
     const match = await fuzzyMatchContact(c.firstName, c.lastName);
     proposalsRows.push({
       meetingId: meeting.id,
@@ -60,7 +71,7 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
       matchConfidence: match ? match.confidence.toFixed(3) : null,
     });
   }
-  for (const p of result.proposedProjects) {
+  for (const p of dedupedProjects) {
     const match = await fuzzyMatchProject(p.name);
     proposalsRows.push({
       meetingId: meeting.id,
@@ -100,4 +111,17 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
     .where(eq(meetings.id, meeting.id));
 
   return { count: proposalsRows.length };
+}
+
+/** Garde la 1re occurrence par clé. Préserve l'ordre d'entrée. */
+function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items) {
+    const k = key(item);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(item);
+  }
+  return out;
 }

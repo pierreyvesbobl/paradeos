@@ -10,7 +10,7 @@ import {
   quickCreateEntitySchema,
   updateEntitySchema,
 } from "@/lib/schemas/entities";
-import { eq } from "drizzle-orm";
+import { eq, ilike } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -62,6 +62,17 @@ export const updateEntity = action(updateEntitySchema, async ({ input }) => {
  */
 export const quickCreateEntity = action(quickCreateEntitySchema, async ({ input, user }) => {
   const conn = await db();
+  // Find-or-create : si une entité du même nom existe déjà, on la réutilise.
+  // Évite qu'un double-clic / re-render du picker n'insère plusieurs fois
+  // la même entité.
+  const [existing] = await conn
+    .select({ id: entities.id, name: entities.name })
+    .from(entities)
+    .where(ilike(entities.name, input.name))
+    .limit(1);
+  if (existing) {
+    return { id: existing.id, name: existing.name };
+  }
   const [row] = await conn
     .insert(entities)
     .values({

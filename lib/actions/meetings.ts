@@ -26,7 +26,7 @@ import {
   updateMeetingSubjectSchema,
   updateMeetingSummarySchema,
 } from "@/lib/schemas/meetings";
-import { eq, ilike } from "drizzle-orm";
+import { and, eq, ilike } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -199,6 +199,19 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
     return { ok: true as const };
   }
 
+  // Réclamation atomique : on flippe pending→accepted *conditionnellement*
+  // sur status='pending'. Si aucune ligne n'est touchée, c'est qu'un appel
+  // concurrent (double-clic, retry réseau, « Tout accepter » relancé) a déjà
+  // décidé cette proposition → on s'arrête avant de créer un doublon.
+  const claimed = await conn
+    .update(meetingProposals)
+    .set({ status: "accepted", decidedBy: user.id, decidedAt: new Date() })
+    .where(and(eq(meetingProposals.id, proposal.id), eq(meetingProposals.status, "pending")))
+    .returning({ id: meetingProposals.id });
+  if (claimed.length === 0) {
+    return { ok: true as const };
+  }
+
   // Accept : merge override sur payload puis crée/lie.
   const payload = {
     ...(proposal.payload as Record<string, unknown>),
@@ -235,12 +248,7 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
 
   await conn
     .update(meetingProposals)
-    .set({
-      status: "accepted",
-      decidedBy: user.id,
-      decidedAt: new Date(),
-      createdEntityId,
-    })
+    .set({ createdEntityId })
     .where(eq(meetingProposals.id, proposal.id));
 
   revalidatePath(`/meetings/${proposal.meetingId}`);
@@ -356,10 +364,21 @@ async function createForKind(
 
   switch (kind) {
     case "entity": {
+      const entityName = String(payload.name ?? "Sans nom");
+      // Find-or-create : si une entité du même nom existe déjà, on la
+      // réutilise plutôt que d'en créer une 2e. Évite les doublons quand
+      // plusieurs propositions visent la même société, ou en cas de
+      // ré-acceptation après revert.
+      const [existing] = await conn
+        .select({ id: entities.id })
+        .from(entities)
+        .where(ilike(entities.name, entityName))
+        .limit(1);
+      if (existing) return existing.id;
       const [row] = await conn
         .insert(entities)
         .values({
-          name: String(payload.name ?? "Sans nom"),
+          name: entityName,
           kind:
             (payload.kind as "client" | "prospect" | "partner" | "supplier" | "other") ??
             "prospect",
