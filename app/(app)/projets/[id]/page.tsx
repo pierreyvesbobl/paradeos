@@ -452,7 +452,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
             description={
               <>
                 Crée-en depuis le{" "}
-                <Link href="/planning" className="underline">
+                <Link href="/temps?tab=planning" className="underline">
                   calendrier
                 </Link>
                 .

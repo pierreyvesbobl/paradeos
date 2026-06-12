@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/page-header";
 import { Suspense } from "react";
 import { ComptaTabs } from "./compta-tabs";
 import { DashboardView } from "./dashboard-view";
+import { FacturesView } from "./factures-view";
 import type { ComptaPeriod } from "./period-selector";
 import { RapprochementView } from "./rapprochement-view";
 import { SignedQuotesView } from "./signed-quotes-view";
@@ -23,8 +24,14 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default async function ComptaPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const tabRaw = params.tab;
-  const tab: "dashboard" | "signed" | "rapprochement" =
-    tabRaw === "rapprochement" ? "rapprochement" : tabRaw === "signed" ? "signed" : "dashboard";
+  const tab: "dashboard" | "signed" | "rapprochement" | "factures" =
+    tabRaw === "rapprochement"
+      ? "rapprochement"
+      : tabRaw === "signed"
+        ? "signed"
+        : tabRaw === "factures"
+          ? "factures"
+          : "dashboard";
   const debug = typeof params.debug === "string" ? params.debug : undefined;
   const periodRaw = typeof params.period === "string" ? params.period : null;
   const period: ComptaPeriod = (
@@ -43,6 +50,8 @@ export default async function ComptaPage({ searchParams }: { searchParams: Searc
         <DashboardView period={period} />
       ) : tab === "signed" ? (
         <SignedQuotesView period={period} />
+      ) : tab === "factures" ? (
+        <FacturesView />
       ) : (
         <Suspense fallback={<RapprochementSkeleton />}>
           <RapprochementView debug={debug} />

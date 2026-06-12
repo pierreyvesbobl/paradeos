@@ -184,7 +184,7 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
         {timeStats.entries.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             Aucun créneau enregistré sur cette tâche. Ajoute-en depuis le{" "}
-            <Link href="/planning" className="underline">
+            <Link href="/temps?tab=planning" className="underline">
               calendrier
             </Link>
             .

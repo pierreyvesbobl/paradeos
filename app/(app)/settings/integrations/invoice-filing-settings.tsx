@@ -136,7 +136,7 @@ export function InvoiceFilingSettings({ currentFolderId, enabled }: Props) {
           Drainer les pendings
         </Button>
         <Button asChild size="sm" variant="ghost" className="gap-1.5">
-          <Link href="/factures">Voir l'audit log</Link>
+          <Link href="/compta?tab=factures">Voir l'audit log</Link>
         </Button>
       </div>
     </div>

@@ -69,7 +69,7 @@ export const refreshCalendarList = action(z.object({}), async ({ user }) => {
   }
 
   revalidatePath("/settings/integrations");
-  revalidatePath("/planning");
+  revalidatePath("/temps");
   return { count: items.length };
 });
 
@@ -90,7 +90,7 @@ export const toggleCalendarSync = action(toggleCalendarSyncSchema, async ({ inpu
     .where(eq(googleCalendars.id, input.calendarId));
 
   revalidatePath("/settings/integrations");
-  revalidatePath("/planning");
+  revalidatePath("/temps");
   return { ok: true };
 });
 
@@ -103,7 +103,7 @@ export const toggleCalendarSync = action(toggleCalendarSyncSchema, async ({ inpu
  */
 export const refreshCalendarEvents = action(z.object({}), async ({ user }) => {
   await refreshUserEvents(user.id);
-  revalidatePath("/planning");
+  revalidatePath("/temps");
   return { ok: true };
 });
 
@@ -247,7 +247,7 @@ export const attributeCalendarEvent = action(
           updatedAt: new Date(),
         })
         .where(eq(timeEntries.id, existing.id));
-      revalidatePath("/planning");
+      revalidatePath("/temps");
       return { id: existing.id, created: false as const };
     }
 
@@ -268,7 +268,7 @@ export const attributeCalendarEvent = action(
       })
       .returning({ id: timeEntries.id });
 
-    revalidatePath("/planning");
+    revalidatePath("/temps");
     return { id: row?.id, created: true as const };
   },
 );
@@ -282,7 +282,7 @@ export const unattributeTimeEntry = action(unattributeTimeEntrySchema, async ({ 
   await conn
     .delete(timeEntries)
     .where(and(eq(timeEntries.id, input.timeEntryId), eq(timeEntries.userId, user.id)));
-  revalidatePath("/planning");
+  revalidatePath("/temps");
   return { ok: true };
 });
 

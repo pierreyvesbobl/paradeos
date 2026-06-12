@@ -113,7 +113,7 @@ export const quickCreateProject = action(quickCreateProjectSchema, async ({ inpu
     .returning({ id: projects.id, name: projects.name });
   if (!row) throw new Error("Création échouée.");
   revalidatePath("/projets");
-  revalidatePath("/projets/pipeline");
+  revalidatePath("/crm/pipeline");
   return { id: row.id, name: row.name };
 });
 

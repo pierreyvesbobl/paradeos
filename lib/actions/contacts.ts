@@ -34,7 +34,7 @@ export const createContact = action(createContactSchema, async ({ input, user })
     })
     .returning({ id: contacts.id });
 
-  revalidatePath("/contacts");
+  revalidatePath("/crm/contacts");
   if (input.entityId) revalidatePath(`/entites/${input.entityId}`);
   return { id: row?.id };
 });
@@ -58,7 +58,7 @@ export const updateContact = action(updateContactSchema, async ({ input }) => {
     })
     .where(eq(contacts.id, input.id));
 
-  revalidatePath("/contacts");
+  revalidatePath("/crm/contacts");
   revalidatePath(`/contacts/${input.id}`);
   if (input.entityId) revalidatePath(`/entites/${input.entityId}`);
   return { id: input.id };
@@ -91,7 +91,7 @@ export const quickCreateContact = action(quickCreateContactSchema, async ({ inpu
       lastName: contacts.lastName,
     });
   if (!row) throw new Error("Création échouée.");
-  revalidatePath("/contacts");
+  revalidatePath("/crm/contacts");
   if (input.entityId) revalidatePath(`/entites/${input.entityId}`);
   return {
     id: row.id,
@@ -107,7 +107,7 @@ export const patchContact = action(patchContactSchema, async ({ input }) => {
   ) as Record<string, unknown>;
   if (Object.keys(updates).length === 0) return { id };
   await conn.update(contacts).set(updates).where(eq(contacts.id, id));
-  revalidatePath("/contacts");
+  revalidatePath("/crm/contacts");
   revalidatePath(`/contacts/${id}`);
   return { id };
 });
@@ -115,7 +115,7 @@ export const patchContact = action(patchContactSchema, async ({ input }) => {
 export const deleteContact = action(deleteContactSchema, async ({ input }) => {
   const conn = await db();
   await conn.delete(contacts).where(eq(contacts.id, input.id));
-  revalidatePath("/contacts");
+  revalidatePath("/crm/contacts");
   return { id: input.id };
 });
 

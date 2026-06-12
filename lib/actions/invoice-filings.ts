@@ -37,7 +37,7 @@ export const retryInvoiceFiling = action(
       .set({ status: "pending", errorMessage: null })
       .where(eq(invoiceFilings.id, input.filingId));
     const r = await processInvoiceFiling(input.filingId);
-    revalidatePath("/factures");
+    revalidatePath("/compta");
     return r;
   },
 );
@@ -51,7 +51,7 @@ export const rejectInvoiceFiling = action(
       .update(invoiceFilings)
       .set({ status: "rejected", errorMessage: "Rejeté manuellement." })
       .where(eq(invoiceFilings.id, input.filingId));
-    revalidatePath("/factures");
+    revalidatePath("/compta");
     return { ok: true as const };
   },
 );
@@ -101,6 +101,6 @@ export const processAllPendingFilings = action(z.object({}), async ({ user }) =>
       stats.error++;
     }
   }
-  revalidatePath("/factures");
+  revalidatePath("/compta");
   return stats;
 });

@@ -22,14 +22,18 @@ const QUICK_ACTIONS = [
 
 const NAV = [
   { label: "Tableau de bord", href: "/" },
-  { label: "Projets / Pipeline", href: "/projets" },
-  { label: "Contacts", href: "/contacts" },
-  { label: "Entités", href: "/entites" },
+  { label: "Contacts", href: "/crm/contacts" },
+  { label: "Entités", href: "/crm/entites" },
+  { label: "Pipeline", href: "/crm/pipeline" },
+  { label: "Projets", href: "/projets" },
   { label: "Tâches", href: "/taches" },
+  { label: "Time tracking", href: "/temps" },
   { label: "Notes", href: "/notes" },
   { label: "Meetings", href: "/meetings" },
-  { label: "Planning", href: "/planning" },
-  { label: "Temps", href: "/temps" },
+  { label: "Emails", href: "/emails" },
+  { label: "Factures classées", href: "/compta?tab=factures" },
+  { label: "Coworking", href: "/coworking" },
+  { label: "Compta", href: "/compta" },
 ];
 
 export function CommandPalette() {

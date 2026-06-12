@@ -237,7 +237,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
         actions={
           <>
             <Button asChild variant="outline">
-              <Link href="/projets/pipeline">
+              <Link href="/crm/pipeline">
                 <Sparkles className="size-4" />
                 Pipeline
               </Link>
@@ -393,7 +393,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
                         <ProjName id={row.id} value={row.name} className="font-medium text-sm" />
                         {isCommercial ? (
                           <Link
-                            href="/projets/pipeline"
+                            href="/crm/pipeline"
                             className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 font-medium text-[10px] text-amber-700 uppercase tracking-wide hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300"
                             title="Phase commerciale — voir le pipeline"
                           >

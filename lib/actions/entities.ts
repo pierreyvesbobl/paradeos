@@ -31,7 +31,7 @@ export const createEntity = action(createEntitySchema, async ({ input, user }) =
     })
     .returning({ id: entities.id });
 
-  revalidatePath("/entites");
+  revalidatePath("/crm/entites");
   return { id: row?.id };
 });
 
@@ -51,7 +51,7 @@ export const updateEntity = action(updateEntitySchema, async ({ input }) => {
     })
     .where(eq(entities.id, input.id));
 
-  revalidatePath("/entites");
+  revalidatePath("/crm/entites");
   revalidatePath(`/entites/${input.id}`);
   return { id: input.id };
 });
@@ -83,7 +83,7 @@ export const quickCreateEntity = action(quickCreateEntitySchema, async ({ input,
     })
     .returning({ id: entities.id, name: entities.name });
   if (!row) throw new Error("Création échouée.");
-  revalidatePath("/entites");
+  revalidatePath("/crm/entites");
   return { id: row.id, name: row.name };
 });
 
@@ -95,7 +95,7 @@ export const patchEntity = action(patchEntitySchema, async ({ input }) => {
   ) as Record<string, unknown>;
   if (Object.keys(updates).length === 0) return { id };
   await conn.update(entities).set(updates).where(eq(entities.id, id));
-  revalidatePath("/entites");
+  revalidatePath("/crm/entites");
   revalidatePath(`/entites/${id}`);
   return { id };
 });
@@ -103,7 +103,7 @@ export const patchEntity = action(patchEntitySchema, async ({ input }) => {
 export const deleteEntity = action(deleteEntitySchema, async ({ input }) => {
   const conn = await db();
   await conn.delete(entities).where(eq(entities.id, input.id));
-  revalidatePath("/entites");
+  revalidatePath("/crm/entites");
   return { id: input.id };
 });
 
