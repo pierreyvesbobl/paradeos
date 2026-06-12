@@ -7,7 +7,7 @@ import { toast } from "sonner";
 const APP_URL =
   typeof window !== "undefined" && window.location?.origin
     ? window.location.origin
-    : "https://paradeos.app";
+    : "https://paradeos.vercel.app";
 
 const HTTP_PROMPT = (
   url: string,

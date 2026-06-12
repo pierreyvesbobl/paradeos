@@ -134,7 +134,7 @@ export async function extractEmail(input: EmailInput): Promise<EmailExtraction> 
     apiKey,
     baseURL: OPENROUTER_BASE_URL,
     headers: {
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://paradeos.app",
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://paradeos.vercel.app",
       "X-Title": "Paradeos",
     },
   });

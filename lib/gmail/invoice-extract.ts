@@ -79,7 +79,7 @@ export async function extractInvoiceMetadata(args: {
     apiKey,
     baseURL: OPENROUTER_BASE_URL,
     headers: {
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://paradeos.app",
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://paradeos.vercel.app",
       "X-Title": "Paradeos",
     },
   });
