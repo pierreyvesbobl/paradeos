@@ -14,7 +14,7 @@ import { TimeEntryDialog } from "./time-entry-dialog";
 
 const HOUR_HEIGHT = 48; // px par heure
 const HOURS_START = 7; // 07:00
-const HOURS_END = 21; // 21:00
+const HOURS_END = 24; // 24:00 (dernière étiquette affichée : 23:00)
 const SNAP_MINUTES = 15;
 const HOURS_COL_WIDTH = 60;
 const HOURS_OF_DAY = Array.from({ length: HOURS_END - HOURS_START }, (_, i) => HOURS_START + i);
