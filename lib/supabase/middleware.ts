@@ -4,12 +4,16 @@ import { type NextRequest, NextResponse } from "next/server";
 // `/api/dougs/sync-cookie` est appelé par l'extension Chrome
 // "Paradeos Dougs Sync" depuis l'origine app.dougs.fr — pas de session
 // Supabase, auth via Bearer token (cf. resolveSyncToken).
+// `/api/mcp` est appelé par les clients MCP (Claude Desktop/Code, Cursor…)
+// en transport HTTP — pas de cookie de session, auth via
+// `Authorization: Bearer paradeos_pat_…` (cf. resolveToken dans la route).
 const PUBLIC_ROUTES = [
   "/login",
   "/auth/callback",
   "/auth/confirm",
   "/api/cron",
   "/api/dougs/sync-cookie",
+  "/api/mcp",
 ];
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };

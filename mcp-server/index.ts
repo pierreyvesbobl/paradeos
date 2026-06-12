@@ -52,6 +52,8 @@ import {
   getCoworkingContractSchema,
   getMeeting,
   getMeetingSchema,
+  getNote,
+  getNoteSchema,
   getProject,
   getProjectSchema,
   listContacts,
@@ -67,6 +69,8 @@ import {
   listMyTasks,
   listMyTime,
   listMyTimeSchema,
+  listNotes,
+  listNotesSchema,
   listProjects,
   listProjectsSchema,
   listTasks,
@@ -187,6 +191,24 @@ server.tool(
   listEntitiesSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await listEntities(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "list_notes",
+  "Liste les notes polymorphes (memo/call/meeting/message) avec filtres. Sans filtre : 50 dernières par occurredAt desc. Filtres : subjectType+subjectId (notes d'un projet/contact/entité/opportunité/tâche), kind, authorId, mine=true (mes notes), search (titre+contenu), since/until (ISO date).",
+  listNotesSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await listNotes(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "get_note",
+  "Détail complet d'une note par id (contenu intégral + auteur + sujet rattaché).",
+  getNoteSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await getNote(args), null, 2) }],
   }),
 );
 

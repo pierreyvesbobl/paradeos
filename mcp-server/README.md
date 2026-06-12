@@ -57,6 +57,8 @@ servers. Tu peux maintenant demander à Claude :
 - `get_meeting` — détail + propositions LLM
 - `list_my_time` (period, project) — total en minutes
 - `list_contacts` / `list_entities`
+- `list_notes` — filtres subjectType+subjectId, kind, authorId, mine, search, since/until
+- `get_note` — contenu intégral par id
 
 ### Writes
 - `create_task` — assignée à toi par défaut
@@ -65,7 +67,7 @@ servers. Tu peux maintenant demander à Claude :
 - `add_note` — polymorphique (project/contact/etc.)
 
 ### Search
-- `search_all` — full-text sur projets, tâches, contacts, entités, meetings
+- `search_all` — full-text sur projets, tâches, contacts, entités, meetings, **notes**
 
 ## Resources (URIs)
 
@@ -100,7 +102,7 @@ puis configure ton client MCP avec :
 {
   "mcpServers": {
     "paradeos": {
-      "url": "https://paradeos.app/api/mcp",
+      "url": "https://paradeos.vercel.app/api/mcp",
       "headers": { "Authorization": "Bearer paradeos_pat_…" }
     }
   }

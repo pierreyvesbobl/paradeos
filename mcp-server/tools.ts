@@ -445,6 +445,80 @@ export async function addNote(args: z.infer<typeof addNoteSchema>, ctx: UserCont
   return row;
 }
 
+export const listNotesSchema = z.object({
+  subjectType: z.enum(["entity", "contact", "opportunity", "project", "task"]).optional(),
+  subjectId: z.string().uuid().optional(),
+  kind: z.enum(["memo", "call", "meeting", "message"]).optional(),
+  authorId: z.string().uuid().optional(),
+  mine: z.boolean().optional(),
+  search: z.string().optional(),
+  since: z.string().optional(),
+  until: z.string().optional(),
+  limit: z.number().int().positive().max(200).optional(),
+});
+
+export async function listNotes(args: z.infer<typeof listNotesSchema>, ctx: UserContext) {
+  const conn = db();
+  const conds = [];
+  if (args.subjectType) conds.push(eq(notes.subjectType, args.subjectType));
+  if (args.subjectId) conds.push(eq(notes.subjectId, args.subjectId));
+  if (args.kind) conds.push(eq(notes.kind, args.kind));
+  if (args.authorId) conds.push(eq(notes.authorId, args.authorId));
+  if (args.mine) conds.push(eq(notes.authorId, ctx.userId));
+  if (args.search) {
+    const like = `%${args.search}%`;
+    const o = or(ilike(notes.title, like), ilike(notes.content, like));
+    if (o) conds.push(o);
+  }
+  if (args.since) conds.push(gte(notes.occurredAt, new Date(args.since)));
+  if (args.until) conds.push(lte(notes.occurredAt, new Date(args.until)));
+
+  return conn
+    .select({
+      id: notes.id,
+      title: notes.title,
+      content: notes.content,
+      kind: notes.kind,
+      subjectType: notes.subjectType,
+      subjectId: notes.subjectId,
+      occurredAt: notes.occurredAt,
+      authorId: notes.authorId,
+      authorName: users.fullName,
+      createdAt: notes.createdAt,
+      updatedAt: notes.updatedAt,
+    })
+    .from(notes)
+    .leftJoin(users, eq(users.id, notes.authorId))
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(desc(notes.occurredAt))
+    .limit(args.limit ?? DEFAULT_LIMIT);
+}
+
+export const getNoteSchema = z.object({ id: z.string().uuid() });
+
+export async function getNote(args: z.infer<typeof getNoteSchema>) {
+  const conn = db();
+  const [row] = await conn
+    .select({
+      id: notes.id,
+      title: notes.title,
+      content: notes.content,
+      kind: notes.kind,
+      subjectType: notes.subjectType,
+      subjectId: notes.subjectId,
+      occurredAt: notes.occurredAt,
+      authorId: notes.authorId,
+      authorName: users.fullName,
+      createdAt: notes.createdAt,
+      updatedAt: notes.updatedAt,
+    })
+    .from(notes)
+    .leftJoin(users, eq(users.id, notes.authorId))
+    .where(eq(notes.id, args.id))
+    .limit(1);
+  return row ?? null;
+}
+
 // ---------- SEARCH ----------
 
 export const searchAllSchema = z.object({
@@ -457,49 +531,64 @@ export async function searchAll(args: z.infer<typeof searchAllSchema>) {
   const limit = args.limit ?? 10;
   const like = `%${args.query}%`;
 
-  const [projectsHits, tasksHits, contactsHits, entitiesHits, meetingsHits] = await Promise.all([
-    conn
-      .select({ id: projects.id, name: projects.name, status: projects.status })
-      .from(projects)
-      .where(ilike(projects.name, like))
-      .limit(limit),
-    conn
-      .select({
-        id: tasks.id,
-        title: tasks.title,
-        status: tasks.status,
-        projectId: tasks.projectId,
-      })
-      .from(tasks)
-      .where(ilike(tasks.title, like))
-      .limit(limit),
-    conn
-      .select({
-        id: contacts.id,
-        firstName: contacts.firstName,
-        lastName: contacts.lastName,
-        email: contacts.email,
-      })
-      .from(contacts)
-      .where(
-        or(
-          ilike(contacts.firstName, like),
-          ilike(contacts.lastName, like),
-          ilike(contacts.email, like),
-        ),
-      )
-      .limit(limit),
-    conn
-      .select({ id: entities.id, name: entities.name, kind: entities.kind })
-      .from(entities)
-      .where(ilike(entities.name, like))
-      .limit(limit),
-    conn
-      .select({ id: meetings.id, title: meetings.title, occurredAt: meetings.occurredAt })
-      .from(meetings)
-      .where(or(ilike(meetings.title, like), ilike(meetings.summary, like)))
-      .limit(limit),
-  ]);
+  const [projectsHits, tasksHits, contactsHits, entitiesHits, meetingsHits, notesHits] =
+    await Promise.all([
+      conn
+        .select({ id: projects.id, name: projects.name, status: projects.status })
+        .from(projects)
+        .where(ilike(projects.name, like))
+        .limit(limit),
+      conn
+        .select({
+          id: tasks.id,
+          title: tasks.title,
+          status: tasks.status,
+          projectId: tasks.projectId,
+        })
+        .from(tasks)
+        .where(ilike(tasks.title, like))
+        .limit(limit),
+      conn
+        .select({
+          id: contacts.id,
+          firstName: contacts.firstName,
+          lastName: contacts.lastName,
+          email: contacts.email,
+        })
+        .from(contacts)
+        .where(
+          or(
+            ilike(contacts.firstName, like),
+            ilike(contacts.lastName, like),
+            ilike(contacts.email, like),
+          ),
+        )
+        .limit(limit),
+      conn
+        .select({ id: entities.id, name: entities.name, kind: entities.kind })
+        .from(entities)
+        .where(ilike(entities.name, like))
+        .limit(limit),
+      conn
+        .select({ id: meetings.id, title: meetings.title, occurredAt: meetings.occurredAt })
+        .from(meetings)
+        .where(or(ilike(meetings.title, like), ilike(meetings.summary, like)))
+        .limit(limit),
+      conn
+        .select({
+          id: notes.id,
+          title: notes.title,
+          kind: notes.kind,
+          subjectType: notes.subjectType,
+          subjectId: notes.subjectId,
+          occurredAt: notes.occurredAt,
+          excerpt: sql<string>`substring(${notes.content} from 1 for 240)`,
+        })
+        .from(notes)
+        .where(or(ilike(notes.title, like), ilike(notes.content, like)))
+        .orderBy(desc(notes.occurredAt))
+        .limit(limit),
+    ]);
 
   return {
     projects: projectsHits,
@@ -507,6 +596,7 @@ export async function searchAll(args: z.infer<typeof searchAllSchema>) {
     contacts: contactsHits,
     entities: entitiesHits,
     meetings: meetingsHits,
+    notes: notesHits,
   };
 }
 

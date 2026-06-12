@@ -32,6 +32,8 @@ import {
   createTaskSchema,
   getMeeting,
   getMeetingSchema,
+  getNote,
+  getNoteSchema,
   getProject,
   getProjectSchema,
   getPromptMessages,
@@ -44,6 +46,8 @@ import {
   listMyTasks,
   listMyTime,
   listMyTimeSchema,
+  listNotes,
+  listNotesSchema,
   listProjects,
   listProjectsSchema,
   listTasks,
@@ -165,6 +169,17 @@ const TOOL_REGISTRY: Record<
     schema: addNoteSchema,
     handler: (a, ctx) => addNote(a as never, ctx as never),
   },
+  list_notes: {
+    description:
+      "Liste les notes polymorphes (memo/call/meeting/message) avec filtres : subjectType+subjectId (notes d'un projet/contact/entité/opportunité/tâche), kind, authorId, mine=true (mes notes), search (titre+contenu), since/until (ISO). Tri occurredAt desc.",
+    schema: listNotesSchema,
+    handler: (a, ctx) => listNotes(a as never, ctx as never),
+  },
+  get_note: {
+    description: "Détail complet d'une note par id (contenu intégral + auteur + sujet).",
+    schema: getNoteSchema,
+    handler: (a) => getNote(a as never),
+  },
   search_all: {
     description: "Full-text search.",
     schema: searchAllSchema,
@@ -218,6 +233,13 @@ export async function POST(req: NextRequest) {
   }
   if (body.jsonrpc !== "2.0" || !body.method) {
     return NextResponse.json(rpcError(body.id, -32600, "Invalid Request"), { status: 400 });
+  }
+
+  // Notification JSON-RPC (Request sans `id`, ex. `notifications/initialized`) :
+  // aucune réponse n'est attendue. Le transport Streamable HTTP veut un
+  // 202 Accepted sans corps — y répondre par une erreur casse les clients stricts.
+  if (body.id === undefined) {
+    return new NextResponse(null, { status: 202 });
   }
 
   try {
