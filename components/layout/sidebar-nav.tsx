@@ -1,7 +1,16 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Briefcase, Calculator, Clock, Home, Kanban, School, Users } from "lucide-react";
+import {
+  Briefcase,
+  Calculator,
+  Clock,
+  Home,
+  Kanban,
+  Mic,
+  School,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -35,6 +44,7 @@ const sections: NavSection[] = [
         match: ["/projets/pipeline"],
       },
       { label: "Time tracking", href: "/temps", icon: Clock },
+      { label: "Meetings", href: "/meetings", icon: Mic },
       {
         label: "CRM",
         href: "/crm",
