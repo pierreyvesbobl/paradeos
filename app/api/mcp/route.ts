@@ -57,6 +57,10 @@ import {
   readResource,
   searchAll,
   searchAllSchema,
+  updateContact,
+  updateContactSchema,
+  updateEntity,
+  updateEntitySchema,
   updateProject,
   updateProjectSchema,
 } from "./_handlers";
@@ -132,10 +136,20 @@ const TOOL_REGISTRY: Record<
     schema: listContactsSchema,
     handler: (a) => listContacts(a as never),
   },
+  update_contact: {
+    description: "Met à jour un contact (champs fournis seulement). `id` requis.",
+    schema: updateContactSchema,
+    handler: (a) => updateContact(a as never),
+  },
   list_entities: {
     description: "Liste les entités CRM.",
     schema: listEntitiesSchema,
     handler: (a) => listEntities(a as never),
+  },
+  update_entity: {
+    description: "Met à jour une entité (champs fournis seulement). `id` requis.",
+    schema: updateEntitySchema,
+    handler: (a) => updateEntity(a as never),
   },
   create_task: {
     description: "Crée une tâche.",
