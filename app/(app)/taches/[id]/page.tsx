@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { ContactAvatar } from "@/components/user/contact-avatar";
+import { UserAvatar } from "@/components/user/user-avatar";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
@@ -150,9 +152,14 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
           </div>
           <div>
             <h2 className="font-medium text-sm">Assignée à</h2>
-            <p className="mt-2 text-sm">
+            <div className="mt-2 text-sm">
               {assigneeContact ? (
-                <span className="inline-flex items-center gap-2">
+                <div className="inline-flex items-center gap-2">
+                  <ContactAvatar
+                    size="sm"
+                    name={`${assigneeContact.firstName} ${assigneeContact.lastName}`.trim()}
+                    entityName={assigneeContactEntityName}
+                  />
                   <span>
                     {`${assigneeContact.firstName} ${assigneeContact.lastName}`.trim() ||
                       "(sans nom)"}
@@ -165,13 +172,16 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
                       — {assigneeContactEntityName}
                     </span>
                   ) : null}
-                </span>
+                </div>
               ) : assignee ? (
-                (assignee.fullName ?? "(sans nom)")
+                <div className="inline-flex items-center gap-2">
+                  <UserAvatar size="sm" name={assignee.fullName} avatarUrl={assignee.avatarUrl} />
+                  <span>{assignee.fullName ?? "(sans nom)"}</span>
+                </div>
               ) : (
                 <span className="text-muted-foreground">—</span>
               )}
-            </p>
+            </div>
           </div>
         </section>
       </div>

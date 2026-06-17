@@ -9,6 +9,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ContactAvatar } from "@/components/user/contact-avatar";
 import { UserAvatar } from "@/components/user/user-avatar";
 import { patchTask } from "@/lib/actions/tasks";
 import { Check, X } from "lucide-react";
@@ -77,18 +78,7 @@ export function TaskAssigneeEditor({
     if (value.kind === "user") {
       return <UserAvatar size="sm" name={value.fullName} avatarUrl={value.avatarUrl} />;
     }
-    return (
-      <span
-        className="inline-flex h-6 items-center gap-1 rounded-full bg-amber-100 px-1.5 font-medium text-[11px] text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-        title={`${value.fullName}${value.entityName ? ` — ${value.entityName}` : ""} (externe)`}
-      >
-        {value.fullName
-          .split(" ")
-          .map((p) => p[0]?.toUpperCase() ?? "")
-          .join("")
-          .slice(0, 2) || "?"}
-      </span>
-    );
+    return <ContactAvatar size="sm" name={value.fullName} entityName={value.entityName} />;
   };
 
   return (
@@ -137,13 +127,7 @@ export function TaskAssigneeEditor({
                     value={`c ${opt.fullName} ${opt.entityName ?? ""}`}
                     onSelect={() => pickContact(opt.id)}
                   >
-                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 font-medium text-[10px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                      {opt.fullName
-                        .split(" ")
-                        .map((p) => p[0]?.toUpperCase() ?? "")
-                        .join("")
-                        .slice(0, 2) || "?"}
-                    </span>
+                    <ContactAvatar size="sm" name={opt.fullName} entityName={opt.entityName} />
                     <span className="truncate">
                       {opt.fullName}
                       {opt.entityName ? (
