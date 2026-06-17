@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { contacts } from "@/db/schema/contacts";
+import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
@@ -32,15 +34,19 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
       task: tasks,
       project: projects,
       assignee: users,
+      assigneeContact: contacts,
+      assigneeContactEntityName: entities.name,
     })
     .from(tasks)
     .leftJoin(projects, eq(tasks.projectId, projects.id))
     .leftJoin(users, eq(tasks.assigneeId, users.id))
+    .leftJoin(contacts, eq(tasks.assigneeContactId, contacts.id))
+    .leftJoin(entities, eq(entities.id, contacts.entityId))
     .where(eq(tasks.id, id))
     .limit(1);
 
   if (!row) notFound();
-  const { task, project, assignee } = row;
+  const { task, project, assignee, assigneeContact, assigneeContactEntityName } = row;
   const timeStats = await getTaskTimeStats(id);
   const notesList = await getNotesForSubject("task", id);
   const attachmentRows = await getAttachmentsForNotes(notesList.map((n) => n.id));
@@ -145,7 +151,22 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
           <div>
             <h2 className="font-medium text-sm">Assignée à</h2>
             <p className="mt-2 text-sm">
-              {assignee ? (
+              {assigneeContact ? (
+                <span className="inline-flex items-center gap-2">
+                  <span>
+                    {`${assigneeContact.firstName} ${assigneeContact.lastName}`.trim() ||
+                      "(sans nom)"}
+                  </span>
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-[10px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                    Externe
+                  </span>
+                  {assigneeContactEntityName ? (
+                    <span className="text-muted-foreground text-xs">
+                      — {assigneeContactEntityName}
+                    </span>
+                  ) : null}
+                </span>
+              ) : assignee ? (
                 (assignee.fullName ?? "(sans nom)")
               ) : (
                 <span className="text-muted-foreground">—</span>

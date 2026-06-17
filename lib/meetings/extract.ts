@@ -77,6 +77,12 @@ const extractionSchema = z.object({
     z.object({
       title: z.string(),
       assigneeName: z.string().nullable(),
+      /**
+       * `internal` = membre Paradeos (table users). `external` = personne
+       * côté client/partenaire (table contacts). Permet de router la tâche
+       * vers la bonne FK à l'acceptation et d'afficher un badge.
+       */
+      assigneeKind: z.enum(["internal", "external"]).nullable(),
       dueDate: z.string().nullable(),
       projectName: z.string().nullable(),
       priority: z.enum(["low", "normal", "high"]).nullable(),
@@ -196,7 +202,13 @@ function formatVocabulary(v: Vocabulary): string {
   return sections.join("\n\n");
 }
 
-function buildSystemPrompt(vocab: Vocabulary): string {
+export type ProjectContext = {
+  name: string;
+  entityName: string | null;
+  contacts: { fullName: string; jobTitle: string | null }[];
+};
+
+function buildSystemPrompt(vocab: Vocabulary, projectContext?: ProjectContext): string {
   const baseRules = `Tu es un assistant qui dépouille un transcript de meeting professionnel
 et en extrait :
 - un résumé concis en français (markdown, 5 à 10 lignes max),
@@ -212,6 +224,18 @@ Règles générales :
 - Pour les tâches, dueDate au format YYYY-MM-DD si une date est mentionnée.
 - Pour les projets, valueAmount en euros (sans symbole) si mentionné.
 - Reste factuel et neutre dans le résumé.
+
+# Tâches : interne vs externe
+
+Pour chaque tâche, identifie qui doit la faire :
+- **assigneeKind="internal"** quand l'action incombe à un **membre de l'équipe Paradeos**
+  (cf. liste "Membres de l'équipe" dans le vocabulaire ci-dessous).
+- **assigneeKind="external"** quand l'action incombe à une **personne extérieure** :
+  contact client, partenaire, fournisseur (cf. liste "Contacts" ci-dessous).
+- Si pas d'assigné explicite ou impossible à déterminer : assigneeKind=null.
+
+Exemple : "Sophie envoie la maquette mardi prochain" → si Sophie est dans "Membres
+de l'équipe" → internal ; si Sophie est dans "Contacts" → external.
 
 # Projet (objet unique couvrant tout le cycle)
 
@@ -237,9 +261,28 @@ Règles :
    juste l'avancée dans le résumé.`;
 
   const vocabBlock = formatVocabulary(vocab);
-  if (vocabBlock.length === 0) return baseRules;
 
-  return `${baseRules}
+  let contextBlock = "";
+  if (projectContext) {
+    const lines = [
+      `Ce meeting est rattaché au projet "${projectContext.name}"${projectContext.entityName ? ` (client : ${projectContext.entityName})` : ""}.`,
+      "→ Par défaut, projectName des tâches extraites = ce projet. Ne mets un projectName différent que si le transcript parle clairement d'un AUTRE projet.",
+    ];
+    if (projectContext.contacts.length > 0) {
+      lines.push(
+        "",
+        "Contacts déjà rattachés à ce projet (assignés externes prioritaires) :",
+        ...projectContext.contacts.map(
+          (c) => `- ${c.fullName}${c.jobTitle ? ` (${c.jobTitle})` : ""}`,
+        ),
+      );
+    }
+    contextBlock = `\n\n---\n\n# Contexte projet\n\n${lines.join("\n")}`;
+  }
+
+  if (vocabBlock.length === 0) return baseRules + contextBlock;
+
+  return `${baseRules}${contextBlock}
 
 ---
 
@@ -253,7 +296,10 @@ nom de famille seul, abréviation, faute de transcription — alors retourne
 ${vocabBlock}`;
 }
 
-export async function extractMeeting(transcript: string): Promise<MeetingExtraction> {
+export async function extractMeeting(
+  transcript: string,
+  options?: { projectContext?: ProjectContext },
+): Promise<MeetingExtraction> {
   const apiKey = await getSetting(SETTING_KEYS.OPENROUTER_API_KEY);
   if (!apiKey) {
     throw new Error("Clé OpenRouter non configurée. Ajoute-la dans /settings/integrations.");
@@ -261,7 +307,7 @@ export async function extractMeeting(transcript: string): Promise<MeetingExtract
   const modelId = (await getSetting(SETTING_KEYS.LLM_MODEL)) ?? DEFAULT_LLM_MODEL;
 
   const vocab = await getKnownVocabulary();
-  const systemPrompt = buildSystemPrompt(vocab);
+  const systemPrompt = buildSystemPrompt(vocab, options?.projectContext);
 
   // OpenRouter expose une API OpenAI-compatible : on réutilise le
   // provider `@ai-sdk/openai` avec un baseURL custom. Les headers

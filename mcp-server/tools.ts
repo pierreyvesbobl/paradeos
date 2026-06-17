@@ -11,6 +11,7 @@ import { z } from "zod";
 import { contacts } from "../db/schema/contacts";
 import { coworkingContracts } from "../db/schema/coworking";
 import { entities } from "../db/schema/entities";
+import { gmailMessages, gmailTags, gmailThreadTags, gmailThreads } from "../db/schema/gmail";
 import { invoices as invoicesTable } from "../db/schema/invoices";
 import { meetingProposals, meetings } from "../db/schema/meetings";
 import { notes } from "../db/schema/notes";
@@ -169,10 +170,14 @@ export async function listTasks(args: z.infer<typeof listTasksSchema>) {
       projectName: projects.name,
       assigneeId: tasks.assigneeId,
       assigneeName: users.fullName,
+      assigneeContactId: tasks.assigneeContactId,
+      assigneeContactFirstName: contacts.firstName,
+      assigneeContactLastName: contacts.lastName,
     })
     .from(tasks)
     .leftJoin(projects, eq(projects.id, tasks.projectId))
     .leftJoin(users, eq(users.id, tasks.assigneeId))
+    .leftJoin(contacts, eq(contacts.id, tasks.assigneeContactId))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(asc(tasks.dueDate), desc(tasks.priority))
     .limit(args.limit ?? DEFAULT_LIMIT);
@@ -517,6 +522,145 @@ export async function getNote(args: z.infer<typeof getNoteSchema>) {
     .where(eq(notes.id, args.id))
     .limit(1);
   return row ?? null;
+}
+
+// ---------- EMAILS (Gmail) ----------
+// Les threads sont attachés à un projet/entité via tags Gmail dédiés
+// (gmail_tags + gmail_thread_tags). Pour un contact on dérive au runtime
+// par match sur les adresses du message (pas de label par contact).
+// Tous les threads sont scopés par ctx.userId — un user ne voit que sa
+// boîte. Pour le détail d'un thread on retourne le bodyText (HTML stripé
+// côté ingestion) et on omet bodyHtml pour rester compact.
+
+export const listEmailsSchema = z.object({
+  subjectType: z.enum(["project", "entity", "contact"]),
+  subjectId: z.string().uuid(),
+  since: z.string().optional(),
+  limit: z.number().int().positive().max(100).optional(),
+});
+
+export async function listEmails(args: z.infer<typeof listEmailsSchema>, ctx: UserContext) {
+  const conn = db();
+  const limit = args.limit ?? DEFAULT_LIMIT;
+
+  if (args.subjectType === "contact") {
+    const [contact] = await conn
+      .select({ email: contacts.email })
+      .from(contacts)
+      .where(eq(contacts.id, args.subjectId))
+      .limit(1);
+    if (!contact?.email) return [];
+    const email = contact.email.toLowerCase();
+    const conds = [
+      eq(gmailThreads.userId, ctx.userId),
+      sql`(
+        lower(${gmailMessages.fromEmail}) = ${email}
+        or ${email} = any(${gmailMessages.toEmails})
+        or ${email} = any(${gmailMessages.ccEmails})
+      )`,
+    ];
+    if (args.since) conds.push(gte(gmailThreads.lastMessageAt, new Date(args.since)));
+    return conn
+      .selectDistinct({
+        id: gmailThreads.id,
+        gmailThreadId: gmailThreads.gmailThreadId,
+        subject: gmailThreads.subject,
+        snippet: gmailThreads.snippet,
+        lastMessageAt: gmailThreads.lastMessageAt,
+        messageCount: gmailThreads.messageCount,
+        hasUnread: gmailThreads.hasUnread,
+        participants: gmailThreads.participants,
+      })
+      .from(gmailThreads)
+      .innerJoin(gmailMessages, eq(gmailMessages.threadId, gmailThreads.id))
+      .where(and(...conds))
+      .orderBy(desc(gmailThreads.lastMessageAt))
+      .limit(limit);
+  }
+
+  const conds = [
+    eq(gmailThreads.userId, ctx.userId),
+    eq(gmailTags.kind, args.subjectType),
+    eq(gmailTags.targetId, args.subjectId),
+  ];
+  if (args.since) conds.push(gte(gmailThreads.lastMessageAt, new Date(args.since)));
+  return conn
+    .select({
+      id: gmailThreads.id,
+      gmailThreadId: gmailThreads.gmailThreadId,
+      subject: gmailThreads.subject,
+      snippet: gmailThreads.snippet,
+      lastMessageAt: gmailThreads.lastMessageAt,
+      messageCount: gmailThreads.messageCount,
+      hasUnread: gmailThreads.hasUnread,
+      participants: gmailThreads.participants,
+    })
+    .from(gmailThreads)
+    .innerJoin(gmailThreadTags, eq(gmailThreadTags.threadId, gmailThreads.id))
+    .innerJoin(gmailTags, eq(gmailTags.id, gmailThreadTags.tagId))
+    .where(and(...conds))
+    .orderBy(desc(gmailThreads.lastMessageAt))
+    .limit(limit);
+}
+
+export const getEmailThreadSchema = z.object({ id: z.string().uuid() });
+
+export async function getEmailThread(args: z.infer<typeof getEmailThreadSchema>, ctx: UserContext) {
+  const conn = db();
+  const [thread] = await conn
+    .select()
+    .from(gmailThreads)
+    .where(and(eq(gmailThreads.id, args.id), eq(gmailThreads.userId, ctx.userId)))
+    .limit(1);
+  if (!thread) return null;
+
+  const [messageRows, tagRows] = await Promise.all([
+    conn
+      .select({
+        id: gmailMessages.id,
+        gmailMessageId: gmailMessages.gmailMessageId,
+        fromEmail: gmailMessages.fromEmail,
+        fromName: gmailMessages.fromName,
+        toEmails: gmailMessages.toEmails,
+        ccEmails: gmailMessages.ccEmails,
+        subject: gmailMessages.subject,
+        snippet: gmailMessages.snippet,
+        bodyText: gmailMessages.bodyText,
+        internalDate: gmailMessages.internalDate,
+        labels: gmailMessages.labels,
+        isDraft: gmailMessages.isDraft,
+      })
+      .from(gmailMessages)
+      .where(eq(gmailMessages.threadId, thread.id))
+      .orderBy(asc(gmailMessages.internalDate)),
+    conn
+      .select({
+        tagId: gmailTags.id,
+        kind: gmailTags.kind,
+        targetId: gmailTags.targetId,
+        labelName: gmailTags.labelName,
+        source: gmailThreadTags.source,
+      })
+      .from(gmailThreadTags)
+      .innerJoin(gmailTags, eq(gmailTags.id, gmailThreadTags.tagId))
+      .where(eq(gmailThreadTags.threadId, thread.id))
+      .orderBy(asc(gmailTags.kind), asc(gmailTags.labelName)),
+  ]);
+
+  return {
+    thread: {
+      id: thread.id,
+      gmailThreadId: thread.gmailThreadId,
+      subject: thread.subject,
+      snippet: thread.snippet,
+      lastMessageAt: thread.lastMessageAt,
+      messageCount: thread.messageCount,
+      hasUnread: thread.hasUnread,
+      participants: thread.participants,
+    },
+    messages: messageRows,
+    tags: tagRows,
+  };
 }
 
 // ---------- SEARCH ----------

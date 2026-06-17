@@ -18,6 +18,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
+import { contacts } from "@/db/schema/contacts";
+import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
@@ -185,7 +187,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
   const richConditions = applyFilters(richFilters, richFilterColumns);
   conditions.push(...richConditions);
 
-  const [rows, projectOptions, userOptions] = await Promise.all([
+  const [rows, projectOptions, userOptions, contactOptions] = await Promise.all([
     conn
       .select({
         id: tasks.id,
@@ -198,10 +200,16 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
         assigneeId: users.id,
         assigneeName: users.fullName,
         assigneeAvatarUrl: users.avatarUrl,
+        assigneeContactId: contacts.id,
+        assigneeContactFirstName: contacts.firstName,
+        assigneeContactLastName: contacts.lastName,
+        assigneeContactEntityName: entities.name,
       })
       .from(tasks)
       .leftJoin(projects, eq(tasks.projectId, projects.id))
       .leftJoin(users, eq(tasks.assigneeId, users.id))
+      .leftJoin(contacts, eq(tasks.assigneeContactId, contacts.id))
+      .leftJoin(entities, eq(contacts.entityId, entities.id))
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(...orderByFor(sortState)),
     conn
@@ -212,7 +220,23 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
       .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
       .from(users)
       .orderBy(asc(users.fullName)),
+    conn
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        entityName: entities.name,
+      })
+      .from(contacts)
+      .leftJoin(entities, eq(contacts.entityId, entities.id))
+      .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
   ]);
+
+  const contactOptionsForEditor = contactOptions.map((c) => ({
+    id: c.id,
+    fullName: `${c.firstName} ${c.lastName}`.trim(),
+    entityName: c.entityName ?? null,
+  }));
 
   return (
     <div className="space-y-6">
@@ -422,15 +446,25 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
                     <TaskAssigneeEditor
                       id={row.id}
                       value={
-                        row.assigneeId
+                        row.assigneeContactId
                           ? {
-                              id: row.assigneeId,
-                              fullName: row.assigneeName,
-                              avatarUrl: row.assigneeAvatarUrl,
+                              kind: "contact",
+                              id: row.assigneeContactId,
+                              fullName:
+                                `${row.assigneeContactFirstName ?? ""} ${row.assigneeContactLastName ?? ""}`.trim(),
+                              entityName: row.assigneeContactEntityName ?? null,
                             }
-                          : null
+                          : row.assigneeId
+                            ? {
+                                kind: "user",
+                                id: row.assigneeId,
+                                fullName: row.assigneeName,
+                                avatarUrl: row.assigneeAvatarUrl,
+                              }
+                            : null
                       }
                       options={userOptions}
+                      contactOptions={contactOptionsForEditor}
                     />
                   </TableCell>
                   <TableCell>

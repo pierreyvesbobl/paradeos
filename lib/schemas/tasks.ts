@@ -57,6 +57,8 @@ export const taskBaseSchema = z.object({
   priority: taskPriorityEnum.default("medium"),
   projectId: optionalUuid,
   assigneeId: optionalUuid,
+  /** Assigné externe (contact). XOR avec assigneeId au niveau applicatif. */
+  assigneeContactId: optionalUuid,
   dueDate: optionalDate,
   startDate: optionalDate,
 });
@@ -81,6 +83,7 @@ export const patchTaskSchema = z.object({
   priority: taskPriorityEnum.optional(),
   projectId: z.union([z.string().uuid(), z.null()]).optional(),
   assigneeId: z.union([z.string().uuid(), z.null()]).optional(),
+  assigneeContactId: z.union([z.string().uuid(), z.null()]).optional(),
   dueDate: z
     .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD."), z.null()])
     .optional(),

@@ -10,6 +10,7 @@ import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
 import {
   type Match,
+  type ProjectContext,
   extractMeeting,
   fuzzyMatchContact,
   fuzzyMatchEntity,
@@ -84,7 +85,44 @@ export const extractMeetingProposals = action(extractMeetingSchema, async ({ inp
     .limit(1);
   if (!meeting) throw new Error("Meeting introuvable.");
 
-  const result = await extractMeeting(meeting.transcript);
+  // Si le meeting est rattaché à un projet, on file le contexte au LLM :
+  // par défaut les tâches extraites pointeront sur ce projet, et les
+  // contacts liés au client deviennent les assignés externes prioritaires.
+  let projectContext: ProjectContext | undefined;
+  if (meeting.projectId) {
+    const [proj] = await conn
+      .select({
+        name: projects.name,
+        entityName: entities.name,
+        entityId: projects.entityId,
+      })
+      .from(projects)
+      .leftJoin(entities, eq(entities.id, projects.entityId))
+      .where(eq(projects.id, meeting.projectId))
+      .limit(1);
+    if (proj) {
+      const projectContacts = proj.entityId
+        ? await conn
+            .select({
+              firstName: contacts.firstName,
+              lastName: contacts.lastName,
+              jobTitle: contacts.jobTitle,
+            })
+            .from(contacts)
+            .where(eq(contacts.entityId, proj.entityId))
+        : [];
+      projectContext = {
+        name: proj.name,
+        entityName: proj.entityName ?? null,
+        contacts: projectContacts.map((c) => ({
+          fullName: `${c.firstName} ${c.lastName}`.trim(),
+          jobTitle: c.jobTitle ?? null,
+        })),
+      };
+    }
+  }
+
+  const result = await extractMeeting(meeting.transcript, { projectContext });
 
   await conn.delete(meetingProposals).where(eq(meetingProposals.meetingId, meeting.id));
 
@@ -130,15 +168,51 @@ export const extractMeetingProposals = action(extractMeetingSchema, async ({ inp
     // Pré-résolution des FKs via fuzzy match (pg_trgm). Le LLM phrase
     // souvent les noms autrement que la base — on accepte des écarts
     // raisonnables pour pré-cocher le bon projet / la bonne assignée.
+    //
+    // projectId : si le LLM ne propose pas de projet OU pointe vers le
+    // projet du meeting → on retombe sur meeting.projectId. C'est le
+    // défaut souhaité (cf. UI : un meeting dans projet X = ses tâches
+    // sont dans projet X sauf mention explicite d'un autre projet).
     const projectMatch = t.projectName ? await fuzzyMatchProject(t.projectName) : null;
-    const assigneeMatch = t.assigneeName ? await fuzzyMatchUser(t.assigneeName) : null;
+    const projectId = projectMatch?.id ?? meeting.projectId ?? null;
+
+    // Assignee : selon assigneeKind, on cherche dans users (internal) ou
+    // contacts (external). En l'absence d'indication on tente d'abord
+    // user (rétrocompat), puis contact si rien ne matche.
+    let assigneeUserId: string | null = null;
+    let assigneeContactId: string | null = null;
+    if (t.assigneeName) {
+      if (t.assigneeKind === "external") {
+        const parts = t.assigneeName.trim().split(/\s+/);
+        const first = parts[0] ?? t.assigneeName;
+        const last = parts.slice(1).join(" ") || parts[0] || "";
+        const contactMatch = await fuzzyMatchContact(first, last);
+        assigneeContactId = contactMatch?.id ?? null;
+      } else if (t.assigneeKind === "internal") {
+        const userMatch = await fuzzyMatchUser(t.assigneeName);
+        assigneeUserId = userMatch?.id ?? null;
+      } else {
+        const userMatch = await fuzzyMatchUser(t.assigneeName);
+        if (userMatch) {
+          assigneeUserId = userMatch.id;
+        } else {
+          const parts = t.assigneeName.trim().split(/\s+/);
+          const first = parts[0] ?? t.assigneeName;
+          const last = parts.slice(1).join(" ") || parts[0] || "";
+          const contactMatch = await fuzzyMatchContact(first, last);
+          assigneeContactId = contactMatch?.id ?? null;
+        }
+      }
+    }
+
     proposalsRows.push({
       meetingId: meeting.id,
       kind: "task",
       payload: {
         ...t,
-        projectId: projectMatch?.id ?? null,
-        assigneeId: assigneeMatch?.id ?? null,
+        projectId,
+        assigneeId: assigneeUserId,
+        assigneeContactId,
       },
       matchedId: null,
       matchConfidence: null,
@@ -481,16 +555,33 @@ async function createForKind(
           projectId = matched?.id ?? null;
         }
       }
-      let assigneeId: string | null = (payload.assigneeId as string | null | undefined) ?? null;
-      if (!assigneeId) {
+      // XOR-ish : si un contact externe est désigné, on ignore assigneeId.
+      // Sinon on retombe sur user via assigneeId ou fuzzy-match nom.
+      let assigneeContactId: string | null =
+        (payload.assigneeContactId as string | null | undefined) ?? null;
+      let assigneeId: string | null = assigneeContactId
+        ? null
+        : ((payload.assigneeId as string | null | undefined) ?? null);
+      if (!assigneeId && !assigneeContactId) {
         const assigneeName = payload.assigneeName as string | null | undefined;
+        const assigneeKind = payload.assigneeKind as "internal" | "external" | null | undefined;
         if (assigneeName) {
-          const [matched] = await conn
-            .select({ id: users.id })
-            .from(users)
-            .where(ilike(users.fullName, `%${assigneeName}%`))
-            .limit(1);
-          assigneeId = matched?.id ?? null;
+          if (assigneeKind === "external") {
+            const first = assigneeName.split(" ")[0] ?? assigneeName;
+            const [matched] = await conn
+              .select({ id: contacts.id })
+              .from(contacts)
+              .where(ilike(contacts.firstName, `%${first}%`))
+              .limit(1);
+            assigneeContactId = matched?.id ?? null;
+          } else {
+            const [matched] = await conn
+              .select({ id: users.id })
+              .from(users)
+              .where(ilike(users.fullName, `%${assigneeName}%`))
+              .limit(1);
+            assigneeId = matched?.id ?? null;
+          }
         }
       }
       const dueDate = payload.dueDate as string | null | undefined;
@@ -505,6 +596,7 @@ async function createForKind(
           priority,
           projectId,
           assigneeId,
+          assigneeContactId,
           dueDate: dueDate ?? null,
           createdBy: userId,
         })
@@ -623,8 +715,12 @@ async function applyUpdateForKind(
           projectId = matched?.id ?? null;
         }
       }
-      let assigneeId: string | null = (payload.assigneeId as string | null | undefined) ?? null;
-      if (!assigneeId) {
+      const assigneeContactId: string | null =
+        (payload.assigneeContactId as string | null | undefined) ?? null;
+      let assigneeId: string | null = assigneeContactId
+        ? null
+        : ((payload.assigneeId as string | null | undefined) ?? null);
+      if (!assigneeId && !assigneeContactId) {
         const assigneeName = payload.assigneeName as string | null | undefined;
         if (assigneeName) {
           const [matched] = await conn
@@ -646,6 +742,7 @@ async function applyUpdateForKind(
           priority,
           projectId,
           assigneeId,
+          assigneeContactId,
           dueDate: dueDate ?? null,
         })
         .where(eq(tasks.id, recordId));

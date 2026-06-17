@@ -33,7 +33,8 @@ export const createTask = action(createTaskSchema, async ({ input, user }) => {
       status: input.status,
       priority: input.priority,
       projectId: input.projectId ?? null,
-      assigneeId: input.assigneeId ?? null,
+      assigneeId: input.assigneeContactId ? null : (input.assigneeId ?? null),
+      assigneeContactId: input.assigneeContactId ?? null,
       dueDate: input.dueDate ?? null,
       startDate: input.startDate ?? null,
       completedAt,
@@ -88,7 +89,8 @@ export const updateTask = action(updateTaskSchema, async ({ input }) => {
       status: input.status,
       priority: input.priority,
       projectId: input.projectId ?? null,
-      assigneeId: input.assigneeId ?? null,
+      assigneeId: input.assigneeContactId ? null : (input.assigneeId ?? null),
+      assigneeContactId: input.assigneeContactId ?? null,
       dueDate: input.dueDate ?? null,
       startDate: input.startDate ?? null,
       completedAt,
@@ -178,7 +180,16 @@ export const patchTask = action(patchTaskSchema, async ({ input }) => {
   if (input.title !== undefined) updates.title = input.title;
   if (input.priority !== undefined) updates.priority = input.priority;
   if (input.projectId !== undefined) updates.projectId = input.projectId;
-  if (input.assigneeId !== undefined) updates.assigneeId = input.assigneeId;
+  // XOR-ish : si on set un user comme assignee, on efface le contact, et vice-versa.
+  // Permet à l'éditeur inline de basculer interne ↔ externe sans inconsistance.
+  if (input.assigneeId !== undefined) {
+    updates.assigneeId = input.assigneeId;
+    if (input.assigneeId !== null) updates.assigneeContactId = null;
+  }
+  if (input.assigneeContactId !== undefined) {
+    updates.assigneeContactId = input.assigneeContactId;
+    if (input.assigneeContactId !== null) updates.assigneeId = null;
+  }
   if (input.dueDate !== undefined) updates.dueDate = input.dueDate;
   if (input.startDate !== undefined) updates.startDate = input.startDate;
   if (input.status !== undefined) {

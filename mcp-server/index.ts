@@ -50,6 +50,8 @@ import {
   generateNextCoworkingInvoiceSchema,
   getCoworkingContract,
   getCoworkingContractSchema,
+  getEmailThread,
+  getEmailThreadSchema,
   getMeeting,
   getMeetingSchema,
   getNote,
@@ -62,6 +64,8 @@ import {
   listCoworkingContractsSchema,
   listCoworkingInvoices,
   listCoworkingInvoicesSchema,
+  listEmails,
+  listEmailsSchema,
   listEntities,
   listEntitiesSchema,
   listMeetings,
@@ -209,6 +213,24 @@ server.tool(
   getNoteSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await getNote(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "list_emails",
+  "Liste les threads Gmail liés à un sujet CRM. subjectType='project' (le plus fréquent) ou 'entity' utilise les tags Gmail dédiés ; 'contact' dérive au runtime via match d'adresse. Args : subjectType, subjectId, since? ISO, limit?. Scopé à l'utilisateur courant (sa boîte uniquement).",
+  listEmailsSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await listEmails(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "get_email_thread",
+  "Détail complet d'un thread email : messages (from/to/cc, bodyText, date, labels), tags rattachés. Scopé à la boîte du user.",
+  getEmailThreadSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await getEmailThread(args, ctx), null, 2) }],
   }),
 );
 

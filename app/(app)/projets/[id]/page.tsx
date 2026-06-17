@@ -134,9 +134,15 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         assigneeId: tasks.assigneeId,
         assigneeName: users.fullName,
         assigneeAvatarUrl: users.avatarUrl,
+        assigneeContactId: tasks.assigneeContactId,
+        assigneeContactFirstName: contactsTable.firstName,
+        assigneeContactLastName: contactsTable.lastName,
+        assigneeContactEntityName: entities.name,
       })
       .from(tasks)
       .leftJoin(users, eq(tasks.assigneeId, users.id))
+      .leftJoin(contactsTable, eq(tasks.assigneeContactId, contactsTable.id))
+      .leftJoin(entities, eq(contactsTable.entityId, entities.id))
       .where(eq(tasks.projectId, id))
       .orderBy(asc(tasks.dueDate), asc(tasks.title)),
     getProjectMembers(id),
@@ -159,10 +165,18 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         firstName: contactsTable.firstName,
         lastName: contactsTable.lastName,
         email: contactsTable.email,
+        entityName: entities.name,
       })
       .from(contactsTable)
+      .leftJoin(entities, eq(entities.id, contactsTable.entityId))
       .orderBy(asc(contactsTable.lastName), asc(contactsTable.firstName)),
   ]);
+
+  const contactAssigneeOptions = contactOptions.map((c) => ({
+    id: c.id,
+    fullName: `${c.firstName} ${c.lastName}`.trim(),
+    entityName: c.entityName ?? null,
+  }));
 
   const quoteInvoice = quoteInvoiceRows[0];
   const notesList = notesData.list;
@@ -207,15 +221,25 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
                 <TaskAssigneeEditor
                   id={t.id}
                   value={
-                    t.assigneeId
+                    t.assigneeContactId
                       ? {
-                          id: t.assigneeId,
-                          fullName: t.assigneeName,
-                          avatarUrl: t.assigneeAvatarUrl,
+                          kind: "contact",
+                          id: t.assigneeContactId,
+                          fullName:
+                            `${t.assigneeContactFirstName ?? ""} ${t.assigneeContactLastName ?? ""}`.trim(),
+                          entityName: t.assigneeContactEntityName ?? null,
                         }
-                      : null
+                      : t.assigneeId
+                        ? {
+                            kind: "user",
+                            id: t.assigneeId,
+                            fullName: t.assigneeName,
+                            avatarUrl: t.assigneeAvatarUrl,
+                          }
+                        : null
                   }
                   options={userOptions}
+                  contactOptions={contactAssigneeOptions}
                 />
                 <TaskDueDateEditor id={t.id} value={t.dueDate} />
                 <TaskRowActions id={t.id} title={t.title} />

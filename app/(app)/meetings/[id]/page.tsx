@@ -54,8 +54,10 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
           id: contacts.id,
           firstName: contacts.firstName,
           lastName: contacts.lastName,
+          entityName: entities.name,
         })
         .from(contacts)
+        .leftJoin(entities, eq(entities.id, contacts.entityId))
         .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
       conn
         .select({ id: tasks.id, title: tasks.title })
@@ -142,6 +144,7 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
         contacts={contactOptions.map((c) => ({
           id: c.id,
           fullName: `${c.firstName} ${c.lastName}`.trim(),
+          entityName: c.entityName ?? null,
         }))}
         existingTasks={taskOptions}
       />

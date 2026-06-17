@@ -30,6 +30,8 @@ import {
   createProjectSchema,
   createTask,
   createTaskSchema,
+  getEmailThread,
+  getEmailThreadSchema,
   getMeeting,
   getMeetingSchema,
   getNote,
@@ -39,6 +41,8 @@ import {
   getPromptMessages,
   listContacts,
   listContactsSchema,
+  listEmails,
+  listEmailsSchema,
   listEntities,
   listEntitiesSchema,
   listMeetings,
@@ -193,6 +197,18 @@ const TOOL_REGISTRY: Record<
     description: "Détail complet d'une note par id (contenu intégral + auteur + sujet).",
     schema: getNoteSchema,
     handler: (a) => getNote(a as never),
+  },
+  list_emails: {
+    description:
+      "Liste les threads Gmail liés à un sujet CRM. subjectType='project' (le plus fréquent) ou 'entity' utilise les tags Gmail dédiés ; 'contact' dérive au runtime via match d'adresse. Args : subjectType, subjectId, since? ISO, limit?. Scopé à la boîte du user courant.",
+    schema: listEmailsSchema,
+    handler: (a, ctx) => listEmails(a as never, ctx as never),
+  },
+  get_email_thread: {
+    description:
+      "Détail d'un thread email par id : messages (from/to/cc, bodyText, date, labels) + tags rattachés. Scopé à la boîte du user.",
+    schema: getEmailThreadSchema,
+    handler: (a, ctx) => getEmailThread(a as never, ctx as never),
   },
   search_all: {
     description: "Full-text search.",

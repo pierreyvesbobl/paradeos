@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { date, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { contacts } from "./contacts";
 import { projects } from "./projects";
 import { users } from "./users";
 
@@ -28,7 +29,14 @@ export const tasks = pgTable(
     status: taskStatus("status").notNull().default("todo"),
     priority: taskPriority("priority").notNull().default("medium"),
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    /** Assigné interne (membre Paradeos). XOR avec assigneeContactId au niveau applicatif —
+     * une tâche est soit pour un membre, soit pour un contact externe. */
     assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
+    /** Assigné externe (contact CRM, typiquement côté client). Posé via les
+     * extractions de meeting pour ne pas perdre les actions des autres. */
+    assigneeContactId: uuid("assignee_contact_id").references(() => contacts.id, {
+      onDelete: "set null",
+    }),
     dueDate: date("due_date"),
     /** Date de début pour la vue Gantt et la planification. Optionnel —
      * une tâche peut être seulement deadline-driven (`due_date` seul). */
@@ -44,6 +52,7 @@ export const tasks = pgTable(
     priorityIdx: index("tasks_priority_idx").on(table.priority),
     projectIdx: index("tasks_project_idx").on(table.projectId),
     assigneeIdx: index("tasks_assignee_idx").on(table.assigneeId),
+    assigneeContactIdx: index("tasks_assignee_contact_idx").on(table.assigneeContactId),
     dueDateIdx: index("tasks_due_date_idx").on(table.dueDate),
   }),
 );

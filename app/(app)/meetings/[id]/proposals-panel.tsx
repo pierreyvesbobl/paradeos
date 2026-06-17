@@ -32,7 +32,7 @@ type ProjectOption = { id: string; name: string };
 type UserOption = { id: string; fullName: string | null };
 type NamedOption = { id: string; name: string };
 type TitledOption = { id: string; title: string };
-type ContactOption = { id: string; fullName: string };
+type ContactOption = { id: string; fullName: string; entityName?: string | null };
 
 type LinkOptions = {
   projects: ProjectOption[];
@@ -199,7 +199,7 @@ function ProposalRow({
   // trouvé (anciennes propositions, ou matching strict trop restrictif).
   const augmented =
     proposal.kind === "task"
-      ? augmentTaskPayload(initial, options.projects, options.users)
+      ? augmentTaskPayload(initial, options.projects, options.users, options.contacts)
       : initial;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<string, unknown>>(augmented);
@@ -280,6 +280,7 @@ function ProposalRow({
             proposal.payload as Record<string, unknown>,
             options.projects,
             options.users,
+            options.contacts,
           )
         : (proposal.payload as Record<string, unknown>),
     );
@@ -600,28 +601,75 @@ function ProposalEditor({
                 onChange={(e) => patch({ title: e.target.value })}
               />
             </Field>
-            <Field label="Assignée" htmlFor="assigneeId">
+            <Field label="Assignée" htmlFor="assigneeRef">
               <FkCombobox
-                id="assigneeId"
-                value={val("assigneeId") || null}
-                onValueChange={(id) => {
-                  const user = id ? options.users.find((u) => u.id === id) : null;
-                  patch({
-                    assigneeId: id,
-                    assigneeName: user?.fullName ?? null,
-                  });
+                id="assigneeRef"
+                value={
+                  val("assigneeContactId")
+                    ? `c:${val("assigneeContactId")}`
+                    : val("assigneeId")
+                      ? `u:${val("assigneeId")}`
+                      : null
+                }
+                onValueChange={(ref) => {
+                  if (!ref) {
+                    patch({
+                      assigneeId: null,
+                      assigneeContactId: null,
+                      assigneeName: null,
+                      assigneeKind: null,
+                    });
+                    return;
+                  }
+                  if (ref.startsWith("u:")) {
+                    const id = ref.slice(2);
+                    const u = options.users.find((x) => x.id === id);
+                    patch({
+                      assigneeId: id,
+                      assigneeContactId: null,
+                      assigneeName: u?.fullName ?? null,
+                      assigneeKind: "internal",
+                    });
+                  } else if (ref.startsWith("c:")) {
+                    const id = ref.slice(2);
+                    const c = options.contacts.find((x) => x.id === id);
+                    patch({
+                      assigneeId: null,
+                      assigneeContactId: id,
+                      assigneeName: c?.fullName ?? null,
+                      assigneeKind: "external",
+                    });
+                  }
                 }}
-                options={options.users.map((u) => ({
-                  id: u.id,
-                  label: u.fullName ?? "(sans nom)",
-                }))}
+                options={[
+                  ...options.users.map((u) => ({
+                    id: `u:${u.id}`,
+                    label: u.fullName ?? "(sans nom)",
+                    leading: (
+                      <span className="rounded bg-sky-100 px-1 py-0.5 font-medium text-[10px] text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                        Paradeos
+                      </span>
+                    ),
+                  })),
+                  ...options.contacts.map((c) => ({
+                    id: `c:${c.id}`,
+                    label: c.entityName ? `${c.fullName} — ${c.entityName}` : c.fullName,
+                    searchValue: `${c.fullName} ${c.entityName ?? ""}`,
+                    leading: (
+                      <span className="rounded bg-amber-100 px-1 py-0.5 font-medium text-[10px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                        Externe
+                      </span>
+                    ),
+                  })),
+                ]}
                 placeholder="— Personne —"
-                searchPlaceholder="Rechercher un membre…"
+                searchPlaceholder="Membre Paradeos ou contact externe…"
                 clearLabel="Personne"
               />
-              {draft.assigneeName && !draft.assigneeId ? (
+              {draft.assigneeName && !draft.assigneeId && !draft.assigneeContactId ? (
                 <p className="mt-1 text-amber-700 text-xs dark:text-amber-400">
-                  LLM avait suggéré « {String(draft.assigneeName)} » — non trouvé en base.
+                  LLM avait suggéré « {String(draft.assigneeName)} »
+                  {draft.assigneeKind === "external" ? " (externe)" : ""} — non trouvé en base.
                 </p>
               ) : null}
             </Field>
@@ -918,11 +966,27 @@ function augmentTaskPayload(
   payload: Record<string, unknown>,
   projects: ProjectOption[],
   users: UserOption[],
+  contacts: ContactOption[],
 ): Record<string, unknown> {
   const next = { ...payload };
-  if (!next.assigneeId && typeof next.assigneeName === "string" && next.assigneeName) {
-    const u = findByName(users, next.assigneeName, (x) => x.fullName);
-    if (u) next.assigneeId = u.id;
+  const hasAssignee = next.assigneeId || next.assigneeContactId;
+  if (!hasAssignee && typeof next.assigneeName === "string" && next.assigneeName) {
+    const kind = next.assigneeKind as "internal" | "external" | undefined;
+    if (kind === "external") {
+      const c = findByName(contacts, next.assigneeName, (x) => x.fullName);
+      if (c) next.assigneeContactId = c.id;
+    } else if (kind === "internal") {
+      const u = findByName(users, next.assigneeName, (x) => x.fullName);
+      if (u) next.assigneeId = u.id;
+    } else {
+      const u = findByName(users, next.assigneeName, (x) => x.fullName);
+      if (u) {
+        next.assigneeId = u.id;
+      } else {
+        const c = findByName(contacts, next.assigneeName, (x) => x.fullName);
+        if (c) next.assigneeContactId = c.id;
+      }
+    }
   }
   if (!next.projectId && typeof next.projectName === "string" && next.projectName) {
     const p = findByName(projects, next.projectName, (x) => x.name);
@@ -962,7 +1026,10 @@ function detailsFor(p: MeetingProposal, payload: Record<string, unknown>): strin
   const bits: string[] = [];
   switch (p.kind) {
     case "task":
-      if (payload.assigneeName) bits.push(`→ ${payload.assigneeName}`);
+      if (payload.assigneeName) {
+        const ext = payload.assigneeContactId || payload.assigneeKind === "external";
+        bits.push(`→ ${payload.assigneeName}${ext ? " (externe)" : ""}`);
+      }
       if (payload.dueDate) bits.push(`📅 ${payload.dueDate}`);
       if (payload.projectName) bits.push(`📁 ${payload.projectName}`);
       if (payload.priority && payload.priority !== "normal")
