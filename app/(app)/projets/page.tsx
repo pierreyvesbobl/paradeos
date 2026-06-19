@@ -235,20 +235,12 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
         title="Projets"
         description="Missions clients (delivery + pipeline commercial), produits internes et initiatives transverses."
         actions={
-          <>
-            <Button asChild variant="outline">
-              <Link href="/crm/pipeline">
-                <Sparkles className="size-4" />
-                Pipeline
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link href="/projets/nouveau">
-                <Plus className="size-4" />
-                Nouveau projet
-              </Link>
-            </Button>
-          </>
+          <Button asChild>
+            <Link href="/projets/nouveau">
+              <Plus className="size-4" />
+              Nouveau projet
+            </Link>
+          </Button>
         }
       />
 

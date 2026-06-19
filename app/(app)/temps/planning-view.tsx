@@ -1,13 +1,13 @@
-import { Button } from "@/components/ui/button";
 import { contacts } from "@/db/schema/contacts";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { timeEntries } from "@/db/schema/time-entries";
 import { requireUser } from "@/lib/auth/server";
-import { addDays, startOfIsoWeek } from "@/lib/calendar";
+import { addDays, formatWeekRange, startOfIsoWeek } from "@/lib/calendar";
 import { getCalendarEventsForRange } from "@/lib/db/queries/calendar";
 import { db } from "@/lib/db/server";
 import { formatDuration } from "@/lib/format";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq, gte, lt } from "drizzle-orm";
 import Link from "next/link";
 import { WeekView } from "./week-view";
@@ -85,26 +85,54 @@ export async function PlanningView({ week }: { week?: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="inline-flex items-center gap-2 text-xs">
-          <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 tabular-nums dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-            Réalisé : {formatDuration(actualMinutes)}
+      <div className="flex flex-wrap items-center gap-3.5">
+        <div className="inline-flex items-center overflow-hidden rounded-lg border bg-[var(--ds-bg-app)]">
+          <Link
+            href={`/temps?tab=planning&week=${isoDateLocal(prevWeek)}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-[var(--ds-bg-hover)]"
+          >
+            <CaretLeft size={12} weight="bold" />
+            Sem. préc.
+          </Link>
+          <span className="h-5 w-px self-stretch bg-border" />
+          <Link
+            href="/temps?tab=planning"
+            className="px-3 py-1.5 font-medium text-[13px] text-foreground transition-colors hover:bg-[var(--ds-bg-hover)]"
+          >
+            Aujourd'hui
+          </Link>
+          <span className="h-5 w-px self-stretch bg-border" />
+          <Link
+            href={`/temps?tab=planning&week=${isoDateLocal(nextWeek)}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-[var(--ds-bg-hover)]"
+          >
+            Sem. suiv.
+            <CaretRight size={12} weight="bold" />
+          </Link>
+        </div>
+        <h2 className="font-semibold text-[16px] text-foreground">{formatWeekRange(weekStart)}</h2>
+        <span className="ml-auto inline-flex items-center gap-3">
+          <span
+            className="inline-flex items-center gap-2 rounded-full px-3 py-1 font-medium text-[13px]"
+            style={{
+              background: "var(--ds-tint-green-bg)",
+              color: "var(--ds-tint-green-text)",
+            }}
+          >
+            <span
+              className="inline-block size-1.5 rounded-full"
+              style={{ background: "var(--ds-tint-green-dot)" }}
+            />
+            Réalisé · {formatDuration(actualMinutes)}
           </span>
-          <span className="rounded-full border bg-muted/30 px-2 py-0.5 tabular-nums">
-            Planifié : {formatDuration(plannedMinutes)}
+          <span className="inline-flex items-center gap-2 rounded-full border bg-[var(--ds-bg-surface)] px-3 py-1 font-medium text-[13px] text-muted-foreground">
+            <span
+              className="inline-block size-1.5 rounded-full"
+              style={{ background: "var(--ds-text-tertiary)" }}
+            />
+            Planifié · {formatDuration(plannedMinutes)}
           </span>
         </span>
-        <div className="ml-auto flex items-center gap-1">
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/temps?tab=planning&week=${isoDateLocal(prevWeek)}`}>← Sem. préc.</Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/temps?tab=planning">Aujourd'hui</Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/temps?tab=planning&week=${isoDateLocal(nextWeek)}`}>Sem. suiv. →</Link>
-          </Button>
-        </div>
       </div>
 
       <WeekView

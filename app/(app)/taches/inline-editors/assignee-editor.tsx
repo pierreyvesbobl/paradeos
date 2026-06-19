@@ -1,30 +1,19 @@
 "use client";
 
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ContactAvatar } from "@/components/user/contact-avatar";
-import { UserAvatar } from "@/components/user/user-avatar";
+import { type AssigneeRef, AssigneesPicker } from "@/components/tasks/assignees-picker";
+import type { TaskContactOption, TaskUserOption } from "@/components/tasks/task-types";
 import { patchTask } from "@/lib/actions/tasks";
-import { Check, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-type UserOption = { id: string; fullName: string | null; avatarUrl: string | null };
-type ContactOption = { id: string; fullName: string; entityName?: string | null };
+export type AssigneeValue = AssigneeRef;
 
-export type AssigneeValue =
-  | { kind: "user"; id: string; fullName: string | null; avatarUrl: string | null }
-  | { kind: "contact"; id: string; fullName: string; entityName: string | null }
-  | null;
-
+/**
+ * Éditeur inline d'assignés multi. Hydrate avec la liste actuelle ;
+ * sauvegarde via patchTask({ assignees }) à chaque ajout/retrait, avec
+ * optimistic UI et rollback en cas d'échec.
+ */
 export function TaskAssigneeEditor({
   id,
   value,
@@ -32,118 +21,38 @@ export function TaskAssigneeEditor({
   contactOptions,
 }: {
   id: string;
-  value: AssigneeValue;
-  options: UserOption[];
-  contactOptions?: ContactOption[];
+  value: AssigneeValue[];
+  options: TaskUserOption[];
+  contactOptions?: TaskContactOption[];
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  const [local, setLocal] = useState<AssigneeValue[]>(value);
+  useEffect(() => setLocal(value), [value]);
 
-  function pickUser(next: string | null) {
-    const current = value?.kind === "user" ? value.id : null;
-    if ((next ?? null) === current && value?.kind !== "contact") {
-      setOpen(false);
-      return;
-    }
+  function commit(next: AssigneeValue[]) {
+    const previous = local;
+    setLocal(next);
     startTransition(async () => {
-      const res = await patchTask({ id, assigneeId: next, assigneeContactId: null });
+      const res = await patchTask({
+        id,
+        assignees: next.map((a) => ({ kind: a.kind, id: a.id })),
+      });
       if (!res.ok) {
+        setLocal(previous);
         toast.error(res.message);
         return;
       }
-      setOpen(false);
       router.refresh();
     });
   }
-
-  function pickContact(next: string) {
-    if (value?.kind === "contact" && value.id === next) {
-      setOpen(false);
-      return;
-    }
-    startTransition(async () => {
-      const res = await patchTask({ id, assigneeId: null, assigneeContactId: next });
-      if (!res.ok) {
-        toast.error(res.message);
-        return;
-      }
-      setOpen(false);
-      router.refresh();
-    });
-  }
-
-  const triggerLabel = () => {
-    if (!value) return <span className="px-1.5 text-muted-foreground text-sm">—</span>;
-    if (value.kind === "user") {
-      return <UserAvatar size="sm" name={value.fullName} avatarUrl={value.avatarUrl} />;
-    }
-    return <ContactAvatar size="sm" name={value.fullName} entityName={value.entityName} />;
-  };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          disabled={pending}
-          className="rounded-full outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-        >
-          {triggerLabel()}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-0">
-        <Command>
-          <CommandInput placeholder="Membre Paradeos ou contact externe…" />
-          <CommandList>
-            <CommandEmpty>Aucun résultat.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem onSelect={() => pickUser(null)} value="__aucun__">
-                <X className="size-3.5 text-muted-foreground" />
-                <span className="text-muted-foreground">Non assignée</span>
-                {value === null ? <Check className="ml-auto size-3.5" /> : null}
-              </CommandItem>
-            </CommandGroup>
-            <CommandGroup heading="Paradeos">
-              {options.map((opt) => (
-                <CommandItem
-                  key={`u:${opt.id}`}
-                  value={`u ${opt.fullName ?? opt.id}`}
-                  onSelect={() => pickUser(opt.id)}
-                >
-                  <UserAvatar size="sm" name={opt.fullName} avatarUrl={opt.avatarUrl} />
-                  <span>{opt.fullName ?? "(sans nom)"}</span>
-                  {value?.kind === "user" && opt.id === value.id ? (
-                    <Check className="ml-auto size-3.5" />
-                  ) : null}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-            {contactOptions && contactOptions.length > 0 ? (
-              <CommandGroup heading="Externes">
-                {contactOptions.map((opt) => (
-                  <CommandItem
-                    key={`c:${opt.id}`}
-                    value={`c ${opt.fullName} ${opt.entityName ?? ""}`}
-                    onSelect={() => pickContact(opt.id)}
-                  >
-                    <ContactAvatar size="sm" name={opt.fullName} entityName={opt.entityName} />
-                    <span className="truncate">
-                      {opt.fullName}
-                      {opt.entityName ? (
-                        <span className="text-muted-foreground"> — {opt.entityName}</span>
-                      ) : null}
-                    </span>
-                    {value?.kind === "contact" && opt.id === value.id ? (
-                      <Check className="ml-auto size-3.5" />
-                    ) : null}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <AssigneesPicker
+      value={local}
+      onChange={commit}
+      userOptions={options}
+      contactOptions={contactOptions}
+    />
   );
 }

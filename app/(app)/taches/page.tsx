@@ -1,29 +1,20 @@
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { NotionFilters } from "@/components/table/notion-filters";
-import {
-  type SortState,
-  SortableHeader,
-  parseSort,
-  sortToParam,
-} from "@/components/table/sortable-header";
+import { type SortState, parseSort, sortToParam } from "@/components/table/sortable-header";
+import { TaskTable } from "@/components/tasks/task-table";
+import type { TaskRowData } from "@/components/tasks/task-types";
 import { Button } from "@/components/ui/button";
 import { SearchInputWithClear } from "@/components/ui/search-input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
+import { taskAssignees } from "@/db/schema/task-assignees";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
+import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { collectF } from "@/lib/filters/url-helpers";
@@ -50,7 +41,11 @@ function orderByFor(sort: SortState): SQL[] {
     case "priority":
       return [dir(tasks.priority), asc(tasks.title)];
     case "assignee":
-      return [dir(users.fullName), asc(tasks.title)];
+      // En multi-assigné on trie côté JS si vraiment voulu — ici on
+      // dégrade en tri par titre (l'assignée n'est plus une colonne
+      // scalaire). UX : la pile d'avatars n'a pas d'ordre canonique
+      // évident, le sort est moins intéressant qu'avant.
+      return [asc(tasks.title)];
     case "dueDate":
       return [dir(tasks.dueDate), asc(tasks.title)];
     default:
@@ -74,14 +69,6 @@ function buildHref(p: {
   const qs = sp.toString();
   return qs ? `/taches?${qs}` : "/taches";
 }
-import { TaskAssigneeEditor } from "./inline-editors/assignee-editor";
-import { TaskDueDateEditor } from "./inline-editors/due-date-editor";
-import { TaskPriorityEditor } from "./inline-editors/priority-editor";
-import { TaskProjectEditor } from "./inline-editors/project-editor";
-import { TaskRowActions } from "./inline-editors/row-actions";
-import { TaskStatusEditor } from "./inline-editors/status-editor";
-import { QuickAddTask } from "./quick-add-task";
-import { TaskToggle } from "./task-toggle";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -109,7 +96,13 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
   const conn = await db();
   const conditions = [];
 
-  if (onlyMine) conditions.push(eq(tasks.assigneeId, authUser.id));
+  // "Les miennes" : EXISTS sur task_assignees pour matcher les tâches où je
+  // suis dans la liste des assignés (peut être 1 parmi N).
+  if (onlyMine) {
+    conditions.push(
+      sql`EXISTS (SELECT 1 FROM ${taskAssignees} ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${authUser.id})`,
+    );
+  }
 
   if (activeStatus === "open") {
     conditions.push(sql`${tasks.status} not in ('done', 'cancelled')`);
@@ -180,14 +173,31 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
     { key: "status", column: tasks.status, kind: "enum" as const },
     { key: "priority", column: tasks.priority, kind: "enum" as const },
     { key: "project", column: tasks.projectId, kind: "enum" as const },
-    { key: "assignee", column: tasks.assigneeId, kind: "enum" as const },
     { key: "title", column: tasks.title, kind: "text" as const },
     { key: "dueDate", column: tasks.dueDate, kind: "date" as const },
   ];
   const richConditions = applyFilters(richFilters, richFilterColumns);
   conditions.push(...richConditions);
+  // Le filtre "assignee" ne peut plus s'exprimer sur une colonne unique
+  // (multi-assigné) — on le traduit en EXISTS sur task_assignees.
+  for (const f of richFilters) {
+    if (f.key !== "assignee") continue;
+    const raw = Array.isArray(f.value) ? f.value : f.value == null ? [] : [f.value];
+    const ids = raw.filter((v): v is string => typeof v === "string" && v.length > 0);
+    if (ids.length === 0) continue;
+    const positive = f.op === "is" || f.op === "in";
+    const clause = sql`EXISTS (
+      SELECT 1 FROM ${taskAssignees} ta
+      WHERE ta.task_id = ${tasks.id}
+      AND ta.user_id = ANY(ARRAY[${sql.join(
+        ids.map((id) => sql`${id}`),
+        sql`, `,
+      )}]::uuid[])
+    )`;
+    conditions.push(positive ? clause : sql`NOT (${clause})`);
+  }
 
-  const [rows, projectOptions, userOptions, contactOptions] = await Promise.all([
+  const [rawTasks, projectOptions, userOptions, contactOptions] = await Promise.all([
     conn
       .select({
         id: tasks.id,
@@ -197,19 +207,9 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
         dueDate: tasks.dueDate,
         projectId: projects.id,
         projectName: projects.name,
-        assigneeId: users.id,
-        assigneeName: users.fullName,
-        assigneeAvatarUrl: users.avatarUrl,
-        assigneeContactId: contacts.id,
-        assigneeContactFirstName: contacts.firstName,
-        assigneeContactLastName: contacts.lastName,
-        assigneeContactEntityName: entities.name,
       })
       .from(tasks)
       .leftJoin(projects, eq(tasks.projectId, projects.id))
-      .leftJoin(users, eq(tasks.assigneeId, users.id))
-      .leftJoin(contacts, eq(tasks.assigneeContactId, contacts.id))
-      .leftJoin(entities, eq(contacts.entityId, entities.id))
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(...orderByFor(sortState)),
     conn
@@ -232,10 +232,50 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
       .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
   ]);
 
+  const assigneesByTask = await fetchAssigneesForTasks(
+    conn,
+    rawTasks.map((r) => r.id),
+  );
+
   const contactOptionsForEditor = contactOptions.map((c) => ({
     id: c.id,
     fullName: `${c.firstName} ${c.lastName}`.trim(),
     entityName: c.entityName ?? null,
+  }));
+
+  // Pré-calcule un href par champ triable. La fonction `buildHref` ne peut
+  // pas traverser la frontière server → client component, donc on sérialise
+  // l'état "où aller si on clique sur cette colonne" sous forme de map.
+  const sortHrefsMap = Object.fromEntries(
+    SORT_FIELDS.map((field) => {
+      const isActive = sortState?.field === field;
+      const next = !isActive
+        ? { field, dir: "asc" as const }
+        : sortState?.dir === "asc"
+          ? { field, dir: "desc" as const }
+          : null;
+      return [
+        field,
+        buildHref({
+          q: query,
+          status: activeStatus,
+          filters: collectF(params),
+          scope: onlyMine ? "mine" : undefined,
+          sort: sortToParam(next),
+        }),
+      ];
+    }),
+  );
+
+  const taskRows: TaskRowData[] = rawTasks.map((row) => ({
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    priority: row.priority,
+    dueDate: row.dueDate,
+    projectId: row.projectId,
+    projectName: row.projectName,
+    assignees: assigneesByTask.get(row.id) ?? [],
   }));
 
   return (
@@ -291,9 +331,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
         {sort ? <input type="hidden" name="sort" value={sort} /> : null}
       </form>
 
-      <QuickAddTask placeholder="+ Ajouter une tâche… (Entrée pour valider)" />
-
-      {rows.length === 0 ? (
+      {rawTasks.length === 0 ? (
         <EmptyState
           icon={CheckSquare}
           title={query ? "Aucune tâche trouvée." : "Aucune tâche pour ce filtre."}
@@ -309,180 +347,18 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
           }
         />
       ) : (
-        <div className="rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10" />
-                <TableHead>
-                  <SortableHeader
-                    label="Tâche"
-                    field="title"
-                    current={sortState}
-                    buildHref={(next) =>
-                      buildHref({
-                        q: query,
-                        status: activeStatus,
-                        filters: collectF(params),
-                        scope: onlyMine ? "mine" : undefined,
-                        sort: sortToParam(next),
-                      })
-                    }
-                  />
-                </TableHead>
-                <TableHead>
-                  <SortableHeader
-                    label="Projet"
-                    field="project"
-                    current={sortState}
-                    buildHref={(next) =>
-                      buildHref({
-                        q: query,
-                        status: activeStatus,
-                        filters: collectF(params),
-                        scope: onlyMine ? "mine" : undefined,
-                        sort: sortToParam(next),
-                      })
-                    }
-                  />
-                </TableHead>
-                <TableHead>
-                  <SortableHeader
-                    label="Statut"
-                    field="status"
-                    current={sortState}
-                    buildHref={(next) =>
-                      buildHref({
-                        q: query,
-                        status: activeStatus,
-                        filters: collectF(params),
-                        scope: onlyMine ? "mine" : undefined,
-                        sort: sortToParam(next),
-                      })
-                    }
-                  />
-                </TableHead>
-                <TableHead>
-                  <SortableHeader
-                    label="Priorité"
-                    field="priority"
-                    current={sortState}
-                    buildHref={(next) =>
-                      buildHref({
-                        q: query,
-                        status: activeStatus,
-                        filters: collectF(params),
-                        scope: onlyMine ? "mine" : undefined,
-                        sort: sortToParam(next),
-                      })
-                    }
-                  />
-                </TableHead>
-                <TableHead>
-                  <SortableHeader
-                    label="Assignée"
-                    field="assignee"
-                    current={sortState}
-                    buildHref={(next) =>
-                      buildHref({
-                        q: query,
-                        status: activeStatus,
-                        filters: collectF(params),
-                        scope: onlyMine ? "mine" : undefined,
-                        sort: sortToParam(next),
-                      })
-                    }
-                  />
-                </TableHead>
-                <TableHead>
-                  <SortableHeader
-                    label="Échéance"
-                    field="dueDate"
-                    current={sortState}
-                    buildHref={(next) =>
-                      buildHref({
-                        q: query,
-                        status: activeStatus,
-                        filters: collectF(params),
-                        scope: onlyMine ? "mine" : undefined,
-                        sort: sortToParam(next),
-                      })
-                    }
-                  />
-                </TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>
-                    <TaskToggle id={row.id} done={row.status === "done"} />
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/taches/${row.id}`}
-                      className={`hover:underline ${row.status === "done" ? "text-muted-foreground line-through" : ""}`}
-                    >
-                      {row.title}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <TaskProjectEditor
-                      id={row.id}
-                      value={
-                        row.projectId ? { id: row.projectId, name: row.projectName ?? "" } : null
-                      }
-                      options={projectOptions}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <TaskStatusEditor id={row.id} value={row.status} />
-                  </TableCell>
-                  <TableCell>
-                    <TaskPriorityEditor id={row.id} value={row.priority} />
-                  </TableCell>
-                  <TableCell>
-                    <TaskAssigneeEditor
-                      id={row.id}
-                      value={
-                        row.assigneeContactId
-                          ? {
-                              kind: "contact",
-                              id: row.assigneeContactId,
-                              fullName:
-                                `${row.assigneeContactFirstName ?? ""} ${row.assigneeContactLastName ?? ""}`.trim(),
-                              entityName: row.assigneeContactEntityName ?? null,
-                            }
-                          : row.assigneeId
-                            ? {
-                                kind: "user",
-                                id: row.assigneeId,
-                                fullName: row.assigneeName,
-                                avatarUrl: row.assigneeAvatarUrl,
-                              }
-                            : null
-                      }
-                      options={userOptions}
-                      contactOptions={contactOptionsForEditor}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <TaskDueDateEditor id={row.id} value={row.dueDate} />
-                  </TableCell>
-                  <TableCell>
-                    <TaskRowActions id={row.id} title={row.title} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <TaskTable
+          rows={taskRows}
+          userOptions={userOptions}
+          contactOptions={contactOptionsForEditor}
+          projectOptions={projectOptions}
+          sort={sortState}
+          sortHrefs={sortHrefsMap}
+        />
       )}
     </div>
   );
 }
-
 function FilterLink({ href, active, label }: { href: string; active: boolean; label: string }) {
   return (
     <Link

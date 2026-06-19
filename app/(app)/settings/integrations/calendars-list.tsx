@@ -104,7 +104,7 @@ export function CalendarsList({ calendars }: { calendars: CalendarRow[] }) {
                 <p className="truncate font-medium text-sm">
                   {c.summary}
                   {c.isPrimary ? (
-                    <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground uppercase tracking-wide">
                       principal
                     </span>
                   ) : null}

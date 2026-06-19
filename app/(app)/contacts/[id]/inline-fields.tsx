@@ -55,10 +55,12 @@ export function ContLastName({
   id,
   value,
   className,
+  placeholder,
 }: {
   id: string;
   value: string;
   className?: string;
+  placeholder?: string;
 }) {
   return (
     <InlineText
@@ -66,6 +68,7 @@ export function ContLastName({
       nullable={false}
       maxLength={120}
       className={className}
+      placeholder={placeholder}
       onSave={makeSaver<string | null>(id, "lastName")}
     />
   );
@@ -75,16 +78,19 @@ export function ContEmail({
   id,
   value,
   className,
+  placeholder,
 }: {
   id: string;
   value: string | null;
   className?: string;
+  placeholder?: string;
 }) {
   return (
     <InlineText
       value={value}
       maxLength={200}
       className={className}
+      placeholder={placeholder}
       onSave={async (raw): Promise<SaveResult> => {
         const trimmed = raw?.trim() ?? "";
         if (trimmed === "") {
@@ -102,16 +108,19 @@ export function ContPhone({
   id,
   value,
   className,
+  placeholder,
 }: {
   id: string;
   value: string | null;
   className?: string;
+  placeholder?: string;
 }) {
   return (
     <InlineText
       value={value}
       maxLength={40}
       className={className}
+      placeholder={placeholder}
       onSave={makeSaver<string | null>(id, "phone")}
     />
   );
@@ -166,10 +175,12 @@ export function ContEntity({
   id,
   value,
   options,
+  placeholder,
 }: {
   id: string;
   value: { id: string; name: string } | null;
   options: { id: string; name: string }[];
+  placeholder?: string;
 }) {
   return (
     <InlineFk
@@ -178,6 +189,7 @@ export function ContEntity({
       onSave={makeSaver<string | null>(id, "entityId")}
       searchPlaceholder="Rechercher une entité…"
       clearLabel="Aucune entité"
+      placeholder={placeholder}
       onCreate={async (name) => {
         const res = await quickCreateEntity({ name });
         if (!res.ok) throw new Error(res.message);

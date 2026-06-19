@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { UserAvatar } from "@/components/user/user-avatar";
 import { patchProject, quickCreateProject } from "@/lib/actions/projects";
 import { formatDate, formatEuro } from "@/lib/format";
 import { type ProjectStatus, projectStatusLabels } from "@/lib/schemas/projects";
@@ -21,8 +23,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { Building2, Clock, Plus } from "lucide-react";
-import Link from "next/link";
+import { Buildings, CalendarBlank, Clock, Plus } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -39,6 +40,8 @@ export type PipelineItem = {
   probability: number | null;
   followUpDate: string | null;
   entityName: string | null;
+  ownerName: string | null;
+  ownerAvatarUrl: string | null;
 };
 
 const COLUMNS: ProjectStatus[] = [
@@ -49,18 +52,28 @@ const COLUMNS: ProjectStatus[] = [
   "lost",
 ];
 
-const STATUS_DOT: Record<ProjectStatus, string> = {
-  not_started: "bg-slate-400",
-  to_follow_up: "bg-amber-500",
-  awaiting_response: "bg-orange-500",
-  won: "bg-emerald-500",
-  lost: "bg-rose-500",
-  planning: "bg-slate-400",
-  active: "bg-emerald-500",
-  on_hold: "bg-slate-300",
-  completed: "bg-indigo-500",
-  archived: "bg-slate-300",
+type Tint = "gray" | "yellow" | "orange" | "green" | "red";
+
+const STATUS_TINT: Record<ProjectStatus, Tint> = {
+  not_started: "gray",
+  to_follow_up: "yellow",
+  awaiting_response: "orange",
+  won: "green",
+  lost: "red",
+  planning: "gray",
+  active: "green",
+  on_hold: "gray",
+  completed: "green",
+  archived: "gray",
 };
+
+function tintVars(tint: Tint) {
+  return {
+    background: `var(--ds-tint-${tint}-bg)`,
+    color: `var(--ds-tint-${tint}-text)`,
+    "--tint-dot": `var(--ds-tint-${tint}-dot)`,
+  } as React.CSSProperties;
+}
 
 export function PipelineBoard({ items }: { items: PipelineItem[] }) {
   const router = useRouter();
@@ -110,7 +123,7 @@ export function PipelineBoard({ items }: { items: PipelineItem[] }) {
     <>
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <div className="-mx-6 overflow-x-auto px-6 pb-2">
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-4">
             {COLUMNS.map((status) => (
               <Column
                 key={status}
@@ -134,27 +147,18 @@ export function PipelineBoard({ items }: { items: PipelineItem[] }) {
 
 function Column({ status, items }: { status: ProjectStatus; items: PipelineItem[] }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
+  const tint = STATUS_TINT[status];
   const total = items.reduce((acc, it) => acc + Number(it.valueAmount ?? 0), 0);
   return (
     <section
       ref={setNodeRef}
-      className={`flex w-72 shrink-0 flex-col gap-2 rounded-lg border p-2 transition-colors ${
-        isOver ? "border-foreground/30 bg-muted/70" : "bg-muted/40"
+      style={tintVars(tint)}
+      className={`flex w-[300px] shrink-0 flex-col gap-2.5 rounded-xl p-2.5 transition-[box-shadow] ${
+        isOver ? "shadow-[inset_0_0_0_2px_var(--tint-dot)]" : ""
       }`}
     >
-      <header className="flex items-center justify-between px-2 py-1">
-        <div className="flex items-center gap-2">
-          <span className={`inline-block size-2 rounded-full ${STATUS_DOT[status]}`} />
-          <h2 className="font-medium text-sm">{projectStatusLabels[status]}</h2>
-          <span className="text-muted-foreground text-xs">{items.length}</span>
-        </div>
-        {total > 0 ? (
-          <span className="font-medium text-muted-foreground text-xs tabular-nums">
-            {formatEuro(total)}
-          </span>
-        ) : null}
-      </header>
-      <ul className="flex flex-col gap-2">
+      <ColumnHeader title={projectStatusLabels[status]} count={items.length} total={total} />
+      <ul className="flex flex-col gap-2.5">
         {items.map((it) => (
           <Card key={it.id} item={it} />
         ))}
@@ -164,7 +168,33 @@ function Column({ status, items }: { status: ProjectStatus; items: PipelineItem[
   );
 }
 
+function ColumnHeader({
+  title,
+  count,
+  total,
+}: {
+  title: string;
+  count: number;
+  total: number;
+}) {
+  return (
+    <header className="flex items-center gap-2.5 px-1 pt-0.5">
+      <span
+        className="inline-flex size-6 flex-none items-center justify-center rounded-full bg-[var(--ds-bg-app)] font-bold text-[12px] shadow-sm"
+        style={{ color: "inherit" }}
+      >
+        {count}
+      </span>
+      <h2 className="whitespace-nowrap font-semibold text-[15px] leading-none">{title}</h2>
+      <span className="flex-1" />
+      {total > 0 ? <span className="font-mono text-xs opacity-80">{formatEuro(total)}</span> : null}
+      <Plus size={14} weight="bold" className="opacity-75" />
+    </header>
+  );
+}
+
 function Card({ item }: { item: PipelineItem }) {
+  const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.id,
   });
@@ -175,37 +205,79 @@ function Card({ item }: { item: PipelineItem }) {
       }
     : undefined;
 
+  const probability =
+    item.probability != null ? Math.max(0, Math.min(100, item.probability)) : null;
+  const overdueDays = item.followUpDate ? computeOverdueDays(item.followUpDate) : 0;
+
+  // Navigation programmatique : on n'enveloppe plus la carte dans un <Link>
+  // pour pouvoir embarquer un picker date (interactif) sans HTML invalide
+  // (<button> dans <a>). On garde la sémantique role="link" + onClick.
+  function openProject(e: React.MouseEvent) {
+    if (isDragging) {
+      e.preventDefault();
+      return;
+    }
+    // Ouverture cmd/ctrl-clic = nouvel onglet (comme un vrai Link).
+    if (e.metaKey || e.ctrlKey) {
+      window.open(`/projets/${item.id}`, "_blank");
+      return;
+    }
+    router.push(`/projets/${item.id}`);
+  }
+
   return (
     <li
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
-      className={`group cursor-grab rounded-lg border border-border/60 bg-background shadow-sm transition-shadow active:cursor-grabbing ${
-        isDragging ? "opacity-70 shadow-lg ring-2 ring-foreground/20" : "hover:shadow-md"
+      className={`group cursor-grab rounded-[10px] border border-border/70 bg-[var(--ds-bg-app)] shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition-shadow active:cursor-grabbing ${
+        isDragging
+          ? "opacity-70 shadow-lg ring-2 ring-foreground/20"
+          : "hover:-translate-y-px hover:shadow-sm"
       }`}
     >
-      <Link
-        href={`/projets/${item.id}`}
-        onClick={(e) => {
-          if (isDragging) e.preventDefault();
+      {/** biome-ignore lint/a11y/useSemanticElements: <a> imbriquerait <button>
+       *  (le DateInput-trigger). On garde un div role="link" + onClick. */}
+      <div
+        role="link"
+        tabIndex={0}
+        onClick={openProject}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") router.push(`/projets/${item.id}`);
         }}
-        className="block space-y-2 px-3 py-2.5"
+        className="block space-y-2.5 px-3 py-3"
       >
         <p className="font-medium text-foreground text-sm leading-snug">{item.name}</p>
-        {item.entityName ? (
-          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Building2 className="size-3" />
-            <span className="truncate">{item.entityName}</span>
+
+        <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px] text-muted-foreground">
+            <Buildings
+              size={14}
+              weight="duotone"
+              className="flex-none text-[var(--ds-text-tertiary)]"
+            />
+            <span className="truncate">{item.entityName ?? "—"}</span>
           </div>
-        ) : null}
-        <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px] text-muted-foreground">
+          {item.ownerName ? (
+            <UserAvatar
+              name={item.ownerName}
+              avatarUrl={item.ownerAvatarUrl}
+              size="sm"
+              className="size-[26px]"
+            />
+          ) : null}
+        </div>
+
+        <div className="h-px bg-border/70" />
+
+        <div className="flex items-center gap-2">
           {item.valueAmount ? (
             <span
               className={
                 item.valueSource === "dougs"
-                  ? "rounded border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
-                  : "rounded bg-muted px-1.5 py-0.5 font-medium"
+                  ? "font-medium font-mono text-[13px] text-indigo-700 dark:text-indigo-300"
+                  : "font-medium font-mono text-[13px] text-foreground"
               }
               title={
                 item.valueSource === "dougs"
@@ -216,28 +288,137 @@ function Card({ item }: { item: PipelineItem }) {
               {formatEuro(Number(item.valueAmount))}
               {item.valueSource === "dougs" ? " ⓘ" : ""}
             </span>
-          ) : null}
-          {item.probability != null ? (
-            <span
-              className="inline-flex items-center gap-1"
-              title={`Probabilité ${item.probability}%`}
-            >
-              <span className="relative inline-block h-1 w-6 overflow-hidden rounded-full bg-muted">
+          ) : (
+            <span className="text-[12px] text-[var(--ds-text-tertiary)]">Montant à définir</span>
+          )}
+
+          <span className="flex-1" />
+
+          <FollowUpEditor id={item.id} value={item.followUpDate} overdueDays={overdueDays} />
+
+          {probability != null ? (
+            <span className="inline-flex flex-none items-center gap-1.5">
+              <span className="relative h-[5px] w-10 overflow-hidden rounded-full bg-[var(--ds-bg-press)]">
                 <span
-                  className="absolute inset-y-0 left-0 bg-foreground/70"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, item.probability))}%`,
-                  }}
+                  className="absolute inset-y-0 left-0 rounded-full bg-[var(--ds-primary-400)]"
+                  style={{ width: `${probability}%` }}
                 />
               </span>
-              <span className="tabular-nums">{item.probability}%</span>
+              <span className="font-semibold text-[11px] text-[var(--ds-text-tertiary)] tabular-nums">
+                {probability}%
+              </span>
             </span>
           ) : null}
-          {item.followUpDate ? <FollowUpBadge date={item.followUpDate} /> : null}
         </div>
-      </Link>
+      </div>
     </li>
   );
+}
+
+/**
+ * Picker date de relance — sert de remplaçant au badge overdue/lecture.
+ *
+ *  - aucune date    → bouton subtil "+ Relance" (visible au hover de la carte)
+ *  - date à venir   → pill neutre avec date formatée + icône calendar
+ *  - date dépassée  → pill rouge "Xj" comme avant
+ *
+ * Stop la propagation du `pointerDown`/`click` pour éviter de déclencher
+ * le drag dnd-kit ou la navigation vers la fiche projet.
+ */
+function FollowUpEditor({
+  id,
+  value,
+  overdueDays,
+}: {
+  id: string;
+  value: string | null;
+  overdueDays: number;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [optimistic, setOptimistic] = useState<string | null>(value);
+  useEffect(() => setOptimistic(value), [value]);
+
+  function commit(next: string) {
+    const nextOrNull = next === "" ? null : next;
+    if (nextOrNull === optimistic) return;
+    const prev = optimistic;
+    setOptimistic(nextOrNull);
+    startTransition(async () => {
+      const res = await patchProject({ id, followUpDate: nextOrNull });
+      if (!res.ok) {
+        setOptimistic(prev);
+        toast.error(res.message);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  // Évite que le clic descende sur le wrapper "block" (qui déclenche la
+  // navigation) ou sur le `<li>` (qui déclenche le drag dnd-kit).
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+
+  return (
+    <span
+      onPointerDown={stop}
+      onMouseDown={stop}
+      onKeyDown={stop}
+      onClick={stop}
+      className="inline-flex flex-none"
+    >
+      <DateInput
+        value={optimistic ?? ""}
+        onValueChange={commit}
+        disabled={pending}
+        trigger={
+          optimistic && overdueDays > 0 ? (
+            <button
+              type="button"
+              disabled={pending}
+              title={`Relance ${formatDate(optimistic)} — en retard de ${overdueDays}j`}
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold text-[11px] transition-opacity hover:opacity-80"
+              style={{
+                background: "var(--ds-tint-red-bg)",
+                color: "var(--ds-tint-red-text)",
+              }}
+            >
+              <Clock size={12} weight="duotone" />
+              {overdueDays}j
+            </button>
+          ) : optimistic ? (
+            <button
+              type="button"
+              disabled={pending}
+              title={`Relance prévue le ${formatDate(optimistic)}`}
+              className="inline-flex items-center gap-1 rounded-full bg-[var(--ds-bg-hover)] px-2 py-0.5 font-medium text-[11px] text-muted-foreground transition-opacity hover:opacity-80"
+            >
+              <CalendarBlank size={12} weight="duotone" />
+              {formatDate(optimistic)}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={pending}
+              title="Définir une date de relance"
+              className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium text-[11px] text-[var(--ds-text-tertiary)] opacity-0 transition-opacity hover:bg-[var(--ds-bg-hover)] group-hover:opacity-100"
+            >
+              <CalendarBlank size={12} weight="duotone" />
+              Relance
+            </button>
+          )
+        }
+      />
+    </span>
+  );
+}
+
+function computeOverdueDays(date: string): number {
+  const followUp = new Date(date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const followUpDay = new Date(followUp.getFullYear(), followUp.getMonth(), followUp.getDate());
+  return Math.floor((today.getTime() - followUpDay.getTime()) / 86400000);
 }
 
 /**
@@ -248,37 +429,36 @@ function Card({ item }: { item: PipelineItem }) {
 function StaticBoard({ items }: { items: PipelineItem[] }) {
   return (
     <div className="-mx-6 overflow-x-auto px-6 pb-2">
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-4">
         {COLUMNS.map((status) => {
           const colItems = items.filter((it) => it.status === status);
           const total = colItems.reduce((acc, it) => acc + Number(it.valueAmount ?? 0), 0);
+          const tint = STATUS_TINT[status];
           return (
             <section
               key={status}
-              className="flex w-72 shrink-0 flex-col gap-2 rounded-lg border bg-muted/40 p-2"
+              style={tintVars(tint)}
+              className="flex w-[300px] shrink-0 flex-col gap-2.5 rounded-xl p-2.5"
             >
-              <header className="flex items-center justify-between px-2 py-1">
-                <div className="flex items-center gap-2">
-                  <span className={`inline-block size-2 rounded-full ${STATUS_DOT[status]}`} />
-                  <h2 className="font-medium text-sm">{projectStatusLabels[status]}</h2>
-                  <span className="text-muted-foreground text-xs">{colItems.length}</span>
-                </div>
-                {total > 0 ? (
-                  <span className="font-medium text-muted-foreground text-xs tabular-nums">
-                    {formatEuro(total)}
-                  </span>
-                ) : null}
-              </header>
-              <ul className="flex flex-col gap-2">
+              <ColumnHeader
+                title={projectStatusLabels[status]}
+                count={colItems.length}
+                total={total}
+              />
+              <ul className="flex flex-col gap-2.5">
                 {colItems.map((it) => (
                   <li
                     key={it.id}
-                    className="rounded-lg border border-border/60 bg-background px-3 py-2.5 shadow-sm"
+                    className="rounded-[10px] border border-border/70 bg-[var(--ds-bg-app)] px-3 py-3 shadow-[0_1px_2px_rgba(15,15,15,0.04)]"
                   >
                     <p className="font-medium text-foreground text-sm leading-snug">{it.name}</p>
                     {it.entityName ? (
-                      <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <Building2 className="size-3" />
+                      <div className="mt-2 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                        <Buildings
+                          size={14}
+                          weight="duotone"
+                          className="text-[var(--ds-text-tertiary)]"
+                        />
                         <span className="truncate">{it.entityName}</span>
                       </div>
                     ) : null}
@@ -320,9 +500,10 @@ function ColumnAddForm({ status }: { status: ProjectStatus }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground"
+        className="flex w-full items-center justify-center gap-1.5 rounded-[10px] border-[1.5px] border-dashed py-2.5 font-medium text-[13px] opacity-85 transition-opacity hover:opacity-100"
+        style={{ borderColor: "var(--tint-dot)", color: "inherit" }}
       >
-        <Plus className="size-3.5" />
+        <Plus size={14} weight="bold" />
         Ajouter un deal
       </button>
     );
@@ -334,7 +515,7 @@ function ColumnAddForm({ status }: { status: ProjectStatus }) {
         e.preventDefault();
         submit();
       }}
-      className="space-y-1.5 rounded-md border bg-background p-1.5"
+      className="space-y-1.5 rounded-[10px] border border-border/70 bg-[var(--ds-bg-app)] p-2"
     >
       <input
         type="text"
@@ -353,7 +534,7 @@ function ColumnAddForm({ status }: { status: ProjectStatus }) {
         }}
         placeholder="Titre du deal…"
         disabled={pending}
-        className="w-full rounded-sm bg-transparent px-1.5 py-0.5 text-sm outline-none focus-visible:bg-muted/50"
+        className="w-full rounded-sm bg-transparent px-1.5 py-0.5 text-foreground text-sm outline-none focus-visible:bg-muted/50"
       />
       <div className="flex items-center justify-end gap-1">
         <button
@@ -376,28 +557,6 @@ function ColumnAddForm({ status }: { status: ProjectStatus }) {
         </button>
       </div>
     </form>
-  );
-}
-
-function FollowUpBadge({ date }: { date: string }) {
-  const followUp = new Date(date);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const followUpDay = new Date(followUp.getFullYear(), followUp.getMonth(), followUp.getDate());
-  const overdueDays = Math.floor((today.getTime() - followUpDay.getTime()) / 86400000);
-  if (overdueDays > 0) {
-    return (
-      <span className="inline-flex items-center gap-0.5 font-medium text-destructive">
-        <Clock className="size-3" />
-        En retard de {overdueDays}j
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-0.5">
-      <Clock className="size-3" />
-      {formatDate(date)}
-    </span>
   );
 }
 

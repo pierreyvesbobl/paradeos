@@ -2,8 +2,9 @@
 
 import { Button } from "@/components/ui/button";
 import { moveTimeEntry } from "@/lib/actions/time-entries";
-import { DAY_LABELS, addDays, formatWeekRange, startOfIsoWeek } from "@/lib/calendar";
+import { DAY_LABELS, addDays, startOfIsoWeek } from "@/lib/calendar";
 import { formatDuration } from "@/lib/format";
+import { Plus } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
@@ -11,6 +12,26 @@ import {
   CalendarEventAttributionDialog,
 } from "./calendar-event-attribution-dialog";
 import { TimeEntryDialog } from "./time-entry-dialog";
+
+type EventTint = "blue" | "green" | "mauve" | "orange" | "red";
+
+/**
+ * Catégorie visuelle d'une entrée. Heuristique simple :
+ *  - planned (créneau planifié) → mauve (réunion interne)
+ *  - actual + projectId         → blue  (projet client)
+ *  - actual + contactId only    → green (coworking — proxy : contact externe sans projet)
+ *  - default                    → orange (admin / social)
+ */
+function entryTint(e: {
+  kind: "planned" | "actual";
+  projectId: string | null;
+  contactId: string | null;
+}): EventTint {
+  if (e.kind === "planned") return "mauve";
+  if (e.projectId) return "blue";
+  if (e.contactId) return "green";
+  return "orange";
+}
 
 const HOUR_HEIGHT = 48; // px par heure
 const HOURS_START = 7; // 07:00
@@ -277,9 +298,7 @@ export function WeekView({
 
   return (
     <>
-      <p className="text-muted-foreground text-sm">{formatWeekRange(weekStart)}</p>
-
-      <div className="overflow-x-auto rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card">
         <div
           ref={gridRef}
           className="grid select-none"
@@ -291,27 +310,32 @@ export function WeekView({
             setCreateDrag(null);
           }}
         >
-          <div className="border-r border-b bg-muted/30" />
+          <div className="border-r border-b bg-[var(--ds-bg-surface)]" />
           {days.map((d, i) => {
             const today = isSameDay(d, new Date());
             const minutes = dayActualMinutes(d, optimistic);
             return (
               <div
                 key={d.toISOString()}
-                className={`space-y-0.5 border-r border-b px-2 py-2 text-xs ${today ? "bg-primary/5" : "bg-muted/30"}`}
+                className="space-y-0.5 border-r border-b px-3 py-2.5 text-xs"
+                style={{
+                  background: today ? "var(--ds-primary-50)" : "var(--ds-bg-surface)",
+                }}
               >
-                <p className="font-medium">{DAY_LABELS[i]}</p>
                 <p
-                  className={`text-muted-foreground ${today ? "font-medium text-foreground" : ""}`}
+                  className="font-semibold text-[13px]"
+                  style={{ color: today ? "var(--ds-primary-900)" : "var(--ds-text)" }}
                 >
+                  {DAY_LABELS[i]}
+                </p>
+                <p className="text-[12px] text-[var(--ds-text-tertiary)]">
                   {d.getDate()}/{String(d.getMonth() + 1).padStart(2, "0")}
                 </p>
                 <p
-                  className={`tabular-nums ${
-                    minutes > 0
-                      ? "font-medium text-emerald-600 dark:text-emerald-400"
-                      : "text-muted-foreground/50"
-                  }`}
+                  className="font-semibold text-[12px] tabular-nums"
+                  style={{
+                    color: minutes > 0 ? "var(--ds-tint-green-text)" : "var(--ds-text-tertiary)",
+                  }}
                   title="Temps réalisé sur la journée"
                 >
                   {minutes > 0 ? formatDuration(minutes) : "—"}
@@ -363,7 +387,13 @@ export function WeekView({
         </div>
       </div>
 
-      <Button onClick={() => setDialogState({ mode: "create", defaults: defaultRange() })}>
+      <CategoryLegend />
+
+      <Button
+        onClick={() => setDialogState({ mode: "create", defaults: defaultRange() })}
+        className="gap-1.5"
+      >
+        <Plus size={13} weight="bold" />
         Nouveau créneau
       </Button>
 
@@ -442,11 +472,19 @@ function DayColumn({
 }) {
   const dayEntries = entries.filter((e) => isSameDay(new Date(e.startAt), day));
   const dayGoogleEvents = googleEvents.filter((e) => isSameDay(new Date(e.startAt), day));
+  const now = new Date();
+  const isToday = isSameDay(day, now);
+  const nowMinutes = (now.getHours() - HOURS_START) * 60 + now.getMinutes();
+  const showNowLine = isToday && nowMinutes >= 0 && nowMinutes <= (HOURS_END - HOURS_START) * 60;
+  const nowTop = (nowMinutes / 60) * HOUR_HEIGHT;
 
   return (
     <div
       className="relative border-r"
-      style={{ height: HOUR_HEIGHT * (HOURS_END - HOURS_START) }}
+      style={{
+        height: HOUR_HEIGHT * (HOURS_END - HOURS_START),
+        background: isToday ? "var(--ds-primary-50)" : undefined,
+      }}
       onPointerDown={(e) => {
         // Filtre les boutons gauche uniquement.
         if (e.button !== 0) return;
@@ -460,6 +498,18 @@ function DayColumn({
           style={{ top: idx * HOUR_HEIGHT, height: HOUR_HEIGHT, pointerEvents: "none" }}
         />
       ))}
+
+      {showNowLine ? (
+        <div
+          className="pointer-events-none absolute right-0 left-0 z-[5]"
+          style={{ top: nowTop, borderTop: "2px solid var(--ds-tint-red-dot)" }}
+        >
+          <span
+            className="-translate-y-1/2 absolute left-0 inline-block size-2 rounded-full"
+            style={{ background: "var(--ds-tint-red-dot)" }}
+          />
+        </div>
+      ) : null}
 
       {/* Ghost de création */}
       {createDrag ? (
@@ -557,32 +607,36 @@ function DayColumn({
               );
               const top = (startMinutes / 60) * HOUR_HEIGHT;
               const height = (durationMinutes / 60) * HOUR_HEIGHT - 2;
-              const isPlanned = e.kind === "planned";
-              const bg = e.color ?? (isPlanned ? "rgb(79 70 229 / 0.12)" : "rgb(34 197 94 / 0.16)");
-              const border = isPlanned ? "border-primary/40" : "border-emerald-500/40";
+              const tint = entryTint(e);
               const isDragging = entryDragId === e.id;
 
               const slot = layout.get(e.id) ?? { lane: 0, lanes: 1 };
               const widthPct = 100 / slot.lanes;
               const leftPct = slot.lane * widthPct;
 
+              const inlineBg = e.color ?? `var(--ds-tint-${tint}-bg)`;
+              const accent = e.color ?? `var(--ds-tint-${tint}-dot)`;
+              const text = `var(--ds-tint-${tint}-text)`;
+
               return (
                 <div
                   key={e.id}
-                  className={`absolute z-[1] rounded border ${border} text-left text-[11px] leading-tight shadow-sm ${
+                  className={`absolute z-[1] overflow-hidden rounded-md text-left text-[11px] leading-tight shadow-[0_1px_2px_rgba(15,15,15,0.04)] ${
                     isDragging ? "z-10 opacity-90 shadow-lg ring-2 ring-primary/50" : ""
                   }`}
                   style={{
                     top,
                     height,
-                    backgroundColor: bg,
+                    background: inlineBg,
+                    borderLeft: `3px solid ${accent}`,
+                    color: text,
                     left: `calc(${leftPct}% + 2px)`,
                     width: `calc(${widthPct}% - ${gutter + 2}px)`,
                   }}
                 >
                   <button
                     type="button"
-                    className="block h-full w-full cursor-grab overflow-hidden px-1.5 py-1 text-left active:cursor-grabbing"
+                    className="block h-full w-full cursor-grab overflow-hidden px-2 py-1 text-left active:cursor-grabbing"
                     onPointerDown={(ev) => startEntryDrag(ev, e, "move")}
                     onClick={(ev) => {
                       if (isDragging) {
@@ -592,7 +646,7 @@ function DayColumn({
                       onEntryClick(e);
                     }}
                   >
-                    <p className="flex items-center gap-1 truncate font-medium">
+                    <p className="flex items-center gap-1 truncate font-medium text-[12px] leading-tight">
                       {e.googleEventId ? (
                         <span
                           className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm bg-foreground/10 font-semibold text-[8px] text-foreground/70"
@@ -603,7 +657,7 @@ function DayColumn({
                       ) : null}
                       <span className="truncate">{e.title ?? "Sans titre"}</span>
                     </p>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="mt-px text-[10px] tabular-nums opacity-70">
                       {formatHm(start)}–{formatHm(end)}
                     </p>
                   </button>
@@ -620,6 +674,30 @@ function DayColumn({
           </>
         );
       })()}
+    </div>
+  );
+}
+
+function CategoryLegend() {
+  const items: { tint: EventTint; label: string }[] = [
+    { tint: "blue", label: "Projet client" },
+    { tint: "green", label: "Coworking" },
+    { tint: "mauve", label: "Planifié / réunion" },
+    { tint: "orange", label: "Social / admin" },
+    { tint: "red", label: "Important" },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-4 text-[12px] text-muted-foreground">
+      <span className="text-[var(--ds-text-tertiary)]">Catégories</span>
+      {items.map((it) => (
+        <span key={it.tint} className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block size-2.5 rounded-[3px]"
+            style={{ background: `var(--ds-tint-${it.tint}-dot)` }}
+          />
+          {it.label}
+        </span>
+      ))}
     </div>
   );
 }

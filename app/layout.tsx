@@ -1,12 +1,19 @@
 import { Toaster } from "@/components/ui/sonner";
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const sans = Hanken_Grotesk({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
+});
+
+const brand = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-brand",
+  display: "swap",
+  axes: ["opsz"],
 });
 
 const mono = JetBrains_Mono({
@@ -23,7 +30,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" suppressHydrationWarning>
-      <body className={`${inter.variable} ${mono.variable} font-sans`}>
+      <body className={`${sans.variable} ${brand.variable} ${mono.variable} font-sans`}>
         {children}
         <Toaster richColors position="top-right" />
       </body>

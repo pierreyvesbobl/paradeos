@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -22,9 +23,18 @@ type Props = {
   /** Phrase de confirmation, ex. "Supprimer le contact \"Jean Dupont\" ?" */
   confirmTitle: string;
   confirmDescription?: string;
+  /** Classe optionnelle pour adapter le trigger (largeur, alignement, etc.). */
+  className?: string;
 };
 
-export function DeleteButton({ action, id, label, confirmTitle, confirmDescription }: Props) {
+export function DeleteButton({
+  action,
+  id,
+  label,
+  confirmTitle,
+  confirmDescription,
+  className,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -47,7 +57,11 @@ export function DeleteButton({ action, id, label, confirmTitle, confirmDescripti
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn("text-destructive hover:text-destructive", className)}
+        >
           <Trash2 className="size-4" />
           {label}
         </Button>

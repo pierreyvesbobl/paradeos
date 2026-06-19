@@ -8,13 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ContactAvatar } from "@/components/user/contact-avatar";
 import { UserAvatar } from "@/components/user/user-avatar";
-import { contacts } from "@/db/schema/contacts";
-import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
-import { users } from "@/db/schema/users";
 import { deleteTaskAndRedirect } from "@/lib/actions/tasks";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
+import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { getTaskTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
 import { formatDateTime, formatDuration } from "@/lib/format";
@@ -35,20 +33,16 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
     .select({
       task: tasks,
       project: projects,
-      assignee: users,
-      assigneeContact: contacts,
-      assigneeContactEntityName: entities.name,
     })
     .from(tasks)
     .leftJoin(projects, eq(tasks.projectId, projects.id))
-    .leftJoin(users, eq(tasks.assigneeId, users.id))
-    .leftJoin(contacts, eq(tasks.assigneeContactId, contacts.id))
-    .leftJoin(entities, eq(entities.id, contacts.entityId))
     .where(eq(tasks.id, id))
     .limit(1);
 
   if (!row) notFound();
-  const { task, project, assignee, assigneeContact, assigneeContactEntityName } = row;
+  const { task, project } = row;
+  const assigneesByTask = await fetchAssigneesForTasks(conn, [id]);
+  const assignees = assigneesByTask.get(id) ?? [];
   const timeStats = await getTaskTimeStats(id);
   const notesList = await getNotesForSubject("task", id);
   const attachmentRows = await getAttachmentsForNotes(notesList.map((n) => n.id));
@@ -151,35 +145,30 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
             )}
           </div>
           <div>
-            <h2 className="font-medium text-sm">Assignée à</h2>
-            <div className="mt-2 text-sm">
-              {assigneeContact ? (
-                <div className="inline-flex items-center gap-2">
-                  <ContactAvatar
-                    size="sm"
-                    name={`${assigneeContact.firstName} ${assigneeContact.lastName}`.trim()}
-                    entityName={assigneeContactEntityName}
-                  />
-                  <span>
-                    {`${assigneeContact.firstName} ${assigneeContact.lastName}`.trim() ||
-                      "(sans nom)"}
-                  </span>
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-[10px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                    Externe
-                  </span>
-                  {assigneeContactEntityName ? (
-                    <span className="text-muted-foreground text-xs">
-                      — {assigneeContactEntityName}
-                    </span>
-                  ) : null}
-                </div>
-              ) : assignee ? (
-                <div className="inline-flex items-center gap-2">
-                  <UserAvatar size="sm" name={assignee.fullName} avatarUrl={assignee.avatarUrl} />
-                  <span>{assignee.fullName ?? "(sans nom)"}</span>
-                </div>
-              ) : (
+            <h2 className="font-medium text-sm">Assigné{assignees.length > 1 ? "s" : "e"} à</h2>
+            <div className="mt-2 space-y-1.5 text-sm">
+              {assignees.length === 0 ? (
                 <span className="text-muted-foreground">—</span>
+              ) : (
+                assignees.map((a) =>
+                  a.kind === "user" ? (
+                    <div key={`u:${a.id}`} className="flex items-center gap-2">
+                      <UserAvatar size="sm" name={a.fullName} avatarUrl={a.avatarUrl} />
+                      <span>{a.fullName ?? "(sans nom)"}</span>
+                    </div>
+                  ) : (
+                    <div key={`c:${a.id}`} className="flex items-center gap-2">
+                      <ContactAvatar size="sm" name={a.fullName} entityName={a.entityName} />
+                      <span>{a.fullName || "(sans nom)"}</span>
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-[10px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                        Externe
+                      </span>
+                      {a.entityName ? (
+                        <span className="text-muted-foreground text-xs">— {a.entityName}</span>
+                      ) : null}
+                    </div>
+                  ),
+                )
               )}
             </div>
           </div>

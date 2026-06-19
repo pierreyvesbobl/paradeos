@@ -93,7 +93,7 @@ export async function GET(request: Request) {
       .leftJoin(projects, eq(tasks.projectId, projects.id))
       .where(
         and(
-          eq(tasks.assigneeId, user.id),
+          sql`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${user.id})`,
           isNotNull(tasks.dueDate),
           lt(tasks.dueDate, todayIso),
           sql`${tasks.status} not in ('done', 'cancelled')`,

@@ -259,7 +259,7 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
           )}
         </button>
       </div>
-      <pre className="overflow-x-auto p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+      <pre className="overflow-x-auto whitespace-pre-wrap p-2 font-mono text-[11px] leading-relaxed">
         {code}
       </pre>
     </div>

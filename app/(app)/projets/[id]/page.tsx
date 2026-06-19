@@ -1,10 +1,3 @@
-import { TaskAssigneeEditor } from "@/app/(app)/taches/inline-editors/assignee-editor";
-import { TaskDueDateEditor } from "@/app/(app)/taches/inline-editors/due-date-editor";
-import { TaskPriorityEditor } from "@/app/(app)/taches/inline-editors/priority-editor";
-import { TaskRowActions } from "@/app/(app)/taches/inline-editors/row-actions";
-import { TaskStatusEditor } from "@/app/(app)/taches/inline-editors/status-editor";
-import { QuickAddTask } from "@/app/(app)/taches/quick-add-task";
-import { TaskToggle } from "@/app/(app)/taches/task-toggle";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { DriveFolderSection } from "@/components/drive/drive-folder-section";
@@ -17,6 +10,8 @@ import { ProjectMembersField } from "@/components/projects/project-members-field
 import { ProjectMeetingsSection } from "@/components/projets/project-meetings-section";
 import { ProjectSecretsSection } from "@/components/projets/project-secrets-section";
 import { ProjectTabs } from "@/components/projets/project-tabs";
+import { TaskTable } from "@/components/tasks/task-table";
+import type { TaskRowData } from "@/components/tasks/task-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { contacts as contactsTable } from "@/db/schema/contacts";
@@ -30,6 +25,7 @@ import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/not
 import { getProjectProfitability } from "@/lib/db/queries/profitability";
 import { getProjectContacts, getProjectMembers } from "@/lib/db/queries/project-members";
 import { getProjectSecretsList } from "@/lib/db/queries/project-secrets";
+import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { getProjectTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
 import { formatDuration, formatEuro } from "@/lib/format";
@@ -131,18 +127,8 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         status: tasks.status,
         priority: tasks.priority,
         dueDate: tasks.dueDate,
-        assigneeId: tasks.assigneeId,
-        assigneeName: users.fullName,
-        assigneeAvatarUrl: users.avatarUrl,
-        assigneeContactId: tasks.assigneeContactId,
-        assigneeContactFirstName: contactsTable.firstName,
-        assigneeContactLastName: contactsTable.lastName,
-        assigneeContactEntityName: entities.name,
       })
       .from(tasks)
-      .leftJoin(users, eq(tasks.assigneeId, users.id))
-      .leftJoin(contactsTable, eq(tasks.assigneeContactId, contactsTable.id))
-      .leftJoin(entities, eq(contactsTable.entityId, entities.id))
       .where(eq(tasks.projectId, id))
       .orderBy(asc(tasks.dueDate), asc(tasks.title)),
     getProjectMembers(id),
@@ -187,71 +173,31 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     attachmentsByNote[a.noteId]?.push(a);
   }
 
-  const openTasks = projectTasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
-  const doneTasks = projectTasks.filter((t) => t.status === "done");
+  const projectAssigneesByTask = await fetchAssigneesForTasks(
+    conn,
+    projectTasks.map((t) => t.id),
+  );
+
+  const taskRows: TaskRowData[] = projectTasks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    priority: t.priority,
+    dueDate: t.dueDate,
+    projectId: id,
+    projectName: project.name,
+    assignees: projectAssigneesByTask.get(t.id) ?? [],
+  }));
 
   const tasksContent = (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="font-medium text-sm">
-          Tâches ({openTasks.length} ouverte{openTasks.length > 1 ? "s" : ""}
-          {doneTasks.length > 0
-            ? ` · ${doneTasks.length} terminée${doneTasks.length > 1 ? "s" : ""}`
-            : ""}
-          )
-        </h2>
-      </div>
-
-      <div className="rounded-md border bg-card">
-        {projectTasks.length > 0 ? (
-          <ul className="divide-y">
-            {[...openTasks, ...doneTasks].map((t) => (
-              <li key={t.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40">
-                <TaskToggle id={t.id} done={t.status === "done"} />
-                <Link
-                  href={`/taches/${t.id}`}
-                  className={`flex-1 text-sm hover:underline ${
-                    t.status === "done" ? "text-muted-foreground line-through" : ""
-                  }`}
-                >
-                  {t.title}
-                </Link>
-                <TaskStatusEditor id={t.id} value={t.status} />
-                <TaskPriorityEditor id={t.id} value={t.priority} />
-                <TaskAssigneeEditor
-                  id={t.id}
-                  value={
-                    t.assigneeContactId
-                      ? {
-                          kind: "contact",
-                          id: t.assigneeContactId,
-                          fullName:
-                            `${t.assigneeContactFirstName ?? ""} ${t.assigneeContactLastName ?? ""}`.trim(),
-                          entityName: t.assigneeContactEntityName ?? null,
-                        }
-                      : t.assigneeId
-                        ? {
-                            kind: "user",
-                            id: t.assigneeId,
-                            fullName: t.assigneeName,
-                            avatarUrl: t.assigneeAvatarUrl,
-                          }
-                        : null
-                  }
-                  options={userOptions}
-                  contactOptions={contactAssigneeOptions}
-                />
-                <TaskDueDateEditor id={t.id} value={t.dueDate} />
-                <TaskRowActions id={t.id} title={t.title} />
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <div className={projectTasks.length > 0 ? "border-t" : ""}>
-          <QuickAddTask projectId={id} variant="inline" placeholder="+ Ajouter une tâche…" />
-        </div>
-      </div>
-    </section>
+    <TaskTable
+      rows={taskRows}
+      userOptions={userOptions}
+      contactOptions={contactAssigneeOptions}
+      projectOptions={[]}
+      hideProjectColumn
+      defaultProjectId={id}
+    />
   );
 
   const notesContent = (

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy } from "@phosphor-icons/react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -33,12 +33,12 @@ export function CopyTranscriptButton({ transcript }: { transcript: string }) {
     >
       {copied ? (
         <>
-          <Check className="size-3.5" />
+          <Check size={14} weight="bold" />
           Copié
         </>
       ) : (
         <>
-          <Copy className="size-3.5" />
+          <Copy size={14} weight="duotone" />
           Copier
         </>
       )}

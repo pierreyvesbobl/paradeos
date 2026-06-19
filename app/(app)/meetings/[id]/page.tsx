@@ -8,6 +8,7 @@ import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { deleteMeetingAndRedirect } from "@/lib/actions/meetings";
 import { db } from "@/lib/db/server";
+import { FileText } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { CopyTranscriptButton } from "./copy-transcript-button";
@@ -22,6 +23,22 @@ import { SummaryEditor } from "./summary-editor";
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
+
+type MeetingStatus = "ingested" | "extracted" | "reviewed" | "archived";
+
+const STATUS_LABEL: Record<MeetingStatus, string> = {
+  ingested: "À extraire",
+  extracted: "En cours de revue",
+  reviewed: "Validé",
+  archived: "Archivé",
+};
+
+const STATUS_TINT: Record<MeetingStatus, "gray" | "yellow" | "green" | "blue"> = {
+  ingested: "gray",
+  extracted: "yellow",
+  reviewed: "green",
+  archived: "blue",
+};
 
 export default async function MeetingDetailPage({ params }: { params: Params }) {
   const { id } = await params;
@@ -69,50 +86,75 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
   const pending = proposals.filter((p) => p.status === "pending");
   const accepted = proposals.filter((p) => p.status === "accepted");
   const rejected = proposals.filter((p) => p.status === "rejected");
+  const status = meeting.status as MeetingStatus;
+  const statusTint = STATUS_TINT[status];
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow={
           meeting.occurredAt
-            ? new Date(meeting.occurredAt).toLocaleDateString("fr-FR", {
+            ? `${new Date(meeting.occurredAt).toLocaleDateString("fr-FR", {
                 day: "2-digit",
                 month: "long",
                 year: "numeric",
-              })
+              })} · Réunion`
             : "Meeting"
         }
         title={meeting.title}
         description={meeting.sourceLabel ?? undefined}
-        actions={
-          <>
-            <ReExtractButton meetingId={meeting.id} />
-            <DeleteButton
-              action={deleteMeetingAndRedirect}
-              id={meeting.id}
-              label="Supprimer"
-              confirmTitle={`Supprimer "${meeting.title}" ?`}
-            />
-          </>
-        }
+        actions={<ReExtractButton meetingId={meeting.id} />}
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <section className="space-y-3 rounded-lg border bg-card p-6 lg:col-span-2">
-          <header className="flex items-center justify-between">
-            <h2 className="font-medium text-sm">Résumé</h2>
-            {meeting.summary == null ? (
-              <span className="text-muted-foreground text-xs">
-                Pas encore d'extraction. Lance "Ré-extraire".
-              </span>
-            ) : null}
-          </header>
-          <SummaryEditor meetingId={meeting.id} initial={meeting.summary} />
-        </section>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div className="flex min-w-0 flex-1 flex-col gap-5">
+          <section className="rounded-xl border bg-[var(--ds-bg-surface)] p-5">
+            <header className="mb-3 flex items-center justify-between">
+              <h2 className="font-semibold text-[15px] text-foreground">Résumé</h2>
+              {meeting.summary == null ? (
+                <span className="text-[12px] text-[var(--ds-text-tertiary)]">
+                  Pas encore d'extraction. Lance « Ré-extraire ».
+                </span>
+              ) : null}
+            </header>
+            <SummaryEditor meetingId={meeting.id} initial={meeting.summary} />
+          </section>
 
-        <div className="space-y-6">
-          <section className="space-y-3 rounded-lg border bg-card p-6">
-            <h2 className="font-medium text-sm">Lié à</h2>
+          <ProposalsPanel
+            proposals={proposals}
+            projects={projectOptions}
+            users={userOptions}
+            entities={entityOptions}
+            contacts={contactOptions.map((c) => ({
+              id: c.id,
+              fullName: `${c.firstName} ${c.lastName}`.trim(),
+              entityName: c.entityName ?? null,
+            }))}
+            existingTasks={taskOptions}
+          />
+
+          <details className="group rounded-xl border bg-[var(--ds-bg-surface)]">
+            <summary className="flex cursor-pointer items-center gap-3 px-4 py-3.5 text-sm">
+              <FileText size={18} weight="duotone" className="text-muted-foreground" />
+              <span className="font-medium text-foreground">Transcript brut</span>
+              <span className="text-[12px] text-[var(--ds-text-tertiary)]">
+                {meeting.transcript.length.toLocaleString("fr-FR")} caractères
+              </span>
+              <span className="flex-1" />
+              <CopyTranscriptButton transcript={meeting.transcript} />
+            </summary>
+            <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap border-t bg-[var(--ds-bg-app)] p-5 text-xs leading-relaxed">
+              {meeting.transcript}
+            </pre>
+          </details>
+        </div>
+
+        <aside className="flex w-full flex-col gap-4 lg:w-[300px] lg:flex-none">
+          <section className="rounded-xl border bg-[var(--ds-bg-surface)] p-4 sm:p-5">
+            <h2 className="font-semibold text-[14px] text-foreground">Lié à</h2>
+            <p className="mt-0.5 mb-3 text-[12px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
+              Projet — phases commerciales & delivery
+            </p>
             <MeetingSubjectEditor
               meetingId={meeting.id}
               initialProjectId={meeting.projectId}
@@ -120,60 +162,75 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
             />
           </section>
 
-          <section className="space-y-3 rounded-lg border bg-card p-6">
-            <h2 className="font-medium text-sm">État</h2>
-            <dl className="space-y-2 text-sm">
-              <Stat label="Statut" value={STATUS_LABEL[meeting.status]} />
-              <Stat label="À valider" value={pending.length.toString()} />
-              <Stat label="Acceptées" value={accepted.length.toString()} />
-              <Stat label="Rejetées" value={rejected.length.toString()} />
-              <Stat
-                label="Transcript"
-                value={`${meeting.transcript.length.toLocaleString("fr-FR")} car.`}
-              />
+          <section className="rounded-xl border bg-[var(--ds-bg-surface)] p-4 sm:p-5">
+            <h2 className="mb-3 font-semibold text-[14px] text-foreground">État</h2>
+            <dl className="flex flex-col gap-2.5 text-sm">
+              <div className="flex items-center">
+                <dt className="text-muted-foreground">Statut</dt>
+                <dd className="flex-1" />
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold text-[12px]"
+                  style={{
+                    background: `var(--ds-tint-${statusTint}-bg)`,
+                    color: `var(--ds-tint-${statusTint}-text)`,
+                  }}
+                >
+                  <span
+                    className="inline-block size-1.5 rounded-full"
+                    style={{ background: `var(--ds-tint-${statusTint}-dot)` }}
+                  />
+                  {STATUS_LABEL[status]}
+                </span>
+              </div>
+              <div className="h-px bg-border/70" />
+              <StatRow tint="yellow" label="En attente" value={pending.length} />
+              <StatRow tint="green" label="Validés" value={accepted.length} />
+              <StatRow tint="red" label="Invalidés" value={rejected.length} />
+              <div className="flex items-center">
+                <dt className="text-muted-foreground">Transcript</dt>
+                <dd className="flex-1" />
+                <span className="text-[12px] text-muted-foreground tabular-nums">
+                  {meeting.transcript.length.toLocaleString("fr-FR")} car.
+                </span>
+              </div>
             </dl>
           </section>
-        </div>
+
+          <DeleteButton
+            action={deleteMeetingAndRedirect}
+            id={meeting.id}
+            label="Supprimer la réunion"
+            confirmTitle={`Supprimer "${meeting.title}" ?`}
+            className="w-full justify-center bg-[var(--ds-tint-red-bg)] py-2.5 font-medium text-[var(--ds-tint-red-text)] hover:bg-[var(--ds-tint-red-bg)] hover:text-[var(--ds-tint-red-text)] hover:brightness-95"
+          />
+        </aside>
       </div>
-
-      <ProposalsPanel
-        proposals={proposals}
-        projects={projectOptions}
-        users={userOptions}
-        entities={entityOptions}
-        contacts={contactOptions.map((c) => ({
-          id: c.id,
-          fullName: `${c.firstName} ${c.lastName}`.trim(),
-          entityName: c.entityName ?? null,
-        }))}
-        existingTasks={taskOptions}
-      />
-
-      <details className="rounded-lg border bg-card">
-        <summary className="flex cursor-pointer items-center justify-between gap-2 px-6 py-3 font-medium text-sm">
-          <span>Transcript brut</span>
-          <CopyTranscriptButton transcript={meeting.transcript} />
-        </summary>
-        <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap p-6 font-mono text-xs leading-relaxed">
-          {meeting.transcript}
-        </pre>
-      </details>
     </div>
   );
 }
 
-const STATUS_LABEL = {
-  ingested: "À extraire",
-  extracted: "À valider",
-  reviewed: "Validé",
-  archived: "Archivé",
-} as const;
-
-function Stat({ label, value }: { label: string; value: string }) {
+function StatRow({
+  label,
+  value,
+  tint,
+}: {
+  label: string;
+  value: number;
+  tint?: "yellow" | "green" | "red";
+}) {
   return (
-    <div className="flex items-center justify-between">
-      <dt className="text-muted-foreground text-xs uppercase tracking-wide">{label}</dt>
-      <dd>{value}</dd>
+    <div className="flex items-center">
+      <dt className="inline-flex items-center gap-2 text-muted-foreground">
+        {tint ? (
+          <span
+            className="inline-block size-2 rounded-full"
+            style={{ background: `var(--ds-tint-${tint}-dot)` }}
+          />
+        ) : null}
+        {label}
+      </dt>
+      <dd className="flex-1" />
+      <span className="font-semibold text-foreground">{value}</span>
     </div>
   );
 }

@@ -74,7 +74,10 @@ export default async function DashboardPage() {
     .select({ count: sql<number>`count(*)::int` })
     .from(tasks)
     .where(
-      and(eq(tasks.assigneeId, authUser.id), sql`${tasks.status} not in ('done', 'cancelled')`),
+      and(
+        sql`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${authUser.id})`,
+        sql`${tasks.status} not in ('done', 'cancelled')`,
+      ),
     );
 
   // Projets actifs.
@@ -125,7 +128,7 @@ export default async function DashboardPage() {
         isNotNull(tasks.dueDate),
         sql`${tasks.dueDate} < ${today}`,
         sql`${tasks.status} not in ('done', 'cancelled')`,
-        eq(tasks.assigneeId, authUser.id),
+        sql`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${authUser.id})`,
       ),
     )
     .orderBy(tasks.dueDate)

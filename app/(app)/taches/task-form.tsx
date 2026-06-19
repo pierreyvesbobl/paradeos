@@ -1,6 +1,8 @@
 "use client";
 
 import { FkCombobox } from "@/components/inline/fk-combobox";
+import { type AssigneeRef, AssigneesPicker } from "@/components/tasks/assignees-picker";
+import type { TaskContactOption, TaskUserOption } from "@/components/tasks/task-types";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker, formatIsoDate, parseIsoDate } from "@/components/ui/date-range-picker";
 import { FieldError } from "@/components/ui/field-error";
@@ -29,12 +31,12 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 type ProjectOption = { id: string; name: string };
-type UserOption = { id: string; fullName: string | null };
 
 type Props = {
   mode: "create" | "edit";
   projects: ProjectOption[];
-  users: UserOption[];
+  userOptions: TaskUserOption[];
+  contactOptions?: TaskContactOption[];
   defaultValues: {
     id?: string;
     title: string;
@@ -42,13 +44,13 @@ type Props = {
     status: TaskStatus;
     priority: TaskPriority;
     projectId: string;
-    assigneeId: string;
+    assignees: AssigneeRef[];
     dueDate: string;
     startDate: string;
   };
 };
 
-export function TaskForm({ mode, projects, users, defaultValues }: Props) {
+export function TaskForm({ mode, projects, userOptions, contactOptions, defaultValues }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
@@ -58,7 +60,7 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
   const [status, setStatus] = useState<TaskStatus>(defaultValues.status);
   const [priority, setPriority] = useState<TaskPriority>(defaultValues.priority);
   const [projectId, setProjectId] = useState<string | null>(defaultValues.projectId || null);
-  const [assigneeId, setAssigneeId] = useState<string | null>(defaultValues.assigneeId || null);
+  const [assignees, setAssignees] = useState<AssigneeRef[]>(defaultValues.assignees);
   const [dueDate, setDueDate] = useState(defaultValues.dueDate);
   const [startDate, setStartDate] = useState(defaultValues.startDate);
 
@@ -69,7 +71,7 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
       status,
       priority,
       projectId: projectId ?? undefined,
-      assigneeId: assigneeId ?? undefined,
+      assignees: assignees.map((a) => ({ kind: a.kind, id: a.id })),
       dueDate: dueDate || undefined,
       startDate: startDate || undefined,
     };
@@ -190,15 +192,25 @@ export function TaskForm({ mode, projects, users, defaultValues }: Props) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="assigneeId">Assignée à</Label>
-            <FkCombobox
-              id="assigneeId"
-              value={assigneeId}
-              onValueChange={setAssigneeId}
-              options={users.map((u) => ({ id: u.id, label: u.fullName ?? "(sans nom)" }))}
-              searchPlaceholder="Rechercher un membre…"
-              disabled={pending}
-            />
+            <Label htmlFor="assignees">Assigné{assignees.length > 1 ? "s" : ""}</Label>
+            <div
+              id="assignees"
+              className="flex min-h-9 flex-wrap items-center gap-2 rounded-md border bg-background px-2 py-1.5"
+            >
+              <AssigneesPicker
+                value={assignees}
+                onChange={setAssignees}
+                userOptions={userOptions}
+                contactOptions={contactOptions ?? []}
+                disabled={pending}
+                triggerMax={6}
+              />
+              <span className="text-muted-foreground text-xs">
+                {assignees.length === 0
+                  ? "Cliquez sur le « + » pour assigner"
+                  : `${assignees.length} assigné${assignees.length > 1 ? "s" : ""}`}
+              </span>
+            </div>
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>Période (début & échéance)</Label>

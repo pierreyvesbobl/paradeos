@@ -7,6 +7,7 @@ import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { action } from "@/lib/actions/action";
+import { setTaskAssignees } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
 import {
   type Match,
@@ -588,20 +589,32 @@ async function createForKind(
       const priorityIn = payload.priority as "low" | "normal" | "high" | null | undefined;
       const priority: "low" | "medium" | "high" | "urgent" =
         priorityIn === "high" ? "high" : priorityIn === "low" ? "low" : "medium";
-      const [row] = await conn
-        .insert(tasks)
-        .values({
-          title: String(payload.title ?? "Sans titre"),
-          status: "todo",
-          priority,
-          projectId,
-          assigneeId,
-          assigneeContactId,
-          dueDate: dueDate ?? null,
-          createdBy: userId,
-        })
-        .returning({ id: tasks.id });
-      return row?.id ?? "";
+      const inserted = await conn.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(tasks)
+          .values({
+            title: String(payload.title ?? "Sans titre"),
+            status: "todo",
+            priority,
+            projectId,
+            // Colonnes legacy mises à NULL : la source de vérité est
+            // task_assignees.
+            assigneeId: null,
+            assigneeContactId: null,
+            dueDate: dueDate ?? null,
+            createdBy: userId,
+          })
+          .returning({ id: tasks.id });
+        if (!row) return null;
+        const assignees: { kind: "user" | "contact"; id: string }[] = [];
+        if (assigneeContactId) assignees.push({ kind: "contact", id: assigneeContactId });
+        else if (assigneeId) assignees.push({ kind: "user", id: assigneeId });
+        if (assignees.length > 0) {
+          await setTaskAssignees(tx, row.id, assignees, userId);
+        }
+        return row;
+      });
+      return inserted?.id ?? "";
     }
   }
 }
@@ -735,17 +748,23 @@ async function applyUpdateForKind(
       const priorityIn = payload.priority as "low" | "normal" | "high" | null | undefined;
       const priority: "low" | "medium" | "high" | "urgent" =
         priorityIn === "high" ? "high" : priorityIn === "low" ? "low" : "medium";
-      await conn
-        .update(tasks)
-        .set({
-          title: String(payload.title ?? "Sans titre"),
-          priority,
-          projectId,
-          assigneeId,
-          assigneeContactId,
-          dueDate: dueDate ?? null,
-        })
-        .where(eq(tasks.id, recordId));
+      await conn.transaction(async (tx) => {
+        await tx
+          .update(tasks)
+          .set({
+            title: String(payload.title ?? "Sans titre"),
+            priority,
+            projectId,
+            assigneeId: null,
+            assigneeContactId: null,
+            dueDate: dueDate ?? null,
+          })
+          .where(eq(tasks.id, recordId));
+        const assignees: { kind: "user" | "contact"; id: string }[] = [];
+        if (assigneeContactId) assignees.push({ kind: "contact", id: assigneeContactId });
+        else if (assigneeId) assignees.push({ kind: "user", id: assigneeId });
+        await setTaskAssignees(tx, recordId, assignees, null);
+      });
       return;
     }
   }

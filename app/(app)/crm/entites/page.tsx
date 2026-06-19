@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { HashedAvatar } from "@/components/user/hashed-avatar";
 import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
@@ -20,8 +21,8 @@ import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply"
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
 import { entityKindEnum, entityKindLabels } from "@/lib/schemas/entities";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
+import { ArrowRight, Buildings, Globe, Plus } from "@phosphor-icons/react/dist/ssr";
 import { type SQL, and, asc, desc, ilike, or } from "drizzle-orm";
-import { ArrowRight, Building2, Plus } from "lucide-react";
 import Link from "next/link";
 import { CrmTabs } from "../crm-tabs";
 
@@ -110,7 +111,7 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
         actions={
           <Button asChild>
             <Link href="/entites/nouveau">
-              <Plus className="size-4" />
+              <Plus size={14} weight="bold" />
               Nouvelle entité
             </Link>
           </Button>
@@ -126,28 +127,33 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
       />
       <PersistViewParams pageKey="entites" relevantKeys={PERSISTED_KEYS} />
 
-      <form className="max-w-sm">
-        <SearchInputWithClear
-          name="q"
-          defaultValue={query}
-          placeholder="Rechercher par nom, site web…"
-        />
-        {collectF(params).map((f, i) => (
-          <input key={`f-${i}-${f}`} type="hidden" name="f" value={f} />
-        ))}
-        {sortRaw ? <input type="hidden" name="sort" value={sortRaw} /> : null}
-      </form>
+      <div className="flex items-center gap-3">
+        <form className="max-w-sm flex-1">
+          <SearchInputWithClear
+            name="q"
+            defaultValue={query}
+            placeholder="Rechercher par nom, site web…"
+          />
+          {collectF(params).map((f, i) => (
+            <input key={`f-${i}-${f}`} type="hidden" name="f" value={f} />
+          ))}
+          {sortRaw ? <input type="hidden" name="sort" value={sortRaw} /> : null}
+        </form>
+        <span className="ml-auto text-[var(--ds-text-tertiary)] text-sm">
+          {rows.length} entité{rows.length > 1 ? "s" : ""}
+        </span>
+      </div>
 
       {rows.length === 0 ? (
         <EmptyState
-          icon={Building2}
+          icon={Buildings}
           title={query ? "Aucune entité trouvée." : "Pas encore d'entité."}
           description={query ? undefined : "Crée la première pour commencer."}
           action={
             query ? null : (
               <Button asChild size="sm">
                 <Link href="/entites/nouveau">
-                  <Plus className="size-4" />
+                  <Plus size={14} weight="bold" />
                   Nouvelle entité
                 </Link>
               </Button>
@@ -155,11 +161,11 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
           }
         />
       ) : (
-        <div className="rounded-lg border bg-card">
+        <div>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>
+              <TableRow className="border-border/70 border-b">
+                <TableHead className="h-9 px-3 font-semibold text-[11px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
                   <SortableHeader
                     label="Nom"
                     field="name"
@@ -167,7 +173,7 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
                     buildHref={(next) => buildSortHref("/crm/entites", params, next)}
                   />
                 </TableHead>
-                <TableHead>
+                <TableHead className="h-9 w-[200px] px-3 font-semibold text-[11px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
                   <SortableHeader
                     label="Type"
                     field="kind"
@@ -175,7 +181,7 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
                     buildHref={(next) => buildSortHref("/crm/entites", params, next)}
                   />
                 </TableHead>
-                <TableHead>
+                <TableHead className="h-9 w-[290px] px-3 font-semibold text-[11px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
                   <SortableHeader
                     label="Site web"
                     field="website"
@@ -183,28 +189,51 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
                     buildHref={(next) => buildSortHref("/crm/entites", params, next)}
                   />
                 </TableHead>
+                <TableHead className="h-9 w-10 px-2" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((row) => (
-                <TableRow key={row.id} className="group">
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
+                <TableRow
+                  key={row.id}
+                  className="group border-border/70 border-b transition-colors hover:bg-[var(--ds-bg-hover)]"
+                >
+                  <TableCell className="min-h-[58px] px-3 py-2.5">
+                    <div className="flex items-center gap-3">
+                      <HashedAvatar name={row.name} seed={row.id} size="md" title={row.name} />
                       <EntName id={row.id} value={row.name} className="font-medium text-sm" />
-                      <Link
-                        href={`/entites/${row.id}`}
-                        aria-label="Ouvrir la fiche"
-                        className="ml-1 inline-flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
-                      >
-                        <ArrowRight className="size-3.5" />
-                      </Link>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <EntKind id={row.id} value={row.kind} />
+                  <TableCell className="px-3 py-2.5 text-sm">
+                    <div className="inline-flex items-center gap-2 text-muted-foreground">
+                      <Buildings
+                        size={14}
+                        weight="duotone"
+                        className="flex-none text-[var(--ds-text-tertiary)]"
+                      />
+                      <EntKind id={row.id} value={row.kind} />
+                    </div>
                   </TableCell>
-                  <TableCell className="text-sm">
-                    <EntWebsite id={row.id} value={row.website} />
+                  <TableCell className="px-3 py-2.5 text-sm">
+                    <div className="inline-flex max-w-full items-center gap-2 text-muted-foreground">
+                      {row.website ? (
+                        <Globe
+                          size={14}
+                          weight="duotone"
+                          className="flex-none text-[var(--ds-text-tertiary)]"
+                        />
+                      ) : null}
+                      <EntWebsite id={row.id} value={row.website} placeholder="" />
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-2 py-2.5 text-right">
+                    <Link
+                      href={`/entites/${row.id}`}
+                      aria-label="Ouvrir la fiche"
+                      className="inline-flex size-7 items-center justify-center rounded-md text-[var(--ds-text-tertiary)] opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                    >
+                      <ArrowRight size={15} weight="bold" />
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}

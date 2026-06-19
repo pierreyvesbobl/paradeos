@@ -2,69 +2,160 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Paradeos Design System — Foundations V1.
+ * Warm-gray neutrals (never pure black, never cold gray) + a blue primary built
+ * on the blue categorical tint + nine categorical tints. See
+ * paradeos-design-system/readme.md for the full guide.
+ *
+ * Two layers cohabit:
+ *   1. Shadcn HSL tokens (--background, --primary, --muted, …) drive every
+ *      shadcn/ui primitive without code changes.
+ *   2. --ds-* raw tokens expose the design system directly (full primary ramp,
+ *      tints, surfaces, font-brand) for components that want them.
+ */
+
 @layer base {
   :root {
-    /* Palette Parade — Slate Mono + accent indigo #4F46E5 */
-    --background: 0 0% 100%;
-    --foreground: 222 22% 11%;
+    /* ----- Shadcn HSL surface ----- */
+    --background: 0 0% 100%; /* #FFFFFF — bg-app */
+    --foreground: 45 8% 20%; /* #37352F — text */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 22% 11%;
+    --card: 60 11% 98%; /* #FBFBFA — bg-surface */
+    --card-foreground: 45 8% 20%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 22% 11%;
+    --popover-foreground: 45 8% 20%;
 
-    /* primary = accent indigo */
-    --primary: 244 75% 59%;
+    --primary: 199 66% 35%; /* #1F6F95 — primary-500 */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 222 22% 11%;
+    --secondary: 60 6% 93%; /* #EFEFED — bg-hover */
+    --secondary-foreground: 45 8% 20%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 60 6% 93%;
+    --muted-foreground: 40 7% 35%; /* #605C54 — text-muted */
 
-    --accent: 220 14% 96%;
-    --accent-foreground: 222 22% 11%;
+    --accent: 60 6% 93%; /* shadcn "accent" = hover surface */
+    --accent-foreground: 45 8% 20%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 4 56% 56%; /* #CE5A52 — tint-red-dot */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 244 75% 59%;
+    --border: 60 5% 89%; /* #E3E3E0 */
+    --input: 60 5% 89%;
+    --ring: 199 66% 35%;
 
     --radius: 0.5rem;
+
+    /* ===========================================================
+     * --ds-* raw Paradeos tokens (mirror tokens/colors.css)
+     * Use these where the shadcn semantic tokens don't fit (full
+     * brand ramp, tint families, sidebar surface, brand font).
+     * =========================================================== */
+
+    /* Neutrals — surfaces */
+    --ds-bg-app: #ffffff;
+    --ds-bg-surface: #fbfbfa;
+    --ds-bg-sidebar: #f7f7f5;
+    --ds-bg-hover: #efefed;
+    --ds-bg-press: #e7e7e4;
+    --ds-border: #e3e3e0;
+    --ds-border-strong: #d6d5d1;
+
+    /* Neutrals — text */
+    --ds-text: #37352f;
+    --ds-text-muted: #605c54;
+    --ds-text-tertiary: #9b9890;
+    --ds-text-on-accent: #ffffff;
+
+    /* Brand primary ramp (blue) */
+    --ds-primary-50: #e7f3f8;
+    --ds-primary-100: #c3deec;
+    --ds-primary-200: #8fc0da;
+    --ds-primary-300: #66abcc;
+    --ds-primary-400: #3e94be;
+    --ds-primary-500: #1f6f95;
+    --ds-primary-600: #1b6587;
+    --ds-primary-700: #185a7c;
+    --ds-primary-800: #134a66;
+    --ds-primary-900: #10384e;
+
+    /* Brand accent aliases */
+    --ds-accent: var(--ds-primary-500);
+    --ds-accent-hover: var(--ds-primary-700);
+    --ds-accent-soft: var(--ds-primary-50);
+    --ds-accent-dot: var(--ds-primary-400);
+
+    /* Nine categorical tints (bg + same-family text + saturated dot) */
+    --ds-tint-gray-bg: #f1f0ee;
+    --ds-tint-gray-text: #605c54;
+    --ds-tint-gray-dot: #908d85;
+
+    --ds-tint-brown-bg: #f4eeea;
+    --ds-tint-brown-text: #7a5c44;
+    --ds-tint-brown-dot: #a8825e;
+
+    --ds-tint-orange-bg: #faebdd;
+    --ds-tint-orange-text: #9a5e26;
+    --ds-tint-orange-dot: #c2702f;
+
+    --ds-tint-yellow-bg: #fbf3db;
+    --ds-tint-yellow-text: #8a6a1a;
+    --ds-tint-yellow-dot: #c9a227;
+
+    --ds-tint-green-bg: #edf3ec;
+    --ds-tint-green-text: #3f6b43;
+    --ds-tint-green-dot: #5e9b63;
+
+    --ds-tint-blue-bg: #e7f3f8;
+    --ds-tint-blue-text: #28617e;
+    --ds-tint-blue-dot: #4a93b8;
+
+    --ds-tint-mauve-bg: #f2eefa;
+    --ds-tint-mauve-text: #5e4b8b;
+    --ds-tint-mauve-dot: #9b82ce;
+
+    --ds-tint-pink-bg: #fbebf4;
+    --ds-tint-pink-text: #8a3a6b;
+    --ds-tint-pink-dot: #c25e97;
+
+    --ds-tint-red-bg: #fbe9e7;
+    --ds-tint-red-text: #9b3530;
+    --ds-tint-red-dot: #ce5a52;
+
+    /* Brand typography */
+    --font-brand: "Fraunces", "Hanken Grotesk", Georgia, "Times New Roman", serif;
   }
 
   .dark {
-    --background: 222 22% 7%;
-    --foreground: 210 17% 95%;
+    --background: 30 4% 9%;
+    --foreground: 40 7% 92%;
 
-    --card: 222 22% 9%;
-    --card-foreground: 210 17% 95%;
+    --card: 30 4% 11%;
+    --card-foreground: 40 7% 92%;
 
-    --popover: 222 22% 9%;
-    --popover-foreground: 210 17% 95%;
+    --popover: 30 4% 11%;
+    --popover-foreground: 40 7% 92%;
 
-    --primary: 244 80% 67%;
-    --primary-foreground: 222 22% 11%;
+    --primary: 200 60% 62%;
+    --primary-foreground: 200 70% 12%;
 
-    --secondary: 217 19% 17%;
-    --secondary-foreground: 210 17% 95%;
+    --secondary: 30 4% 16%;
+    --secondary-foreground: 40 7% 92%;
 
-    --muted: 217 19% 17%;
-    --muted-foreground: 218 11% 65%;
+    --muted: 30 4% 16%;
+    --muted-foreground: 40 5% 65%;
 
-    --accent: 217 19% 17%;
-    --accent-foreground: 210 17% 95%;
+    --accent: 30 4% 16%;
+    --accent-foreground: 40 7% 92%;
 
-    --destructive: 0 63% 45%;
-    --destructive-foreground: 210 17% 95%;
+    --destructive: 4 45% 45%;
+    --destructive-foreground: 40 7% 92%;
 
-    --border: 217 19% 20%;
-    --input: 217 19% 20%;
-    --ring: 244 80% 67%;
+    --border: 30 4% 20%;
+    --input: 30 4% 20%;
+    --ring: 200 60% 62%;
   }
 }
 
@@ -76,6 +167,25 @@
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+}
+
+/*
+ * Brand lettermark — the Fraunces "P" on a blue square. Size and radius are
+ * set inline at the call site (font-size ≈ 0.62 × box size).
+ *   <span class="parade-mark" style={{ width: 28, height: 28, fontSize: 18 }}>P</span>
+ */
+.parade-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  background: var(--ds-accent);
+  color: #fff;
+  font-family: var(--font-brand);
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+  border-radius: 24%;
 }
 
 /* react-day-picker — theming aligné sur la palette shadcn */

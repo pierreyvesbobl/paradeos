@@ -16,9 +16,11 @@ import { invoices as invoicesTable } from "../db/schema/invoices";
 import { meetingProposals, meetings } from "../db/schema/meetings";
 import { notes } from "../db/schema/notes";
 import { projects } from "../db/schema/projects";
+import { taskAssignees } from "../db/schema/task-assignees";
 import { tasks } from "../db/schema/tasks";
 import { timeEntries } from "../db/schema/time-entries";
 import { users } from "../db/schema/users";
+import { setTaskAssignees } from "../lib/db/queries/task-assignees";
 import type { UserContext } from "./context";
 import { db } from "./db";
 
@@ -112,7 +114,6 @@ export async function getProject(args: z.infer<typeof getProjectSchema>) {
       title: tasks.title,
       status: tasks.status,
       dueDate: tasks.dueDate,
-      assigneeId: tasks.assigneeId,
     })
     .from(tasks)
     .where(eq(tasks.projectId, proj.id))
@@ -141,6 +142,7 @@ export async function getProject(args: z.infer<typeof getProjectSchema>) {
 
 export const listTasksSchema = z.object({
   projectId: z.string().uuid().optional(),
+  /** Filtre par membre interne (n'importe quelle tâche où il est dans la liste d'assignés). */
   assigneeId: z.string().uuid().optional(),
   status: z
     .enum(["todo", "in_progress", "awaiting_client", "blocked", "done", "cancelled"])
@@ -153,12 +155,17 @@ export async function listTasks(args: z.infer<typeof listTasksSchema>) {
   const conn = db();
   const conds = [];
   if (args.projectId) conds.push(eq(tasks.projectId, args.projectId));
-  if (args.assigneeId) conds.push(eq(tasks.assigneeId, args.assigneeId));
+  if (args.assigneeId)
+    conds.push(
+      sql`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${args.assigneeId})` as ReturnType<
+        typeof eq
+      >,
+    );
   if (args.status) conds.push(eq(tasks.status, args.status));
   if (args.openOnly)
     conds.push(sql`${tasks.status} not in ('done', 'cancelled')` as ReturnType<typeof eq>);
 
-  return conn
+  const rows = await conn
     .select({
       id: tasks.id,
       title: tasks.title,
@@ -168,19 +175,46 @@ export async function listTasks(args: z.infer<typeof listTasksSchema>) {
       startDate: tasks.startDate,
       projectId: tasks.projectId,
       projectName: projects.name,
-      assigneeId: tasks.assigneeId,
-      assigneeName: users.fullName,
-      assigneeContactId: tasks.assigneeContactId,
-      assigneeContactFirstName: contacts.firstName,
-      assigneeContactLastName: contacts.lastName,
     })
     .from(tasks)
     .leftJoin(projects, eq(projects.id, tasks.projectId))
-    .leftJoin(users, eq(users.id, tasks.assigneeId))
-    .leftJoin(contacts, eq(contacts.id, tasks.assigneeContactId))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(asc(tasks.dueDate), desc(tasks.priority))
     .limit(args.limit ?? DEFAULT_LIMIT);
+
+  // Hydrate les assignés en 1 requête. Évite N+1.
+  const ids = rows.map((r) => r.id);
+  if (ids.length === 0) return rows.map((r) => ({ ...r, assignees: [] }));
+  const assigneesRows = await conn
+    .select({
+      taskId: taskAssignees.taskId,
+      kind: taskAssignees.kind,
+      userId: taskAssignees.userId,
+      userName: users.fullName,
+      contactId: taskAssignees.contactId,
+      contactFirstName: contacts.firstName,
+      contactLastName: contacts.lastName,
+    })
+    .from(taskAssignees)
+    .leftJoin(users, eq(users.id, taskAssignees.userId))
+    .leftJoin(contacts, eq(contacts.id, taskAssignees.contactId))
+    .where(inArray(taskAssignees.taskId, ids));
+  const byTask = new Map<
+    string,
+    Array<{ kind: "user" | "contact"; id: string; name: string | null }>
+  >();
+  for (const a of assigneesRows) {
+    const list = byTask.get(a.taskId) ?? [];
+    if (a.kind === "user" && a.userId) list.push({ kind: "user", id: a.userId, name: a.userName });
+    else if (a.kind === "contact" && a.contactId)
+      list.push({
+        kind: "contact",
+        id: a.contactId,
+        name: `${a.contactFirstName ?? ""} ${a.contactLastName ?? ""}`.trim() || null,
+      });
+    byTask.set(a.taskId, list);
+  }
+  return rows.map((r) => ({ ...r, assignees: byTask.get(r.id) ?? [] }));
 }
 
 export async function listMyTasks(_args: unknown, ctx: UserContext) {
@@ -197,7 +231,12 @@ export async function listMyTasks(_args: unknown, ctx: UserContext) {
     })
     .from(tasks)
     .leftJoin(projects, eq(projects.id, tasks.projectId))
-    .where(and(eq(tasks.assigneeId, ctx.userId), sql`${tasks.status} not in ('done', 'cancelled')`))
+    .where(
+      and(
+        sql`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${ctx.userId})`,
+        sql`${tasks.status} not in ('done', 'cancelled')`,
+      ),
+    )
     .orderBy(asc(tasks.dueDate), desc(tasks.priority))
     .limit(100);
 }
@@ -358,21 +397,30 @@ export const createTaskSchema = z.object({
 
 export async function createTask(args: z.infer<typeof createTaskSchema>, ctx: UserContext) {
   const conn = db();
-  const [row] = await conn
-    .insert(tasks)
-    .values({
-      title: args.title,
-      description: args.description ?? null,
-      status: "todo",
-      priority: args.priority ?? "medium",
-      projectId: args.projectId ?? null,
-      assigneeId: args.assigneeId ?? ctx.userId,
-      dueDate: args.dueDate ?? null,
-      startDate: args.startDate ?? null,
-      ownerId: ctx.userId,
-      createdBy: ctx.userId,
-    })
-    .returning({ id: tasks.id, title: tasks.title });
+  // Source de vérité = task_assignees. Si `assigneeId` n'est pas fourni,
+  // l'auteur est ajouté par défaut (parité avec quickCreateTask).
+  const assigneeUserId = args.assigneeId ?? ctx.userId;
+  const row = await conn.transaction(async (tx) => {
+    const [r] = await tx
+      .insert(tasks)
+      .values({
+        title: args.title,
+        description: args.description ?? null,
+        status: "todo",
+        priority: args.priority ?? "medium",
+        projectId: args.projectId ?? null,
+        assigneeId: null,
+        assigneeContactId: null,
+        dueDate: args.dueDate ?? null,
+        startDate: args.startDate ?? null,
+        ownerId: ctx.userId,
+        createdBy: ctx.userId,
+      })
+      .returning({ id: tasks.id, title: tasks.title });
+    if (!r) return null;
+    await setTaskAssignees(tx, r.id, [{ kind: "user", id: assigneeUserId }], ctx.userId);
+    return r;
+  });
   return row;
 }
 

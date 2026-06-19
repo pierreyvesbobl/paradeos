@@ -372,7 +372,7 @@ function TaskBar({
       title={`${task.title}${task.projectName ? ` · ${task.projectName}` : ""}`}
     >
       <span
-        className={`block truncate px-2 py-1 leading-tight text-foreground/90 ${
+        className={`block truncate px-2 py-1 text-foreground/90 leading-tight ${
           task.status === "done" ? "line-through" : ""
         }`}
       >

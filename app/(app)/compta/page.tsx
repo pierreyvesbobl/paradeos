@@ -1,11 +1,10 @@
 import { PageHeader } from "@/components/page-header";
 import { Suspense } from "react";
 import { ComptaTabs } from "./compta-tabs";
-import { DashboardView } from "./dashboard-view";
+import { type ComptaSegment, DashboardView } from "./dashboard-view";
 import { FacturesView } from "./factures-view";
 import type { ComptaPeriod } from "./period-selector";
 import { RapprochementView } from "./rapprochement-view";
-import { SignedQuotesView } from "./signed-quotes-view";
 
 export const dynamic = "force-dynamic";
 
@@ -19,37 +18,35 @@ const VALID_PERIODS: ComptaPeriod[] = [
   "all",
 ];
 
+const VALID_SEGMENTS: ComptaSegment[] = ["conso", "presta", "cowork"];
+
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function ComptaPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const tabRaw = params.tab;
-  const tab: "dashboard" | "signed" | "rapprochement" | "factures" =
-    tabRaw === "rapprochement"
-      ? "rapprochement"
-      : tabRaw === "signed"
-        ? "signed"
-        : tabRaw === "factures"
-          ? "factures"
-          : "dashboard";
+  const tab: "dashboard" | "rapprochement" | "factures" =
+    tabRaw === "rapprochement" ? "rapprochement" : tabRaw === "factures" ? "factures" : "dashboard";
   const debug = typeof params.debug === "string" ? params.debug : undefined;
   const periodRaw = typeof params.period === "string" ? params.period : null;
   const period: ComptaPeriod = (
     periodRaw && (VALID_PERIODS as string[]).includes(periodRaw) ? periodRaw : "last_12_months"
   ) as ComptaPeriod;
+  const segmentRaw = typeof params.segment === "string" ? params.segment : null;
+  const segment: ComptaSegment = (
+    segmentRaw && (VALID_SEGMENTS as string[]).includes(segmentRaw) ? segmentRaw : "conso"
+  ) as ComptaSegment;
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Finance"
         title="Compta"
-        description="Vue d'ensemble des montants facturés, à facturer, encaissés et rapprochement Dougs."
+        description="Vue d'ensemble du signé, facturé, encaissé et rapprochement Dougs."
       />
       <ComptaTabs current={tab} />
       {tab === "dashboard" ? (
-        <DashboardView period={period} />
-      ) : tab === "signed" ? (
-        <SignedQuotesView period={period} />
+        <DashboardView period={period} segment={segment} />
       ) : tab === "factures" ? (
         <FacturesView />
       ) : (

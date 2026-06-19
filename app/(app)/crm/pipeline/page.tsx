@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { entities } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
+import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { COMMERCIAL_STATUSES } from "@/lib/schemas/projects";
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -26,9 +27,12 @@ export default async function CrmPipelinePage() {
       probability: projects.probability,
       followUpDate: projects.followUpDate,
       entityName: entities.name,
+      ownerName: users.fullName,
+      ownerAvatarUrl: users.avatarUrl,
     })
     .from(projects)
     .leftJoin(entities, eq(projects.entityId, entities.id))
+    .leftJoin(users, eq(projects.ownerId, users.id))
     .leftJoin(invoices, and(eq(invoices.projectId, projects.id), eq(invoices.kind, "quote")))
     .where(inArray(projects.status, COMMERCIAL_STATUSES))
     .orderBy(asc(projects.followUpDate));
@@ -46,6 +50,8 @@ export default async function CrmPipelinePage() {
       probability: r.probability,
       followUpDate: r.followUpDate,
       entityName: r.entityName,
+      ownerName: r.ownerName,
+      ownerAvatarUrl: r.ownerAvatarUrl,
     };
   });
 

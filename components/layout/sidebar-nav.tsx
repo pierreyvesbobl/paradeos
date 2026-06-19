@@ -1,14 +1,25 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Briefcase, Calculator, Clock, Home, Kanban, Mic, School, Users } from "lucide-react";
+import {
+  Briefcase,
+  Buildings,
+  Calculator,
+  Clock,
+  EnvelopeSimple,
+  Funnel,
+  House,
+  Microphone,
+  type Icon as PhosphorIcon,
+  Users,
+} from "@phosphor-icons/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 type NavItem = {
   label: string;
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: PhosphorIcon;
   disabled?: boolean;
   /**
    * Préfixes d'URL supplémentaires qui activent cet item (au-delà de `href`).
@@ -26,16 +37,17 @@ type NavSection = {
 const sections: NavSection[] = [
   {
     items: [
-      { label: "Dashboard", href: "/", icon: Home },
+      { label: "Dashboard", href: "/", icon: House },
       { label: "Projets", href: "/projets", icon: Briefcase },
       {
         label: "Pipeline",
         href: "/crm/pipeline",
-        icon: Kanban,
+        icon: Funnel,
         match: ["/projets/pipeline"],
       },
       { label: "Time tracking", href: "/temps", icon: Clock },
-      { label: "Meetings", href: "/meetings", icon: Mic },
+      { label: "Meetings", href: "/meetings", icon: Microphone },
+      { label: "Emails", href: "/emails", icon: EnvelopeSimple },
       {
         label: "CRM",
         href: "/crm",
@@ -43,7 +55,7 @@ const sections: NavSection[] = [
         match: ["/contacts", "/entites"],
       },
       { label: "Compta", href: "/compta", icon: Calculator },
-      { label: "Coworking", href: "/coworking", icon: School },
+      { label: "Coworking", href: "/coworking", icon: Buildings },
     ],
   },
 ];
@@ -96,24 +108,29 @@ export function SidebarNav() {
                   key={item.href}
                   className={cn(base, "cursor-not-allowed text-muted-foreground/60")}
                 >
-                  <Icon className="size-4" />
+                  <Icon size={18} weight="duotone" />
                   {item.label}
                   <span className="ml-auto text-[10px] uppercase tracking-wider">soon</span>
                 </span>
               );
             }
+            const isActive = item.href === active;
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
                   base,
-                  item.href === active
-                    ? "bg-muted font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  isActive
+                    ? "bg-primary-50 font-medium text-primary-900"
+                    : "text-ds-text-muted hover:bg-ds-hover hover:text-ds-text",
                 )}
               >
-                <Icon className="size-4" />
+                <Icon
+                  size={18}
+                  weight="duotone"
+                  className={cn("shrink-0", isActive ? "text-primary-700" : "text-primary-500")}
+                />
                 {item.label}
               </Link>
             );

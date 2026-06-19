@@ -54,16 +54,24 @@ const SORT_FIELDS = ["title", "occurredAt", "status", "pending"] as const;
 
 const PERSISTED_KEYS = ["q", "f", "sort"] as const;
 
+/**
+ * Date effective d'un meeting = occurredAt si renseigné, sinon createdAt
+ * (date de l'import du transcript). On utilise coalesce dans tous les tris
+ * "par date" pour que les meetings sans `occurredAt` soient classés selon
+ * leur date d'import — jamais en début/fin arbitraire à cause de NULL.
+ */
+const effectiveDateSql = sql`coalesce(${meetings.occurredAt}, ${meetings.createdAt})`;
+
 function orderByFor(sort: SortState): SQL[] {
-  if (!sort) return [desc(meetings.occurredAt), desc(meetings.createdAt)];
+  if (!sort) return [desc(effectiveDateSql)];
   const dir = sort.dir === "asc" ? asc : desc;
   switch (sort.field) {
     case "title":
       return [dir(meetings.title)];
     case "occurredAt":
-      return [dir(meetings.occurredAt), desc(meetings.createdAt)];
+      return [dir(effectiveDateSql)];
     case "status":
-      return [dir(meetings.status), desc(meetings.occurredAt)];
+      return [dir(meetings.status), desc(effectiveDateSql)];
     case "pending":
       return [
         dir(sql`(
@@ -71,10 +79,10 @@ function orderByFor(sort: SortState): SQL[] {
           where meeting_proposals.meeting_id = meetings.id
             and meeting_proposals.status = 'pending'
         )`),
-        desc(meetings.occurredAt),
+        desc(effectiveDateSql),
       ];
     default:
-      return [desc(meetings.occurredAt), desc(meetings.createdAt)];
+      return [desc(effectiveDateSql)];
   }
 }
 
@@ -237,7 +245,22 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
-                    {row.occurredAt ? new Date(row.occurredAt).toLocaleDateString("fr-FR") : "—"}
+                    {(() => {
+                      const date = row.occurredAt ?? row.createdAt;
+                      const isFallback = !row.occurredAt;
+                      return (
+                        <span
+                          title={
+                            isFallback
+                              ? "Date d'import du transcript (occurrence non renseignée)"
+                              : undefined
+                          }
+                          className={isFallback ? "italic" : undefined}
+                        >
+                          {new Date(date).toLocaleDateString("fr-FR")}
+                        </span>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-sm">
                     {row.projectId && row.projectName ? (

@@ -4,21 +4,34 @@ import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HashedAvatar } from "@/components/user/hashed-avatar";
 import type { MeetingProposal } from "@/db/schema/meetings";
 import { quickCreateEntity } from "@/lib/actions/entities";
 import { decideProposal, revertProposal, updateAcceptedProposal } from "@/lib/actions/meetings";
-import { Check, Pencil, RotateCcw, X } from "lucide-react";
+import {
+  ArrowCounterClockwise,
+  ArrowUUpLeft,
+  ArrowUpRight,
+  Briefcase,
+  Buildings,
+  Calendar,
+  CalendarX,
+  Check,
+  CheckCircle,
+  EnvelopeSimple,
+  Folder,
+  IdentificationBadge,
+  LinkSimple,
+  ListChecks,
+  PencilSimple,
+  PlusCircle,
+  User,
+  X,
+} from "@phosphor-icons/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-
-const KIND_LABEL: Record<MeetingProposal["kind"], string> = {
-  task: "Tâches",
-  project: "Projets",
-  opportunity: "Opportunités",
-  contact: "Contacts",
-  entity: "Entités",
-};
 
 const KIND_ORDER: MeetingProposal["kind"][] = [
   "task",
@@ -84,53 +97,77 @@ export function ProposalsPanel({
     );
   }
 
+  // Aplatissement design v4 : tout dans une seule section "À valider",
+  // ordonné par kind puis par statut (pending → accepted → rejected).
   const grouped = groupByKind(proposals);
-  // Tri intra-section : pending → accepted → rejected.
   const orderRank: Record<MeetingProposal["status"], number> = {
     pending: 0,
     accepted: 1,
     rejected: 2,
   };
+  const flat = KIND_ORDER.flatMap((k) => grouped[k] ?? []).sort(
+    (a, b) => orderRank[a.status] - orderRank[b.status],
+  );
+
+  // Découpage clé du redesign v4 :
+  //  - "À valider"   = vraiment nouveaux (sans matchedId) + tous les decided
+  //                    (accepted/rejected) — la décision humaine reste affichée.
+  //  - "Déjà en base" = pending + matched. Rattachés automatiquement à un
+  //                     record CRM existant ; rien à valider, on les montre
+  //                     pour transparence (et pour pouvoir corriger un match
+  //                     incorrect).
+  const toReview = flat.filter((p) => p.status !== "pending" || p.matchedId === null);
+  const alreadyInDb = flat.filter((p) => p.status === "pending" && p.matchedId !== null);
+
+  const pendingCount = toReview.filter((p) => p.status === "pending").length;
+  const acceptedCount = toReview.filter((p) => p.status === "accepted").length;
+  const rejectedCount = toReview.filter((p) => p.status === "rejected").length;
+
+  function markAll(status: "accepted" | "rejected") {
+    const pendingIds = toReview.filter((p) => p.status === "pending").map((p) => p.id);
+    for (const id of pendingIds) {
+      patchProposal(id, (p) => ({
+        ...p,
+        status,
+        decidedAt: new Date(),
+      }));
+    }
+  }
 
   return (
-    <div className="space-y-4">
-      {KIND_ORDER.filter((k) => (grouped[k]?.length ?? 0) > 0).map((kind) => {
-        const all = (grouped[kind] ?? [])
-          .slice()
-          .sort((a, b) => orderRank[a.status] - orderRank[b.status]);
-        const pendingCount = all.filter((p) => p.status === "pending").length;
-        const acceptedCount = all.filter((p) => p.status === "accepted").length;
-        const rejectedCount = all.filter((p) => p.status === "rejected").length;
-        return (
-          <section key={kind} className="rounded-lg border bg-card">
-            <header className="flex items-center justify-between border-b px-4 py-2">
-              <h2 className="font-medium text-sm">
-                {KIND_LABEL[kind]}{" "}
-                <span className="ml-1 inline-flex items-center gap-2 text-xs">
-                  {pendingCount > 0 ? (
-                    <span className="text-muted-foreground">{pendingCount} à valider</span>
-                  ) : null}
-                  {acceptedCount > 0 ? (
-                    <span className="text-emerald-600">{acceptedCount} ✓</span>
-                  ) : null}
-                  {rejectedCount > 0 ? (
-                    <span className="text-rose-600">{rejectedCount} ✗</span>
-                  ) : null}
-                </span>
-              </h2>
-              <BulkAcceptButton
-                ids={all.filter((p) => p.status === "pending").map((p) => p.id)}
-                onAccepted={(id) =>
-                  patchProposal(id, (p) => ({
-                    ...p,
-                    status: "accepted",
-                    decidedAt: new Date(),
-                  }))
-                }
+    <div className="space-y-6">
+      {toReview.length > 0 ? (
+        <section className="space-y-3">
+          <header className="flex flex-wrap items-center gap-2">
+            <h2 className="font-semibold text-[18px] text-foreground">À valider</h2>
+            {pendingCount > 0 ? (
+              <CountPill tint="yellow" label={`${pendingCount} en attente`} dot />
+            ) : null}
+            {acceptedCount > 0 ? (
+              <CountPill
+                tint="green"
+                label={`${acceptedCount} validé${acceptedCount > 1 ? "s" : ""}`}
+                icon="check"
               />
-            </header>
+            ) : null}
+            {rejectedCount > 0 ? (
+              <CountPill
+                tint="red"
+                label={`${rejectedCount} invalidé${rejectedCount > 1 ? "s" : ""}`}
+                icon="x"
+              />
+            ) : null}
+            <span className="flex-1" />
+            {pendingCount > 0 ? (
+              <BulkDecideButtons
+                pendingIds={toReview.filter((p) => p.status === "pending").map((p) => p.id)}
+                onMarkAll={markAll}
+              />
+            ) : null}
+          </header>
+          <div className="overflow-hidden rounded-xl border bg-card">
             <ul className="divide-y">
-              {all.map((p) => (
+              {toReview.map((p) => (
                 <ProposalRow
                   key={p.id}
                   proposal={p}
@@ -139,47 +176,131 @@ export function ProposalsPanel({
                 />
               ))}
             </ul>
-          </section>
-        );
-      })}
+          </div>
+        </section>
+      ) : null}
+
+      {alreadyInDb.length > 0 ? (
+        <section className="space-y-3">
+          <header className="flex flex-wrap items-baseline gap-2">
+            <h2 className="font-semibold text-[18px] text-muted-foreground">Déjà en base</h2>
+            <span className="text-[12px] text-[var(--ds-text-tertiary)]">
+              {alreadyInDb.length} élément{alreadyInDb.length > 1 ? "s" : ""} · rattaché
+              {alreadyInDb.length > 1 ? "s" : ""} automatiquement
+            </span>
+          </header>
+          <div className="overflow-hidden rounded-xl border bg-[var(--ds-bg-surface)]">
+            <div className="flex items-center gap-2 border-b px-4 py-2.5 text-[12px] text-muted-foreground">
+              <CheckCircle size={15} weight="duotone" className="text-[var(--ds-tint-green-dot)]" />
+              Reconnus dans la base et liés à cette réunion. Rien à valider — intervenez seulement
+              si la correspondance est fausse.
+            </div>
+            <ul className="divide-y">
+              {alreadyInDb.map((p) => (
+                <AlreadyInDbRow
+                  key={p.id}
+                  proposal={p}
+                  options={linkOptions}
+                  onChange={(next) => patchProposal(p.id, () => next)}
+                />
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
 
-function BulkAcceptButton({
-  ids,
-  onAccepted,
+function CountPill({
+  tint,
+  label,
+  dot,
+  icon,
 }: {
-  ids: string[];
-  onAccepted: (id: string) => void;
+  tint: "yellow" | "green" | "red";
+  label: string;
+  dot?: boolean;
+  icon?: "check" | "x";
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold text-[12px]"
+      style={{
+        background: `var(--ds-tint-${tint}-bg)`,
+        color: `var(--ds-tint-${tint}-text)`,
+      }}
+    >
+      {dot ? (
+        <span
+          className="inline-block size-1.5 rounded-full"
+          style={{ background: `var(--ds-tint-${tint}-dot)` }}
+        />
+      ) : null}
+      {icon === "check" ? <Check size={11} weight="bold" /> : null}
+      {icon === "x" ? <X size={11} weight="bold" /> : null}
+      {label}
+    </span>
+  );
+}
+
+function BulkDecideButtons({
+  pendingIds,
+  onMarkAll,
+}: {
+  pendingIds: string[];
+  onMarkAll: (status: "accepted" | "rejected") => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  if (ids.length === 0) return null;
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      disabled={pending}
-      onClick={() =>
-        startTransition(async () => {
-          let ok = 0;
-          let fail = 0;
-          for (const id of ids) {
-            const res = await decideProposal({ proposalId: id, action: "accept" });
-            if (res.ok) {
-              ok++;
-              onAccepted(id);
-            } else fail++;
-          }
-          if (ok > 0) toast.success(`${ok} accepté(s).`);
-          if (fail > 0) toast.error(`${fail} échec(s).`);
-          router.refresh();
-        })
+  if (pendingIds.length === 0) return null;
+
+  function bulk(action: "accept" | "reject") {
+    startTransition(async () => {
+      let ok = 0;
+      let fail = 0;
+      for (const id of pendingIds) {
+        const res = await decideProposal({ proposalId: id, action });
+        if (res.ok) ok++;
+        else fail++;
       }
-    >
-      Tout accepter
-    </Button>
+      onMarkAll(action === "accept" ? "accepted" : "rejected");
+      if (ok > 0) toast.success(`${ok} ${action === "accept" ? "validés" : "rejetés"}.`);
+      if (fail > 0) toast.error(`${fail} échec(s).`);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => bulk("reject")}
+        className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-medium text-[13px] transition-colors disabled:opacity-50"
+        style={{
+          background: "var(--ds-tint-red-bg)",
+          color: "var(--ds-tint-red-text)",
+        }}
+      >
+        <X size={13} weight="bold" />
+        Tout rejeter
+      </button>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => bulk("accept")}
+        className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 font-medium text-[13px] transition-colors disabled:opacity-50"
+        style={{
+          background: "var(--ds-tint-green-bg)",
+          color: "var(--ds-tint-green-text)",
+          boxShadow: "inset 0 0 0 1px var(--ds-tint-green-dot)",
+        }}
+      >
+        <Check size={13} weight="bold" />
+        Tout créer
+      </button>
+    </div>
   );
 }
 
@@ -287,16 +408,9 @@ function ProposalRow({
     setEditing(true);
   }
 
-  // Visuel selon le statut.
-  const rowBg = isAccepted
-    ? "bg-emerald-50/50 dark:bg-emerald-950/20"
-    : isRejected
-      ? "bg-muted/30 opacity-60"
-      : "";
-
-  return (
-    <li className={`px-4 py-3 ${rowBg}`}>
-      {editing ? (
+  if (editing) {
+    return (
+      <li className="px-4 py-3.5">
         <div className="space-y-3">
           <ProposalEditor
             kind={proposal.kind}
@@ -330,119 +444,560 @@ function ProposalRow({
             </Button>
             {isAccepted ? (
               <Button size="sm" disabled={pending} onClick={() => saveAcceptedEdit(draft)}>
-                <Check className="size-4" />
+                <Check size={14} weight="bold" />
                 Enregistrer
               </Button>
             ) : (
               <Button size="sm" disabled={pending} onClick={() => decide("accept", draft)}>
-                <Check className="size-4" />
+                <Check size={14} weight="bold" />
                 Accepter
               </Button>
             )}
           </div>
         </div>
-      ) : (
-        <div className="flex items-start gap-3">
-          <StatusDot status={proposal.status} />
-          <div className="flex-1 space-y-1">
-            <p className={`font-medium text-sm leading-tight ${isRejected ? "line-through" : ""}`}>
-              {summaryFor(proposal, initial)}
-            </p>
-            <p className="text-muted-foreground text-xs">{detailsFor(proposal, initial)}</p>
-            {!isAccepted && !isRejected && matched ? (
-              <p className="text-emerald-700 text-xs dark:text-emerald-400">
-                Match existant ({confidence != null ? `${Math.round(confidence * 100)}%` : "—"}) —
-                sera lié au record actuel.
-              </p>
-            ) : null}
-            {!isAccepted && !isRejected ? (
-              <CrossKindBanner proposal={proposal} payload={initial} />
-            ) : null}
-          </div>
-          <div className="flex shrink-0 gap-1">
-            {isAccepted ? (
-              <>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={pending}
-                  onClick={startEditing}
-                  title="Modifier le record lié"
-                >
-                  <Pencil className="size-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={pending}
-                  onClick={restore}
-                  title="Remettre en attente"
-                >
-                  <RotateCcw className="size-4" />
-                </Button>
-              </>
-            ) : isRejected ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={pending}
-                onClick={restore}
-                title="Remettre en attente"
-              >
-                <RotateCcw className="size-4" />
-              </Button>
-            ) : (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={pending}
-                  onClick={() => decide("accept")}
-                  title="Accepter"
-                >
-                  <Check className="size-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={pending}
-                  onClick={startEditing}
-                  title="Modifier"
-                >
-                  <Pencil className="size-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={pending}
-                  onClick={() => decide("reject")}
-                  title="Rejeter"
-                >
-                  <X className="size-4" />
-                </Button>
-              </>
-            )}
-          </div>
+      </li>
+    );
+  }
+
+  // Banner accepted (validé) : fond tinted vert + pastille + bouton restore.
+  if (isAccepted) {
+    return (
+      <li
+        className="flex items-center gap-3.5 px-4 py-3.5"
+        style={{
+          background: "var(--ds-tint-green-bg)",
+          borderLeft: "4px solid var(--ds-tint-green-dot)",
+        }}
+      >
+        <span
+          title="Validé · créé dans la base"
+          className="inline-flex size-8 flex-none items-center justify-center rounded-full text-white"
+          style={{ background: "var(--ds-tint-green-dot)" }}
+        >
+          <Check size={17} weight="bold" />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <span className="font-medium text-foreground text-sm leading-snug">
+            {summaryFor(proposal, initial)}
+          </span>
+          <ProposalMetaTags proposal={proposal} payload={initial} />
         </div>
-      )}
+        <div className="flex flex-none items-center gap-1.5">
+          <IconButton title="Modifier le record lié" onClick={startEditing} disabled={pending}>
+            <PencilSimple size={16} weight="duotone" />
+          </IconButton>
+          <button
+            type="button"
+            onClick={restore}
+            disabled={pending}
+            title="Annuler la validation"
+            aria-label="Annuler la validation"
+            className="inline-flex size-8 items-center justify-center rounded-md border bg-[var(--ds-bg-app)] transition-colors hover:bg-[var(--ds-bg-hover)] disabled:opacity-50"
+            style={{
+              borderColor: "var(--ds-tint-green-dot)",
+              color: "var(--ds-tint-green-text)",
+            }}
+          >
+            <ArrowCounterClockwise size={14} weight="bold" />
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  // Banner rejected (invalidé) : fond tinted rouge + pastille + texte barré + bouton rétablir.
+  if (isRejected) {
+    return (
+      <li
+        className="flex items-center gap-3.5 px-4 py-3.5"
+        style={{
+          background: "var(--ds-tint-red-bg)",
+          borderLeft: "4px solid var(--ds-tint-red-dot)",
+        }}
+      >
+        <span
+          title="Invalidé · non créé"
+          className="inline-flex size-8 flex-none items-center justify-center rounded-full text-white"
+          style={{ background: "var(--ds-tint-red-dot)" }}
+        >
+          <X size={17} weight="bold" />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <span className="font-medium text-[var(--ds-text-tertiary)] text-sm leading-snug line-through">
+            {summaryFor(proposal, initial)}
+          </span>
+          <ProposalMetaTags proposal={proposal} payload={initial} muted />
+        </div>
+        <button
+          type="button"
+          onClick={restore}
+          disabled={pending}
+          title="Rétablir cet élément"
+          aria-label="Rétablir cet élément"
+          className="inline-flex size-8 flex-none items-center justify-center rounded-md border bg-[var(--ds-bg-app)] transition-colors hover:bg-[var(--ds-bg-hover)] disabled:opacity-50"
+          style={{
+            borderColor: "var(--ds-tint-red-dot)",
+            color: "var(--ds-tint-red-text)",
+          }}
+        >
+          <ArrowCounterClockwise size={14} weight="bold" />
+        </button>
+      </li>
+    );
+  }
+
+  // pending : layout normal + actions hover-reveal.
+  return (
+    <li className="flex items-start gap-3 px-4 py-3.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <KindIcon kind={proposal.kind} />
+          <span className="font-medium text-foreground text-sm leading-snug">
+            {summaryFor(proposal, initial)}
+          </span>
+          {matched ? <MatchBadge confidence={confidence} /> : <NewBadge kind={proposal.kind} />}
+        </div>
+        <ProposalMetaTags proposal={proposal} payload={initial} />
+        <CrossKindBanner proposal={proposal} payload={initial} />
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <IconButton title="Modifier" onClick={startEditing} disabled={pending}>
+          <PencilSimple size={16} weight="duotone" />
+        </IconButton>
+        <HoverRevealButton
+          tint="red"
+          label="Invalider"
+          icon={<X size={13} weight="bold" />}
+          onClick={() => decide("reject")}
+          disabled={pending}
+        />
+        <HoverRevealButton
+          tint="green"
+          label="Valider"
+          icon={<Check size={13} weight="bold" />}
+          ring
+          onClick={() => decide("accept")}
+          disabled={pending}
+        />
+      </div>
     </li>
   );
 }
 
-function StatusDot({ status }: { status: MeetingProposal["status"] }) {
-  const cls =
-    status === "accepted"
-      ? "bg-emerald-500"
-      : status === "rejected"
-        ? "bg-rose-400"
-        : "bg-amber-400";
-  const title = status === "accepted" ? "Accepté" : status === "rejected" ? "Rejeté" : "À valider";
+/**
+ * Bouton tinted dont le label apparaît au hover (animation max-width).
+ * Cf. design v4 — "iconbtn .t" : icône seule par défaut, label glissé à
+ * côté quand on survole. Évite que la rangée prenne 4 colonnes d'actions.
+ */
+function HoverRevealButton({
+  tint,
+  label,
+  icon,
+  onClick,
+  disabled,
+  ring,
+}: {
+  tint: "red" | "green";
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  ring?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className="group/hr inline-flex items-center rounded-md px-2.5 py-1.5 font-medium text-[13px] transition-colors disabled:opacity-50"
+      style={{
+        background: `var(--ds-tint-${tint}-bg)`,
+        color: `var(--ds-tint-${tint}-text)`,
+        boxShadow: ring ? `inset 0 0 0 1px var(--ds-tint-${tint}-dot)` : undefined,
+      }}
+    >
+      {icon}
+      <span className="ml-0 inline-block max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-[max-width,opacity,margin] duration-150 group-hover/hr:ml-1.5 group-hover/hr:max-w-[120px] group-hover/hr:opacity-100">
+        {label}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Row "Déjà en base" — proposition pending dont le matchedId pointe sur un
+ * record CRM existant. UI compacte, ton bas, on n'attend rien de l'utilisateur
+ * (Valider/Invalider absents). Actions hover : voir la fiche, modifier, ou
+ * corriger un mauvais match.
+ */
+function AlreadyInDbRow({
+  proposal,
+  options,
+  onChange,
+}: {
+  proposal: MeetingProposal;
+  options: LinkOptions;
+  onChange: (next: MeetingProposal) => void;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const payload = proposal.payload as Record<string, unknown>;
+  const title = summaryFor(proposal, payload);
+  const subtitle = matchedSubtitle(proposal, payload);
+  const viewHref = matchedViewHref(proposal);
+
+  function correct() {
+    // Revert -> redevient pending sans match. L'utilisateur peut alors
+    // ré-éditer / choisir un autre record dans le panneau "À valider".
+    startTransition(async () => {
+      const res = await revertProposal({ proposalId: proposal.id });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      onChange({
+        ...proposal,
+        status: "pending",
+        matchedId: null,
+        matchConfidence: null,
+        decidedAt: null,
+        decidedBy: null,
+      });
+      // augmentTaskPayload réutilise les options pour ne pas perdre la
+      // pré-résolution si elle existe encore.
+      void options;
+      toast.success("Match retiré. Remis dans 'À valider'.");
+      router.refresh();
+    });
+  }
+
+  return (
+    <li className="group/qrow flex items-center gap-3 px-4 py-2.5">
+      <KindIcon kind={proposal.kind} />
+      <span className="truncate font-medium text-foreground text-sm">{title}</span>
+      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--ds-bg-hover)] px-2 py-0.5 font-semibold text-[11px] text-muted-foreground">
+        <LinkSimple size={11} weight="bold" />
+        Fiche existante
+      </span>
+      {subtitle ? (
+        <span className="truncate text-[12px] text-[var(--ds-text-tertiary)]">· {subtitle}</span>
+      ) : null}
+      <span className="flex-1" />
+      <button
+        type="button"
+        onClick={correct}
+        disabled={pending}
+        className="inline-flex items-center gap-1 text-[12px] text-muted-foreground opacity-0 transition-opacity hover:text-foreground disabled:opacity-30 group-hover/qrow:opacity-100"
+        title="Mauvaise fiche ? Détache le match — la proposition retourne dans 'À valider'."
+      >
+        <ArrowUUpLeft size={13} weight="duotone" />
+        Mauvaise fiche
+      </button>
+      {viewHref ? (
+        <Link
+          href={viewHref}
+          className="inline-flex items-center gap-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowUpRight size={12} weight="bold" />
+          Voir
+        </Link>
+      ) : null}
+    </li>
+  );
+}
+
+function matchedSubtitle(p: MeetingProposal, payload: Record<string, unknown>): string {
+  switch (p.kind) {
+    case "task":
+      return "tâche existante";
+    case "project":
+      return "projet existant";
+    case "opportunity":
+      return "opportunité existante";
+    case "contact": {
+      const job = payload.jobTitle as string | null | undefined;
+      const ent = payload.entityName as string | null | undefined;
+      return [job, ent].filter(Boolean).join(" · ") || "contact existant";
+    }
+    case "entity": {
+      const k = payload.kind as string | null | undefined;
+      return k ? `${k}` : "entité existante";
+    }
+  }
+}
+
+function matchedViewHref(p: MeetingProposal): string | null {
+  if (!p.matchedId) return null;
+  switch (p.kind) {
+    case "task":
+      return `/taches/${p.matchedId}`;
+    case "project":
+    case "opportunity":
+      return `/projets/${p.matchedId}`;
+    case "contact":
+      return `/contacts/${p.matchedId}`;
+    case "entity":
+      return `/entites/${p.matchedId}`;
+  }
+}
+
+function KindIcon({ kind }: { kind: MeetingProposal["kind"] }) {
+  const props = {
+    size: 16,
+    weight: "duotone" as const,
+    className: "flex-none text-[var(--ds-primary-500)]",
+  };
+  switch (kind) {
+    case "task":
+      return <ListChecks {...props} />;
+    case "project":
+      return <Briefcase {...props} />;
+    case "opportunity":
+      return <Briefcase {...props} />;
+    case "contact":
+      return <User {...props} />;
+    case "entity":
+      return <Buildings {...props} />;
+  }
+}
+
+const KIND_NEW_LABEL: Record<MeetingProposal["kind"], string> = {
+  task: "Nouvelle tâche",
+  project: "Nouveau projet",
+  opportunity: "Nouvelle opportunité",
+  contact: "Nouveau contact",
+  entity: "Nouvelle entité",
+};
+
+function NewBadge({ kind }: { kind: MeetingProposal["kind"] }) {
   return (
     <span
-      className={`mt-1.5 size-2 shrink-0 rounded-full ${cls}`}
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold text-[11px]"
+      style={{
+        background: "var(--ds-tint-green-bg)",
+        color: "var(--ds-tint-green-text)",
+      }}
+    >
+      <PlusCircle size={11} weight="bold" />
+      {KIND_NEW_LABEL[kind]}
+    </span>
+  );
+}
+
+function MatchBadge({ confidence }: { confidence: number | null }) {
+  const pct = confidence != null ? `${Math.round(confidence * 100)}%` : "—";
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold text-[11px]"
+      style={{
+        background: "var(--ds-tint-blue-bg)",
+        color: "var(--ds-tint-blue-text)",
+      }}
+    >
+      Match existant · {pct}
+    </span>
+  );
+}
+
+const PRIORITY_TINT: Record<string, { tint: "yellow" | "red" | "gray"; label: string }> = {
+  urgent: { tint: "red", label: "Urgente" },
+  high: { tint: "yellow", label: "Haute" },
+  normal: { tint: "gray", label: "Normale" },
+  low: { tint: "gray", label: "Basse" },
+};
+
+function formatDueDate(raw: string): string {
+  try {
+    const d = new Date(raw.length === 10 ? `${raw}T00:00:00` : raw);
+    if (Number.isNaN(d.getTime())) return raw;
+    return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+  } catch {
+    return raw;
+  }
+}
+
+function ProposalMetaTags({
+  proposal,
+  payload,
+  muted,
+}: {
+  proposal: MeetingProposal;
+  payload: Record<string, unknown>;
+  /** Si vrai, les tags sont rendus en couleurs assoupies (rows invalidées). */
+  muted?: boolean;
+}) {
+  // muted est utilisé via la classe wrapper en parent : ici on garde
+  // les tags inchangés. Marqué pour silence le lint si jamais.
+  void muted;
+  switch (proposal.kind) {
+    case "task": {
+      const assigneeName = payload.assigneeName as string | null | undefined;
+      const isExternal = !!payload.assigneeContactId || payload.assigneeKind === "external";
+      const priority = payload.priority as string | null | undefined;
+      const projectName = payload.projectName as string | null | undefined;
+      const dueDate = payload.dueDate as string | null | undefined;
+      const prio = priority && priority !== "normal" ? PRIORITY_TINT[priority] : null;
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {assigneeName ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border bg-[var(--ds-bg-app)] py-0.5 pr-2 pl-0.5 text-[12px] text-muted-foreground">
+              <HashedAvatar name={assigneeName} seed={assigneeName} size="xs" />
+              {assigneeName}
+              {isExternal ? (
+                <span className="text-[10px] text-[var(--ds-text-tertiary)]">externe</span>
+              ) : null}
+            </span>
+          ) : null}
+          {prio ? (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-medium text-[12px]"
+              style={{
+                background: `var(--ds-tint-${prio.tint}-bg)`,
+                color: `var(--ds-tint-${prio.tint}-text)`,
+              }}
+            >
+              <span
+                className="inline-block size-1.5 rounded-full"
+                style={{ background: `var(--ds-tint-${prio.tint}-dot)` }}
+              />
+              {prio.label}
+            </span>
+          ) : null}
+          {projectName ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium text-[12px]"
+              style={{
+                background: "var(--ds-tint-mauve-bg)",
+                color: "var(--ds-tint-mauve-text)",
+              }}
+            >
+              <Folder size={13} weight="duotone" />
+              {projectName}
+            </span>
+          ) : null}
+          {dueDate ? (
+            <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground">
+              <Calendar size={13} weight="duotone" className="text-[var(--ds-text-tertiary)]" />
+              {formatDueDate(dueDate)}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[12px] text-[var(--ds-text-tertiary)]">
+              <CalendarX size={13} weight="duotone" />
+              Pas d'échéance
+            </span>
+          )}
+        </div>
+      );
+    }
+    case "project":
+    case "opportunity": {
+      const k = payload.kind as string | null | undefined;
+      const entityName = payload.entityName as string | null | undefined;
+      const value = payload.valueAmount as number | null | undefined;
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          {k ? (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-medium text-[12px]"
+              style={{
+                background: "var(--ds-tint-blue-bg)",
+                color: "var(--ds-tint-blue-text)",
+              }}
+            >
+              <span
+                className="inline-block size-1.5 rounded-full"
+                style={{ background: "var(--ds-tint-blue-dot)" }}
+              />
+              {k}
+            </span>
+          ) : null}
+          {entityName ? (
+            <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+              <Buildings size={13} weight="duotone" className="text-[var(--ds-text-tertiary)]" />
+              pour {entityName}
+            </span>
+          ) : null}
+          {value != null ? (
+            <span className="font-semibold text-[12px] text-muted-foreground tabular-nums">
+              {Number(value).toLocaleString("fr-FR")} €
+            </span>
+          ) : null}
+        </div>
+      );
+    }
+    case "contact": {
+      const jobTitle = payload.jobTitle as string | null | undefined;
+      const entityName = payload.entityName as string | null | undefined;
+      const email = payload.email as string | null | undefined;
+      return (
+        <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+          {jobTitle ? (
+            <span className="inline-flex items-center gap-1.5">
+              <IdentificationBadge
+                size={13}
+                weight="duotone"
+                className="text-[var(--ds-text-tertiary)]"
+              />
+              {jobTitle}
+            </span>
+          ) : null}
+          {entityName ? (
+            <>
+              <span className="text-[var(--ds-text-tertiary)]">·</span>
+              <span className="inline-flex items-center gap-1.5">
+                <Buildings size={13} weight="duotone" className="text-[var(--ds-text-tertiary)]" />
+                {entityName}
+              </span>
+            </>
+          ) : null}
+          {email ? (
+            <>
+              <span className="text-[var(--ds-text-tertiary)]">·</span>
+              <span className="inline-flex items-center gap-1.5">
+                <EnvelopeSimple
+                  size={13}
+                  weight="duotone"
+                  className="text-[var(--ds-text-tertiary)]"
+                />
+                {email}
+              </span>
+            </>
+          ) : null}
+        </div>
+      );
+    }
+    case "entity": {
+      const k = payload.kind as string | null | undefined;
+      if (!k) return null;
+      return <span className="text-[12px] text-muted-foreground">{k}</span>;
+    }
+  }
+}
+
+function IconButton({
+  children,
+  onClick,
+  disabled,
+  title,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
       title={title}
       aria-label={title}
-    />
+      className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[var(--ds-bg-hover)] hover:text-foreground disabled:opacity-50"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -1020,38 +1575,4 @@ function summaryFor(p: MeetingProposal, payload: Record<string, unknown>): strin
     case "entity":
       return String(payload.name ?? "Sans nom");
   }
-}
-
-function detailsFor(p: MeetingProposal, payload: Record<string, unknown>): string {
-  const bits: string[] = [];
-  switch (p.kind) {
-    case "task":
-      if (payload.assigneeName) {
-        const ext = payload.assigneeContactId || payload.assigneeKind === "external";
-        bits.push(`→ ${payload.assigneeName}${ext ? " (externe)" : ""}`);
-      }
-      if (payload.dueDate) bits.push(`📅 ${payload.dueDate}`);
-      if (payload.projectName) bits.push(`📁 ${payload.projectName}`);
-      if (payload.priority && payload.priority !== "normal")
-        bits.push(`priorité ${payload.priority}`);
-      break;
-    case "project":
-      if (payload.kind) bits.push(String(payload.kind));
-      if (payload.entityName) bits.push(`pour ${payload.entityName}`);
-      break;
-    case "opportunity":
-      if (payload.entityName) bits.push(`avec ${payload.entityName}`);
-      if (payload.valueAmount)
-        bits.push(`${Number(payload.valueAmount).toLocaleString("fr-FR")} €`);
-      break;
-    case "contact":
-      if (payload.jobTitle) bits.push(String(payload.jobTitle));
-      if (payload.entityName) bits.push(`@ ${payload.entityName}`);
-      if (payload.email) bits.push(String(payload.email));
-      break;
-    case "entity":
-      if (payload.kind) bits.push(String(payload.kind));
-      break;
-  }
-  return bits.join(" · ") || "—";
 }

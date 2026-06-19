@@ -96,7 +96,7 @@ export async function readResource(uri: string, ctx: UserContext) {
       .from(tasks)
       .where(
         and(
-          eq(tasks.assigneeId, ctx.userId),
+          sql`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${ctx.userId})`,
           isNotNull(tasks.dueDate),
           sql`${tasks.dueDate} <= ${today.toISOString().slice(0, 10)}`,
           sql`${tasks.status} not in ('done', 'cancelled')`,
@@ -116,7 +116,7 @@ export async function readResource(uri: string, ctx: UserContext) {
       .from(tasks)
       .where(
         and(
-          eq(tasks.assigneeId, ctx.userId),
+          sql`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${ctx.userId})`,
           lte(tasks.dueDate, today.toISOString().slice(0, 10)),
           sql`${tasks.status} not in ('done', 'cancelled')`,
         ),
