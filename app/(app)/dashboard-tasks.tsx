@@ -3,6 +3,7 @@
 import { AvatarStack, type StackedAssignee } from "@/components/tasks/avatar-stack";
 import { PriorityPill } from "@/components/tasks/priority-pill";
 import { TaskCheckbox } from "@/components/tasks/task-checkbox";
+import { DemoBlur, ProjectName } from "@/lib/demo/components";
 import type { TaskPriority } from "@/lib/schemas/tasks";
 import { cn } from "@/lib/utils";
 import { CalendarDots, ListChecks, Plus, SunHorizon, WarningCircle } from "@phosphor-icons/react";
@@ -172,14 +173,16 @@ function TaskListRow({ task }: { task: DashboardTask }) {
         <TaskCheckbox id={task.id} done={false} />
       </span>
       <Link href={`/taches/${task.id}`} className="flex min-w-0 flex-1 flex-col py-2.5">
-        <span className="truncate text-ds-text text-sm">{task.title}</span>
-        {task.projectName ? (
+        <span className="truncate text-ds-text text-sm">
+          <DemoBlur>{task.title}</DemoBlur>
+        </span>
+        {task.projectName && task.projectId ? (
           <span className="mt-0.5 inline-flex items-center gap-1.5 text-ds-text-tertiary text-xs">
             <span
               className="size-[7px] flex-none rounded-full"
               style={{ background: task.projectTint }}
             />
-            {task.projectName}
+            <ProjectName project={{ id: task.projectId, name: task.projectName }} />
           </span>
         ) : (
           <span className="mt-0.5 text-ds-text-tertiary text-xs">— sans projet</span>

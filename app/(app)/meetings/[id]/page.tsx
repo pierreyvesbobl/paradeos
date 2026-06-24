@@ -8,6 +8,7 @@ import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { deleteMeetingAndRedirect } from "@/lib/actions/meetings";
 import { db } from "@/lib/db/server";
+import { DemoBlur } from "@/lib/demo/components";
 import { FileText } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
@@ -101,7 +102,7 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
               })} · Réunion`
             : "Meeting"
         }
-        title={meeting.title}
+        title={<DemoBlur>{meeting.title}</DemoBlur>}
         description={meeting.sourceLabel ?? undefined}
         actions={<ReExtractButton meetingId={meeting.id} />}
       />
@@ -143,9 +144,11 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
               <span className="flex-1" />
               <CopyTranscriptButton transcript={meeting.transcript} />
             </summary>
-            <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap border-t bg-[var(--ds-bg-app)] p-5 text-xs leading-relaxed">
-              {meeting.transcript}
-            </pre>
+            <DemoBlur className="block">
+              <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap border-t bg-[var(--ds-bg-app)] p-5 text-xs leading-relaxed">
+                {meeting.transcript}
+              </pre>
+            </DemoBlur>
           </details>
         </div>
 
@@ -200,7 +203,7 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
             action={deleteMeetingAndRedirect}
             id={meeting.id}
             label="Supprimer la réunion"
-            confirmTitle={`Supprimer "${meeting.title}" ?`}
+            confirmTitle="Supprimer cette réunion ?"
             className="w-full justify-center bg-[var(--ds-tint-red-bg)] py-2.5 font-medium text-[var(--ds-tint-red-text)] hover:bg-[var(--ds-tint-red-bg)] hover:text-[var(--ds-tint-red-text)] hover:brightness-95"
           />
         </aside>

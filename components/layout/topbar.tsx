@@ -1,6 +1,7 @@
 import { users } from "@/db/schema/users";
 import { getRecentMentions, getUnreadMentionCount } from "@/lib/db/queries/mentions";
 import { db } from "@/lib/db/server";
+import { DemoBanner } from "@/lib/demo/components";
 import type { User } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { CommandPalette } from "./command-palette";
@@ -22,7 +23,8 @@ export async function Topbar({ user }: { user: User }) {
   return (
     <header className="flex h-14 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
       <CommandPalette />
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex items-center gap-2">
+        <DemoBanner />
         <MentionsBell
           unreadCount={unread}
           recent={recent.map((m) => ({

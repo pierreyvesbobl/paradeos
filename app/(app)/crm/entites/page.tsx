@@ -200,7 +200,14 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
                 >
                   <TableCell className="min-h-[58px] px-3 py-2.5">
                     <div className="flex items-center gap-3">
-                      <HashedAvatar name={row.name} seed={row.id} size="md" title={row.name} />
+                      <HashedAvatar
+                        name={row.name}
+                        seed={row.id}
+                        size="md"
+                        title={row.name}
+                        demoKind="entity"
+                        demoId={row.id}
+                      />
                       <EntName id={row.id} value={row.name} className="font-medium text-sm" />
                     </div>
                   </TableCell>

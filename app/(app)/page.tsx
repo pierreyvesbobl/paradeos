@@ -10,6 +10,7 @@ import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
 import { getCalendarEventsForRange } from "@/lib/db/queries/calendar";
 import { db } from "@/lib/db/server";
+import { DemoBlur, EntityName, EuroAmount, ProjectName } from "@/lib/demo/components";
 import {
   ArrowBendDownRight,
   ArrowUpRight,
@@ -70,15 +71,6 @@ const hourFmt = new Intl.DateTimeFormat("fr-FR", {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function formatEurCompact(n: number): string {
-  if (n === 0) return "0 €";
-  return n.toLocaleString("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  });
 }
 
 // Bucket par rapport à aujourd'hui (string YYYY-MM-DD).
@@ -239,6 +231,7 @@ export default async function DashboardPage() {
       name: projects.name,
       color: projects.color,
       status: projects.status,
+      entityId: entities.id,
       entityName: entities.name,
       updatedAt: projects.updatedAt,
     })
@@ -362,6 +355,7 @@ export default async function DashboardPage() {
       title: projects.name,
       followUpDate: projects.followUpDate,
       status: projects.status,
+      entityId: entities.id,
       entityName: entities.name,
       color: projects.color,
     })
@@ -485,7 +479,11 @@ export default async function DashboardPage() {
           sub={relancesCount > 1 ? "clients" : "client"}
           valueClassName="text-ds-text"
           footIcon={<Briefcase weight="duotone" className="size-3.5 text-ds-text-muted" />}
-          footText={`Pipeline · ${formatEurCompact(relancesTotal)}`}
+          footText={
+            <>
+              Pipeline · <EuroAmount value={relancesTotal} demoId="kpi-relances" compact />
+            </>
+          }
           footClassName="text-ds-text-muted"
         />
         <MetricCard
@@ -503,7 +501,7 @@ export default async function DashboardPage() {
           href="/compta"
           label="À encaisser"
           icon={<Receipt weight="duotone" className="size-5 text-tint-mauve-dot" />}
-          value={formatEurCompact(toCollect)}
+          value={<EuroAmount value={toCollect} demoId="kpi-to-collect" compact />}
           sub={`${toCollectCount} facture${toCollectCount > 1 ? "s" : ""}`}
           valueClassName="text-ds-text"
           footIcon={
@@ -566,9 +564,10 @@ export default async function DashboardPage() {
                           className="size-[11px] flex-none rounded-full"
                           style={{ background: tint }}
                         />
-                        <span className="min-w-0 flex-1 truncate font-medium text-ds-text text-sm">
-                          {p.name}
-                        </span>
+                        <ProjectName
+                          project={p}
+                          className="min-w-0 flex-1 truncate font-medium text-ds-text text-sm"
+                        />
                         <span
                           className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-medium text-[11px]"
                           style={{ background: status.bg, color: status.text }}
@@ -581,7 +580,9 @@ export default async function DashboardPage() {
                         </span>
                       </div>
                       <div className="mb-2.5 flex items-center gap-2 text-ds-text-tertiary text-xs">
-                        <span>{p.entityName ?? "—"}</span>
+                        <EntityName
+                          entity={p.entityId ? { id: p.entityId, name: p.entityName } : null}
+                        />
                         <span
                           className="inline-block size-[3px] rounded-full"
                           style={{ background: "var(--ds-border-strong)" }}
@@ -602,7 +603,7 @@ export default async function DashboardPage() {
                             style={{ color: tint }}
                           />
                           <span className="min-w-0 flex-1 truncate text-ds-text-muted text-xs">
-                            {next.title}
+                            <DemoBlur>{next.title}</DemoBlur>
                           </span>
                         </div>
                       ) : null}
@@ -657,9 +658,13 @@ export default async function DashboardPage() {
                       style={{ background: e.dot }}
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-ds-text text-sm">{e.title}</div>
+                      <div className="truncate text-ds-text text-sm">
+                        <DemoBlur>{e.title}</DemoBlur>
+                      </div>
                       {e.meta ? (
-                        <div className="truncate text-ds-text-tertiary text-xs">{e.meta}</div>
+                        <div className="truncate text-ds-text-tertiary text-xs">
+                          <DemoBlur>{e.meta}</DemoBlur>
+                        </div>
                       ) : null}
                     </div>
                     {e.physical ? (
@@ -696,9 +701,15 @@ export default async function DashboardPage() {
                       style={{ background: projectTint({ id: r.id, color: r.color }) }}
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-ds-text text-sm">{r.title}</div>
+                      <ProjectName
+                        project={{ id: r.id, name: r.title }}
+                        className="block truncate text-ds-text text-sm"
+                      />
                       <div className="truncate text-ds-text-tertiary text-xs">
-                        {r.entityName ?? "—"} · {RELANCE_STATUS_LABEL[r.status] ?? r.status}
+                        <EntityName
+                          entity={r.entityId ? { id: r.entityId, name: r.entityName } : null}
+                        />{" "}
+                        · {RELANCE_STATUS_LABEL[r.status] ?? r.status}
                       </div>
                     </div>
                     <span className="font-medium text-ds-text-tertiary text-xs">
@@ -731,11 +742,11 @@ function MetricCard({
   href: string;
   label: string;
   icon: React.ReactNode;
-  value: string;
+  value: React.ReactNode;
   sub?: string;
   valueClassName?: string;
   footIcon?: React.ReactNode;
-  footText?: string;
+  footText?: React.ReactNode;
   footClassName?: string;
 }) {
   return (

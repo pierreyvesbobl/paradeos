@@ -6,6 +6,9 @@ import { InlineText } from "@/components/inline/inline-text";
 import type { SaveResult, Saver } from "@/components/inline/types";
 import { Badge } from "@/components/ui/badge";
 import { patchEntity } from "@/lib/actions/entities";
+import { demoCompanyName } from "@/lib/demo/anonymize";
+import { DemoBlur } from "@/lib/demo/components";
+import { useDemoMode } from "@/lib/demo/context";
 import { type EntityKind, entityKindLabels } from "@/lib/schemas/entities";
 
 type FieldId = "name" | "kind" | "website" | "siren" | "vatNumber" | "notes";
@@ -44,6 +47,8 @@ export function EntName({
   value: string;
   className?: string;
 }) {
+  const demo = useDemoMode();
+  if (demo) return <span className={className}>{demoCompanyName(id)}</span>;
   return (
     <InlineText
       value={value}
@@ -81,6 +86,14 @@ export function EntWebsite({
   className?: string;
   placeholder?: string;
 }) {
+  const demo = useDemoMode();
+  if (demo) {
+    return (
+      <span className={className}>
+        {value ? <DemoBlur>{value}</DemoBlur> : (placeholder ?? "")}
+      </span>
+    );
+  }
   return (
     <InlineText
       value={value}
@@ -140,6 +153,14 @@ export function EntVat({ id, value }: { id: string; value: string | null }) {
 }
 
 export function EntNotes({ id, value }: { id: string; value: string | null }) {
+  const demo = useDemoMode();
+  if (demo) {
+    return value ? (
+      <DemoBlur>{value}</DemoBlur>
+    ) : (
+      <span className="text-muted-foreground text-sm">—</span>
+    );
+  }
   return (
     <InlineMultiline
       value={value}

@@ -14,6 +14,8 @@ import { Slider } from "@/components/ui/slider";
 import { UserAvatar } from "@/components/user/user-avatar";
 import { quickCreateEntity } from "@/lib/actions/entities";
 import { patchProject } from "@/lib/actions/projects";
+import { demoAmount, demoCompanyName, demoProjectName } from "@/lib/demo/anonymize";
+import { useDemoMode } from "@/lib/demo/context";
 import { formatEuro } from "@/lib/format";
 import {
   type ProjectBillingType,
@@ -76,6 +78,8 @@ export function ProjName({
   value: string;
   className?: string;
 }) {
+  const demo = useDemoMode();
+  if (demo) return <span className={className}>{demoProjectName(id)}</span>;
   return (
     <InlineText
       value={value}
@@ -232,6 +236,10 @@ export function ProjEntity({
   value: { id: string; name: string } | null;
   options: { id: string; name: string }[];
 }) {
+  const demo = useDemoMode();
+  if (demo) {
+    return <span>{value ? demoCompanyName(value.id) : "—"}</span>;
+  }
   return (
     <InlineFk
       value={value ? { id: value.id, label: value.name } : null}
@@ -251,6 +259,10 @@ export function ProjEntity({
 
 export function ProjValueAmount({ id, value }: { id: string; value: string | null }) {
   const numeric = value != null ? Number(value) : null;
+  const demo = useDemoMode();
+  if (demo) {
+    return <span>{numeric != null ? formatEuro(demoAmount(id, numeric)) : "—"}</span>;
+  }
   return (
     <InlineText
       value={numeric != null ? String(numeric) : null}
@@ -399,6 +411,10 @@ export function ProjProbability({ id, value }: { id: string; value: number | nul
 
 export function ProjBudget({ id, value }: { id: string; value: string | null }) {
   const numeric = value != null ? Number(value) : null;
+  const demo = useDemoMode();
+  if (demo) {
+    return <span>{numeric != null ? formatEuro(demoAmount(`budget:${id}`, numeric)) : "—"}</span>;
+  }
   return (
     <InlineText
       value={numeric != null ? String(numeric) : null}
@@ -446,6 +462,14 @@ export function ProjHourlyRate({ id, value }: { id: string; value: string | null
 }
 
 export function ProjDescription({ id, value }: { id: string; value: string | null }) {
+  const demo = useDemoMode();
+  if (demo) {
+    return value ? (
+      <span className="select-none blur-sm">{value}</span>
+    ) : (
+      <span className="text-muted-foreground text-sm">—</span>
+    );
+  }
   return (
     <InlineMultiline
       value={value}

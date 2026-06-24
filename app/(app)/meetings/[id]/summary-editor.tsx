@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { updateMeetingSummary } from "@/lib/actions/meetings";
+import { useDemoMode } from "@/lib/demo/context";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -18,6 +19,7 @@ export function SummaryEditor({
   const [current, setCurrent] = useState<string | null>(initial);
   const [draft, setDraft] = useState(initial ?? "");
   const [pending, startTransition] = useTransition();
+  const demo = useDemoMode();
 
   useEffect(() => {
     setCurrent(initial);
@@ -42,20 +44,28 @@ export function SummaryEditor({
     return (
       <div className="space-y-2">
         {current ? (
-          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{current}</pre>
+          <pre
+            className={`whitespace-pre-wrap font-sans text-sm leading-relaxed ${
+              demo ? "select-none blur-sm" : ""
+            }`}
+          >
+            {current}
+          </pre>
         ) : (
           <p className="text-muted-foreground text-sm">—</p>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setDraft(current ?? "");
-            setEditing(true);
-          }}
-        >
-          Modifier
-        </Button>
+        {demo ? null : (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setDraft(current ?? "");
+              setEditing(true);
+            }}
+          >
+            Modifier
+          </Button>
+        )}
       </div>
     );
   }

@@ -42,6 +42,13 @@ export const SETTING_KEYS = {
    * (les rows pending restent en attente). Default : enabled.
    */
   INVOICE_FILING_ENABLED: "INVOICE_FILING_ENABLED",
+  /**
+   * Mode démo global : si "true", l'UI affiche des alias déterministes pour
+   * les noms d'entreprises, contacts, projets, et applique un facteur (~×1)
+   * aux montants. Les données en base restent intactes. Les exports
+   * (PDF, CSV, Dougs) ne sont PAS anonymisés.
+   */
+  DEMO_MODE: "DEMO_MODE",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

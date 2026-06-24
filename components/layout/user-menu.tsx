@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/lib/actions/auth";
 import type { User } from "@supabase/supabase-js";
-import { LogOut, Plug, Settings, Users as UsersIcon } from "lucide-react";
+import { Eye, LogOut, Plug, Settings, Users as UsersIcon } from "lucide-react";
 import Link from "next/link";
 
 function initialsFromEmail(email: string | undefined): string {
@@ -63,6 +63,12 @@ export function UserMenu({
               <Link href="/settings/integrations" className="flex items-center gap-2">
                 <Plug className="size-4" />
                 Intégrations
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/settings/demo" className="flex items-center gap-2">
+                <Eye className="size-4" />
+                Mode démo
               </Link>
             </DropdownMenuItem>
           </>

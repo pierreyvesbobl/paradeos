@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { acceptEmailProposal, rejectEmailProposal } from "@/lib/actions/email-proposals";
+import { DemoBlur } from "@/lib/demo/components";
 import { formatDate } from "@/lib/format";
 import { Briefcase, Check, ExternalLink, ListTodo, Mail, Tag, X } from "lucide-react";
 import Link from "next/link";
@@ -54,11 +55,13 @@ export function ProposalCard({ message, proposals }: Props) {
             className="block min-w-0 truncate font-medium text-sm hover:underline"
           >
             <Mail className="-mt-0.5 mr-1 inline size-3.5 text-muted-foreground" />
-            {message.subject || "(sans objet)"}
+            <DemoBlur>{message.subject || "(sans objet)"}</DemoBlur>
           </Link>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {message.fromName ? `${message.fromName} ` : ""}
-            {message.fromEmail ? `<${message.fromEmail}>` : ""}
+            <DemoBlur>
+              {message.fromName ? `${message.fromName} ` : ""}
+              {message.fromEmail ? `<${message.fromEmail}>` : ""}
+            </DemoBlur>
             {message.date ? ` · ${formatDate(message.date)}` : ""}
           </p>
         </div>
@@ -125,14 +128,18 @@ function ProposalRow({ proposal: p }: { proposal: Proposal }) {
           <Badge variant="outline" className="text-[10px]">
             {KIND_LABEL[p.kind]}
           </Badge>
-          <span className="font-medium text-sm">{describeProposal(p)}</span>
+          <span className="font-medium text-sm">
+            <DemoBlur>{describeProposal(p)}</DemoBlur>
+          </span>
           {p.matchConfidence ? (
             <span className="text-[10px] text-muted-foreground">
               · match {(Number(p.matchConfidence) * 100).toFixed(0)}%
             </span>
           ) : null}
         </div>
-        <p className="text-[11px] text-muted-foreground">{describeDetails(p)}</p>
+        <p className="text-[11px] text-muted-foreground">
+          <DemoBlur>{describeDetails(p)}</DemoBlur>
+        </p>
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <Button

@@ -254,7 +254,14 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                   >
                     <TableCell className="min-h-[58px] px-3 py-2.5">
                       <div className="flex items-center gap-3">
-                        <HashedAvatar name={fullName} seed={row.id} size="md" title={fullName} />
+                        <HashedAvatar
+                          name={fullName}
+                          seed={row.id}
+                          size="md"
+                          title={fullName}
+                          demoKind="contact"
+                          demoId={row.id}
+                        />
                         <div className="flex min-w-0 flex-col gap-px">
                           <div className="flex items-center gap-1.5">
                             <ContFirstName

@@ -5,6 +5,7 @@ import { gmailMessages } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
+import { DemoBlur } from "@/lib/demo/components";
 import { formatDate } from "@/lib/format";
 import { desc, eq } from "drizzle-orm";
 import { ExternalLink, FileText } from "lucide-react";
@@ -73,13 +74,15 @@ export async function FacturesView() {
               <header className="flex flex-wrap items-baseline justify-between gap-2">
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="truncate font-medium text-sm">
-                    {r.generatedFilename ?? r.originalFilename ?? "(sans nom)"}
+                    <DemoBlur>{r.generatedFilename ?? r.originalFilename ?? "(sans nom)"}</DemoBlur>
                   </p>
                   <p className="truncate text-[11px] text-muted-foreground">
-                    {r.messageSubject ? `« ${r.messageSubject} »` : "(sans objet)"}
+                    <DemoBlur>
+                      {r.messageSubject ? `« ${r.messageSubject} »` : "(sans objet)"}
+                    </DemoBlur>
                     {" — "}
                     <Link href={`/emails/${r.messageThreadIdLocal}`} className="hover:underline">
-                      {r.messageFromName ?? r.messageFrom ?? "?"}
+                      <DemoBlur>{r.messageFromName ?? r.messageFrom ?? "?"}</DemoBlur>
                     </Link>
                     {r.createdAt ? ` · ${formatDate(r.createdAt.toISOString())}` : ""}
                   </p>
@@ -105,7 +108,9 @@ export async function FacturesView() {
 
               {r.status === "filed" ? (
                 <p className="text-[11px] text-muted-foreground">
-                  <span className="text-foreground/80">{r.supplierSanitized ?? r.supplierRaw}</span>
+                  <span className="text-foreground/80">
+                    <DemoBlur>{r.supplierSanitized ?? r.supplierRaw}</DemoBlur>
+                  </span>
                   {" · "}
                   {r.prestationType ?? "—"}
                   {r.invoiceDate ? ` · émise le ${r.invoiceDate}` : ""}

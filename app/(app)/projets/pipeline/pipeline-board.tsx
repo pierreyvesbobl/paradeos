@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user/user-avatar";
 import { patchProject, quickCreateProject } from "@/lib/actions/projects";
-import { formatDate, formatEuro } from "@/lib/format";
+import { EntityName, EuroAmount, ProjectName } from "@/lib/demo/components";
+import { formatDate } from "@/lib/format";
 import { type ProjectStatus, projectStatusLabels } from "@/lib/schemas/projects";
 import {
   DndContext,
@@ -39,6 +40,7 @@ export type PipelineItem = {
   dougsQuoteReference: string | null;
   probability: number | null;
   followUpDate: string | null;
+  entityId: string | null;
   entityName: string | null;
   ownerName: string | null;
   ownerAvatarUrl: string | null;
@@ -187,7 +189,11 @@ function ColumnHeader({
       </span>
       <h2 className="whitespace-nowrap font-semibold text-[15px] leading-none">{title}</h2>
       <span className="flex-1" />
-      {total > 0 ? <span className="font-mono text-xs opacity-80">{formatEuro(total)}</span> : null}
+      {total > 0 ? (
+        <span className="font-mono text-xs opacity-80">
+          <EuroAmount value={total} demoId={`col:${title}`} />
+        </span>
+      ) : null}
       <Plus size={14} weight="bold" className="opacity-75" />
     </header>
   );
@@ -248,7 +254,10 @@ function Card({ item }: { item: PipelineItem }) {
         }}
         className="block space-y-2.5 px-3 py-3"
       >
-        <p className="font-medium text-foreground text-sm leading-snug">{item.name}</p>
+        <ProjectName
+          project={item}
+          className="block font-medium text-foreground text-sm leading-snug"
+        />
 
         <div className="flex items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px] text-muted-foreground">
@@ -257,7 +266,10 @@ function Card({ item }: { item: PipelineItem }) {
               weight="duotone"
               className="flex-none text-[var(--ds-text-tertiary)]"
             />
-            <span className="truncate">{item.entityName ?? "—"}</span>
+            <EntityName
+              entity={item.entityId ? { id: item.entityId, name: item.entityName } : null}
+              className="truncate"
+            />
           </div>
           {item.ownerName ? (
             <UserAvatar
@@ -285,7 +297,7 @@ function Card({ item }: { item: PipelineItem }) {
                   : "Montant manuel"
               }
             >
-              {formatEuro(Number(item.valueAmount))}
+              <EuroAmount value={Number(item.valueAmount)} demoId={item.id} />
               {item.valueSource === "dougs" ? " ⓘ" : ""}
             </span>
           ) : (
@@ -451,15 +463,21 @@ function StaticBoard({ items }: { items: PipelineItem[] }) {
                     key={it.id}
                     className="rounded-[10px] border border-border/70 bg-[var(--ds-bg-app)] px-3 py-3 shadow-[0_1px_2px_rgba(15,15,15,0.04)]"
                   >
-                    <p className="font-medium text-foreground text-sm leading-snug">{it.name}</p>
-                    {it.entityName ? (
+                    <ProjectName
+                      project={it}
+                      className="block font-medium text-foreground text-sm leading-snug"
+                    />
+                    {it.entityId ? (
                       <div className="mt-2 flex items-center gap-1.5 text-[12px] text-muted-foreground">
                         <Buildings
                           size={14}
                           weight="duotone"
                           className="text-[var(--ds-text-tertiary)]"
                         />
-                        <span className="truncate">{it.entityName}</span>
+                        <EntityName
+                          entity={{ id: it.entityId, name: it.entityName }}
+                          className="truncate"
+                        />
                       </div>
                     ) : null}
                   </li>

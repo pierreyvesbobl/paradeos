@@ -9,6 +9,7 @@ import { entities } from "@/db/schema/entities";
 import { deleteEntityAndRedirect } from "@/lib/actions/entities";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { db } from "@/lib/db/server";
+import { ContactName, EntityName } from "@/lib/demo/components";
 import { asc, eq } from "drizzle-orm";
 import { Plus } from "lucide-react";
 import Link from "next/link";
@@ -63,7 +64,12 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
     <div className="space-y-8">
       <PageHeader
         eyebrow={
-          <Breadcrumbs items={[{ label: "Entités", href: "/entites" }, { label: entity.name }]} />
+          <Breadcrumbs
+            items={[
+              { label: "Entités", href: "/entites" },
+              { label: <EntityName entity={entity} /> },
+            ]}
+          />
         }
         title={<EntName id={id} value={entity.name} />}
         description={
@@ -74,7 +80,7 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
             action={deleteEntityAndRedirect}
             id={id}
             label="Supprimer"
-            confirmTitle={`Supprimer "${entity.name}" ?`}
+            confirmTitle="Supprimer cette entité ?"
             confirmDescription="L'entité sera supprimée. Les contacts rattachés seront détachés (mais conservés)."
           />
         }
@@ -154,9 +160,7 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
                     href={`/contacts/${c.id}`}
                     className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted"
                   >
-                    <span className="text-sm">
-                      {c.firstName} {c.lastName}
-                    </span>
+                    <ContactName contact={c} className="text-sm" />
                     {c.jobTitle ? (
                       <span className="text-muted-foreground text-xs">{c.jobTitle}</span>
                     ) : null}

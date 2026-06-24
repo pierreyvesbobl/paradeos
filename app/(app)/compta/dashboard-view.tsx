@@ -3,6 +3,8 @@ import { entities } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
+import { demoAmount, demoCompanyName, demoProjectName } from "@/lib/demo/anonymize";
+import { isDemoMode } from "@/lib/demo/server";
 import {
   ArrowRight,
   BellRinging,
@@ -48,6 +50,7 @@ type PendingItem = {
   projectName: string | null;
   coworkingContractId: string | null;
   contractName: string | null;
+  entityId: string | null;
   entityName: string | null;
   amountHt: number;
   status: "draft" | "sent";
@@ -56,6 +59,7 @@ type PendingItem = {
 type ProjectDetailRow = {
   projectId: string;
   projectName: string;
+  entityId: string | null;
   entityName: string | null;
   quoteReference: string | null;
   signedHt: number;
@@ -74,6 +78,12 @@ export async function DashboardView({
   const conn = await db();
   const win = periodWindow(period);
   const showSigned = segment !== "cowork";
+  const demo = await isDemoMode();
+  const dAmt = (id: string, n: number) => (demo ? demoAmount(id, n) : n);
+  const dCompany = (id: string | null, name: string | null) =>
+    demo && id ? demoCompanyName(id) : name;
+  const dProject = (id: string | null, name: string | null) =>
+    demo && id ? demoProjectName(id) : name;
 
   // Toutes les invoices facturables, filtrées par segment.
   const rows = await conn
@@ -88,6 +98,7 @@ export async function DashboardView({
       projectId: invoices.projectId,
       coworkingContractId: invoices.coworkingContractId,
       projectName: projects.name,
+      projectEntityId: entities.id,
       projectEntityName: entities.name,
       contractName: coworkingContracts.name,
     })
@@ -112,6 +123,7 @@ export async function DashboardView({
           invoiceId: invoices.id,
           projectId: invoices.projectId,
           projectName: projects.name,
+          entityId: entities.id,
           entityName: entities.name,
           amountHt: invoices.amountHt,
           dougsTotalHt: invoices.dougsTotalHt,
@@ -138,7 +150,7 @@ export async function DashboardView({
   const pending: PendingItem[] = [];
 
   for (const r of rows) {
-    const amount = Number(r.amountHt) || 0;
+    const amount = dAmt(r.id, Number(r.amountHt) || 0);
     const status = r.status;
     if (status === "draft") {
       toBillHt += amount;
@@ -147,10 +159,11 @@ export async function DashboardView({
         kind: r.kind as PendingItem["kind"],
         label: r.label,
         projectId: r.projectId,
-        projectName: r.projectName,
+        projectName: dProject(r.projectId, r.projectName),
         coworkingContractId: r.coworkingContractId,
         contractName: r.contractName,
-        entityName: r.projectEntityName,
+        entityId: r.projectEntityId,
+        entityName: dCompany(r.projectEntityId, r.projectEntityName),
         amountHt: amount,
         status: "draft",
       });
@@ -162,10 +175,11 @@ export async function DashboardView({
         kind: r.kind as PendingItem["kind"],
         label: r.label,
         projectId: r.projectId,
-        projectName: r.projectName,
+        projectName: dProject(r.projectId, r.projectName),
         coworkingContractId: r.coworkingContractId,
         contractName: r.contractName,
-        entityName: r.projectEntityName,
+        entityId: r.projectEntityId,
+        entityName: dCompany(r.projectEntityId, r.projectEntityName),
         amountHt: amount,
         status: "sent",
       });
@@ -205,7 +219,7 @@ export async function DashboardView({
   for (const inv of projectInvoices) {
     if (!inv.projectId) continue;
     const a = aggByProject.get(inv.projectId) ?? { billed: 0, cashed: 0 };
-    const amount = Number(inv.amountHt) || 0;
+    const amount = dAmt(inv.projectId, Number(inv.amountHt) || 0);
     if (inv.status === "sent" || inv.status === "paid") a.billed += amount;
     if (inv.status === "paid") a.cashed += amount;
     aggByProject.set(inv.projectId, a);
@@ -214,11 +228,12 @@ export async function DashboardView({
     .filter((q): q is typeof q & { projectId: string } => q.projectId !== null)
     .map((q) => {
       const agg = aggByProject.get(q.projectId) ?? { billed: 0, cashed: 0 };
-      const signedHt = Number(q.dougsTotalHt ?? q.amountHt ?? 0);
+      const signedHt = dAmt(`signed:${q.projectId}`, Number(q.dougsTotalHt ?? q.amountHt ?? 0));
       return {
         projectId: q.projectId,
-        projectName: q.projectName ?? "(projet supprimé)",
-        entityName: q.entityName,
+        projectName: dProject(q.projectId, q.projectName) ?? "(projet supprimé)",
+        entityId: q.entityId,
+        entityName: dCompany(q.entityId, q.entityName),
         quoteReference: q.dougsReference ?? q.reference,
         signedHt,
         billedHt: agg.billed,

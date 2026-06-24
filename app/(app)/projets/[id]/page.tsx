@@ -28,7 +28,8 @@ import { getProjectSecretsList } from "@/lib/db/queries/project-secrets";
 import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { getProjectTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
-import { formatDuration, formatEuro } from "@/lib/format";
+import { EntityName, EuroAmount, ProjectName } from "@/lib/demo/components";
+import { formatDuration } from "@/lib/format";
 import { projectBillingTypeLabels } from "@/lib/schemas/projects";
 import { cn } from "@/lib/utils";
 import { and, asc, eq } from "drizzle-orm";
@@ -513,7 +514,8 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       >
         {profitability.billingType === "none" ? (
           <p className="text-muted-foreground text-xs">
-            Non facturable. Coût interne : {formatEuro(profitability.costAmount)} sur{" "}
+            Non facturable. Coût interne :{" "}
+            <EuroAmount value={profitability.costAmount} demoId={`cost:${id}`} /> sur{" "}
             {formatDuration(profitability.actualMinutes)} réalisés.
           </p>
         ) : profitability.actualMinutes === 0 ? (
@@ -527,16 +529,23 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
             <div className="grid grid-cols-3 gap-2">
               <CompactStat
                 label="Revenu"
-                value={formatEuro(profitability.revenueAmount)}
+                value={<EuroAmount value={profitability.revenueAmount} demoId={`rev:${id}`} />}
                 tone="muted"
               />
-              <CompactStat label="Coût" value={formatEuro(profitability.costAmount)} tone="muted" />
+              <CompactStat
+                label="Coût"
+                value={<EuroAmount value={profitability.costAmount} demoId={`cost:${id}`} />}
+                tone="muted"
+              />
               <CompactMargin amount={profitability.marginAmount} pct={profitability.marginPct} />
             </div>
             {profitability.effectiveHourlyRate != null ? (
               <p className="text-[11px] text-muted-foreground">
                 Taux effectif :{" "}
-                <span className="font-mono">{formatEuro(profitability.effectiveHourlyRate)}/h</span>
+                <span className="font-mono">
+                  <EuroAmount value={profitability.effectiveHourlyRate} demoId={`rate:${id}`} />
+                  /h
+                </span>
               </p>
             ) : null}
           </>
@@ -552,8 +561,10 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
           <Breadcrumbs
             items={[
               { label: "Projets", href: "/projets" },
-              ...(entity ? [{ label: entity.name, href: `/entites/${entity.id}` }] : []),
-              { label: project.name },
+              ...(entity
+                ? [{ label: <EntityName entity={entity} />, href: `/entites/${entity.id}` }]
+                : []),
+              { label: <ProjectName project={project} /> },
             ]}
           />
         }
@@ -573,7 +584,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
               action={deleteProjectAndRedirect}
               id={id}
               label="Supprimer"
-              confirmTitle={`Supprimer "${project.name}" ?`}
+              confirmTitle="Supprimer ce projet ?"
             />
           </>
         }
@@ -634,7 +645,7 @@ function CompactStat({
   tone,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   tone: "actual" | "planned" | "muted";
 }) {
   const accent =
@@ -666,7 +677,7 @@ function CompactMargin({ amount, pct }: { amount: number; pct: number | null }) 
       <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Marge</p>
       <p className={cn("mt-0.5 font-semibold text-sm tabular-nums", tone)}>
         {sign}
-        {formatEuro(Math.abs(amount))}
+        <EuroAmount value={Math.abs(amount)} demoId="margin" />
       </p>
       {pct != null ? <p className="text-[10px] text-muted-foreground">{pct.toFixed(1)}%</p> : null}
     </div>

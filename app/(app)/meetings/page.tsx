@@ -16,6 +16,7 @@ import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { meetings } from "@/db/schema/meetings";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
+import { DemoBlur, ProjectName } from "@/lib/demo/components";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
@@ -241,7 +242,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
                 <TableRow key={row.id} className="group">
                   <TableCell className="font-medium">
                     <Link href={`/meetings/${row.id}`} className="hover:underline">
-                      {row.title}
+                      <DemoBlur>{row.title}</DemoBlur>
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
@@ -269,7 +270,10 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
                         className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted"
                       >
                         <FolderKanban className="size-3.5 text-muted-foreground" />
-                        <span className="truncate font-medium">{row.projectName}</span>
+                        <ProjectName
+                          project={{ id: row.projectId, name: row.projectName }}
+                          className="truncate font-medium"
+                        />
                       </Link>
                     ) : (
                       <span className="text-muted-foreground">—</span>

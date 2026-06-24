@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { updateCoworkingContract } from "@/lib/actions/coworking";
 import { updateCoworkingInvoice } from "@/lib/actions/invoices";
+import { demoAmount, demoCompanyName } from "@/lib/demo/anonymize";
+import { useDemoMode } from "@/lib/demo/context";
 import {
   type CoworkingContractStatus,
   type CoworkingInvoiceBilledBy,
@@ -423,6 +425,8 @@ export function ContractStatusEditor({
 }
 
 export function ContractNameEditor({ id, value }: { id: string; value: string }) {
+  const demo = useDemoMode();
+  if (demo) return <span className="font-medium">{demoCompanyName(id)}</span>;
   return (
     <InlineText
       value={value}
@@ -455,6 +459,11 @@ export function ContractDesksEditor({ id, value }: { id: string; value: number }
 }
 
 export function ContractPriceEditor({ id, value }: { id: string; value: string }) {
+  const demo = useDemoMode();
+  if (demo) {
+    const v = demoAmount(`price:${id}`, Number(value) || 0);
+    return <span className="w-24 text-right tabular-nums">{v.toLocaleString("fr-FR")} €</span>;
+  }
   return (
     <InlineNumber
       value={value}
@@ -545,6 +554,8 @@ export function InvoiceBilledByEditor({
 }
 
 export function InvoiceNameEditor({ id, value }: { id: string; value: string }) {
+  const demo = useDemoMode();
+  if (demo) return <span className="font-medium">Facture {id.slice(0, 6)}</span>;
   return (
     <InlineText
       value={value}

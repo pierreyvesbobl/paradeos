@@ -1,3 +1,7 @@
+"use client";
+
+import { demoCompanyName, demoContactName } from "@/lib/demo/anonymize";
+import { useDemoMode } from "@/lib/demo/context";
 import { cn } from "@/lib/utils";
 
 const TINTS = [
@@ -48,17 +52,32 @@ export function HashedAvatar({
   title,
   size = "md",
   className,
+  demoKind,
+  demoId,
 }: {
   name: string | null | undefined;
   seed?: string | null;
   title?: string;
   size?: Size;
   className?: string;
+  /** Si fourni et que le mode démo est on, remplace le nom utilisé pour les
+   * initiales par l'alias correspondant. */
+  demoKind?: "entity" | "contact";
+  demoId?: string;
 }) {
-  const tint = hashTint(seed?.trim() || name?.trim() || "?");
+  const demo = useDemoMode();
+  let displayName = name;
+  if (demo && demoId) {
+    if (demoKind === "entity") displayName = demoCompanyName(demoId);
+    else if (demoKind === "contact") {
+      const c = demoContactName(demoId);
+      displayName = `${c.firstName} ${c.lastName}`;
+    }
+  }
+  const tint = hashTint(seed?.trim() || displayName?.trim() || "?");
   return (
     <span
-      title={title ?? name ?? undefined}
+      title={title ?? displayName ?? undefined}
       aria-hidden="true"
       className={cn(
         "inline-flex flex-none items-center justify-center rounded-full font-semibold",
@@ -70,7 +89,7 @@ export function HashedAvatar({
         color: `var(--ds-tint-${tint}-text)`,
       }}
     >
-      {initialsFor(name)}
+      {initialsFor(displayName)}
     </span>
   );
 }

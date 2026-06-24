@@ -9,6 +9,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { type SearchResults, globalSearch } from "@/lib/actions/global-search";
+import { ContactName, DemoBlur, EntityName, ProjectName } from "@/lib/demo/components";
 import { ArrowRight, Building2, CheckSquare, FolderKanban, Plus, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -144,7 +145,7 @@ export function CommandPalette() {
                     onSelect={() => go(`/contacts/${c.id}`)}
                   >
                     <User className="size-4" />
-                    {`${c.firstName} ${c.lastName}`.trim()}
+                    <ContactName contact={c} />
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -158,7 +159,7 @@ export function CommandPalette() {
                     onSelect={() => go(`/projets/${p.id}`)}
                   >
                     <FolderKanban className="size-4" />
-                    {p.name}
+                    <ProjectName project={p} />
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -172,7 +173,7 @@ export function CommandPalette() {
                     onSelect={() => go(`/entites/${e.id}`)}
                   >
                     <Building2 className="size-4" />
-                    {e.name}
+                    <EntityName entity={e} />
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -186,7 +187,7 @@ export function CommandPalette() {
                     onSelect={() => go(`/taches/${t.id}`)}
                   >
                     <CheckSquare className="size-4" />
-                    {t.title}
+                    <DemoBlur>{t.title}</DemoBlur>
                   </CommandItem>
                 ))}
               </CommandGroup>

@@ -10,6 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { patchContact } from "@/lib/actions/contacts";
 import { quickCreateEntity } from "@/lib/actions/entities";
+import { demoCompanyName, demoEmail, demoFirstName, demoLastName } from "@/lib/demo/anonymize";
+import { DemoBlur } from "@/lib/demo/components";
+import { useDemoMode } from "@/lib/demo/context";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -40,6 +43,8 @@ export function ContFirstName({
   value: string;
   className?: string;
 }) {
+  const demo = useDemoMode();
+  if (demo) return <span className={className}>{demoFirstName(id)}</span>;
   return (
     <InlineText
       value={value}
@@ -62,6 +67,8 @@ export function ContLastName({
   className?: string;
   placeholder?: string;
 }) {
+  const demo = useDemoMode();
+  if (demo) return <span className={className}>{demoLastName(id)}</span>;
   return (
     <InlineText
       value={value}
@@ -85,6 +92,8 @@ export function ContEmail({
   className?: string;
   placeholder?: string;
 }) {
+  const demo = useDemoMode();
+  if (demo) return <span className={className}>{demoEmail(id)}</span>;
   return (
     <InlineText
       value={value}
@@ -115,6 +124,8 @@ export function ContPhone({
   className?: string;
   placeholder?: string;
 }) {
+  const demo = useDemoMode();
+  if (demo && value) return <span className={className}>+33 6 12 34 56 78</span>;
   return (
     <InlineText
       value={value}
@@ -182,6 +193,10 @@ export function ContEntity({
   options: { id: string; name: string }[];
   placeholder?: string;
 }) {
+  const demo = useDemoMode();
+  if (demo) {
+    return <span>{value ? demoCompanyName(value.id) : (placeholder ?? "—")}</span>;
+  }
   return (
     <InlineFk
       value={value ? { id: value.id, label: value.name } : null}
@@ -201,6 +216,14 @@ export function ContEntity({
 }
 
 export function ContNotes({ id, value }: { id: string; value: string | null }) {
+  const demo = useDemoMode();
+  if (demo) {
+    return value ? (
+      <DemoBlur>{value}</DemoBlur>
+    ) : (
+      <span className="text-muted-foreground text-sm">—</span>
+    );
+  }
   return (
     <InlineMultiline
       value={value}

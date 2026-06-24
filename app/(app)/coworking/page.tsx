@@ -26,17 +26,38 @@ import {
   listCoworkingContracts,
   listCoworkingInvoices,
 } from "@/lib/db/queries/coworking";
+import { demoAmount, demoCompanyName } from "@/lib/demo/anonymize";
+import { isDemoMode } from "@/lib/demo/server";
 import { formatEuro } from "@/lib/format";
 import { invoiceTotalHt, invoiceTotalTtc, monthsBetween } from "@/lib/schemas/coworking";
 import { ArrowRight, Banknote, Clock, FileText, Mail, Plus, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
 
 export default async function CoworkingPage() {
-  const [contracts, invoices, coworkers] = await Promise.all([
+  const [contractsRaw, invoicesRaw, coworkers, demo] = await Promise.all([
     listCoworkingContracts(),
     listCoworkingInvoices(),
     listCoworkers(),
+    isDemoMode(),
   ]);
+
+  // Anonymisation déterministe : contact + prix unitaire sont mappés par id.
+  // Les ht/ttc dérivés en aval seront cohérents puisqu'ils utilisent unitPriceHt.
+  const contracts = demo
+    ? contractsRaw.map((c) => ({
+        ...c,
+        contactName: c.contactName ? demoCompanyName(`contact:${c.id}`) : null,
+        unitPriceHt: String(demoAmount(`price:${c.id}`, Number(c.unitPriceHt) || 0)),
+      }))
+    : contractsRaw;
+  const invoices = demo
+    ? invoicesRaw.map((i) => ({
+        ...i,
+        contractName: demoCompanyName(`contract:${i.contractId}`),
+        contactName: i.contactName ? demoCompanyName(`contact:${i.contractId}`) : null,
+        unitPriceHt: String(demoAmount(`price:${i.contractId}`, Number(i.unitPriceHt) || 0)),
+      }))
+    : invoicesRaw;
 
   const enCoursContracts = contracts.filter((c) => c.status === "en_cours");
   const aFacturer = invoices.filter((i) => i.status === "a_facturer");

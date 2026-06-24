@@ -19,6 +19,8 @@ import { entities } from "@/db/schema/entities";
 import { deleteCoworkingContract } from "@/lib/actions/coworking";
 import { getCoworkingContractWithInvoices } from "@/lib/db/queries/coworking";
 import { db } from "@/lib/db/server";
+import { demoAmount, demoCompanyName } from "@/lib/demo/anonymize";
+import { isDemoMode } from "@/lib/demo/server";
 import { formatEuro } from "@/lib/format";
 import {
   coworkingInvoiceBilledByLabels,
@@ -56,7 +58,22 @@ export default async function ContractDetailPage({ params }: { params: Params })
   const { id } = await params;
   const data = await getCoworkingContractWithInvoices(id);
   if (!data) notFound();
-  const { contract, invoices } = data;
+  const demo = await isDemoMode();
+  const contract = demo
+    ? {
+        ...data.contract,
+        name: demoCompanyName(data.contract.id),
+        contactName: data.contract.contactName
+          ? demoCompanyName(`contact:${data.contract.id}`)
+          : null,
+        unitPriceHt: String(
+          demoAmount(`price:${data.contract.id}`, Number(data.contract.unitPriceHt) || 0),
+        ),
+      }
+    : data.contract;
+  const invoices = demo
+    ? data.invoices.map((i) => ({ ...i, name: `Facture ${i.id.slice(0, 6)}` }))
+    : data.invoices;
 
   const conn = await db();
   const [contactRows, entityRows] = await Promise.all([
@@ -78,7 +95,7 @@ export default async function ContractDetailPage({ params }: { params: Params })
             items={[
               { label: "Coworking", href: "/coworking" },
               { label: "Contrats", href: "/coworking?tab=contracts" },
-              { label: contract.name },
+              { label: contract.name ?? "—" },
             ]}
           />
         }
@@ -89,7 +106,7 @@ export default async function ContractDetailPage({ params }: { params: Params })
             action={deleteAndRedirect}
             id={contract.id}
             label="Supprimer"
-            confirmTitle={`Supprimer "${contract.name}" ?`}
+            confirmTitle="Supprimer ce contrat ?"
           />
         }
       />
