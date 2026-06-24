@@ -5,20 +5,34 @@ import { Button } from "@/components/ui/button";
 import { acceptEmailProposal, rejectEmailProposal } from "@/lib/actions/email-proposals";
 import { DemoBlur } from "@/lib/demo/components";
 import { formatDate } from "@/lib/format";
-import { Briefcase, Check, ExternalLink, ListTodo, Mail, Tag, X } from "lucide-react";
+import {
+  Briefcase,
+  Building2,
+  Check,
+  ExternalLink,
+  ListTodo,
+  Mail,
+  Tag,
+  UserPlus,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
+type ProposalKind = "task" | "category_tag" | "project_link" | "contact" | "entity" | "project";
+
 type Proposal = {
   id: string;
-  kind: "task" | "category_tag" | "project_link";
+  kind: ProposalKind;
   payload: Record<string, unknown>;
   matchedId: string | null;
   matchConfidence: string | null;
   matchedProjectName: string | null;
   matchedTagLabel: string | null;
+  matchedContactName: string | null;
+  matchedEntityName: string | null;
 };
 
 type Props = {
@@ -33,17 +47,23 @@ type Props = {
   proposals: Proposal[];
 };
 
-const KIND_ICON = {
+const KIND_ICON: Record<ProposalKind, typeof ListTodo> = {
   task: ListTodo,
   category_tag: Tag,
   project_link: Briefcase,
-} as const;
+  contact: UserPlus,
+  entity: Building2,
+  project: Briefcase,
+};
 
-const KIND_LABEL = {
+const KIND_LABEL: Record<ProposalKind, string> = {
   task: "Tâche",
   category_tag: "Catégorie",
   project_link: "Lien projet",
-} as const;
+  contact: "Contact",
+  entity: "Entité",
+  project: "Projet",
+};
 
 export function ProposalCard({ message, proposals }: Props) {
   return (
@@ -103,7 +123,13 @@ function ProposalRow({ proposal: p }: { proposal: Proposal }) {
           ? "Tâche créée."
           : p.kind === "category_tag"
             ? "Tag appliqué."
-            : "Lien projet ajouté.",
+            : p.kind === "project_link"
+              ? "Lien projet ajouté."
+              : p.kind === "contact"
+                ? "Contact créé."
+                : p.kind === "entity"
+                  ? "Entité créée."
+                  : "Projet créé.",
       );
       router.refresh();
     });
@@ -176,8 +202,20 @@ function describeProposal(p: Proposal): string {
     const name = String(p.payload.name ?? "");
     return p.matchedTagLabel ? (p.matchedTagLabel.split("/").pop() ?? name) : name;
   }
-  // project_link
-  return p.matchedProjectName ?? String(p.payload.projectName ?? "Projet");
+  if (p.kind === "project_link") {
+    return p.matchedProjectName ?? String(p.payload.projectName ?? "Projet");
+  }
+  if (p.kind === "contact") {
+    return (
+      `${String(p.payload.firstName ?? "").trim()} ${String(p.payload.lastName ?? "").trim()}`.trim() ||
+      "Contact"
+    );
+  }
+  if (p.kind === "entity") {
+    return String(p.payload.name ?? "Entité");
+  }
+  // project (création)
+  return String(p.payload.name ?? "Projet");
 }
 
 function describeDetails(p: Proposal): string {
@@ -193,7 +231,30 @@ function describeDetails(p: Proposal): string {
   if (p.kind === "category_tag") {
     return "Catégorie existante — sera appliquée au thread.";
   }
-  return p.matchedProjectName
-    ? "Lie le thread à ce projet (label Gmail ajouté)."
-    : "Projet pas encore créé dans le CRM.";
+  if (p.kind === "project_link") {
+    return p.matchedProjectName
+      ? "Lie le thread à ce projet (label Gmail ajouté)."
+      : "Projet pas encore créé dans le CRM.";
+  }
+  if (p.kind === "contact") {
+    const parts: string[] = [];
+    if (p.payload.email) parts.push(String(p.payload.email));
+    if (p.payload.jobTitle) parts.push(String(p.payload.jobTitle));
+    if (p.payload.entityName) parts.push(`@ ${String(p.payload.entityName)}`);
+    if (p.matchedContactName) parts.push(`déjà connu : ${p.matchedContactName}`);
+    return parts.join(" · ") || "Nouveau contact à créer.";
+  }
+  if (p.kind === "entity") {
+    const parts: string[] = [];
+    if (p.payload.kind) parts.push(String(p.payload.kind));
+    if (p.matchedEntityName) parts.push(`déjà connue : ${p.matchedEntityName}`);
+    return parts.join(" · ") || "Nouvelle entité à créer.";
+  }
+  // project (création)
+  const parts: string[] = [];
+  if (p.payload.entityName) parts.push(`pour ${String(p.payload.entityName)}`);
+  if (p.payload.status) parts.push(String(p.payload.status));
+  if (p.payload.valueAmount) parts.push(`${p.payload.valueAmount}€`);
+  if (p.matchedProjectName) parts.push(`déjà connu : ${p.matchedProjectName}`);
+  return parts.join(" · ") || "Nouveau projet à créer.";
 }

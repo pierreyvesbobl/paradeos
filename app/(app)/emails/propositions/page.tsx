@@ -2,6 +2,8 @@ import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ProposalCard } from "@/components/emails/proposal-card";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { contacts } from "@/db/schema/contacts";
+import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages, gmailTags, gmailThreads } from "@/db/schema/gmail";
 import { projects } from "@/db/schema/projects";
 import { requireUser } from "@/lib/auth/server";
@@ -35,19 +37,27 @@ export default async function EmailPropositionsPage() {
     .where(and(eq(gmailMessages.userId, user.id), eq(emailProposals.status, "pending")))
     .orderBy(desc(emailProposals.createdAt));
 
-  // Résout les noms des projets / catégories matchés pour affichage.
+  // Résout les noms des projets / catégories / contacts / entités matchés
+  // pour affichage. On bucket par kind (matchedId pointe sur des tables
+  // différentes selon le kind, donc pas de jointure polymorphique).
   const projectIds = new Set<string>();
   const tagIds = new Set<string>();
+  const contactIds = new Set<string>();
+  const entityIds = new Set<string>();
   for (const r of rows) {
-    if (r.kind === "project_link" && r.matchedId) projectIds.add(r.matchedId);
-    if (r.kind === "category_tag" && r.matchedId) tagIds.add(r.matchedId);
+    if (r.matchedId) {
+      if (r.kind === "project_link" || r.kind === "project") projectIds.add(r.matchedId);
+      else if (r.kind === "category_tag") tagIds.add(r.matchedId);
+      else if (r.kind === "contact") contactIds.add(r.matchedId);
+      else if (r.kind === "entity") entityIds.add(r.matchedId);
+    }
     if (r.kind === "task") {
       const pid = (r.payload as Record<string, unknown>).projectId as string | null;
       if (pid) projectIds.add(pid);
     }
   }
 
-  const [projectNamesById, tagNamesById] = await Promise.all([
+  const [projectNamesById, tagNamesById, contactNamesById, entityNamesById] = await Promise.all([
     projectIds.size > 0
       ? conn
           .select({ id: projects.id, name: projects.name })
@@ -60,10 +70,30 @@ export default async function EmailPropositionsPage() {
           .from(gmailTags)
           .where(inArray(gmailTags.id, [...tagIds]))
       : Promise.resolve([]),
+    contactIds.size > 0
+      ? conn
+          .select({
+            id: contacts.id,
+            firstName: contacts.firstName,
+            lastName: contacts.lastName,
+          })
+          .from(contacts)
+          .where(inArray(contacts.id, [...contactIds]))
+      : Promise.resolve([]),
+    entityIds.size > 0
+      ? conn
+          .select({ id: entities.id, name: entities.name })
+          .from(entities)
+          .where(inArray(entities.id, [...entityIds]))
+      : Promise.resolve([]),
   ]);
 
   const projectNameMap = new Map(projectNamesById.map((p) => [p.id, p.name]));
   const tagLabelMap = new Map(tagNamesById.map((t) => [t.id, t.labelName]));
+  const contactNameMap = new Map(
+    contactNamesById.map((c) => [c.id, `${c.firstName} ${c.lastName}`.trim()]),
+  );
+  const entityNameMap = new Map(entityNamesById.map((e) => [e.id, e.name]));
 
   // Group par message pour un affichage compact.
   const groupedByMessage = new Map<string, typeof rows>();
@@ -108,19 +138,31 @@ export default async function EmailPropositionsPage() {
                   proposals={proposals.map((p) => {
                     const pl = p.payload as Record<string, unknown>;
                     const taskProjectId = (pl.projectId as string | null) ?? null;
+                    const projectName =
+                      p.kind === "task" && taskProjectId
+                        ? (projectNameMap.get(taskProjectId) ?? null)
+                        : (p.kind === "project_link" || p.kind === "project") && p.matchedId
+                          ? (projectNameMap.get(p.matchedId) ?? null)
+                          : null;
                     return {
                       id: p.id,
                       kind: p.kind,
                       payload: pl,
                       matchedId: p.matchedId,
                       matchConfidence: p.matchConfidence,
-                      matchedProjectName:
-                        p.kind === "task" && taskProjectId
-                          ? (projectNameMap.get(taskProjectId) ?? null)
-                          : p.matchedId
-                            ? (projectNameMap.get(p.matchedId) ?? null)
-                            : null,
-                      matchedTagLabel: p.matchedId ? (tagLabelMap.get(p.matchedId) ?? null) : null,
+                      matchedProjectName: projectName,
+                      matchedTagLabel:
+                        p.kind === "category_tag" && p.matchedId
+                          ? (tagLabelMap.get(p.matchedId) ?? null)
+                          : null,
+                      matchedContactName:
+                        p.kind === "contact" && p.matchedId
+                          ? (contactNameMap.get(p.matchedId) ?? null)
+                          : null,
+                      matchedEntityName:
+                        p.kind === "entity" && p.matchedId
+                          ? (entityNameMap.get(p.matchedId) ?? null)
+                          : null,
                     };
                   })}
                 />

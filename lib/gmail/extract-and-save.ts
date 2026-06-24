@@ -1,11 +1,20 @@
 import "server-only";
 
 import { emailProposals, gmailMessages, gmailTags } from "@/db/schema/gmail";
+import { findContactByEmail } from "@/lib/db/queries/contacts";
 import { db } from "@/lib/db/server";
 import { extractEmail } from "@/lib/gmail/extract";
 import { applyTagToThread } from "@/lib/gmail/tags";
-import { fuzzyMatchProject } from "@/lib/meetings/extract";
+import { fuzzyMatchContact, fuzzyMatchEntity, fuzzyMatchProject } from "@/lib/meetings/extract";
 import { and, eq, sql } from "drizzle-orm";
+
+type ProposalRow = {
+  messageId: string;
+  kind: "task" | "category_tag" | "project_link" | "contact" | "entity" | "project";
+  payload: Record<string, unknown>;
+  matchedId: string | null;
+  matchConfidence: string | null;
+};
 
 /**
  * Pipeline d'extraction email : lit le message, appelle LLM, persiste
@@ -59,6 +68,8 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       subject: msg.subject,
       fromEmail: msg.fromEmail,
       fromName: msg.fromName,
+      toEmails: msg.toEmails,
+      ccEmails: msg.ccEmails,
       bodyText: msg.bodyText,
       bodyHtml: msg.bodyHtml,
       existingCategories,
@@ -84,13 +95,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   // Wipe les anciennes propositions du message + ré-injecte.
   await conn.delete(emailProposals).where(eq(emailProposals.messageId, messageId));
 
-  const rows: Array<{
-    messageId: string;
-    kind: "task" | "category_tag" | "project_link";
-    payload: Record<string, unknown>;
-    matchedId: string | null;
-    matchConfidence: string | null;
-  }> = [];
+  const rows: ProposalRow[] = [];
 
   // 1. Tâches
   for (const t of result.proposedTasks) {
@@ -146,9 +151,11 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   // au-delà du contact (ex. "concernant le projet X" mentionné dans un
   // email qui n'a pas de contact CRM dans les participants).
   let autoAppliedProjectLinks = 0;
+  let autoLinkedProjectId: string | null = null;
   if (result.proposedProjectName) {
     const match = await fuzzyMatchProject(result.proposedProjectName);
     if (match) {
+      autoLinkedProjectId = match.id;
       // Cherche le gmail_tag projet correspondant.
       const [projectTag] = await conn
         .select({ id: gmailTags.id })
@@ -181,6 +188,76 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       // déclencher "Initialiser les tags CRM" depuis /emails/tags pour
       // créer tous les labels manquants.
     }
+  }
+
+  // 4. Entités proposées (nouvelles) — fuzzy match côté serveur en
+  // défense en profondeur, même si le LLM est consigné de ne pas
+  // re-proposer ce qui est dans le vocabulaire.
+  for (const e of result.proposedEntities) {
+    const name = e.name.trim();
+    if (!name) continue;
+    const match = await fuzzyMatchEntity(name);
+    rows.push({
+      messageId,
+      kind: "entity",
+      payload: { name, kind: e.kind },
+      matchedId: match?.id ?? null,
+      matchConfidence: match ? match.confidence.toFixed(3) : null,
+    });
+  }
+
+  // 5. Contacts proposés (nouveaux). Pour chaque contact :
+  //   - Si email fourni → lookup exact. Si match, SKIP (contact connu).
+  //   - Sinon fuzzy match par nom (comme meetings).
+  // Le match exact par email court-circuite la proposition : c'est plus
+  // précis et évite de polluer la file de propositions avec des contacts
+  // qu'on a déjà.
+  for (const c of result.proposedContacts) {
+    const firstName = c.firstName.trim();
+    const lastName = c.lastName.trim();
+    if (!firstName && !lastName) continue;
+    const email = c.email?.trim() ?? null;
+    if (email) {
+      const exact = await findContactByEmail(email);
+      if (exact) continue; // contact déjà connu, rien à proposer
+    }
+    const match = firstName || lastName ? await fuzzyMatchContact(firstName, lastName) : null;
+    rows.push({
+      messageId,
+      kind: "contact",
+      payload: {
+        firstName,
+        lastName,
+        email,
+        jobTitle: c.jobTitle,
+        entityName: c.entityName,
+      },
+      matchedId: match?.id ?? null,
+      matchConfidence: match ? match.confidence.toFixed(3) : null,
+    });
+  }
+
+  // 6. Projets proposés (nouveaux). Garde-fou : si le projet correspond
+  // à celui déjà auto-lié via `proposedProjectName` plus haut, on ne le
+  // propose pas une seconde fois (double signal LLM).
+  for (const p of result.proposedProjects) {
+    const name = p.name.trim();
+    if (!name) continue;
+    const match = await fuzzyMatchProject(name);
+    if (match && match.id === autoLinkedProjectId) continue;
+    rows.push({
+      messageId,
+      kind: "project",
+      payload: {
+        name,
+        kind: p.kind,
+        entityName: p.entityName,
+        status: p.status,
+        valueAmount: p.valueAmount,
+      },
+      matchedId: match?.id ?? null,
+      matchConfidence: match ? match.confidence.toFixed(3) : null,
+    });
   }
 
   if (rows.length > 0) {

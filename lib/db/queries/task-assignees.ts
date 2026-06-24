@@ -1,8 +1,8 @@
-import type { Database } from "@/db/client";
-import { contacts } from "@/db/schema/contacts";
-import { entities } from "@/db/schema/entities";
-import { taskAssignees } from "@/db/schema/task-assignees";
-import { users } from "@/db/schema/users";
+import type { Database } from "../../../db/client";
+import { contacts } from "../../../db/schema/contacts";
+import { entities } from "../../../db/schema/entities";
+import { taskAssignees } from "../../../db/schema/task-assignees";
+import { users } from "../../../db/schema/users";
 import { eq, inArray } from "drizzle-orm";
 
 export type AssigneeRef = { kind: "user" | "contact"; id: string };

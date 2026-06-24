@@ -1,5 +1,6 @@
 import "server-only";
 
+import { formatVocabulary, getKnownVocabulary } from "@/lib/meetings/extract";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { createOpenAI } from "@ai-sdk/openai";
@@ -16,30 +17,29 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 export const MAX_BODY_CHARS_FOR_LLM = 50_000;
 
 /**
- * Schéma de sortie de l'extraction. Volontairement minimal vs le
- * meeting extraction : pas de proposition de contacts/entités (on les
- * a déjà via le CRM + auto-tag). On focus sur les ACTIONS et la
- * CATÉGORISATION.
+ * Schéma de sortie de l'extraction email.
+ *
+ * Parité avec les meetings sur les kinds qui ont du sens pour un email :
+ * tâches, contacts, entités, projets. Les emails ont l'avantage unique de
+ * porter des adresses email exactes (sender/recipients) — on en profite
+ * pour matcher les contacts par email (plus précis que par nom) côté
+ * persistence.
+ *
+ * Spécificités email vs meeting :
+ * - intent : auto-classification du type d'email (info, request, etc.).
+ * - proposedCategoryTags : tags catégorie libres ; le LLM ne peut piocher
+ *   QUE dans la taxonomie existante (cf. système prompt).
+ * - proposedProjectName : projet inféré pour AUTO-apply le tag projet
+ *   correspondant si un projet en base matche (au-delà du contact match
+ *   déjà géré par le sync). Distinct du nouveau `proposedProjects` qui
+ *   propose la CRÉATION d'un projet inconnu.
+ * - sensitiveDetected : sécurité — si true on ne persiste rien.
  */
 const extractionSchema = z.object({
-  /** Résumé 2-3 phrases en français. */
   summary: z.string(),
-  /** Intention de l'email (auto-classification de base). */
   intent: z.enum(["info", "request", "fyi", "decision", "follow_up", "compta", "admin", "other"]),
-  /**
-   * Catégories libres à appliquer (correspondent à un `gmail_tag` de
-   * kind='category'). Le LLM peut proposer des catégories existantes ou
-   * nouvelles. Côté serveur on matche fuzzy.
-   * Exemples : "Compta", "Annexe", "Admin", "Support", "Recrutement".
-   */
   proposedCategoryTags: z.array(z.string()),
-  /**
-   * Nom du projet inféré du contenu, au-delà du contact match (ex. l'email
-   * mentionne explicitement "le projet X" sans que le destinataire soit
-   * encore lié au CRM).
-   */
   proposedProjectName: z.string().nullable(),
-  /** Tâches à proposer pour création. */
   proposedTasks: z.array(
     z.object({
       title: z.string(),
@@ -49,7 +49,32 @@ const extractionSchema = z.object({
       priority: z.enum(["low", "normal", "high"]).nullable(),
     }),
   ),
-  /** Sécurité : true si le body contient des secrets / credentials. */
+  proposedEntities: z.array(
+    z.object({
+      name: z.string(),
+      kind: z.enum(["client", "prospect", "partner", "supplier", "other"]).nullable(),
+    }),
+  ),
+  proposedContacts: z.array(
+    z.object({
+      firstName: z.string(),
+      lastName: z.string(),
+      email: z.string().nullable(),
+      jobTitle: z.string().nullable(),
+      entityName: z.string().nullable(),
+    }),
+  ),
+  proposedProjects: z.array(
+    z.object({
+      name: z.string(),
+      kind: z.enum(["client", "product", "transverse"]).nullable(),
+      entityName: z.string().nullable(),
+      status: z
+        .enum(["not_started", "to_follow_up", "awaiting_response", "won", "planning", "active"])
+        .nullable(),
+      valueAmount: z.number().nullable(),
+    }),
+  ),
   sensitiveDetected: z.boolean(),
 });
 
@@ -72,21 +97,27 @@ type EmailInput = {
   subject: string | null;
   fromEmail: string | null;
   fromName: string | null;
+  toEmails: string[];
+  ccEmails: string[];
   bodyText: string | null;
   bodyHtml: string | null;
   /** Catégories existantes à proposer en priorité au LLM. */
   existingCategories: string[];
 };
 
-function buildSystemPrompt(args: { existingCategories: string[] }): string {
-  return `Tu analyses un email professionnel reçu/envoyé et en extrais :
+function buildSystemPrompt(args: {
+  existingCategories: string[];
+  vocab: Awaited<ReturnType<typeof getKnownVocabulary>>;
+}): string {
+  const baseRules = `Tu analyses un email professionnel reçu/envoyé et en extrais :
 1. Un résumé court (2-3 phrases en français)
 2. L'intention principale (info / request / fyi / decision / follow_up / compta / admin / other)
 3. Les catégories libres pertinentes pour le ranger (Compta, Annexe, Admin, Support, etc.)
-4. Le projet éventuellement mentionné dans le contenu
+4. Le projet éventuellement mentionné dans le contenu (auto-apply)
 5. Les tâches à faire qui ressortent
+6. Les entités, contacts et projets NOUVEAUX évoqués (à créer dans le CRM)
 
-Règles :
+Règles générales :
 - Reste factuel. Pas de paraphrase, pas d'extrapolation.
 - Si un champ n'est pas explicite, retourne null (ou tableau vide pour les listes).
 - Pour proposedCategoryTags : reste minimaliste. 0 à 2 catégories max. UNIQUEMENT depuis la liste des catégories existantes ci-dessous. **NE JAMAIS** proposer une catégorie qui n'est pas dans la liste — si aucune ne correspond, retourne un tableau vide. La taxonomie est gérée par l'utilisateur, pas par toi.
@@ -94,17 +125,43 @@ Règles :
 - dueDate au format YYYY-MM-DD si une date concrète est mentionnée.
 - sensitiveDetected = true si tu repères des mots de passe, clés API, numéros bancaires, etc.
 
+# Entités, contacts, projets — propositions de création
+
+- **proposedEntities** : sociétés/organisations mentionnées qui ne sont PAS dans le vocabulaire existant. Ne re-propose JAMAIS une entité déjà connue. Si une entité connue correspond (même approximativement), on l'utilise comme \`entityName\` sur les contacts/projets mais on ne la propose pas à nouveau.
+- **proposedContacts** : personnes mentionnées (sender, recipients dans le body, signatures) qui ne sont PAS déjà dans la liste des contacts connus. Pour chaque contact, donne son email si tu le trouves dans le body ou les en-têtes (l'email est le matcher le plus fiable). Toujours séparer firstName/lastName.
+- **proposedProjects** : projets/deals NOUVEAUX évoqués qui ne correspondent PAS à un projet déjà connu. Ne pas re-proposer un projet du vocabulaire. valueAmount en euros sans symbole si mentionné.
+
+# Différence proposedProjectName vs proposedProjects
+
+- \`proposedProjectName\` (string, singulier) : nom d'un projet **déjà existant** que cet email mentionne — sera auto-relié au thread comme tag projet. Utilise EXACTEMENT le nom du vocabulaire.
+- \`proposedProjects\` (array) : projets NOUVEAUX à créer. Si le projet est connu, n'apparait QUE dans proposedProjectName.
+
 ${
   args.existingCategories.length > 0
     ? `Catégories existantes (UNIQUEMENT celles-ci, jamais en inventer) :\n${args.existingCategories.map((c) => `- ${c}`).join("\n")}`
     : "Aucune catégorie existante. Retourne donc proposedCategoryTags = []."
 }`;
+
+  const vocabBlock = formatVocabulary(args.vocab);
+  if (vocabBlock.length === 0) return baseRules;
+
+  return `${baseRules}
+
+---
+
+# Vocabulaire connu (utiliser EN PRIORITÉ, ne pas re-proposer)
+
+Voici les noms canoniques déjà en base. Si l'email mentionne quelque chose qui leur ressemble — orthographe phonétique, acronyme, prénom seul, nom de famille seul, abréviation — alors retourne **l'orthographe exacte de la liste** dans entityName / projectName, et **ne re-propose pas l'entité/contact/projet** dans proposedEntities/proposedContacts/proposedProjects.
+
+${vocabBlock}`;
 }
 
 function buildUserPrompt(input: EmailInput): string {
   const fromLine = input.fromName
     ? `De : ${input.fromName} <${input.fromEmail ?? "?"}>`
     : `De : ${input.fromEmail ?? "(inconnu)"}`;
+  const toLine = input.toEmails.length > 0 ? `À : ${input.toEmails.join(", ")}` : null;
+  const ccLine = input.ccEmails.length > 0 ? `Cc : ${input.ccEmails.join(", ")}` : null;
   const subject = `Sujet : ${input.subject ?? "(sans objet)"}`;
   // Préfère text si dispo, sinon strip HTML grossièrement.
   let body = input.bodyText ?? "";
@@ -120,7 +177,8 @@ function buildUserPrompt(input: EmailInput): string {
     body = `${body.slice(0, MAX_BODY_CHARS_FOR_LLM)}\n\n[…tronqué]`;
   }
   body = sanitizeForLlm(body);
-  return `${fromLine}\n${subject}\n\n---\n\n${body}`;
+  const header = [fromLine, toLine, ccLine, subject].filter(Boolean).join("\n");
+  return `${header}\n\n---\n\n${body}`;
 }
 
 export async function extractEmail(input: EmailInput): Promise<EmailExtraction> {
@@ -129,6 +187,8 @@ export async function extractEmail(input: EmailInput): Promise<EmailExtraction> 
     throw new Error("Clé OpenRouter non configurée. Ajoute-la dans /settings/integrations.");
   }
   const modelId = (await getSetting(SETTING_KEYS.LLM_MODEL)) ?? DEFAULT_LLM_MODEL;
+
+  const vocab = await getKnownVocabulary();
 
   const openrouter = createOpenAI({
     apiKey,
@@ -142,7 +202,7 @@ export async function extractEmail(input: EmailInput): Promise<EmailExtraction> 
   const { object } = await generateObject({
     model: openrouter(modelId),
     schema: extractionSchema,
-    system: buildSystemPrompt({ existingCategories: input.existingCategories }),
+    system: buildSystemPrompt({ existingCategories: input.existingCategories, vocab }),
     prompt: buildUserPrompt(input),
     temperature: 0.2,
   });

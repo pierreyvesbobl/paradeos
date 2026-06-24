@@ -92,7 +92,7 @@ const extractionSchema = z.object({
 
 export type MeetingExtraction = z.infer<typeof extractionSchema>;
 
-type Vocabulary = {
+export type Vocabulary = {
   entities: { name: string; kind: string }[];
   contacts: { fullName: string; entityName: string | null; jobTitle: string | null }[];
   projects: { name: string; kind: string; status: string; entityName: string | null }[];
@@ -103,8 +103,11 @@ type Vocabulary = {
  * Charge le vocabulaire existant en base. Injecté dans le prompt LLM
  * pour qu'il utilise les noms canoniques quand le transcript en parle
  * de façon approximative — phonétique, acronymes, prénom seul…
+ *
+ * Exporté pour réutilisation par le pipeline email (mêmes données
+ * canoniques, mêmes limites).
  */
-async function getKnownVocabulary(): Promise<Vocabulary> {
+export async function getKnownVocabulary(): Promise<Vocabulary> {
   const conn = await db();
 
   const [entityRows, contactRows, projectRows, userRows] = await Promise.all([
@@ -157,7 +160,7 @@ async function getKnownVocabulary(): Promise<Vocabulary> {
   };
 }
 
-function formatVocabulary(v: Vocabulary): string {
+export function formatVocabulary(v: Vocabulary): string {
   const sections: string[] = [];
 
   if (v.users.length > 0) {

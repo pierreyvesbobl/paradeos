@@ -187,6 +187,9 @@ export const emailProposalKind = pgEnum("email_proposal_kind", [
   "task",
   "category_tag",
   "project_link",
+  "contact",
+  "entity",
+  "project",
 ]);
 
 export const emailProposalStatus = pgEnum("email_proposal_status", [
