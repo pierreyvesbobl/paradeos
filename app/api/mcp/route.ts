@@ -10,6 +10,8 @@
  */
 import { resolveToken } from "@/lib/db/queries/api-tokens";
 import { type NextRequest, NextResponse } from "next/server";
+import { type ZodTypeAny, z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 import {
   pushCoworkingInvoiceMcp,
@@ -98,7 +100,7 @@ const TOOL_REGISTRY: Record<
   string,
   {
     description: string;
-    schema: { parse: (i: unknown) => unknown };
+    schema: ZodTypeAny;
     handler: (args: unknown, ctx: { userId: string; source: "token" }) => Promise<unknown>;
   }
 > = {
@@ -119,7 +121,7 @@ const TOOL_REGISTRY: Record<
   },
   list_my_tasks: {
     description: "Mes tâches assignées encore ouvertes.",
-    schema: { parse: () => ({}) },
+    schema: z.object({}),
     handler: (_a, ctx) => listMyTasks({}, ctx as never),
   },
   list_meetings: {
@@ -244,6 +246,27 @@ const TOOL_REGISTRY: Record<
   },
 };
 
+/**
+ * Convertit un schéma Zod en JSON Schema MCP-compatible : top-level
+ * `{ type: "object", properties, required }` sans `$ref` ni `$schema`.
+ * Les MCP clients (Claude.ai, Cursor, etc.) s'appuient là-dessus pour
+ * savoir quels arguments envoyer — un `{ type: "object" }` vide casse
+ * l'appel car le client n'inclut alors aucun arg.
+ */
+function toMcpInputSchema(schema: ZodTypeAny): Record<string, unknown> {
+  const raw = zodToJsonSchema(schema, { target: "openApi3", $refStrategy: "none" }) as Record<
+    string,
+    unknown
+  >;
+  // Drop legacy openApi metadata + force shape minimale attendue par MCP.
+  delete raw.$schema;
+  delete raw.definitions;
+  if (raw.type !== "object") {
+    return { type: "object" };
+  }
+  return raw;
+}
+
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("authorization");
   const match = auth?.match(/^Bearer\s+(paradeos_pat_[A-Za-z0-9_-]+)$/);
@@ -298,7 +321,7 @@ export async function POST(req: NextRequest) {
             tools: Object.entries(TOOL_REGISTRY).map(([name, t]) => ({
               name,
               description: t.description,
-              inputSchema: { type: "object" },
+              inputSchema: toMcpInputSchema(t.schema),
             })),
           }),
         );
