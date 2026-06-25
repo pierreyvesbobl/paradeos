@@ -35,11 +35,13 @@ import { redirect } from "next/navigation";
 export const createMeeting = action(createMeetingSchema, async ({ input, user }) => {
   const conn = await db();
   const occurredAt = input.occurredAt ? new Date(input.occurredAt) : null;
+  const transcript =
+    input.transcript && input.transcript.trim().length > 0 ? input.transcript : null;
   const [row] = await conn
     .insert(meetings)
     .values({
       title: input.title,
-      transcript: input.transcript,
+      transcript,
       occurredAt,
       sourceLabel: input.sourceLabel ?? null,
       projectId: input.projectId ?? null,
@@ -123,6 +125,9 @@ export const extractMeetingProposals = action(extractMeetingSchema, async ({ inp
     }
   }
 
+  if (!meeting.transcript || meeting.transcript.trim().length === 0) {
+    throw new Error("Transcript vide : importe un audio ou colle un texte avant d'extraire.");
+  }
   const result = await extractMeeting(meeting.transcript, { projectContext });
 
   await conn.delete(meetingProposals).where(eq(meetingProposals.meetingId, meeting.id));

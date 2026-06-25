@@ -16,4 +16,7 @@ async function main() {
   await sql.end({ timeout: 5 });
   console.log("OK.");
 }
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

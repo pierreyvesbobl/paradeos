@@ -2,7 +2,7 @@
 
 import { action } from "@/lib/actions/action";
 import { requireAdmin } from "@/lib/auth/admin";
-import { updateLlmConfigSchema } from "@/lib/schemas/integrations";
+import { updateLlmConfigSchema, updateOpenAiKeySchema } from "@/lib/schemas/integrations";
 import { SETTING_KEYS, setSetting } from "@/lib/settings";
 import { revalidatePath } from "next/cache";
 
@@ -24,6 +24,17 @@ export const updateLlmConfig = action(updateLlmConfigSchema, async ({ input, use
   if (input.model !== undefined) {
     await setSetting(SETTING_KEYS.LLM_MODEL, input.model === "" ? null : input.model, user.id);
   }
+  revalidatePath("/settings/integrations");
+  return { ok: true as const };
+});
+
+/**
+ * Met à jour la clé OpenAI directe utilisée pour la transcription
+ * audio Whisper (cf. lib/meetings/transcribe.ts). `""` = supprimer.
+ */
+export const updateOpenAiKey = action(updateOpenAiKeySchema, async ({ input, user }) => {
+  await requireAdmin(user);
+  await setSetting(SETTING_KEYS.OPENAI_API_KEY, input.apiKey === "" ? null : input.apiKey, user.id);
   revalidatePath("/settings/integrations");
   return { ok: true as const };
 });

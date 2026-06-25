@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm";
-import { index, jsonb, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  jsonb,
+  numeric,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { projects } from "./projects";
 import { users } from "./users";
 
@@ -8,6 +18,20 @@ export const meetingStatus = pgEnum("meeting_status", [
   "extracted", // résumé + propositions générés, en attente de revue
   "reviewed", // toutes propositions traitées
   "archived",
+]);
+
+/**
+ * État du pipeline de transcription quand la source est un audio uploadé.
+ *  - `idle`    : pas d'audio, ou audio attaché mais pas encore traité
+ *  - `running` : Whisper en cours
+ *  - `done`    : transcript rempli depuis l'audio
+ *  - `error`   : échec, voir `transcription_error`
+ */
+export const meetingTranscriptionStatus = pgEnum("meeting_transcription_status", [
+  "idle",
+  "running",
+  "done",
+  "error",
 ]);
 
 export const meetingProposalKind = pgEnum("meeting_proposal_kind", [
@@ -35,14 +59,29 @@ export const meetings = pgTable(
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     title: text("title").notNull(),
     occurredAt: timestamp("occurred_at", { withTimezone: true }),
-    /** Transcript brut (texte). Pour les fichiers volumineux on passera
-     * par Vercel Blob plus tard. */
-    transcript: text("transcript").notNull(),
+    /** Transcript brut (texte). Peut être null tant que la transcription
+     * d'un audio uploadé n'a pas abouti — sinon rempli soit par paste,
+     * soit par Whisper. */
+    transcript: text("transcript"),
     /** Résumé en markdown généré par le LLM, éditable côté UI. */
     summary: text("summary"),
     status: meetingStatus("status").notNull().default("ingested"),
     /** Source d'origine si fournie (Drive, upload local, copier-coller…). */
     sourceLabel: text("source_label"),
+    /** Audio source (bucket `meeting-audio`) si la réunion a été importée
+     * sous forme de fichier audio. Le transcript est alors généré via
+     * Whisper. Un seul audio par réunion en MVP. */
+    audioStoragePath: text("audio_storage_path"),
+    audioFileName: text("audio_file_name"),
+    audioMimeType: text("audio_mime_type"),
+    audioSizeBytes: integer("audio_size_bytes"),
+    transcriptionStatus: meetingTranscriptionStatus("transcription_status")
+      .notNull()
+      .default("idle"),
+    /** Si `transcription_status='error'`, message lisible affiché en UI. */
+    transcriptionError: text("transcription_error"),
+    /** Identifiant tech du modèle utilisé, ex. `openai-whisper-1`. */
+    transcriptionProvider: text("transcription_provider"),
     /** Si ingéré depuis le watch d'un dossier Drive, ID du fichier source.
      * Utilisé pour l'idempotence (cf. unique index partiel). */
     sourceDriveFileId: text("source_drive_file_id"),

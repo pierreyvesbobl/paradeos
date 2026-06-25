@@ -34,6 +34,8 @@ import {
   getEmailThreadSchema,
   getMeeting,
   getMeetingSchema,
+  getMeetingTranscript,
+  getMeetingTranscriptSchema,
   getNote,
   getNoteSchema,
   getProject,
@@ -126,9 +128,16 @@ const TOOL_REGISTRY: Record<
     handler: (a) => listMeetings(a as never),
   },
   get_meeting: {
-    description: "Détail d'un meeting + propositions LLM.",
+    description:
+      "Détail complet d'un meeting : transcript intégral, résumé markdown, statut de transcription et propositions LLM. Pour ne récupérer que le transcript (sans propositions), préférer `get_meeting_transcript`.",
     schema: getMeetingSchema,
     handler: (a) => getMeeting(a as never),
+  },
+  get_meeting_transcript: {
+    description:
+      "Transcript brut d'un meeting (texte intégral) + métadonnées de transcription (status, provider, audio). Réponse compacte sans les propositions LLM.",
+    schema: getMeetingTranscriptSchema,
+    handler: (a) => getMeetingTranscript(a as never),
   },
   list_my_time: {
     description: "Mon temps passé sur une période.",

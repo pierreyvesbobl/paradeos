@@ -16,7 +16,11 @@ export const SETTING_KEYS = {
    * Si non défini, fallback sur `DEFAULT_LLM_MODEL` (cf. lib/schemas/integrations.ts).
    */
   LLM_MODEL: "LLM_MODEL",
-  /** @deprecated remplacé par OPENROUTER_API_KEY. Lu pour migration douce. */
+  /**
+   * Clé API OpenAI **directe** (sk-…). Utilisée pour la transcription
+   * audio Whisper, qu'OpenRouter ne propose pas. Distincte de la clé
+   * OpenRouter qui sert au LLM d'extraction.
+   */
   OPENAI_API_KEY: "OPENAI_API_KEY",
   /**
    * ID du dossier Google Drive surveillé pour ingestion automatique

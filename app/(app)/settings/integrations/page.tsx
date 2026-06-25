@@ -17,6 +17,7 @@ import { IntegrationsTabs } from "./integrations-tabs";
 import { InvoiceFilingSection } from "./invoice-filing-section";
 import { LlmConfigForm } from "./llm-config-form";
 import { OauthCallbackToast } from "./oauth-callback-toast";
+import { OpenAiKeyForm } from "./openai-key-form";
 
 export default async function IntegrationsSettingsPage({
   searchParams,
@@ -27,9 +28,10 @@ export default async function IntegrationsSettingsPage({
   const role = await getCurrentUserRole(user);
   const isAdmin = role === "admin";
 
-  const [llmKey, llmModel, params, conn] = await Promise.all([
+  const [llmKey, llmModel, openAiKey, params, conn] = await Promise.all([
     isAdmin ? getSettingStatus(SETTING_KEYS.OPENROUTER_API_KEY) : Promise.resolve(null),
     isAdmin ? getSetting(SETTING_KEYS.LLM_MODEL) : Promise.resolve(null),
+    isAdmin ? getSettingStatus(SETTING_KEYS.OPENAI_API_KEY) : Promise.resolve(null),
     searchParams,
     db(),
   ]);
@@ -93,6 +95,22 @@ export default async function IntegrationsSettingsPage({
             <Status status={llmKey} />
           </header>
           <LlmConfigForm currentKeyPreview={llmKey.preview} currentModel={llmModel} />
+        </section>
+      ) : null}
+      {isAdmin && openAiKey ? (
+        <section className="rounded-lg border bg-card p-6">
+          <header className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-medium text-sm">Transcription audio (OpenAI Whisper)</h2>
+              <p className="mt-1 text-muted-foreground text-xs">
+                Clé OpenAI directe pour transcrire les fichiers audio importés sur les réunions
+                (Whisper). OpenRouter ne propose pas la transcription, d'où une clé séparée. Accès
+                admin uniquement.
+              </p>
+            </div>
+            <Status status={openAiKey} />
+          </header>
+          <OpenAiKeyForm currentKeyPreview={openAiKey.preview} />
         </section>
       ) : null}
     </>

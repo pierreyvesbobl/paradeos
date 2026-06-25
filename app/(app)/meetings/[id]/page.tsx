@@ -12,6 +12,7 @@ import { DemoBlur } from "@/lib/demo/components";
 import { FileText } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { AudioSection } from "./audio-section";
 import { CopyTranscriptButton } from "./copy-transcript-button";
 import { MeetingSubjectEditor } from "./meeting-subject-editor";
 import { ProposalsPanel } from "./proposals-panel";
@@ -134,22 +135,40 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
             existingTasks={taskOptions}
           />
 
-          <details className="group rounded-xl border bg-[var(--ds-bg-surface)]">
-            <summary className="flex cursor-pointer items-center gap-3 px-4 py-3.5 text-sm">
-              <FileText size={18} weight="duotone" className="text-muted-foreground" />
-              <span className="font-medium text-foreground">Transcript brut</span>
-              <span className="text-[12px] text-[var(--ds-text-tertiary)]">
-                {meeting.transcript.length.toLocaleString("fr-FR")} caractères
-              </span>
-              <span className="flex-1" />
-              <CopyTranscriptButton transcript={meeting.transcript} />
-            </summary>
-            <DemoBlur className="block">
-              <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap border-t bg-[var(--ds-bg-app)] p-5 text-xs leading-relaxed">
-                {meeting.transcript}
-              </pre>
-            </DemoBlur>
-          </details>
+          <AudioSection
+            meetingId={meeting.id}
+            hasTranscript={Boolean(meeting.transcript && meeting.transcript.length > 0)}
+            audio={
+              meeting.audioStoragePath
+                ? {
+                    fileName: meeting.audioFileName,
+                    sizeBytes: meeting.audioSizeBytes,
+                    mimeType: meeting.audioMimeType,
+                  }
+                : null
+            }
+            status={meeting.transcriptionStatus as "idle" | "running" | "done" | "error"}
+            errorMessage={meeting.transcriptionError}
+          />
+
+          {meeting.transcript ? (
+            <details className="group rounded-xl border bg-[var(--ds-bg-surface)]">
+              <summary className="flex cursor-pointer items-center gap-3 px-4 py-3.5 text-sm">
+                <FileText size={18} weight="duotone" className="text-muted-foreground" />
+                <span className="font-medium text-foreground">Transcript brut</span>
+                <span className="text-[12px] text-[var(--ds-text-tertiary)]">
+                  {meeting.transcript.length.toLocaleString("fr-FR")} caractères
+                </span>
+                <span className="flex-1" />
+                <CopyTranscriptButton transcript={meeting.transcript} />
+              </summary>
+              <DemoBlur className="block">
+                <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap border-t bg-[var(--ds-bg-app)] p-5 text-xs leading-relaxed">
+                  {meeting.transcript}
+                </pre>
+              </DemoBlur>
+            </details>
+          ) : null}
         </div>
 
         <aside className="flex w-full flex-col gap-4 lg:w-[300px] lg:flex-none">
@@ -193,7 +212,7 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
                 <dt className="text-muted-foreground">Transcript</dt>
                 <dd className="flex-1" />
                 <span className="text-[12px] text-muted-foreground tabular-nums">
-                  {meeting.transcript.length.toLocaleString("fr-FR")} car.
+                  {(meeting.transcript?.length ?? 0).toLocaleString("fr-FR")} car.
                 </span>
               </div>
             </dl>

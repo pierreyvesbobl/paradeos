@@ -28,6 +28,9 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
   const [meeting] = await conn.select().from(meetings).where(eq(meetings.id, meetingId)).limit(1);
   if (!meeting) throw new Error("Meeting introuvable.");
 
+  if (!meeting.transcript || meeting.transcript.trim().length === 0) {
+    throw new Error("Transcript vide — pas d'extraction possible.");
+  }
   const result = await extractMeeting(meeting.transcript);
 
   await conn.delete(meetingProposals).where(eq(meetingProposals.meetingId, meeting.id));

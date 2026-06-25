@@ -54,6 +54,8 @@ import {
   getEmailThreadSchema,
   getMeeting,
   getMeetingSchema,
+  getMeetingTranscript,
+  getMeetingTranscriptSchema,
   getNote,
   getNoteSchema,
   getProject,
@@ -164,10 +166,19 @@ server.tool(
 
 server.tool(
   "get_meeting",
-  "Détail d'un meeting (transcript, résumé, propositions LLM).",
+  "Détail d'un meeting : transcript intégral, résumé markdown, statut de transcription et propositions LLM. Pour ne récupérer que le transcript (sans les propositions), utiliser `get_meeting_transcript` — plus compact.",
   getMeetingSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await getMeeting(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "get_meeting_transcript",
+  "Transcript brut d'un meeting (texte intégral) + métadonnées de transcription (status idle/running/done/error, provider, audio source). Réponse compacte, sans les propositions LLM.",
+  getMeetingTranscriptSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await getMeetingTranscript(args), null, 2) }],
   }),
 );
 

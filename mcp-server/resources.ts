@@ -24,8 +24,8 @@ export const RESOURCE_TEMPLATES = [
   },
   {
     uriTemplate: "paradeos://meetings/{id}",
-    name: "Résumé meeting",
-    description: "Résumé markdown d'un meeting + propositions LLM en attente.",
+    name: "Meeting (résumé + transcript)",
+    description: "Markdown : résumé du meeting suivi du transcript intégral.",
     mimeType: "text/markdown",
   },
   {
@@ -82,8 +82,16 @@ export async function readResource(uri: string, ctx: UserContext) {
       .where(eq(meetings.id, meetingMatch[1] ?? ""))
       .limit(1);
     if (!m) throw new Error("Meeting introuvable.");
-    const md = `# ${m.title}\n\n${m.occurredAt ? `_${new Date(m.occurredAt).toLocaleString("fr-FR")}_\n\n` : ""}${m.summary ?? "_Pas encore de résumé._"}`;
-    return { mimeType: "text/markdown", text: md };
+    const header = `# ${m.title}\n\n${m.occurredAt ? `_${new Date(m.occurredAt).toLocaleString("fr-FR")}_\n\n` : ""}`;
+    const summarySection = `## Résumé\n\n${m.summary ?? "_Pas encore de résumé._"}\n\n`;
+    const transcriptSection = m.transcript
+      ? `## Transcript\n\n${m.transcript}\n`
+      : m.transcriptionStatus === "running"
+        ? "## Transcript\n\n_Transcription en cours…_\n"
+        : m.transcriptionStatus === "error"
+          ? `## Transcript\n\n_Échec transcription : ${m.transcriptionError ?? "inconnu"}._\n`
+          : "## Transcript\n\n_Pas encore de transcript._\n";
+    return { mimeType: "text/markdown", text: header + summarySection + transcriptSection };
   }
 
   // paradeos://tasks/today

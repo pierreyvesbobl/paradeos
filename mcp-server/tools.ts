@@ -287,6 +287,34 @@ export async function getMeeting(args: z.infer<typeof getMeetingSchema>) {
   return { meeting, proposals };
 }
 
+/**
+ * Retourne uniquement le transcript brut d'un meeting + métadonnées de
+ * transcription (status, provider, erreur). Utile quand l'agent veut
+ * relire le contenu de la réunion sans tirer aussi les propositions LLM
+ * (souvent verbeuses) renvoyées par `get_meeting`.
+ */
+export const getMeetingTranscriptSchema = z.object({ id: z.string().uuid() });
+
+export async function getMeetingTranscript(args: z.infer<typeof getMeetingTranscriptSchema>) {
+  const conn = db();
+  const [row] = await conn
+    .select({
+      id: meetings.id,
+      title: meetings.title,
+      occurredAt: meetings.occurredAt,
+      sourceLabel: meetings.sourceLabel,
+      transcript: meetings.transcript,
+      transcriptionStatus: meetings.transcriptionStatus,
+      transcriptionError: meetings.transcriptionError,
+      transcriptionProvider: meetings.transcriptionProvider,
+      audioFileName: meetings.audioFileName,
+    })
+    .from(meetings)
+    .where(eq(meetings.id, args.id))
+    .limit(1);
+  return row ?? null;
+}
+
 export const listMyTimeSchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
