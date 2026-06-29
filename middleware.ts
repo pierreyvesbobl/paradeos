@@ -10,8 +10,9 @@ export const config = {
     /*
      * Match toutes les routes sauf :
      * - _next/static, _next/image, favicon.ico
+     * - icon / apple-icon (convention App Router — pas d'extension dans l'URL)
      * - fichiers statiques avec extension (png, svg, jpg, ico, css, js)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js)$).*)",
   ],
 };
