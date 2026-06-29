@@ -30,7 +30,7 @@ import {
   noteKindLabels,
 } from "@/lib/schemas/notes";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 type Defaults = {
@@ -50,6 +50,13 @@ type Props = {
   trigger: React.ReactNode;
 };
 
+type Draft = {
+  title: string;
+  content: string;
+  kind: NoteKind;
+  occurredAt: string;
+};
+
 const DEFAULTS_BLANK: Defaults = {
   title: "",
   content: "",
@@ -57,11 +64,61 @@ const DEFAULTS_BLANK: Defaults = {
   occurredAt: localInput(new Date()),
 };
 
+const DRAFT_PREFIX = "paradeos:note-draft:";
+const DRAFT_DEBOUNCE_MS = 400;
+
+function readDraftFromStorage(key: string): Draft | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Draft>;
+    if (typeof parsed.content !== "string") return null;
+    const kindOk = (noteKindEnum.options as readonly string[]).includes(
+      (parsed.kind as string) ?? "",
+    );
+    return {
+      title: typeof parsed.title === "string" ? parsed.title : "",
+      content: parsed.content,
+      kind: kindOk ? (parsed.kind as NoteKind) : "memo",
+      occurredAt:
+        typeof parsed.occurredAt === "string" && parsed.occurredAt.length > 0
+          ? parsed.occurredAt
+          : localInput(new Date()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeDraftToStorage(key: string, d: Draft): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(d));
+  } catch {
+    // ignore (mode privé, quota plein, etc.)
+  }
+}
+
+function clearDraftFromStorage(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
 export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const isEdit = Boolean(initial?.id);
-  const seed = initial ?? DEFAULTS_BLANK;
+  const seed = useMemo(() => initial ?? DEFAULTS_BLANK, [initial]);
+
+  // Clé stable pour le brouillon local : un brouillon par sujet (création) ou
+  // par note (édition). Permet de reprendre exactement là où on s'était arrêté.
+  const draftKey = useMemo(() => {
+    if (isEdit) return `${DRAFT_PREFIX}edit:${initial?.id ?? ""}`;
+    if (subjectType && subjectId) return `${DRAFT_PREFIX}new:${subjectType}:${subjectId}`;
+    return `${DRAFT_PREFIX}new:free`;
+  }, [isEdit, initial?.id, subjectType, subjectId]);
 
   const [title, setTitle] = useState(seed.title);
   const [content, setContent] = useState(seed.content);
@@ -70,6 +127,9 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [restored, setRestored] = useState(false);
+
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function reset() {
     setTitle(seed.title);
@@ -77,7 +137,62 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
     setKind(seed.kind);
     setOccurredAt(seed.occurredAt);
     setErrors({});
+    setRestored(false);
   }
+
+  // Restaure un éventuel brouillon à l'ouverture.
+  useEffect(() => {
+    if (!open) return;
+    const draft = readDraftFromStorage(draftKey);
+    if (!draft) return;
+    const sameAsSeed =
+      draft.title === seed.title &&
+      draft.content === seed.content &&
+      draft.kind === seed.kind &&
+      draft.occurredAt === seed.occurredAt;
+    if (sameAsSeed) return;
+    setTitle(draft.title);
+    setContent(draft.content);
+    setKind(draft.kind);
+    setOccurredAt(draft.occurredAt);
+    setRestored(true);
+  }, [open, draftKey, seed]);
+
+  // Persistance auto du brouillon dès qu'on diverge du seed.
+  useEffect(() => {
+    if (!open) return;
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    const isDirty =
+      title !== seed.title ||
+      content !== seed.content ||
+      kind !== seed.kind ||
+      occurredAt !== seed.occurredAt;
+    draftTimer.current = setTimeout(() => {
+      if (isDirty) writeDraftToStorage(draftKey, { title, content, kind, occurredAt });
+      else clearDraftFromStorage(draftKey);
+    }, DRAFT_DEBOUNCE_MS);
+    return () => {
+      if (draftTimer.current) clearTimeout(draftTimer.current);
+    };
+  }, [open, title, content, kind, occurredAt, draftKey, seed]);
+
+  // Garde-fou : alerte navigateur avant fermeture/refresh si du contenu n'est
+  // pas sauvegardé. Le brouillon local couvre déjà le cas, c'est une 2e ligne.
+  useEffect(() => {
+    if (!open) return;
+    const isDirty =
+      title !== seed.title ||
+      content !== seed.content ||
+      kind !== seed.kind ||
+      occurredAt !== seed.occurredAt;
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [open, title, content, kind, occurredAt, seed]);
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -101,6 +216,7 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
         toast.error(result.message);
         return;
       }
+      clearDraftFromStorage(draftKey);
       toast.success(isEdit ? "Note mise à jour." : "Note ajoutée.");
       setOpen(false);
       if (!isEdit) reset();
@@ -121,6 +237,7 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
         toast.error(result.message);
         return;
       }
+      clearDraftFromStorage(draftKey);
       toast.success("Note supprimée.");
       setConfirmDelete(false);
       setOpen(false);
@@ -128,11 +245,19 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
     });
   }
 
+  function discardDraft() {
+    clearDraftFromStorage(draftKey);
+    reset();
+  }
+
   return (
     <Dialog
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
+        // À la fermeture, on remet les inputs au seed pour ne pas afficher
+        // les anciennes valeurs si on rouvre. Le brouillon reste en
+        // localStorage et sera restauré au prochain open.
         if (!v) reset();
       }}
     >
@@ -143,6 +268,22 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="space-y-4">
+          {restored ? (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900 text-xs dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+              <span>Brouillon récupéré depuis ce navigateur.</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-amber-900 hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-900"
+                onClick={discardDraft}
+                disabled={pending}
+              >
+                Repartir de zéro
+              </Button>
+            </div>
+          ) : null}
+
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="note-kind">Type</Label>

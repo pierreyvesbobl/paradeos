@@ -60,6 +60,9 @@ export function TiptapNoteEditor({ note }: Props) {
   const [uploading, setUploading] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef(note.content);
+  // Référence vivante vers doSave : permet aux écouteurs (visibility/unload)
+  // d'appeler la dernière version sans dépendances obsolètes.
+  const doSaveRef = useRef<() => Promise<void>>(async () => {});
 
   async function uploadFile(file: File): Promise<string | null> {
     const urlRes = await signedUploadUrl({ noteId: note.id, fileName: file.name });
@@ -199,8 +202,26 @@ export function TiptapNoteEditor({ note }: Props) {
     router.refresh();
   }
 
+  doSaveRef.current = doSave;
+
   useEffect(() => {
+    const flush = () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      void doSaveRef.current();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
     return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("beforeunload", flush);
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
   }, []);
