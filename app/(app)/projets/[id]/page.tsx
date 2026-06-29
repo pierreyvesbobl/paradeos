@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/empty-state";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { ProjectContactsField } from "@/components/projects/project-contacts-field";
+import { ProjectEntityField } from "@/components/projects/project-entity-field";
 import { ProjectMembersField } from "@/components/projects/project-members-field";
 import { ProjectMeetingsSection } from "@/components/projets/project-meetings-section";
 import { ProjectSecretsSection } from "@/components/projets/project-secrets-section";
@@ -33,7 +34,6 @@ import { formatDuration } from "@/lib/format";
 import { projectBillingTypeLabels } from "@/lib/schemas/projects";
 import { cn } from "@/lib/utils";
 import { and, asc, eq } from "drizzle-orm";
-import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -46,7 +46,6 @@ import {
   ProjColor,
   ProjDate,
   ProjDescription,
-  ProjEntity,
   ProjHourlyRate,
   ProjIcon,
   ProjKind,
@@ -286,19 +285,11 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       </SidebarSection>
 
       <SidebarSection title="Entité">
-        <ProjEntity
-          id={id}
-          value={entity ? { id: entity.id, name: entity.name } : null}
+        <ProjectEntityField
+          projectId={id}
+          entity={entity ? { id: entity.id, name: entity.name } : null}
           options={entityList}
         />
-        {entity ? (
-          <Link
-            href={`/entites/${entity.id}`}
-            className="inline-flex items-center gap-1 text-muted-foreground text-xs hover:underline"
-          >
-            Voir la fiche <ExternalLink className="size-3" />
-          </Link>
-        ) : null}
       </SidebarSection>
 
       <SidebarSection title="Membres">
@@ -310,9 +301,10 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         />
       </SidebarSection>
 
-      <SidebarSection title="Contacts liés">
+      <SidebarSection title="Contacts liés" count={projectContactRows.length}>
         <ProjectContactsField
           projectId={id}
+          projectEntityId={project.entityId ?? null}
           contacts={projectContactRows}
           options={contactOptions}
           primaryContactId={project.contactId ?? null}
@@ -615,15 +607,22 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
 
 function SidebarSection({
   title,
+  count,
   children,
 }: {
   title: React.ReactNode;
+  count?: number;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-3">
-      <h3 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
-        {title}
+      <h3 className="flex items-center gap-2 border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+        <span>{title}</span>
+        {typeof count === "number" ? (
+          <span className="text-[11px] text-ds-text-tertiary normal-case tracking-normal">
+            {count}
+          </span>
+        ) : null}
       </h3>
       <div className="space-y-3">{children}</div>
     </div>

@@ -1,5 +1,6 @@
 "use server";
 
+import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
@@ -10,9 +11,10 @@ import {
   quickCreateEntitySchema,
   updateEntitySchema,
 } from "@/lib/schemas/entities";
-import { eq, ilike } from "drizzle-orm";
+import { asc, eq, ilike, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
 export const createEntity = action(createEntitySchema, async ({ input, user }) => {
   const conn = await db();
@@ -105,6 +107,49 @@ export const deleteEntity = action(deleteEntitySchema, async ({ input }) => {
   await conn.delete(entities).where(eq(entities.id, input.id));
   revalidatePath("/crm/entites");
   return { id: input.id };
+});
+
+/**
+ * Lecture compacte pour la modale d'aperçu — informations clé + contacts
+ * rattachés (3 max pour rester compact). Charge à la demande à l'ouverture
+ * du modal.
+ */
+export const getEntityPreview = action(z.object({ id: z.string().uuid() }), async ({ input }) => {
+  const conn = await db();
+  const [entity] = await conn
+    .select({
+      id: entities.id,
+      name: entities.name,
+      kind: entities.kind,
+      website: entities.website,
+      siren: entities.siren,
+      vatNumber: entities.vatNumber,
+      address: entities.address,
+      notes: entities.notes,
+    })
+    .from(entities)
+    .where(eq(entities.id, input.id))
+    .limit(1);
+  if (!entity) throw new Error("Entité introuvable.");
+
+  const [{ count: contactsCount } = { count: 0 }] = await conn
+    .select({ count: sql<number>`count(*)::int` })
+    .from(contacts)
+    .where(eq(contacts.entityId, input.id));
+
+  const previewContacts = await conn
+    .select({
+      id: contacts.id,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+      jobTitle: contacts.jobTitle,
+    })
+    .from(contacts)
+    .where(eq(contacts.entityId, input.id))
+    .orderBy(asc(contacts.lastName), asc(contacts.firstName))
+    .limit(5);
+
+  return { entity, contactsCount, previewContacts };
 });
 
 export async function deleteEntityAndRedirect(formData: FormData) {

@@ -1,6 +1,7 @@
 "use server";
 
 import { contacts } from "@/db/schema/contacts";
+import { entities } from "@/db/schema/entities";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
 import {
@@ -13,6 +14,7 @@ import {
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
 export const createContact = action(createContactSchema, async ({ input, user }) => {
   const conn = await db();
@@ -117,6 +119,34 @@ export const deleteContact = action(deleteContactSchema, async ({ input }) => {
   await conn.delete(contacts).where(eq(contacts.id, input.id));
   revalidatePath("/crm/contacts");
   return { id: input.id };
+});
+
+/**
+ * Lecture compacte pour la modale d'aperçu — pas de notes, pas de pièces
+ * jointes. L'objectif est d'éviter d'embarquer le payload complet de la
+ * fiche dans chaque chip de la page projet.
+ */
+export const getContactPreview = action(z.object({ id: z.string().uuid() }), async ({ input }) => {
+  const conn = await db();
+  const [row] = await conn
+    .select({
+      id: contacts.id,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+      email: contacts.email,
+      phone: contacts.phone,
+      jobTitle: contacts.jobTitle,
+      linkedinUrl: contacts.linkedinUrl,
+      notes: contacts.notes,
+      entityId: entities.id,
+      entityName: entities.name,
+    })
+    .from(contacts)
+    .leftJoin(entities, eq(contacts.entityId, entities.id))
+    .where(eq(contacts.id, input.id))
+    .limit(1);
+  if (!row) throw new Error("Contact introuvable.");
+  return row;
 });
 
 export async function deleteContactAndRedirect(formData: FormData) {
