@@ -183,9 +183,10 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
     const matches = await searchDougsClients(user.id, searchName, isBtoB);
     const best = matches[0];
     if (best) {
-      const dougsHasAddress = Boolean(
-        best.address?.street || best.address?.city || best.address?.zipcode,
-      );
+      // Merge champ par champ : Dougs prioritaire si non-vide, sinon
+      // fallback local. L'endpoint search renvoie souvent ville +
+      // code postal mais pas la rue → si on prenait Dougs en bloc,
+      // on écraserait la rue Paradeos avec "".
       clientData = {
         isBToB: best.isBtoB,
         legalName: best.legalName ?? best.name,
@@ -194,14 +195,12 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
         vatNumber: best.vatNumber,
         firstName: best.firstName,
         lastName: best.lastName,
-        address: dougsHasAddress
-          ? {
-              street: best.address?.street ?? "",
-              zipCode: best.address?.zipcode ?? "",
-              city: best.address?.city ?? "",
-              country: "France",
-            }
-          : localAddressPayload,
+        address: {
+          street: best.address?.street || localAddressPayload.street,
+          zipCode: best.address?.zipcode || localAddressPayload.zipCode,
+          city: best.address?.city || localAddressPayload.city,
+          country: localAddressPayload.country,
+        },
         deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
         others: [],
         email: best.email ?? row.contactEmail ?? null,
