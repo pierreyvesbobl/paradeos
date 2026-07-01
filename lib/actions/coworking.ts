@@ -161,11 +161,31 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
     );
   }
 
+  // Adresse locale Paradeos, utilisée en fallback si la recherche Dougs
+  // ne renvoie pas d'adresse (endpoint search qui ne l'inclut pas, ou
+  // fiche client Dougs incomplète). Sans ce fallback on écraserait tout
+  // à chaque push avec des chaînes vides.
+  const localAddr = (isBtoB ? row.billToEntityAddress : row.contactAddress) as {
+    street?: string;
+    postalCode?: string;
+    city?: string;
+    country?: string;
+  } | null;
+  const localAddressPayload = {
+    street: localAddr?.street ?? "",
+    zipCode: localAddr?.postalCode ?? "",
+    city: localAddr?.city ?? "",
+    country: localAddr?.country ?? "France",
+  };
+
   let clientData: Record<string, unknown>;
   try {
     const matches = await searchDougsClients(user.id, searchName, isBtoB);
     const best = matches[0];
     if (best) {
+      const dougsHasAddress = Boolean(
+        best.address?.street || best.address?.city || best.address?.zipcode,
+      );
       clientData = {
         isBToB: best.isBtoB,
         legalName: best.legalName ?? best.name,
@@ -174,14 +194,14 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
         vatNumber: best.vatNumber,
         firstName: best.firstName,
         lastName: best.lastName,
-        address: best.address
+        address: dougsHasAddress
           ? {
-              street: best.address.street ?? "",
-              zipCode: best.address.zipcode ?? "",
-              city: best.address.city ?? "",
+              street: best.address?.street ?? "",
+              zipCode: best.address?.zipcode ?? "",
+              city: best.address?.city ?? "",
               country: "France",
             }
-          : { street: "", zipCode: "", city: "", country: "France" },
+          : localAddressPayload,
         deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
         others: [],
         email: best.email ?? row.contactEmail ?? null,
@@ -189,12 +209,6 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
         clientId: best.clientId,
       };
     } else {
-      const localAddr = (isBtoB ? row.billToEntityAddress : row.contactAddress) as {
-        street?: string;
-        postalCode?: string;
-        city?: string;
-        country?: string;
-      } | null;
       clientData = {
         isBToB: isBtoB,
         legalName: isBtoB ? row.billToEntityName : null,
@@ -203,12 +217,7 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
         vatNumber: row.billToEntityVatNumber ?? null,
         firstName: isBtoB ? null : row.contactFirstName,
         lastName: isBtoB ? null : row.contactLastName,
-        address: {
-          street: localAddr?.street ?? "",
-          zipCode: localAddr?.postalCode ?? "",
-          city: localAddr?.city ?? "",
-          country: localAddr?.country ?? "France",
-        },
+        address: localAddressPayload,
         deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
         others: [],
         email: row.contactEmail ?? null,
