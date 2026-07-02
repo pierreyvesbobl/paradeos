@@ -12,6 +12,7 @@ import {
   ExternalLink,
   ListTodo,
   Mail,
+  Reply,
   Tag,
   UserPlus,
   X,
@@ -21,7 +22,14 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
-type ProposalKind = "task" | "category_tag" | "project_link" | "contact" | "entity" | "project";
+type ProposalKind =
+  | "task"
+  | "category_tag"
+  | "project_link"
+  | "contact"
+  | "entity"
+  | "project"
+  | "draft_reply";
 
 type Proposal = {
   id: string;
@@ -54,6 +62,7 @@ const KIND_ICON: Record<ProposalKind, typeof ListTodo> = {
   contact: UserPlus,
   entity: Building2,
   project: Briefcase,
+  draft_reply: Reply,
 };
 
 const KIND_LABEL: Record<ProposalKind, string> = {
@@ -63,6 +72,7 @@ const KIND_LABEL: Record<ProposalKind, string> = {
   contact: "Contact",
   entity: "Entité",
   project: "Projet",
+  draft_reply: "Brouillon de réponse",
 };
 
 export function ProposalCard({ message, proposals }: Props) {
@@ -129,7 +139,9 @@ function ProposalRow({ proposal: p }: { proposal: Proposal }) {
                 ? "Contact créé."
                 : p.kind === "entity"
                   ? "Entité créée."
-                  : "Projet créé.",
+                  : p.kind === "draft_reply"
+                    ? "Brouillon Gmail créé."
+                    : "Projet créé.",
       );
       router.refresh();
     });
@@ -214,6 +226,9 @@ function describeProposal(p: Proposal): string {
   if (p.kind === "entity") {
     return String(p.payload.name ?? "Entité");
   }
+  if (p.kind === "draft_reply") {
+    return String(p.payload.subject ?? "Re: (sans objet)");
+  }
   // project (création)
   return String(p.payload.name ?? "Projet");
 }
@@ -249,6 +264,10 @@ function describeDetails(p: Proposal): string {
     if (p.payload.kind) parts.push(String(p.payload.kind));
     if (p.matchedEntityName) parts.push(`déjà connue : ${p.matchedEntityName}`);
     return parts.join(" · ") || "Nouvelle entité à créer.";
+  }
+  if (p.kind === "draft_reply") {
+    const body = String(p.payload.body ?? "");
+    return body.slice(0, 140) + (body.length > 140 ? "…" : "");
   }
   // project (création)
   const parts: string[] = [];

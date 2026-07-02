@@ -45,6 +45,10 @@ export const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/drive.readonly",
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/gmail.modify",
+  // `gmail.compose` = créer/éditer/envoyer des brouillons. Requis pour le
+  // push automatique du replyDraft LLM vers Gmail (drafts.create). Ne
+  // couvre PAS l'envoi direct sans brouillon (c'est gmail.send).
+  "https://www.googleapis.com/auth/gmail.compose",
 ];
 
 /** Alias historique — gardé pour la compat avec d'éventuels callers. */
@@ -61,6 +65,17 @@ export const REQUIRED_CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calend
 // gmail.readonly seulement (utilisateur déjà connecté avant cette MAJ)
 // est rejeté → reconnexion requise.
 export const REQUIRED_GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.modify"];
+
+/**
+ * Scope requis pour pousser un brouillon de réponse dans Gmail. Optionnel :
+ * si absent, la vue thread affiche un bandeau "reconnecte-toi pour
+ * activer les brouillons" au lieu de bloquer le reste des features Gmail.
+ */
+export const REQUIRED_GMAIL_COMPOSE_SCOPES = ["https://www.googleapis.com/auth/gmail.compose"];
+
+export function hasGmailComposeScope(grantedScopes: string[]): boolean {
+  return REQUIRED_GMAIL_COMPOSE_SCOPES.every((s) => grantedScopes.includes(s));
+}
 
 export function hasRequiredDriveScopes(grantedScopes: string[]): boolean {
   return REQUIRED_DRIVE_SCOPES.every((s) => grantedScopes.includes(s));

@@ -401,3 +401,88 @@ export function internalDateToDate(internalDate: string | undefined): Date | nul
   if (!Number.isFinite(n)) return null;
   return new Date(n);
 }
+
+// ─── drafts.create ─────────────────────────────────────────────────────
+
+/**
+ * Encode une string en base64url (RFC 4648) — c'est le format attendu
+ * par Gmail pour le champ `raw`. Buffer.from().toString('base64url')
+ * ferait pareil mais reste explicite ici pour la relecture.
+ */
+function base64urlEncode(text: string): string {
+  return Buffer.from(text, "utf8").toString("base64url");
+}
+
+/**
+ * Encode un header selon RFC 2047 si non-ASCII, sinon retourne tel quel.
+ * Nécessaire pour un `Subject` ou nom de destinataire contenant des
+ * accents (usuel en français).
+ */
+function encodeHeaderIfNeeded(value: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: check for non-ASCII printable.
+  if (/^[\x20-\x7e]*$/.test(value)) return value;
+  return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
+}
+
+type CreateDraftArgs = {
+  /** Destinataire principal (obligatoire pour Gmail — sinon rejette). */
+  to: string;
+  cc?: string[];
+  subject: string;
+  /** Corps texte brut (UTF-8). Sera encodé en 8bit / base64 selon l'ASCII-ness. */
+  body: string;
+  /**
+   * Attribue le brouillon à un thread Gmail existant — Gmail placera
+   * la réponse au bon endroit dans la conversation. Si absent, crée un
+   * brouillon isolé.
+   */
+  gmailThreadId?: string | null;
+  /**
+   * Value du header `Message-ID` du mail auquel on répond. Permet à
+   * Gmail *et* aux clients tiers de threader correctement via
+   * `In-Reply-To` + `References`.
+   */
+  inReplyToHeader?: string | null;
+};
+
+export type GmailDraft = {
+  id: string;
+  message: { id: string; threadId: string };
+};
+
+/**
+ * Crée un brouillon Gmail. Le message est en text/plain (UTF-8) —
+ * suffisant pour un brouillon de réponse simple, sans HTML.
+ * `threadId` sur `message` fait que Gmail place le draft dans le fil
+ * existant à condition que le subject commence par "Re: ".
+ */
+export async function createGmailDraft(
+  accessToken: string,
+  args: CreateDraftArgs,
+): Promise<GmailDraft> {
+  const headers: string[] = [
+    `To: ${args.to}`,
+    ...(args.cc && args.cc.length > 0 ? [`Cc: ${args.cc.join(", ")}`] : []),
+    `Subject: ${encodeHeaderIfNeeded(args.subject)}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: 8bit",
+  ];
+  if (args.inReplyToHeader) {
+    headers.push(`In-Reply-To: ${args.inReplyToHeader}`);
+    headers.push(`References: ${args.inReplyToHeader}`);
+  }
+  const rfc822 = `${headers.join("\r\n")}\r\n\r\n${args.body}`;
+  const raw = base64urlEncode(rfc822);
+
+  return gmailFetch<GmailDraft>("/users/me/drafts", accessToken, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      message: {
+        raw,
+        ...(args.gmailThreadId ? { threadId: args.gmailThreadId } : {}),
+      },
+    }),
+  });
+}

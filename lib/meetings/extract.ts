@@ -3,6 +3,7 @@ import "server-only";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
+import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
@@ -97,6 +98,8 @@ export type Vocabulary = {
   contacts: { fullName: string; entityName: string | null; jobTitle: string | null }[];
   projects: { name: string; kind: string; status: string; entityName: string | null }[];
   users: string[];
+  /** Tâches encore ouvertes — pour éviter de re-proposer une action déjà notée. */
+  tasks: { title: string; projectName: string | null; status: string }[];
 };
 
 /**
@@ -110,7 +113,7 @@ export type Vocabulary = {
 export async function getKnownVocabulary(): Promise<Vocabulary> {
   const conn = await db();
 
-  const [entityRows, contactRows, projectRows, userRows] = await Promise.all([
+  const [entityRows, contactRows, projectRows, userRows, taskRows] = await Promise.all([
     conn
       .select({ name: entities.name, kind: entities.kind, updatedAt: entities.updatedAt })
       .from(entities)
@@ -141,6 +144,21 @@ export async function getKnownVocabulary(): Promise<Vocabulary> {
       .orderBy(desc(projects.updatedAt))
       .limit(VOCAB_LIMIT_PER_KIND),
     conn.select({ fullName: users.fullName }).from(users).orderBy(asc(users.fullName)),
+    // Tâches encore ouvertes — sert au LLM pour ne pas re-proposer une
+    // action déjà tracée. On exclut done/cancelled/archived. Ordonne par
+    // updatedAt desc pour prioriser les plus récentes / actives.
+    conn
+      .select({
+        title: tasks.title,
+        status: tasks.status,
+        projectName: projects.name,
+        updatedAt: tasks.updatedAt,
+      })
+      .from(tasks)
+      .leftJoin(projects, eq(tasks.projectId, projects.id))
+      .where(sql`${tasks.status} not in ('done', 'cancelled')`)
+      .orderBy(desc(tasks.updatedAt))
+      .limit(VOCAB_LIMIT_PER_KIND),
   ]);
 
   return {
@@ -157,6 +175,11 @@ export async function getKnownVocabulary(): Promise<Vocabulary> {
       entityName: r.entityName ?? null,
     })),
     users: userRows.map((u) => u.fullName).filter((n): n is string => !!n),
+    tasks: taskRows.map((r) => ({
+      title: r.title,
+      status: r.status,
+      projectName: r.projectName ?? null,
+    })),
   };
 }
 
@@ -202,7 +225,54 @@ export function formatVocabulary(v: Vocabulary): string {
     );
   }
 
+  if (v.tasks.length > 0) {
+    sections.push(
+      `Tâches ouvertes déjà connues (NE PAS re-proposer, même reformulées) :\n${v.tasks
+        .map((t) => {
+          const bits = [t.title];
+          if (t.projectName) bits.push(`— projet ${t.projectName}`);
+          bits.push(`[${t.status}]`);
+          return `- ${bits.join(" ")}`;
+        })
+        .join("\n")}`,
+    );
+  }
+
   return sections.join("\n\n");
+}
+
+/**
+ * Fuzzy match d'un titre de tâche parmi les tâches déjà en base, avec
+ * scope facultatif sur un projet donné. Sert au dédup côté extraction :
+ * si le LLM propose une action déjà tracée sur ce projet, on peut skip
+ * la proposition (cf. `extract-and-save.ts` pour meetings et emails).
+ *
+ * Seuil bas (0.4) — on préfère skip trop que pas assez ; l'utilisateur
+ * peut toujours créer manuellement s'il veut vraiment une 2e tâche.
+ */
+export async function fuzzyMatchTaskInProject(
+  title: string,
+  projectId: string | null,
+  threshold = 0.4,
+): Promise<Match> {
+  const conn = await db();
+  const scope = projectId
+    ? sql`${tasks.projectId} = ${projectId}`
+    : sql`${tasks.projectId} is null`;
+  const rows = await conn
+    .select({
+      id: tasks.id,
+      name: tasks.title,
+      sim: sql<number>`similarity(${tasks.title}, ${title})`,
+    })
+    .from(tasks)
+    .where(
+      sql`${scope} and ${tasks.status} not in ('done', 'cancelled') and similarity(${tasks.title}, ${title}) > ${threshold}`,
+    )
+    .orderBy(sql`similarity(${tasks.title}, ${title}) desc`)
+    .limit(1);
+  const top = rows[0];
+  return top ? { id: top.id, name: top.name, confidence: Number(top.sim) } : null;
 }
 
 export type ProjectContext = {

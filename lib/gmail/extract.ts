@@ -1,5 +1,6 @@
 import "server-only";
 
+import { parseEmailThread } from "@/lib/gmail/thread-parse";
 import { formatVocabulary, getKnownVocabulary } from "@/lib/meetings/extract";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
@@ -38,6 +39,16 @@ export const MAX_BODY_CHARS_FOR_LLM = 50_000;
 const extractionSchema = z.object({
   summary: z.string(),
   intent: z.enum(["info", "request", "fyi", "decision", "follow_up", "compta", "admin", "other"]),
+  /**
+   * Stade pipeline du deal/projet sous-jacent :
+   *   - lead        : premier contact commercial (prospection tiède/froide)
+   *   - opportunity : deal actif (devis, négo, relance)
+   *   - project     : delivery/opérationnel (post-signature)
+   *   - none        : pas de dimension commerciale (compta, admin, info…)
+   * Pilote le status suggéré à la création + affiche une suggestion de
+   * changement de statut quand un projet existant est déjà matché.
+   */
+  pipelineStage: z.enum(["lead", "opportunity", "project", "none"]),
   proposedCategoryTags: z.array(z.string()),
   proposedProjectName: z.string().nullable(),
   proposedTasks: z.array(
@@ -75,6 +86,22 @@ const extractionSchema = z.object({
       valueAmount: z.number().nullable(),
     }),
   ),
+  /**
+   * Vrai quand le mail appelle une action de l'utilisateur : une
+   * question, une décision demandée, une relance à faire. Faux pour
+   * les emails purement informatifs (newsletters, notifications, cc-info…).
+   */
+  needsReply: z.boolean(),
+  /**
+   * Brouillon de réponse suggéré. Rempli **uniquement** quand `needsReply`
+   * est vrai. En français, ton naturel, signé "Pierre-Yves".
+   */
+  replyDraft: z
+    .object({
+      subject: z.string(),
+      body: z.string(),
+    })
+    .nullable(),
   sensitiveDetected: z.boolean(),
 });
 
@@ -112,10 +139,12 @@ function buildSystemPrompt(args: {
   const baseRules = `Tu analyses un email professionnel reçu/envoyé et en extrais :
 1. Un résumé court (2-3 phrases en français)
 2. L'intention principale (info / request / fyi / decision / follow_up / compta / admin / other)
-3. Les catégories libres pertinentes pour le ranger (Compta, Annexe, Admin, Support, etc.)
-4. Le projet éventuellement mentionné dans le contenu (auto-apply)
-5. Les tâches à faire qui ressortent
-6. Les entités, contacts et projets NOUVEAUX évoqués (à créer dans le CRM)
+3. Le stade pipeline (lead / opportunity / project / none)
+4. Les catégories libres pertinentes pour le ranger (Compta, Annexe, Admin, Support, etc.)
+5. Le projet éventuellement mentionné dans le contenu (auto-apply)
+6. Les tâches à faire qui ressortent
+7. Les entités, contacts et projets NOUVEAUX évoqués (à créer dans le CRM)
+8. Un brouillon de réponse si le mail attend une action
 
 Règles générales :
 - Reste factuel. Pas de paraphrase, pas d'extrapolation.
@@ -124,6 +153,26 @@ Règles générales :
 - Pour proposedTasks : uniquement les ACTIONS EXPLICITES ("merci de m'envoyer", "peux-tu vérifier", "il faut faire X"). Pas de tâches déduites/imaginées.
 - dueDate au format YYYY-MM-DD si une date concrète est mentionnée.
 - sensitiveDetected = true si tu repères des mots de passe, clés API, numéros bancaires, etc.
+
+# Stade pipeline (pipelineStage)
+
+Classifie l'affaire portée par cet email :
+- **lead** : premier contact commercial, prospection tiède/froide, demande d'infos initiale, prise de contact avant tout devis. L'expéditeur n'est probablement pas encore dans le CRM.
+- **opportunity** : deal actif — devis envoyé, négociation en cours, relance commerciale, réponse attendue avant signature.
+- **project** : delivery/opérationnel — le deal est signé, on parle exécution, livraison, planning, retour, ajustement.
+- **none** : pas de dimension commerciale (compta, admin, info interne, newsletter, notification, …).
+
+# Réponse attendue (needsReply / replyDraft)
+
+- **needsReply=true** quand le mail attend une action de ta part : question directe, décision à prendre, relance à faire, choix à valider, RDV à confirmer.
+- **needsReply=false** pour les mails purement informatifs (Cc pour info, notification automatique, réponse "OK reçu" sans suite).
+- Si **needsReply=true**, produis un **replyDraft** :
+  - En français, ton naturel et concis (3 à 6 phrases max).
+  - Signé "Pierre-Yves" en fin de mail.
+  - subject préfixé "Re: " s'il ne l'est pas déjà.
+  - **Aucune affirmation** qui ne soit pas vérifiable depuis le mail d'origine. Si un chiffre/nom/date est incertain, laisse un placeholder \`[À compléter]\`.
+  - Ne t'engage pas à la place de l'utilisateur — propose des tournures ouvertes ("je te reviens sur", "je te propose de", "peux-tu me confirmer…").
+- Si **needsReply=false**, replyDraft = null.
 
 # Entités, contacts, projets — propositions de création
 
@@ -163,22 +212,32 @@ function buildUserPrompt(input: EmailInput): string {
   const toLine = input.toEmails.length > 0 ? `À : ${input.toEmails.join(", ")}` : null;
   const ccLine = input.ccEmails.length > 0 ? `Cc : ${input.ccEmails.join(", ")}` : null;
   const subject = `Sujet : ${input.subject ?? "(sans objet)"}`;
-  // Préfère text si dispo, sinon strip HTML grossièrement.
-  let body = input.bodyText ?? "";
-  if (!body && input.bodyHtml) {
-    body = input.bodyHtml
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
+
+  // On envoie au LLM le corps propre (sans les quotes/forwards) — les
+  // longs threads réassemblés dans un mail unique sont ainsi réduits à
+  // leur intent réel, ce qui économise du token et améliore la qualité
+  // de l'extraction. On donne un résumé du fil précédent en aparté pour
+  // le contexte.
+  const parsed = parseEmailThread({
+    bodyText: input.bodyText,
+    bodyHtml: input.bodyHtml,
+  });
+  let body = parsed.cleanText;
   if (body.length > MAX_BODY_CHARS_FOR_LLM) {
     body = `${body.slice(0, MAX_BODY_CHARS_FOR_LLM)}\n\n[…tronqué]`;
   }
   body = sanitizeForLlm(body);
+
+  const historyBlock =
+    parsed.quotes.length > 0
+      ? `\n\n---\n\n# Historique du fil (pour contexte, ne pas re-résumer)\n\n${parsed.quotes
+          .map((q) => `${q.header ?? "(quote)"}\n${q.body}`)
+          .join("\n\n")
+          .slice(0, 5_000)}`
+      : "";
+
   const header = [fromLine, toLine, ccLine, subject].filter(Boolean).join("\n");
-  return `${header}\n\n---\n\n${body}`;
+  return `${header}\n\n---\n\n${body}${historyBlock}`;
 }
 
 export async function extractEmail(input: EmailInput): Promise<EmailExtraction> {

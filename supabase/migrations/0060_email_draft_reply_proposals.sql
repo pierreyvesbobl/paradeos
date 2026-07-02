@@ -1,0 +1,22 @@
+-- =============================================================================
+-- Email proposals : ajoute le kind `draft_reply`.
+--
+-- L'extraction LLM peut désormais générer un brouillon de réponse pour les
+-- emails qui appellent une action (`intent` ∈ {request, decision, follow_up}).
+-- Le brouillon est stocké comme proposition, l'utilisateur peut l'éditer
+-- puis pousser vers Gmail via `drafts.create`.
+--
+-- Payload attendu :
+--   {
+--     "subject": "Re: …",
+--     "body":    "Bonjour, …",
+--     "gmailThreadId": "18f4a…",   -- pour l'attribution du draft au thread
+--     "gmailMessageId": "18f4a…"   -- l'id du message auquel on répond
+--   }
+--
+-- ALTER TYPE … ADD VALUE n'est pas réversible côté Postgres (pas de DROP
+-- VALUE). En cas de rollback, le code applicatif doit cesser d'émettre
+-- ce kind avant que la migration suivante ne soit appliquée.
+-- =============================================================================
+
+ALTER TYPE email_proposal_kind ADD VALUE IF NOT EXISTS 'draft_reply';

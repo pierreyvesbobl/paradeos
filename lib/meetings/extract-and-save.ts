@@ -7,6 +7,7 @@ import {
   fuzzyMatchContact,
   fuzzyMatchEntity,
   fuzzyMatchProject,
+  fuzzyMatchTaskInProject,
   fuzzyMatchUser,
 } from "@/lib/meetings/extract";
 import { eq } from "drizzle-orm";
@@ -84,9 +85,24 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
       matchConfidence: match ? match.confidence.toFixed(3) : null,
     });
   }
+  // Cap de dédup côté extraction : si un titre proche existe déjà sur
+  // le projet cible (ou en tâches sans projet), on skip pour éviter le
+  // double signal. L'utilisateur verra la tâche existante déjà en base
+  // et pourra créer manuellement une variante s'il en veut une.
+  const TASK_DEDUP_THRESHOLD = 0.5;
+  let skippedDupTasks = 0;
   for (const t of result.proposedTasks) {
     const projectMatch = t.projectName ? await fuzzyMatchProject(t.projectName) : null;
     const assigneeMatch = t.assigneeName ? await fuzzyMatchUser(t.assigneeName) : null;
+    const dupTask = await fuzzyMatchTaskInProject(
+      t.title,
+      projectMatch?.id ?? null,
+      TASK_DEDUP_THRESHOLD,
+    );
+    if (dupTask) {
+      skippedDupTasks++;
+      continue;
+    }
     proposalsRows.push({
       meetingId: meeting.id,
       kind: "task",
@@ -98,6 +114,11 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
       matchedId: null,
       matchConfidence: null,
     });
+  }
+  if (skippedDupTasks > 0) {
+    console.info(
+      `[extract meeting ${meeting.id}] ${skippedDupTasks} tâche(s) LLM ignorée(s) : déjà en base sur le projet.`,
+    );
   }
 
   if (proposalsRows.length > 0) {

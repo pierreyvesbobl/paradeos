@@ -1,16 +1,21 @@
 import "server-only";
 
-import { emailProposals, gmailMessages, gmailTags } from "@/db/schema/gmail";
+import { emailProposals, gmailMessages, gmailTags, gmailThreads } from "@/db/schema/gmail";
 import { findContactByEmail } from "@/lib/db/queries/contacts";
 import { db } from "@/lib/db/server";
 import { extractEmail } from "@/lib/gmail/extract";
 import { applyTagToThread } from "@/lib/gmail/tags";
-import { fuzzyMatchContact, fuzzyMatchEntity, fuzzyMatchProject } from "@/lib/meetings/extract";
+import {
+  fuzzyMatchContact,
+  fuzzyMatchEntity,
+  fuzzyMatchProject,
+  fuzzyMatchTaskInProject,
+} from "@/lib/meetings/extract";
 import { and, eq, sql } from "drizzle-orm";
 
 type ProposalRow = {
   messageId: string;
-  kind: "task" | "category_tag" | "project_link" | "contact" | "entity" | "project";
+  kind: "task" | "category_tag" | "project_link" | "contact" | "entity" | "project" | "draft_reply";
   payload: Record<string, unknown>;
   matchedId: string | null;
   matchConfidence: string | null;
@@ -97,9 +102,22 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
 
   const rows: ProposalRow[] = [];
 
-  // 1. Tâches
+  // 1. Tâches — avec dédup contre les tâches déjà en base sur le projet
+  //    matché. Évite de re-suggérer une action déjà tracée (l'utilisateur
+  //    l'a peut-être déjà créée à partir d'un mail précédent).
+  const TASK_DEDUP_THRESHOLD = 0.5;
+  let skippedDupTasks = 0;
   for (const t of result.proposedTasks) {
     const projectMatch = t.projectName ? await fuzzyMatchProject(t.projectName) : null;
+    const dupTask = await fuzzyMatchTaskInProject(
+      t.title,
+      projectMatch?.id ?? null,
+      TASK_DEDUP_THRESHOLD,
+    );
+    if (dupTask) {
+      skippedDupTasks++;
+      continue;
+    }
     rows.push({
       messageId,
       kind: "task",
@@ -114,6 +132,11 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       matchedId: null,
       matchConfidence: null,
     });
+  }
+  if (skippedDupTasks > 0) {
+    console.info(
+      `[extract email ${messageId}] ${skippedDupTasks} tâche(s) LLM ignorée(s) : déjà en base sur le projet.`,
+    );
   }
 
   // 2. Catégories proposées — UNIQUEMENT si elles existent déjà en base.
@@ -254,9 +277,36 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
         entityName: p.entityName,
         status: p.status,
         valueAmount: p.valueAmount,
+        // Le pipelineStage global vient influencer l'UI du panneau
+        // d'extraction ; il est aussi remonté au niveau du message
+        // via extractionMeta plus bas.
+        pipelineStage: result.pipelineStage,
       },
       matchedId: match?.id ?? null,
       matchConfidence: match ? match.confidence.toFixed(3) : null,
+    });
+  }
+
+  // 7. Brouillon de réponse — seulement si le LLM a détecté un besoin
+  //    d'action et fourni un draft. Le push vers Gmail se fait à
+  //    l'acceptation (cf. acceptEmailProposal).
+  if (result.needsReply && result.replyDraft) {
+    const [thread] = await conn
+      .select({ gmailThreadId: gmailThreads.gmailThreadId })
+      .from(gmailThreads)
+      .where(eq(gmailThreads.id, msg.threadId))
+      .limit(1);
+    rows.push({
+      messageId,
+      kind: "draft_reply",
+      payload: {
+        subject: result.replyDraft.subject,
+        body: result.replyDraft.body,
+        gmailThreadId: thread?.gmailThreadId ?? null,
+        gmailMessageId: msg.gmailMessageId,
+      },
+      matchedId: null,
+      matchConfidence: null,
     });
   }
 
@@ -264,14 +314,19 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     await conn.insert(emailProposals).values(rows);
   }
 
-  // Met à jour le summary + extractionStatus côté message.
+  // Met à jour extractionMeta (summary + intent + stage + needsReply)
+  // au niveau du message pour que la vue thread puisse l'afficher
+  // sans avoir à re-parcourir les propositions.
   await conn
     .update(gmailMessages)
     .set({
       extractionStatus: "extracted",
-      // On garde le snippet d'origine ; le summary va dans une autre
-      // colonne si on l'ajoute plus tard. Pour l'instant le summary LLM
-      // n'est stocké nulle part (UI le voit via les proposals si besoin).
+      extractionMeta: {
+        summary: result.summary,
+        intent: result.intent,
+        pipelineStage: result.pipelineStage,
+        needsReply: result.needsReply,
+      },
     })
     .where(eq(gmailMessages.id, messageId));
 

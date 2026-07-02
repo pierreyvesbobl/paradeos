@@ -89,6 +89,13 @@ export const gmailMessages = pgTable(
     labels: text("labels").array().notNull().default(sql`'{}'::text[]`),
     isDraft: boolean("is_draft").notNull().default(false),
     extractionStatus: gmailExtractionStatus("extraction_status").notNull().default("skipped"),
+    /**
+     * Sortie non-actionnable de l'extraction LLM :
+     * `{ summary, intent, pipelineStage, needsReply }`.
+     * Les propositions actionnables (task/contact/entity/project/draft_reply)
+     * vont dans `emailProposals` séparément.
+     */
+    extractionMeta: jsonb("extraction_meta"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
@@ -190,6 +197,7 @@ export const emailProposalKind = pgEnum("email_proposal_kind", [
   "contact",
   "entity",
   "project",
+  "draft_reply",
 ]);
 
 export const emailProposalStatus = pgEnum("email_proposal_status", [

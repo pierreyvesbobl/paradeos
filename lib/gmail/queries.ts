@@ -90,6 +90,64 @@ export type GmailThreadFilters = {
   taggedOnly?: boolean;
   untaggedOnly?: boolean;
   tagId?: string;
+  /**
+   * Segmentation "priorité" :
+   *   - important : lié à un projet/entité/contact AVEC action attendue
+   *     (proposition pending actionnable OU needsReply=true).
+   *   - invoices  : email de facturation (invoice_filing OU intent='compta').
+   *   - noise     : le reste — notifications, newsletters, admin, etc.
+   *   - undefined : pas de segmentation.
+   */
+  bucket?: "important" | "invoices" | "noise";
+};
+
+/**
+ * Prédicats SQL réutilisés entre `listThreads` et `countBuckets`.
+ * Les catégories sont mutuellement exclusives par ordre de priorité :
+ *   invoices > important > noise.
+ */
+const BUCKET_SQL = {
+  invoices: sql`(
+    exists (
+      select 1 from public.invoice_filings f
+      join public.gmail_messages im on im.id = f.message_id
+      where im.thread_id = gmail_threads.id
+    )
+    or exists (
+      select 1 from public.gmail_messages im
+      where im.thread_id = gmail_threads.id
+        and im.extraction_meta->>'intent' = 'compta'
+    )
+  )`,
+  /**
+   * "Important" au sens strict : lié à un projet/contact/entité ET porte
+   * une action à traiter (proposition pending actionnable OU needsReply).
+   * Un mail sans lien CRM mais qui attend une réponse compte aussi — utile
+   * pour attraper les premiers contacts qui ne sont pas encore taggés.
+   */
+  important: sql`(
+    exists (
+      select 1 from public.email_proposals ep
+      join public.gmail_messages im on im.id = ep.message_id
+      where im.thread_id = gmail_threads.id
+        and ep.status = 'pending'
+        and ep.kind in ('task', 'draft_reply', 'project', 'contact', 'entity')
+    )
+    or exists (
+      select 1 from public.gmail_messages im
+      where im.thread_id = gmail_threads.id
+        and (im.extraction_meta->>'needsReply')::boolean = true
+    )
+    or (
+      exists (
+        select 1 from public.gmail_thread_tags tt
+        join public.gmail_tags g on g.id = tt.tag_id
+        where tt.thread_id = gmail_threads.id
+          and g.kind in ('project', 'contact', 'entity')
+      )
+      and gmail_threads.has_unread = true
+    )
+  )`,
 };
 
 /** Timeline globale avec filtres. */
@@ -122,6 +180,19 @@ export async function listThreads(
                   where thread_id = ${gmailThreads.id}
                   and tag_id = ${filters.tagId})`,
     );
+  }
+
+  if (filters.bucket === "invoices") {
+    conditions.push(BUCKET_SQL.invoices);
+  } else if (filters.bucket === "important") {
+    // Un thread facturation apparaît DANS "invoices" et pas dans
+    // "important" — priorité invoices pour lever l'ambiguïté sur les
+    // mails compta qui pourraient aussi avoir une tâche pending.
+    conditions.push(sql`not (${BUCKET_SQL.invoices})`);
+    conditions.push(BUCKET_SQL.important);
+  } else if (filters.bucket === "noise") {
+    conditions.push(sql`not (${BUCKET_SQL.invoices})`);
+    conditions.push(sql`not (${BUCKET_SQL.important})`);
   }
 
   return conn
@@ -175,8 +246,16 @@ export type ThreadDetail = {
     labels: string[];
     isDraft: boolean;
     extractionStatus: string;
+    extractionMeta: ExtractionMeta | null;
   }>;
   tags: ThreadTagRow[];
+};
+
+export type ExtractionMeta = {
+  summary: string;
+  intent: "info" | "request" | "fyi" | "decision" | "follow_up" | "compta" | "admin" | "other";
+  pipelineStage: "lead" | "opportunity" | "project" | "none";
+  needsReply: boolean;
 };
 
 export async function getThreadDetail(threadIdLocal: string): Promise<ThreadDetail | null> {
@@ -233,6 +312,7 @@ export async function getThreadDetail(threadIdLocal: string): Promise<ThreadDeta
       labels: m.labels,
       isDraft: m.isDraft,
       extractionStatus: m.extractionStatus,
+      extractionMeta: (m.extractionMeta as ExtractionMeta | null) ?? null,
     })),
     tags: tagRows,
   };
@@ -275,6 +355,36 @@ export async function listAllTags(
     .orderBy(asc(gmailTags.kind), asc(gmailTags.labelName));
 
   return rows;
+}
+
+/**
+ * Compte les threads par segment (important / invoices / noise) pour
+ * afficher les badges dans les onglets. Une seule requête, filtres
+ * mutuellement exclusifs (cf. BUCKET_SQL).
+ */
+export async function countBuckets(
+  userId: string,
+): Promise<{ important: number; invoices: number; noise: number; total: number }> {
+  const conn = await db();
+  const [row] = await conn
+    .select({
+      important: sql<number>`count(*) filter (
+        where not (${BUCKET_SQL.invoices}) and (${BUCKET_SQL.important})
+      )::int`,
+      invoices: sql<number>`count(*) filter (where (${BUCKET_SQL.invoices}))::int`,
+      noise: sql<number>`count(*) filter (
+        where not (${BUCKET_SQL.invoices}) and not (${BUCKET_SQL.important})
+      )::int`,
+      total: sql<number>`count(*)::int`,
+    })
+    .from(gmailThreads)
+    .where(eq(gmailThreads.userId, userId));
+  return {
+    important: row?.important ?? 0,
+    invoices: row?.invoices ?? 0,
+    noise: row?.noise ?? 0,
+    total: row?.total ?? 0,
+  };
 }
 
 export async function countThreadsForSubject(
