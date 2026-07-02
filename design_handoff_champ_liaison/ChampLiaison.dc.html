@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/colors.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/typography.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/radii.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/base.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+  body { margin:0; font-family: var(--font-sans); }
+  .cl-chip { transition: background .12s var(--ease-standard); }
+  .cl-chip:hover { background: var(--bg-hover) !important; }
+  .cl-chip .cl-x { opacity:0; transition: opacity .12s; }
+  .cl-chip:hover .cl-x { opacity:1; }
+  .cl-add { transition: background .12s, border-color .12s, color .12s; }
+  .cl-add:hover { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text-muted); }
+  .cl-menu-row { transition: background .1s; }
+  .cl-menu-row:hover { background: var(--bg-hover); }
+  .cl-peek { animation: cl-pop .12s var(--ease-standard) both; }
+  @keyframes cl-pop { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform: translateY(0); } }
+  .cl-scrim { animation: cl-fade .14s var(--ease-standard) both; }
+  @keyframes cl-fade { from { opacity:0; } to { opacity:1; } }
+  .cl-drawer { animation: cl-slide .18s var(--ease-standard) both; }
+  @keyframes cl-slide { from { transform: translateX(24px); opacity:.4; } to { transform: translateX(0); opacity:1; } }
+</style>
+</helmet>
+
+<div style="padding:20px;background:var(--bg-app);position:relative;">
+  <!-- label -->
+  <sc-if value="{{ hasLabel }}" hint-placeholder-val="{{ true }}">
+    <div>
+      <div style="display:flex;align-items:baseline;gap:8px;">
+        <div style="font:600 12px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);">{{ label }}</div>
+        <sc-if value="{{ showCount }}" hint-placeholder-val="{{ true }}"><div style="font:var(--type-caption);color:var(--text-tertiary);">{{ count }}</div></sc-if>
+      </div>
+      <div style="height:1px;background:var(--border);margin:9px 0 14px;"></div>
+    </div>
+  </sc-if>
+
+  <!-- chips -->
+  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+    <sc-for list="{{ items }}" as="it" hint-placeholder-count="4">
+      <span style="position:relative;display:inline-flex;" onMouseEnter="{{ it.onEnter }}" onMouseLeave="{{ it.onLeave }}">
+        <span class="cl-chip" onClick="{{ it.open }}" title="Ouvrir — {{ it.name }}" style="display:inline-flex;align-items:center;gap:7px;max-width:230px;padding:4px 5px;border-radius:6px;background:var(--bg-surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;font:var(--type-ui);color:var(--text);">
+          <sc-if value="{{ it.isPerson }}" hint-placeholder-val="{{ true }}">
+            <span style="width:20px;height:20px;flex:none;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;background:{{ it.avBg }};color:{{ it.avText }};">{{ it.initials }}</span>
+          </sc-if>
+          <sc-if value="{{ it.isObject }}" hint-placeholder-val="{{ false }}">
+            <i class="ph-duotone {{ it.iconClass }}" style="font-size:15px;flex:none;color:{{ it.iconColor }};"></i>
+          </sc-if>
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ it.name }}</span>
+          <sc-if value="{{ removable }}" hint-placeholder-val="{{ true }}">
+            <button class="cl-x" onClick="{{ it.remove }}" title="Retirer" style="all:unset;cursor:pointer;width:17px;height:17px;flex:none;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-tertiary);"><i class="ph-bold ph-x" style="font-size:10px;"></i></button>
+          </sc-if>
+        </span>
+
+        <!-- HOVER PEEK -->
+        <sc-if value="{{ it.isPeek }}" hint-placeholder-val="{{ false }}">
+          <div class="cl-peek" style="position:absolute;top:calc(100% + 8px);left:0;z-index:50;width:296px;background:var(--bg-app);border-radius:10px;box-shadow:var(--shadow-popover);overflow:hidden;text-align:left;cursor:default;">
+            <div style="padding:16px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);">
+              <sc-if value="{{ it.isPerson }}" hint-placeholder-val="{{ true }}"><span style="width:44px;height:44px;flex:none;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;background:{{ it.avBg }};color:{{ it.avText }};">{{ it.initials }}</span></sc-if>
+              <sc-if value="{{ it.isObject }}" hint-placeholder-val="{{ false }}"><span style="width:44px;height:44px;flex:none;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;background:{{ it.avBg }};"><i class="ph-duotone {{ it.iconClass }}" style="font-size:22px;color:{{ it.iconColor }};"></i></span></sc-if>
+              <div style="min-width:0;">
+                <div style="font:var(--weight-semibold) 16px/1.2 var(--font-sans);color:var(--text);">{{ it.name }}</div>
+                <sc-if value="{{ it.hasRole }}" hint-placeholder-val="{{ true }}"><div style="font:var(--type-ui);color:var(--text-tertiary);margin-top:2px;">{{ it.role }}</div></sc-if>
+              </div>
+            </div>
+            <div style="padding:12px 16px;display:flex;flex-direction:column;gap:9px;">
+              <sc-if value="{{ it.hasEntity }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-buildings" style="font-size:16px;color:var(--text-tertiary);"></i>{{ it.entity }}</div></sc-if>
+              <sc-if value="{{ it.hasEmail }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-envelope-simple" style="font-size:16px;color:var(--text-tertiary);"></i>{{ it.email }}</div></sc-if>
+              <sc-if value="{{ it.hasMeta }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-briefcase" style="font-size:16px;color:var(--text-tertiary);"></i>{{ it.meta }}</div></sc-if>
+            </div>
+            <div style="padding:10px 12px;border-top:1px solid var(--border);">
+              <div class="cl-menu-row" onClick="{{ it.open }}" style="display:flex;align-items:center;justify-content:center;gap:7px;padding:7px;border-radius:6px;cursor:pointer;color:var(--primary-700);font:var(--type-ui-medium);">Ouvrir la fiche<i class="ph-bold ph-arrow-right" style="font-size:13px;"></i></div>
+            </div>
+          </div>
+        </sc-if>
+      </span>
+    </sc-for>
+
+    <!-- ADD -->
+    <sc-if value="{{ addable }}" hint-placeholder-val="{{ true }}">
+      <span style="position:relative;display:inline-flex;">
+        <button class="cl-add" onClick="{{ togglePopover }}" style="all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:6px;border:1px dashed var(--border-strong);color:var(--text-tertiary);font:var(--type-ui);"><i class="ph-bold ph-plus" style="font-size:11px;"></i>{{ addLabel }}</button>
+        <sc-if value="{{ popoverOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;top:calc(100% + 8px);left:0;z-index:40;width:300px;background:var(--bg-app);border-radius:10px;box-shadow:var(--shadow-popover);overflow:hidden;text-align:left;">
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);">
+              <i class="ph-duotone ph-magnifying-glass" style="font-size:15px;color:var(--text-tertiary);"></i>
+              <span style="flex:1;font:var(--type-ui);color:var(--text-tertiary);">Rechercher…</span>
+              <span style="font:var(--type-mono);font-size:10px;color:var(--text-tertiary);border:1px solid var(--border);border-radius:4px;padding:1px 4px;">Esc</span>
+            </div>
+            <div style="padding:6px;max-height:236px;overflow:auto;">
+              <div style="padding:6px 8px 4px;font:600 11px/1 var(--font-sans);letter-spacing:0.08em;text-transform:uppercase;color:var(--text-tertiary);">Suggestions</div>
+              <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="3">
+                <div class="cl-menu-row" onClick="{{ s.add }}" style="display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:6px;cursor:pointer;">
+                  <span style="width:26px;height:26px;flex:none;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;background:{{ s.avBg }};color:{{ s.avText }};">{{ s.initials }}</span>
+                  <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
+                    <span style="font:var(--type-ui-medium);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.name }}</span>
+                    <span style="font:var(--type-caption);color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.role }}</span>
+                  </span>
+                  <i class="ph-bold ph-plus" style="font-size:12px;color:var(--text-tertiary);"></i>
+                </div>
+              </sc-for>
+            </div>
+            <div style="border-top:1px solid var(--border);">
+              <div class="cl-menu-row" style="display:flex;align-items:center;gap:9px;padding:10px 12px;cursor:pointer;color:var(--primary-700);font:var(--type-ui-medium);"><i class="ph-duotone ph-plus-circle" style="font-size:18px;color:var(--primary-500);"></i>Créer un nouvel élément</div>
+            </div>
+          </div>
+        </sc-if>
+      </span>
+    </sc-if>
+  </div>
+
+  <!-- SIDE PANEL (clic sur un jeton) -->
+  <sc-if value="{{ panelOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:1000;display:flex;justify-content:flex-end;">
+      <div class="cl-scrim" onClick="{{ closePanel }}" style="position:absolute;inset:0;background:rgba(15,15,15,.18);"></div>
+      <div class="cl-drawer" style="position:relative;width:360px;max-width:88vw;height:100%;background:var(--bg-app);border-left:1px solid var(--border);box-shadow:-8px 0 28px rgba(15,15,15,.10);display:flex;flex-direction:column;">
+        <div style="height:50px;flex:none;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;">
+          <button onClick="{{ closePanel }}" title="Fermer" style="all:unset;cursor:pointer;width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);"><i class="ph-bold ph-x" style="font-size:14px;"></i></button>
+          <span style="flex:1;font:600 12px/1 var(--font-sans);letter-spacing:0.08em;text-transform:uppercase;color:var(--text-tertiary);">{{ panel.kindLabel }}</span>
+          <i class="ph-duotone ph-arrow-square-out" style="font-size:18px;color:var(--text-muted);cursor:pointer;"></i>
+        </div>
+        <div style="flex:1;overflow:auto;padding:22px 20px;">
+          <div style="display:flex;flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:24px;">
+            <sc-if value="{{ panel.isPerson }}" hint-placeholder-val="{{ true }}"><span style="width:48px;height:48px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;background:{{ panel.avBg }};color:{{ panel.avText }};">{{ panel.initials }}</span></sc-if>
+            <sc-if value="{{ panel.isObject }}" hint-placeholder-val="{{ false }}"><span style="width:48px;height:48px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;background:{{ panel.avBg }};"><i class="ph-duotone {{ panel.iconClass }}" style="font-size:24px;color:{{ panel.iconColor }};"></i></span></sc-if>
+            <div><div style="font:var(--weight-semibold) 19px/1.2 var(--font-sans);color:var(--text);">{{ panel.name }}</div><sc-if value="{{ panel.hasRole }}" hint-placeholder-val="{{ true }}"><div style="font:var(--type-ui);color:var(--text-tertiary);margin-top:4px;">{{ panel.role }}</div></sc-if></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:18px;">
+            <sc-if value="{{ panel.hasEntity }}" hint-placeholder-val="{{ true }}"><div><div style="font:600 11px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:8px;">Entité</div><span style="display:inline-flex;align-items:center;gap:6px;font:var(--type-ui);color:var(--text);"><i class="ph-duotone ph-buildings" style="font-size:15px;color:var(--tint-blue-dot);"></i>{{ panel.entity }}</span></div></sc-if>
+            <sc-if value="{{ panel.hasEmail }}" hint-placeholder-val="{{ true }}"><div><div style="font:600 11px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:8px;">E-mail</div><span style="font:var(--type-ui);color:var(--text-muted);">{{ panel.email }}</span></div></sc-if>
+            <sc-if value="{{ panel.hasPhone }}" hint-placeholder-val="{{ false }}"><div><div style="font:600 11px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:8px;">Téléphone</div><span style="font:var(--type-ui);color:var(--text-muted);">{{ panel.phone }}</span></div></sc-if>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 480, &quot;height&quot;: 220 },
+  &quot;label&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Contacts liés&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;addLabel&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Ajouter&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;showCount&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;addable&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;removable&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;peekEnabled&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Comportement&quot; },
+  &quot;openInPanel&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Comportement&quot; },
+  &quot;items&quot;: { &quot;editor&quot;: null, &quot;tsType&quot;: &quot;LinkItem[]&quot; },
+  &quot;suggestions&quot;: { &quot;editor&quot;: null, &quot;tsType&quot;: &quot;LinkItem[]&quot; }
+}">
+class Component extends DCLogic {
+  state = { items: null, popoverOpen: false, peekId: null, openItem: null };
+
+  static DEFAULT_ITEMS = [
+    { id: "c1", name: "Amaury Barbier de la Serre", kind: "person", role: "Dirigeant", entity: "PrevandCare", email: "a.delaserre@prevandcare.com", phone: "+33 6 12 84 30 22", meta: "3 projets en cours" },
+    { id: "c2", name: "Solène Bonnardot", kind: "person", role: "Responsable contenus", entity: "PrevandCare", email: "s.bonnardot@prevandcare.com", meta: "2 projets en cours" },
+    { id: "c3", name: "Amaury Khelifi", kind: "person", role: "Lead développeur", entity: "PrevandCare", email: "a.khelifi@prevandcare.com" },
+    { id: "c4", name: "Guillaume Staub", kind: "person", role: "Designer produit", entity: "PrevandCare", email: "g.staub@prevandcare.com" },
+  ];
+  static DEFAULT_SUGGESTIONS = [
+    { id: "s1", name: "Camille Roy", role: "Directrice artistique", kind: "person", entity: "Acme Studio", email: "camille@acmestudio.fr" },
+    { id: "s2", name: "Lorenzo Benedetti", role: "Cofondateur", kind: "person", entity: "Studio Bagel" },
+    { id: "s3", name: "Maël André", role: "Chef de projet", kind: "person", entity: "Indie Location" },
+  ];
+  static KIND_LABELS = { person: "Contact", entity: "Entité", projet: "Projet", facture: "Facture", echeance: "Échéance", tag: "Tag" };
+
+  _tint(s = "") {
+    const TINTS = ["gray", "brown", "orange", "yellow", "green", "blue", "mauve", "pink", "red"];
+    let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return TINTS[h % TINTS.length];
+  }
+  _initials(name = "") {
+    const p = name.trim().split(/\s+/).filter(Boolean);
+    if (!p.length) return "?";
+    if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
+    return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+  }
+  _icon(kind) {
+    return ({ entity: "ph-buildings", projet: "ph-briefcase", facture: "ph-receipt", echeance: "ph-calendar-dot", tag: "ph-circle" })[kind] || "ph-tag";
+  }
+  _decorate(it) {
+    const t = this._tint(it.name);
+    const isPerson = (it.kind || "person") === "person";
+    return {
+      ...it,
+      isPerson, isObject: !isPerson,
+      initials: this._initials(it.name),
+      avBg: `var(--tint-${t}-bg)`, avText: `var(--tint-${t}-text)`,
+      iconClass: this._icon(it.kind), iconColor: `var(--tint-${t}-dot)`,
+      role: it.role || "", hasRole: !!it.role,
+      entity: it.entity || "", hasEntity: !!it.entity,
+      email: it.email || "", hasEmail: !!it.email,
+      phone: it.phone || "", hasPhone: !!it.phone,
+      meta: it.meta || "", hasMeta: !!it.meta,
+      kindLabel: Component.KIND_LABELS[it.kind || "person"] || "Élément",
+    };
+  }
+  getItems() { return this.state.items != null ? this.state.items : (this.props.items || Component.DEFAULT_ITEMS); }
+
+  // peek hover (with grace delay so the cursor can travel into the card)
+  _enter(id) { clearTimeout(this._hideT); if (this.props.peekEnabled ?? true) this.setState({ peekId: id }); }
+  _leave(id) { this._hideT = setTimeout(() => this.setState((s) => (s.peekId === id ? { peekId: null } : null)), 140); }
+  componentWillUnmount() { clearTimeout(this._hideT); }
+
+  renderVals() {
+    const raw = this.getItems();
+    const openInPanel = this.props.openInPanel ?? true;
+
+    const items = raw.map((it) => ({
+      ...this._decorate(it),
+      isPeek: this.state.peekId === it.id,
+      onEnter: () => this._enter(it.id),
+      onLeave: () => this._leave(it.id),
+      open: (e) => { if (e && e.stopPropagation) e.stopPropagation(); if (openInPanel) this.setState({ openItem: it, peekId: null }); },
+      remove: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState((s) => ({ items: (s.items || raw).filter((x) => x.id !== it.id) })); },
+    }));
+
+    const sugg = (this.props.suggestions || Component.DEFAULT_SUGGESTIONS)
+      .filter((s) => !raw.some((it) => it.id === s.id || it.name === s.name));
+    const suggestions = sugg.map((s) => ({
+      ...this._decorate(s),
+      add: () => this.setState((st) => ({ items: [...(st.items || raw), s], popoverOpen: false })),
+    }));
+
+    const op = this.state.openItem;
+    const panel = op ? { ...this._decorate(op) } : {};
+
+    return {
+      label: this.props.label ?? "Contacts liés",
+      hasLabel: (this.props.label ?? "Contacts liés") !== "",
+      showCount: this.props.showCount ?? true,
+      addable: this.props.addable ?? true,
+      removable: this.props.removable ?? true,
+      addLabel: this.props.addLabel ?? "Ajouter",
+      count: items.length,
+      items,
+      suggestions,
+      popoverOpen: this.state.popoverOpen,
+      togglePopover: () => this.setState((s) => ({ popoverOpen: !s.popoverOpen })),
+      panelOpen: !!op,
+      panel,
+      closePanel: () => this.setState({ openItem: null }),
+    };
+  }
+}
+</script>
+</body>
+</html>

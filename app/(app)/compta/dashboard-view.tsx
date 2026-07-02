@@ -543,7 +543,7 @@ function PendingCard({ items, total }: { items: PendingItem[]; total: number }) 
       </header>
       {items.length === 0 ? (
         <p className="border-t px-1 py-6 text-center text-muted-foreground text-sm">
-          Tout est à jour. 🎉
+          Tout est à jour.
         </p>
       ) : (
         items.map((p) => <PendingRow key={p.invoiceId} item={p} />)

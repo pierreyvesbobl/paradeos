@@ -26,6 +26,7 @@ import {
   PencilSimple,
   PlusCircle,
   User,
+  Warning,
   X,
 } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -1015,10 +1016,14 @@ function CrossKindBanner({
     const conf = payload.relatedOpportunityConfidence as number | null | undefined;
     if (!oppTitle) return null;
     return (
-      <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-800 text-xs dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
-        ⚠️ Une opportunité similaire existe déjà : <strong>« {oppTitle} »</strong>
-        {conf != null ? ` (${Math.round(conf * 100)}%)` : ""}. Vérifie qu'on ne crée pas un doublon
-        — si l'opp est gagnée, convertis-la depuis sa fiche plutôt que de créer un projet ici.
+      <p className="flex items-start gap-1.5 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-800 text-xs dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+        <Warning weight="duotone" className="mt-0.5 size-3.5 flex-none" />
+        <span>
+          Une opportunité similaire existe déjà : <strong>« {oppTitle} »</strong>
+          {conf != null ? ` (${Math.round(conf * 100)}%)` : ""}. Vérifie qu'on ne crée pas un
+          doublon — si l'opp est gagnée, convertis-la depuis sa fiche plutôt que de créer un projet
+          ici.
+        </span>
       </p>
     );
   }
@@ -1027,10 +1032,13 @@ function CrossKindBanner({
     const conf = payload.relatedProjectConfidence as number | null | undefined;
     if (!projName) return null;
     return (
-      <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-800 text-xs dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
-        ⚠️ Un projet similaire existe déjà : <strong>« {projName} »</strong>
-        {conf != null ? ` (${Math.round(conf * 100)}%)` : ""}. Probable doublon — cette affaire est
-        peut-être déjà engagée comme projet.
+      <p className="flex items-start gap-1.5 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-800 text-xs dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+        <Warning weight="duotone" className="mt-0.5 size-3.5 flex-none" />
+        <span>
+          Un projet similaire existe déjà : <strong>« {projName} »</strong>
+          {conf != null ? ` (${Math.round(conf * 100)}%)` : ""}. Probable doublon — cette affaire
+          est peut-être déjà engagée comme projet.
+        </span>
       </p>
     );
   }

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/colors.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/typography.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/radii.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/base.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+  body { margin:0; font-family: var(--font-sans); }
+  .rel-chip { transition: background .12s var(--ease-standard), box-shadow .12s var(--ease-standard); }
+  .rel-chip:hover { background: var(--bg-hover) !important; }
+  .rel-chip .chip-x { opacity:0; transition: opacity .12s; }
+  .rel-chip:hover .chip-x { opacity:1; }
+  .add-btn { transition: background .12s, border-color .12s, color .12s; }
+  .add-btn:hover { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text-muted); }
+  .ent-value .ent-apercu { opacity:0; transform: translateX(-3px); transition: opacity .12s, transform .12s; }
+  .ent-value:hover .ent-apercu { opacity:1; transform: translateX(0); }
+  .menu-row { transition: background .1s; }
+  .menu-row:hover { background: var(--bg-hover); }
+  .rel-row { transition: background .12s; }
+  .rel-row:hover { background: var(--bg-hover); }
+  .rel-row .row-arrow { opacity:0; transition: opacity .12s; }
+  .rel-row:hover .row-arrow { opacity:1; }
+  .rcard { transition: box-shadow .12s, background .12s; }
+  .rcard:hover { background: var(--bg-hover); box-shadow: var(--shadow-sm); }
+  .nav-item { transition: background .1s; }
+  .nav-item:hover { background: var(--bg-hover); }
+</style>
+</helmet>
+
+<!-- ===================== INTRO ===================== -->
+<div style="position:absolute;left:80px;top:52px;width:900px;">
+  <div data-drags-parent="1" style="cursor:grab;">
+    <div style="font:600 12px/1.4 var(--font-sans);letter-spacing:0.12em;text-transform:uppercase;color:#9b9890;margin-bottom:8px;">Parade OS — Pattern</div>
+    <div style="font:var(--weight-semibold) 30px/1.15 var(--font-brand);color:#37352f;margin-bottom:10px;">Champ de liaison réutilisable</div>
+    <div style="font:var(--type-body);color:#605c54;max-width:760px;">Un même mécanisme pour relier une fiche à n'importe quel objet — contact, entité, projet, facture, échéance. Saisie directe depuis la page, jeton cliquable qui ouvre la fiche liée, applicable partout dans l'app.</div>
+  </div>
+</div>
+
+<!-- ===================== HERO — FICHE ENTITÉ ===================== -->
+<div style="position:absolute;left:80px;top:256px;width:1200px;">
+  <div data-drags-parent="1" style="font:600 12px/1.4 var(--font-sans);letter-spacing:0.06em;text-transform:uppercase;color:#8a8780;margin-bottom:10px;cursor:grab;">En contexte — Fiche entité</div>
+  <div data-screen-label="Fiche entité" style="background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.09);overflow:hidden;display:flex;align-items:stretch;height:712px;">
+
+    <!-- sidebar -->
+    <div style="width:218px;flex:none;background:var(--bg-sidebar);border-right:1px solid var(--border);padding:12px 10px;display:flex;flex-direction:column;gap:2px;">
+      <div style="display:flex;align-items:center;gap:9px;padding:6px 8px 14px;">
+        <span style="width:26px;height:26px;border-radius:7px;background:var(--primary-500);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-brand);font-weight:700;font-size:15px;">P</span>
+        <span style="font-family:var(--font-brand);font-weight:600;font-size:18px;color:var(--text);">Parade</span>
+      </div>
+      <div class="nav-item" style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-house" style="font-size:18px;color:var(--text-tertiary);"></i>Dashboard</div>
+      <div class="nav-item" style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-briefcase" style="font-size:18px;color:var(--text-tertiary);"></i>Projets</div>
+      <div class="nav-item" style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-funnel" style="font-size:18px;color:var(--text-tertiary);"></i>Pipeline</div>
+      <div style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;background:var(--primary-50);color:var(--primary-900);font:var(--type-ui-medium);"><i class="ph-duotone ph-users" style="font-size:18px;color:var(--primary-700);"></i>CRM</div>
+      <div class="nav-item" style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-calculator" style="font-size:18px;color:var(--text-tertiary);"></i>Compta</div>
+      <div class="nav-item" style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-clock" style="font-size:18px;color:var(--text-tertiary);"></i>Time tracking</div>
+    </div>
+
+    <!-- main -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+      <!-- topbar -->
+      <div style="height:50px;flex:none;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 22px;">
+        <span style="font:var(--type-ui);color:var(--text-tertiary);">CRM</span>
+        <i class="ph-bold ph-caret-right" style="font-size:11px;color:var(--text-tertiary);"></i>
+        <span style="font:var(--type-ui);color:var(--text-tertiary);">Entités</span>
+        <i class="ph-bold ph-caret-right" style="font-size:11px;color:var(--text-tertiary);"></i>
+        <span style="font:var(--type-ui-medium);color:var(--text);">PrevandCare</span>
+        <span style="flex:1;"></span>
+        <span class="nav-item" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-share-network" style="font-size:16px;"></i>Partager</span>
+        <i class="ph-duotone ph-dots-three" style="font-size:20px;color:var(--text-muted);"></i>
+      </div>
+
+      <!-- scroll content -->
+      <div style="flex:1;overflow:auto;padding:30px 56px 40px;">
+        <div style="max-width:600px;">
+          <!-- entity header -->
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:30px;">
+            <span style="width:52px;height:52px;flex:none;border-radius:12px;background:var(--tint-blue-bg);color:var(--tint-blue-text);display:inline-flex;align-items:center;justify-content:center;"><i class="ph-duotone ph-buildings" style="font-size:26px;"></i></span>
+            <div style="min-width:0;">
+              <h1 style="font:var(--weight-semibold) 28px/1.15 var(--font-sans);color:var(--text);margin:0 0 5px;">PrevandCare</h1>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="display:inline-flex;align-items:center;gap:5px;flex:none;white-space:nowrap;padding:2px 8px;border-radius:6px;background:var(--tint-green-bg);color:var(--tint-green-text);font:var(--type-caption);font-weight:500;"><span style="width:6px;height:6px;border-radius:999px;background:var(--tint-green-dot);"></span>Client actif</span>
+                <span style="font:var(--type-ui);color:var(--text-tertiary);">Entité · Santé</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- properties -->
+          <div style="display:flex;flex-direction:column;gap:26px;">
+
+            <!-- FIELD: groupe (single entity, with Aperçu) -->
+            <div>
+              <div style="font:600 12px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);">Groupe</div>
+              <div style="height:1px;background:var(--border);margin:9px 0 14px;"></div>
+              <span class="ent-value" title="Ouvrir la fiche — Webedia" style="display:inline-flex;align-items:center;gap:9px;cursor:pointer;font:var(--text-lg)/1 var(--font-sans);color:var(--text);">
+                <i class="ph-duotone ph-buildings" style="font-size:19px;color:var(--tint-mauve-dot);"></i>
+                <span style="font-weight:500;">Webedia</span>
+                <span class="ent-apercu" style="display:inline-flex;align-items:center;gap:4px;margin-left:2px;color:var(--text-tertiary);font:var(--type-ui);"><i class="ph-duotone ph-eye" style="font-size:16px;"></i>Aperçu</span>
+              </span>
+            </div>
+
+            <!-- FIELD: responsable (single person, with Aperçu) -->
+            <div>
+              <div style="font:600 12px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);">Responsable</div>
+              <div style="height:1px;background:var(--border);margin:9px 0 14px;"></div>
+              <span class="ent-value" title="Ouvrir la fiche — Pierre-Yves Sage" style="display:inline-flex;align-items:center;gap:9px;cursor:pointer;font:var(--text-lg)/1 var(--font-sans);color:var(--text);">
+                <span style="width:24px;height:24px;flex:none;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;background:var(--tint-orange-bg);color:var(--tint-orange-text);">PS</span>
+                <span style="font-weight:500;">Pierre-Yves Sage</span>
+                <span class="ent-apercu" style="display:inline-flex;align-items:center;gap:4px;margin-left:2px;color:var(--text-tertiary);font:var(--type-ui);"><i class="ph-duotone ph-eye" style="font-size:16px;"></i>Aperçu</span>
+              </span>
+            </div>
+
+            <!-- FIELD: contacts liés (multi) — LIVE add/remove -->
+            <div>
+              <div style="display:flex;align-items:baseline;gap:8px;">
+                <div style="font:600 12px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);">Contacts liés</div>
+                <div style="font:var(--type-caption);color:var(--text-tertiary);">{{ contactCount }}</div>
+              </div>
+              <div style="height:1px;background:var(--border);margin:9px 0 14px;"></div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                <sc-for list="{{ contacts }}" as="c" hint-placeholder-count="4">
+                  <span class="rel-chip" title="Ouvrir la fiche — {{ c.name }}" style="display:inline-flex;align-items:center;gap:7px;max-width:230px;padding:4px 5px 4px 5px;border-radius:6px;background:var(--bg-surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;font:var(--type-ui);color:var(--text);">
+                    <span style="width:20px;height:20px;flex:none;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;background:{{ c.avBg }};color:{{ c.avText }};">{{ c.initials }}</span>
+                    <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.name }}</span>
+                    <button class="chip-x" onClick="{{ c.remove }}" title="Retirer" style="all:unset;cursor:pointer;width:17px;height:17px;flex:none;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-tertiary);"><i class="ph-bold ph-x" style="font-size:10px;"></i></button>
+                  </span>
+                </sc-for>
+                <span style="position:relative;display:inline-flex;">
+                  <button class="add-btn" onClick="{{ togglePopover }}" style="all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:6px;border:1px dashed var(--border-strong);color:var(--text-tertiary);font:var(--type-ui);">
+                    <i class="ph-bold ph-plus" style="font-size:11px;"></i>Ajouter
+                  </button>
+                  <sc-if value="{{ popoverOpen }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute;top:calc(100% + 8px);left:0;z-index:40;width:300px;background:var(--bg-app);border-radius:10px;box-shadow:var(--shadow-popover);overflow:hidden;text-align:left;">
+                      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);">
+                        <i class="ph-duotone ph-magnifying-glass" style="font-size:15px;color:var(--text-tertiary);"></i>
+                        <span style="flex:1;font:var(--type-ui);color:var(--text-tertiary);">Rechercher un contact…</span>
+                        <span style="font:var(--type-mono);font-size:10px;color:var(--text-tertiary);border:1px solid var(--border);border-radius:4px;padding:1px 4px;">Esc</span>
+                      </div>
+                      <div style="padding:6px;max-height:236px;overflow:auto;">
+                        <div style="padding:6px 8px 4px;font:600 11px/1 var(--font-sans);letter-spacing:0.08em;text-transform:uppercase;color:var(--text-tertiary);">Suggestions</div>
+                        <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="4">
+                          <div class="menu-row" onClick="{{ s.add }}" style="display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:6px;cursor:pointer;">
+                            <span style="width:26px;height:26px;flex:none;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;background:{{ s.avBg }};color:{{ s.avText }};">{{ s.initials }}</span>
+                            <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
+                              <span style="font:var(--type-ui-medium);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.name }}</span>
+                              <span style="font:var(--type-caption);color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.role }}</span>
+                            </span>
+                            <i class="ph-bold ph-plus" style="font-size:12px;color:var(--text-tertiary);"></i>
+                          </div>
+                        </sc-for>
+                      </div>
+                      <div style="border-top:1px solid var(--border);">
+                        <div class="menu-row" style="display:flex;align-items:center;gap:9px;padding:10px 12px;cursor:pointer;color:var(--primary-700);font:var(--type-ui-medium);">
+                          <i class="ph-duotone ph-plus-circle" style="font-size:18px;color:var(--primary-500);"></i>Créer un nouveau contact
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                </span>
+              </div>
+            </div>
+
+            <!-- FIELD: projets (multi, non-person) -->
+            <div>
+              <div style="font:600 12px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);">Projets</div>
+              <div style="height:1px;background:var(--border);margin:9px 0 14px;"></div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                <span class="rel-chip" title="Ouvrir le projet" style="display:inline-flex;align-items:center;gap:7px;padding:4px 9px;border-radius:6px;background:var(--bg-surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;font:var(--type-ui);color:var(--text);"><i class="ph-duotone ph-briefcase" style="font-size:15px;color:var(--tint-orange-dot);"></i>Refonte de marque<button class="chip-x" style="all:unset;cursor:pointer;width:17px;height:17px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-tertiary);"><i class="ph-bold ph-x" style="font-size:10px;"></i></button></span>
+                <span class="rel-chip" title="Ouvrir le projet" style="display:inline-flex;align-items:center;gap:7px;padding:4px 9px;border-radius:6px;background:var(--bg-surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;font:var(--type-ui);color:var(--text);"><i class="ph-duotone ph-briefcase" style="font-size:15px;color:var(--tint-green-dot);"></i>Site PrevandCare<button class="chip-x" style="all:unset;cursor:pointer;width:17px;height:17px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-tertiary);"><i class="ph-bold ph-x" style="font-size:10px;"></i></button></span>
+                <button class="add-btn" style="all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:6px;border:1px dashed var(--border-strong);color:var(--text-tertiary);font:var(--type-ui);"><i class="ph-bold ph-plus" style="font-size:11px;"></i>Ajouter</button>
+              </div>
+            </div>
+
+            <!-- FIELD: factures + échéances (two columns) -->
+            <div style="display:flex;gap:40px;">
+              <div style="flex:1;min-width:0;">
+                <div style="font:600 12px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);">Factures</div>
+                <div style="height:1px;background:var(--border);margin:9px 0 14px;"></div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                  <span class="rel-chip" title="Ouvrir la facture" style="display:inline-flex;align-items:center;gap:7px;padding:4px 9px;border-radius:6px;background:var(--bg-surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;color:var(--text);"><i class="ph-duotone ph-receipt" style="font-size:15px;color:var(--tint-blue-dot);"></i><span style="font:var(--type-mono);">FAC-2026-014</span></span>
+                  <button class="add-btn" style="all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:6px;border:1px dashed var(--border-strong);color:var(--text-tertiary);font:var(--type-ui);"><i class="ph-bold ph-plus" style="font-size:11px;"></i>Ajouter</button>
+                </div>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font:600 12px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);">Échéance</div>
+                <div style="height:1px;background:var(--border);margin:9px 0 14px;"></div>
+                <span class="rel-chip" title="Ouvrir l'échéance" style="display:inline-flex;align-items:center;gap:7px;padding:4px 9px;border-radius:6px;background:var(--bg-surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;font:var(--type-ui);color:var(--text);"><i class="ph-duotone ph-calendar-dot" style="font-size:15px;color:var(--tint-red-dot);"></i>Livraison V1 · 12 juil.</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== VARIANTS ROW ===================== -->
+<!-- Variant A -->
+<div style="position:absolute;left:80px;top:1040px;width:386px;">
+  <div data-drags-parent="1" style="font:600 12px/1.4 var(--font-sans);letter-spacing:0.06em;text-transform:uppercase;color:#8a8780;margin-bottom:10px;cursor:grab;">Variante A · Jetons compacts <span style="color:var(--primary-700);">— recommandé</span></div>
+  <div style="background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.09);padding:24px;">
+    <div style="font:600 12px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);">Contacts liés</div>
+    <div style="height:1px;background:var(--border);margin:9px 0 14px;"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+      <sc-for list="{{ contacts }}" as="c" hint-placeholder-count="4">
+        <span class="rel-chip" style="display:inline-flex;align-items:center;gap:7px;max-width:210px;padding:4px 5px;border-radius:6px;background:var(--bg-surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;font:var(--type-ui);color:var(--text);">
+          <span style="width:20px;height:20px;flex:none;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;background:{{ c.avBg }};color:{{ c.avText }};">{{ c.initials }}</span>
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.name }}</span>
+          <span class="chip-x" style="width:17px;height:17px;flex:none;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-tertiary);"><i class="ph-bold ph-x" style="font-size:10px;"></i></span>
+        </span>
+      </sc-for>
+      <span class="add-btn" style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:6px;border:1px dashed var(--border-strong);color:var(--text-tertiary);font:var(--type-ui);cursor:pointer;"><i class="ph-bold ph-plus" style="font-size:11px;"></i>Ajouter</span>
+    </div>
+    <div style="margin-top:18px;font:var(--type-caption);color:var(--text-tertiary);line-height:1.5;">Avatar + nom, retrait au survol. Dense, s'enroule sur plusieurs lignes — idéal quand il y a beaucoup de valeurs.</div>
+  </div>
+</div>
+
+<!-- Variant B -->
+<div style="position:absolute;left:506px;top:1040px;width:386px;">
+  <div data-drags-parent="1" style="font:600 12px/1.4 var(--font-sans);letter-spacing:0.06em;text-transform:uppercase;color:#8a8780;margin-bottom:10px;cursor:grab;">Variante B · Lignes de mention</div>
+  <div style="background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.09);padding:24px;">
+    <div style="font:600 12px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);">Contacts liés</div>
+    <div style="height:1px;background:var(--border);margin:9px 0 8px;"></div>
+    <div style="display:flex;flex-direction:column;">
+      <sc-for list="{{ contacts }}" as="c" hint-placeholder-count="4">
+        <div class="rel-row" style="display:flex;align-items:center;gap:11px;padding:8px;border-radius:7px;cursor:pointer;">
+          <span style="width:30px;height:30px;flex:none;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;background:{{ c.avBg }};color:{{ c.avText }};">{{ c.initials }}</span>
+          <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
+            <span style="font:var(--type-ui-medium);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.name }}</span>
+            <span style="font:var(--type-caption);color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.role }}</span>
+          </span>
+          <i class="row-arrow ph-bold ph-arrow-up-right" style="font-size:13px;color:var(--text-tertiary);flex:none;"></i>
+          <span class="chip-x" style="width:18px;height:18px;flex:none;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-tertiary);"><i class="ph-bold ph-x" style="font-size:11px;"></i></span>
+        </div>
+      </sc-for>
+    </div>
+    <div class="add-btn" style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 10px;border-radius:6px;color:var(--text-tertiary);font:var(--type-ui);cursor:pointer;"><i class="ph-bold ph-plus" style="font-size:11px;"></i>Ajouter un contact</div>
+    <div style="margin-top:16px;font:var(--type-caption);color:var(--text-tertiary);line-height:1.5;">Une valeur par ligne, avec son rôle. Grandes cibles, plus lisible — idéal pour peu de valeurs porteuses de contexte.</div>
+  </div>
+</div>
+
+<!-- Variant C -->
+<div style="position:absolute;left:932px;top:1040px;width:386px;">
+  <div data-drags-parent="1" style="font:600 12px/1.4 var(--font-sans);letter-spacing:0.06em;text-transform:uppercase;color:#8a8780;margin-bottom:10px;cursor:grab;">Variante C · Cartes mention</div>
+  <div style="background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.09);padding:24px;">
+    <div style="font:600 12px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);">Contacts liés</div>
+    <div style="height:1px;background:var(--border);margin:9px 0 14px;"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <sc-for list="{{ contacts }}" as="c" hint-placeholder-count="4">
+        <div class="rcard" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;background:var(--bg-surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;">
+          <span style="position:relative;flex:none;"><span style="width:32px;height:32px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;background:{{ c.avBg }};color:{{ c.avText }};">{{ c.initials }}</span><span style="position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border-radius:999px;background:{{ c.dot }};box-shadow:0 0 0 2px var(--bg-surface);"></span></span>
+          <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
+            <span style="font:var(--type-ui-medium);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.name }}</span>
+            <span style="font:var(--type-caption);color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.role }}</span>
+          </span>
+          <i class="ph-duotone ph-eye" style="font-size:16px;color:var(--text-tertiary);flex:none;"></i>
+        </div>
+      </sc-for>
+    </div>
+    <div class="add-btn" style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px;padding:9px;border-radius:8px;border:1px dashed var(--border-strong);color:var(--text-tertiary);font:var(--type-ui);cursor:pointer;"><i class="ph-bold ph-plus" style="font-size:11px;"></i>Ajouter un contact</div>
+    <div style="margin-top:16px;font:var(--type-caption);color:var(--text-tertiary);line-height:1.5;">Carte avec pastille catégorielle + bouton aperçu. Plus riche visuellement — pour des listes courtes mises en avant.</div>
+  </div>
+</div>
+
+<!-- ===================== INTERACTIONS ROW ===================== -->
+<!-- Add popover -->
+<div style="position:absolute;left:80px;top:1600px;width:386px;">
+  <div data-drags-parent="1" style="font:600 12px/1.4 var(--font-sans);letter-spacing:0.06em;text-transform:uppercase;color:#8a8780;margin-bottom:10px;cursor:grab;">1 · Ajout — popover de sélection</div>
+  <div style="background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.09);padding:28px 24px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+      <span class="add-btn" style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:6px;border:1px dashed var(--border-strong);color:var(--text-muted);font:var(--type-ui);background:var(--bg-hover);"><i class="ph-bold ph-plus" style="font-size:11px;"></i>Ajouter</span>
+      <i class="ph-bold ph-arrow-down" style="font-size:13px;color:var(--text-tertiary);"></i>
+    </div>
+    <div style="width:300px;background:var(--bg-app);border-radius:10px;box-shadow:var(--shadow-popover);overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);">
+        <i class="ph-duotone ph-magnifying-glass" style="font-size:15px;color:var(--primary-500);"></i>
+        <span style="flex:1;font:var(--type-ui);color:var(--text);">Sol</span>
+        <span style="width:1px;height:14px;background:var(--primary-500);"></span>
+      </div>
+      <div style="padding:6px;">
+        <div style="padding:6px 8px 4px;font:600 11px/1 var(--font-sans);letter-spacing:0.08em;text-transform:uppercase;color:var(--text-tertiary);">Résultats</div>
+        <div class="menu-row" style="display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:6px;cursor:pointer;background:var(--bg-hover);">
+          <span style="width:26px;height:26px;flex:none;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;background:var(--tint-pink-bg);color:var(--tint-pink-text);">SB</span>
+          <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;"><span style="font:var(--type-ui-medium);color:var(--text);">Solène Bonnardot</span><span style="font:var(--type-caption);color:var(--text-tertiary);">Responsable contenus</span></span>
+          <i class="ph-bold ph-arrow-elbow-down-left" style="font-size:12px;color:var(--text-tertiary);"></i>
+        </div>
+        <div class="menu-row" style="display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:6px;cursor:pointer;">
+          <span style="width:26px;height:26px;flex:none;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;background:var(--tint-green-bg);color:var(--tint-green-text);">SL</span>
+          <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;"><span style="font:var(--type-ui-medium);color:var(--text);">Soline Lefebvre</span><span style="font:var(--type-caption);color:var(--text-tertiary);">Acme Studio</span></span>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);">
+        <div class="menu-row" style="display:flex;align-items:center;gap:9px;padding:10px 12px;cursor:pointer;color:var(--primary-700);font:var(--type-ui-medium);"><i class="ph-duotone ph-plus-circle" style="font-size:18px;color:var(--primary-500);"></i>Créer « Sol »</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;font:var(--type-caption);color:var(--text-tertiary);line-height:1.5;">Recherche instantanée + création à la volée. Clavier : ↑↓ pour naviguer, ⏎ pour lier, Échap pour fermer.</div>
+  </div>
+</div>
+
+<!-- Peek card -->
+<div style="position:absolute;left:506px;top:1600px;width:386px;">
+  <div data-drags-parent="1" style="font:600 12px/1.4 var(--font-sans);letter-spacing:0.06em;text-transform:uppercase;color:#8a8780;margin-bottom:10px;cursor:grab;">2 · Survol — carte d'aperçu</div>
+  <div style="background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.09);padding:28px 24px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+      <span class="rel-chip" style="display:inline-flex;align-items:center;gap:7px;padding:4px 9px 4px 5px;border-radius:6px;background:var(--bg-hover);box-shadow:0 0 0 1px var(--border);font:var(--type-ui);color:var(--text);"><span style="width:20px;height:20px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;background:var(--tint-pink-bg);color:var(--tint-pink-text);">SB</span>Solène Bonnardot</span>
+      <i class="ph-bold ph-arrow-down" style="font-size:13px;color:var(--text-tertiary);"></i>
+    </div>
+    <div style="width:296px;background:var(--bg-app);border-radius:10px;box-shadow:var(--shadow-popover);overflow:hidden;">
+      <div style="padding:16px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);">
+        <span style="width:44px;height:44px;flex:none;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;background:var(--tint-pink-bg);color:var(--tint-pink-text);">SB</span>
+        <div style="min-width:0;"><div style="font:var(--weight-semibold) 16px/1.2 var(--font-sans);color:var(--text);">Solène Bonnardot</div><div style="font:var(--type-ui);color:var(--text-tertiary);margin-top:2px;">Responsable contenus</div></div>
+      </div>
+      <div style="padding:12px 16px;display:flex;flex-direction:column;gap:9px;">
+        <div style="display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-buildings" style="font-size:16px;color:var(--text-tertiary);"></i>PrevandCare</div>
+        <div style="display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-envelope-simple" style="font-size:16px;color:var(--text-tertiary);"></i>s.bonnardot@prevandcare.com</div>
+        <div style="display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-briefcase" style="font-size:16px;color:var(--text-tertiary);"></i>2 projets en cours</div>
+      </div>
+      <div style="padding:10px 12px;border-top:1px solid var(--border);">
+        <div class="menu-row" style="display:flex;align-items:center;justify-content:center;gap:7px;padding:7px;border-radius:6px;cursor:pointer;color:var(--primary-700);font:var(--type-ui-medium);">Ouvrir la fiche<i class="ph-bold ph-arrow-right" style="font-size:13px;"></i></div>
+      </div>
+    </div>
+    <div style="margin-top:16px;font:var(--type-caption);color:var(--text-tertiary);line-height:1.5;">Aperçu non destructif sans quitter la page. Le « Aperçu » œil de la maquette ouvre cette carte.</div>
+  </div>
+</div>
+
+<!-- Side panel -->
+<div style="position:absolute;left:932px;top:1600px;width:386px;">
+  <div data-drags-parent="1" style="font:600 12px/1.4 var(--font-sans);letter-spacing:0.06em;text-transform:uppercase;color:#8a8780;margin-bottom:10px;cursor:grab;">3 · Clic — fiche en panneau latéral</div>
+  <div style="background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.09);overflow:hidden;height:440px;display:flex;">
+    <div style="flex:1;background:var(--bg-sidebar);"></div>
+    <div style="width:268px;flex:none;background:var(--bg-app);border-left:1px solid var(--border);box-shadow:-8px 0 24px rgba(15,15,15,.06);display:flex;flex-direction:column;">
+      <div style="height:46px;flex:none;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 14px;">
+        <i class="ph-bold ph-x" style="font-size:14px;color:var(--text-muted);"></i>
+        <span style="flex:1;font:var(--type-caption);color:var(--text-tertiary);">Contact</span>
+        <i class="ph-duotone ph-arrow-square-out" style="font-size:16px;color:var(--text-muted);"></i>
+      </div>
+      <div style="padding:18px 16px;overflow:auto;">
+        <div style="display:flex;flex-direction:column;align-items:flex-start;gap:10px;margin-bottom:18px;">
+          <span style="width:40px;height:40px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;background:var(--tint-blue-bg);color:var(--tint-blue-text);">AB</span>
+          <div><div style="font:var(--weight-semibold) 17px/1.2 var(--font-sans);color:var(--text);">Amaury Barbier de la Serre</div><div style="font:var(--type-ui);color:var(--text-tertiary);margin-top:3px;">Dirigeant</div></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div><div style="font:600 11px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:7px;">Entité</div><span style="display:inline-flex;align-items:center;gap:6px;font:var(--type-ui);color:var(--text);"><i class="ph-duotone ph-buildings" style="font-size:15px;color:var(--tint-blue-dot);"></i>PrevandCare</span></div>
+          <div><div style="font:600 11px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:7px;">E-mail</div><span style="font:var(--type-ui);color:var(--text-muted);">a.delaserre@prevandcare.com</span></div>
+          <div><div style="font:600 11px/1 var(--font-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:7px;">Téléphone</div><span style="font:var(--type-ui);color:var(--text-muted);">+33 6 12 84 30 22</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    contacts: ["Amaury Barbier de la Serre", "Solène Bonnardot", "Amaury Khelifi", "Guillaume Staub"],
+    popoverOpen: false,
+  };
+
+  renderVals() {
+    const TINTS = ["gray", "brown", "orange", "yellow", "green", "blue", "mauve", "pink", "red"];
+    const hash = (s = "") => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
+    const tintFor = (s) => TINTS[hash(s) % TINTS.length];
+    const initials = (name = "") => {
+      const p = name.trim().split(/\s+/).filter(Boolean);
+      if (!p.length) return "?";
+      if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
+      return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+    };
+    const ROLES = {
+      "Amaury Barbier de la Serre": "Dirigeant",
+      "Solène Bonnardot": "Responsable contenus",
+      "Amaury Khelifi": "Lead développeur",
+      "Guillaume Staub": "Designer produit",
+      "Camille Roy": "Directrice artistique",
+      "Lorenzo Benedetti": "Cofondateur",
+      "Maël André": "Chef de projet",
+      "Pierre-Yves Sage": "Fondateur",
+    };
+    const decorate = (name) => {
+      const t = tintFor(name);
+      return {
+        name, role: ROLES[name] || "", initials: initials(name),
+        avBg: `var(--tint-${t}-bg)`, avText: `var(--tint-${t}-text)`, dot: `var(--tint-${t}-dot)`,
+      };
+    };
+
+    const contacts = this.state.contacts.map((name) => ({
+      ...decorate(name),
+      remove: () => this.setState((s) => ({ contacts: s.contacts.filter((n) => n !== name) })),
+    }));
+
+    const pool = ["Camille Roy", "Lorenzo Benedetti", "Maël André", "Pierre-Yves Sage"]
+      .filter((n) => !this.state.contacts.includes(n));
+    const suggestions = pool.map((name) => ({
+      ...decorate(name),
+      add: () => this.setState((s) => ({ contacts: [...s.contacts, name], popoverOpen: false })),
+    }));
+
+    return {
+      contacts,
+      contactCount: contacts.length,
+      suggestions,
+      popoverOpen: this.state.popoverOpen,
+      togglePopover: () => this.setState((s) => ({ popoverOpen: !s.popoverOpen })),
+    };
+  }
+}
+</script>
+</body>
+</html>

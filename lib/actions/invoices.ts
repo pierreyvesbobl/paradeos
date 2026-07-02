@@ -18,9 +18,33 @@ import {
   pickDougsVat,
 } from "@/lib/dougs/client";
 import { monthsBetween } from "@/lib/schemas/coworking";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
+
+/** Renvoie YYYY-MM-DD = base + days (UTC, suffisant pour une date). */
+function addDaysISO(base: Date, days: number): string {
+  const d = new Date(base.getTime() + days * 86_400_000);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Délai par défaut (30j) appliqué quand une facture passe à 'sent' sans due_date. */
+const DEFAULT_DUE_DAYS = 30;
+
+/** Récupère l'owner du projet pour préremplir `assigned_to`. Null si pas
+ *  de projet ou owner non défini. */
+async function resolveProjectOwner(
+  conn: Awaited<ReturnType<typeof db>>,
+  projectId: string | null | undefined,
+): Promise<string | null> {
+  if (!projectId) return null;
+  const [row] = await conn
+    .select({ ownerId: projects.ownerId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+  return row?.ownerId ?? null;
+}
 
 function toNumeric(n: number | null | undefined): string | null {
   return typeof n === "number" && Number.isFinite(n) ? n.toFixed(2) : null;
@@ -88,6 +112,14 @@ const upsertInvoiceSchema = z.object({
   unitPriceHt: z.number().nonnegative().nullable().optional(),
   billedBy: z.enum(["parade", "g_and_o"]).nullable().optional(),
   notes: z.string().trim().nullable().optional(),
+  /** Échéance au format YYYY-MM-DD. Si non fournie et que status passe à
+   *  'sent' alors qu'aucune due_date n'existe encore, on calcule
+   *  invoiced_at (ou now) + 30j. */
+  dueDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
 });
 
 /**
@@ -96,6 +128,45 @@ const upsertInvoiceSchema = z.object({
  */
 export const upsertInvoice = action(upsertInvoiceSchema, async ({ input, user }) => {
   const conn = await db();
+
+  // Pour résoudre la due_date par défaut au passage à 'sent', on a besoin
+  // de l'état actuel (invoicedAt + dueDate déjà set ?). Lecture une fois,
+  // pas de race significative : un upsert n'est pas concurrent sur la
+  // même ligne en pratique.
+  let existing: {
+    invoicedAt: Date | null;
+    dueDate: string | null;
+    assignedTo: string | null;
+  } | null = null;
+  if (input.id) {
+    const [row] = await conn
+      .select({
+        invoicedAt: invoices.invoicedAt,
+        dueDate: invoices.dueDate,
+        assignedTo: invoices.assignedTo,
+      })
+      .from(invoices)
+      .where(eq(invoices.id, input.id))
+      .limit(1);
+    existing = row ?? null;
+  }
+
+  // Assignee : on garde existant si déjà posé. Sinon, on tente de
+  // récupérer le owner du projet (lead). Pour le coworking sans projet,
+  // reste null jusqu'à assignation manuelle.
+  const nextAssignedTo =
+    existing?.assignedTo ?? (await resolveProjectOwner(conn, input.projectId ?? null));
+
+  // Calcul due_date : si l'appelant en fournit une, elle l'emporte
+  // (y compris null explicite). Sinon, on garde l'existante. Sinon, on
+  // génère une valeur uniquement quand status='sent' (point d'émission).
+  const explicitDue = input.dueDate !== undefined;
+  const fallbackBase = existing?.invoicedAt ?? new Date();
+  const nextDueDate = explicitDue
+    ? input.dueDate
+    : (existing?.dueDate ??
+      (input.status === "sent" ? addDaysISO(fallbackBase, DEFAULT_DUE_DAYS) : null));
+
   const baseValues = {
     kind: input.kind,
     projectId: input.projectId ?? null,
@@ -114,6 +185,8 @@ export const upsertInvoice = action(upsertInvoiceSchema, async ({ input, user })
     unitPriceHt: toNumeric(input.unitPriceHt ?? null),
     billedBy: input.billedBy ?? null,
     notes: input.notes ?? null,
+    dueDate: nextDueDate,
+    assignedTo: nextAssignedTo,
     updatedAt: new Date(),
   };
 
@@ -167,6 +240,8 @@ export const setInvoiceStatus = action(
       .select({
         invoicedAt: invoices.invoicedAt,
         paidAt: invoices.paidAt,
+        dueDate: invoices.dueDate,
+        assignedTo: invoices.assignedTo,
         projectId: invoices.projectId,
         coworkingContractId: invoices.coworkingContractId,
       })
@@ -182,14 +257,144 @@ export const setInvoiceStatus = action(
         : input.status === "draft"
           ? null
           : existing.paidAt;
+    // Au passage à 'sent' sans due_date, on initialise à invoiced_at + 30j
+    // (cohérent avec upsertInvoice). On ne touche pas la due_date si déjà
+    // posée, ni si on retombe à draft (la date reste, ce qui évite de la
+    // ressaisir si on toggle).
+    const nextDueDate =
+      input.status === "sent" && !existing.dueDate && nextInvoicedAt
+        ? addDaysISO(nextInvoicedAt, DEFAULT_DUE_DAYS)
+        : existing.dueDate;
+    // Idem assignee : pose le lead projet à 'sent' s'il n'y a personne.
+    // Ça couvre le cas d'une facture créée avant l'arrivée du champ
+    // (backfill OK pour celles liées à un projet) ou d'un upsert qui
+    // aurait passé null explicite.
+    const nextAssignedTo =
+      input.status === "sent" && !existing.assignedTo
+        ? await resolveProjectOwner(conn, existing.projectId)
+        : existing.assignedTo;
 
     await conn
       .update(invoices)
-      .set({ status: input.status, invoicedAt: nextInvoicedAt, paidAt: nextPaidAt, updatedAt: now })
+      .set({
+        status: input.status,
+        invoicedAt: nextInvoicedAt,
+        paidAt: nextPaidAt,
+        dueDate: nextDueDate,
+        assignedTo: nextAssignedTo,
+        updatedAt: now,
+      })
       .where(eq(invoices.id, input.id));
 
     revalidatePathsForInvoice(existing.projectId, existing.coworkingContractId, input.id);
     revalidatePath("/compta");
+    return { ok: true as const };
+  },
+);
+
+// =====================================================================
+// Relances : pilotage de la due_date et trace des relances émises.
+// =====================================================================
+
+/**
+ * Met à jour l'échéance d'une facture. Accepte null pour effacer.
+ * Valeur attendue au format YYYY-MM-DD.
+ */
+export const setInvoiceDueDate = action(
+  z.object({
+    id: z.string().uuid(),
+    dueDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable(),
+  }),
+  async ({ input }) => {
+    const conn = await db();
+    const [existing] = await conn
+      .select({
+        projectId: invoices.projectId,
+        coworkingContractId: invoices.coworkingContractId,
+      })
+      .from(invoices)
+      .where(eq(invoices.id, input.id))
+      .limit(1);
+    if (!existing) throw new Error("Facture introuvable.");
+
+    await conn
+      .update(invoices)
+      .set({ dueDate: input.dueDate, updatedAt: new Date() })
+      .where(eq(invoices.id, input.id));
+
+    revalidatePathsForInvoice(existing.projectId, existing.coworkingContractId, input.id);
+    revalidatePath("/compta");
+    return { ok: true as const };
+  },
+);
+
+/**
+ * Assigne une facture à un utilisateur (ou null pour désassigner).
+ * Utilisé depuis la liste des relances et la fiche projet.
+ */
+export const setInvoiceAssignee = action(
+  z.object({
+    id: z.string().uuid(),
+    assignedTo: z.string().uuid().nullable(),
+  }),
+  async ({ input }) => {
+    const conn = await db();
+    const [existing] = await conn
+      .select({
+        projectId: invoices.projectId,
+        coworkingContractId: invoices.coworkingContractId,
+      })
+      .from(invoices)
+      .where(eq(invoices.id, input.id))
+      .limit(1);
+    if (!existing) throw new Error("Facture introuvable.");
+
+    await conn
+      .update(invoices)
+      .set({ assignedTo: input.assignedTo, updatedAt: new Date() })
+      .where(eq(invoices.id, input.id));
+
+    revalidatePathsForInvoice(existing.projectId, existing.coworkingContractId, input.id);
+    revalidatePath("/compta");
+    revalidatePath("/");
+    return { ok: true as const };
+  },
+);
+
+/**
+ * Marque une facture comme relancée : pose last_reminded_at = now() et
+ * incrémente reminder_count. Pas d'opération inverse — si on s'est
+ * trompé, on édite directement la facture.
+ */
+export const markInvoiceReminded = action(
+  z.object({ id: z.string().uuid() }),
+  async ({ input }) => {
+    const conn = await db();
+    const [existing] = await conn
+      .select({
+        projectId: invoices.projectId,
+        coworkingContractId: invoices.coworkingContractId,
+      })
+      .from(invoices)
+      .where(eq(invoices.id, input.id))
+      .limit(1);
+    if (!existing) throw new Error("Facture introuvable.");
+
+    await conn
+      .update(invoices)
+      .set({
+        lastRemindedAt: new Date(),
+        reminderCount: sql`${invoices.reminderCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoices.id, input.id));
+
+    revalidatePathsForInvoice(existing.projectId, existing.coworkingContractId, input.id);
+    revalidatePath("/compta");
+    revalidatePath("/");
     return { ok: true as const };
   },
 );
@@ -221,6 +426,7 @@ export const seedProjectMilestones = action(seedSchema, async ({ input, user }) 
   const acompteHt = Math.round(((input.totalHt * acomptePct) / 100) * 100) / 100;
   const soldeHt = Math.round((input.totalHt - acompteHt) * 100) / 100;
   const soldePct = 100 - acomptePct;
+  const ownerId = await resolveProjectOwner(conn, input.projectId);
 
   await conn.insert(invoices).values([
     {
@@ -232,6 +438,7 @@ export const seedProjectMilestones = action(seedSchema, async ({ input, user }) 
       status: "draft",
       milestoneType: "acompte",
       milestonePercent: acomptePct,
+      assignedTo: ownerId,
       createdBy: user.id,
     },
     {
@@ -243,6 +450,7 @@ export const seedProjectMilestones = action(seedSchema, async ({ input, user }) 
       status: "draft",
       milestoneType: "solde",
       milestonePercent: soldePct,
+      assignedTo: ownerId,
       createdBy: user.id,
     },
   ]);

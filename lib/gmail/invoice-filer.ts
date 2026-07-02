@@ -4,7 +4,7 @@ import { gmailMessages } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
-import { findOrCreateFolder, uploadFile } from "@/lib/google/drive-api";
+import { findOrCreateFolder, findOrCreateSupplierFolder, uploadFile } from "@/lib/google/drive-api";
 import { type GmailAttachmentRef, getAttachment } from "@/lib/google/gmail-api";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { eq } from "drizzle-orm";
@@ -169,6 +169,20 @@ export async function processInvoiceFiling(filingId: string): Promise<{
     return { status: "rejected", errorMessage: "champs manquants" };
   }
 
+  // Garde-fou dur : si le supplier extrait est Parade elle-même, c'est
+  // une facture de vente qu'on a émise (arrive par mail en copie côté
+  // Gmail), pas une facture d'achat à classer. Le prompt LLM demande
+  // déjà de rejeter mais on double-checke.
+  const supplierKey = meta.supplierName
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+  if (supplierKey === "parade" || supplierKey === "paradesas" || supplierKey === "sasparade") {
+    await markRejected(filing.id, "facture de vente émise par Parade (pas un achat).");
+    return { status: "rejected", errorMessage: "facture de vente Parade" };
+  }
+
   // Sécurité : on n'auto-file que si confiance suffisante. Sinon on
   // garde en `pending` pour re-traitement / validation manuelle.
   if (meta.confidence < 0.6) {
@@ -208,7 +222,14 @@ export async function processInvoiceFiling(filingId: string): Promise<{
   try {
     const yearFolder = await findOrCreateFolder(rootFolderId, year, accessToken);
     yearFolderId = yearFolder.id;
-    const supplierFolder = await findOrCreateFolder(yearFolderId, supplierSanitized, accessToken);
+    // Match fuzzy sur clé normalisée (accents / casse / suffixes SAS,
+    // SARL, EURL…) pour éviter de créer un doublon quand le supplier a
+    // été sanitizé légèrement différemment d'une facture à l'autre.
+    const supplierFolder = await findOrCreateSupplierFolder(
+      yearFolderId,
+      supplierSanitized,
+      accessToken,
+    );
     supplierFolderId = supplierFolder.id;
 
     // 6. Upload PDF avec le nouveau nom.

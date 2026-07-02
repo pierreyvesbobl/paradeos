@@ -1,5 +1,6 @@
 import { AvatarStack, type StackedAssignee } from "@/components/tasks/avatar-stack";
 import { contacts } from "@/db/schema/contacts";
+import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
@@ -28,7 +29,7 @@ import {
   Warning,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
-import { and, asc, desc, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 import Link from "next/link";
 import { type DashboardTask, DashboardTasksPanel } from "./dashboard-tasks";
 
@@ -410,17 +411,25 @@ export default async function DashboardPage() {
   const trackedHours = Math.round((trackedRow?.minutes ?? 0) / 60);
   const trackedTotalHours = Math.round((trackedTotalRow?.minutes ?? 0) / 60);
 
-  // ─── factures à encaisser (sent, non payées) ──────────────────────
+  // ─── factures à encaisser (sent, non payées) — filtré par utilisateur ─
+  // `overdue` = due_date passée. Fallback sur l'heuristique 30j pour les
+  // factures historiques sans due_date renseignée (backfill 0058 a
+  // couvert l'existant mais une création hors UI pourrait ne pas en avoir).
+  // On ne montre que les factures dont la personne courante est responsable.
   const [toCollectRow] = await conn
     .select({
       total: sql<string>`coalesce(sum(${invoices.amountHt}), 0)`,
       count: sql<number>`count(*)::int`,
-      overdue: sql<number>`count(*) filter (where ${invoices.invoicedAt} < now() - interval '30 days')::int`,
+      overdue: sql<number>`count(*) filter (where
+        (${invoices.dueDate} is not null and ${invoices.dueDate} <= current_date)
+        or (${invoices.dueDate} is null and ${invoices.invoicedAt} < now() - interval '30 days')
+      )::int`,
     })
     .from(invoices)
     .where(
       and(
         eq(invoices.status, "sent"),
+        eq(invoices.assignedTo, authUser.id),
         or(
           eq(invoices.kind, "milestone"),
           eq(invoices.kind, "coworking"),
@@ -431,6 +440,42 @@ export default async function DashboardPage() {
   const toCollect = Number(toCollectRow?.total ?? 0);
   const toCollectCount = toCollectRow?.count ?? 0;
   const toCollectOverdue = toCollectRow?.overdue ?? 0;
+
+  // ─── mes factures à relancer (top 5 plus en retard) ───────────────────
+  // Affichées dans la colonne droite, miroir visuel du widget "Relances
+  // cette semaine" : pastille projet · nom · sous-titre client/retard ·
+  // date d'échéance.
+  const myRelances = await conn
+    .select({
+      id: invoices.id,
+      label: invoices.label,
+      amountHt: invoices.amountHt,
+      dueDate: invoices.dueDate,
+      invoicedAt: invoices.invoicedAt,
+      reminderCount: invoices.reminderCount,
+      projectId: invoices.projectId,
+      projectName: projects.name,
+      projectColor: projects.color,
+      entityId: entities.id,
+      entityName: entities.name,
+      contractName: coworkingContracts.name,
+      kind: invoices.kind,
+    })
+    .from(invoices)
+    .leftJoin(projects, eq(projects.id, invoices.projectId))
+    .leftJoin(entities, eq(entities.id, projects.entityId))
+    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
+    .where(
+      and(
+        eq(invoices.status, "sent"),
+        eq(invoices.assignedTo, authUser.id),
+        inArray(invoices.kind, ["milestone", "coworking", "one_off"]),
+        or(ne(invoices.billedBy, "g_and_o"), isNull(invoices.billedBy)),
+        sql`${invoices.dueDate} is not null and ${invoices.dueDate} <= current_date`,
+      ),
+    )
+    .orderBy(asc(invoices.dueDate))
+    .limit(5);
 
   // KPI strip
   const relancesCount = relancesAggRow?.count ?? 0;
@@ -498,8 +543,8 @@ export default async function DashboardPage() {
           footClassName="text-ds-text-muted"
         />
         <MetricCard
-          href="/compta"
-          label="À encaisser"
+          href="/compta?tab=relances&assignee=me"
+          label="À encaisser (mes factures)"
           icon={<Receipt weight="duotone" className="size-5 text-tint-mauve-dot" />}
           value={<EuroAmount value={toCollect} demoId="kpi-to-collect" compact />}
           sub={`${toCollectCount} facture${toCollectCount > 1 ? "s" : ""}`}
@@ -674,6 +719,86 @@ export default async function DashboardPage() {
                     )}
                   </div>
                 ))
+              )}
+            </div>
+          </section>
+
+          {/* mes factures à relancer */}
+          <section>
+            <div className="mb-3 flex items-center gap-2.5">
+              <Receipt weight="duotone" className="size-4.5 text-tint-mauve-dot" />
+              <h2 className="font-semibold text-[16px] text-ds-text">Mes factures à relancer</h2>
+              <span className="flex-1" />
+              {myRelances.length > 0 ? (
+                <Link
+                  href="/compta?tab=relances&assignee=me"
+                  className="text-primary-700 text-sm hover:underline"
+                >
+                  Tout voir
+                </Link>
+              ) : null}
+            </div>
+            <div className="overflow-hidden rounded-[10px] border border-ds-border">
+              {myRelances.length === 0 ? (
+                <div className="bg-ds-app px-3.5 py-4 text-ds-text-tertiary text-sm">
+                  Aucune facture en retard.
+                </div>
+              ) : (
+                myRelances.map((r, i) => {
+                  const due = r.dueDate ? new Date(r.dueDate) : null;
+                  const overdueDays = due
+                    ? Math.max(0, Math.round((Date.now() - due.getTime()) / 86_400_000))
+                    : null;
+                  const target =
+                    r.kind === "coworking"
+                      ? "/compta?tab=relances&assignee=me"
+                      : r.projectId
+                        ? `/projets/${r.projectId}?tab=billing`
+                        : "/compta?tab=relances&assignee=me";
+                  const title = r.projectName ?? r.contractName ?? r.label;
+                  const subParts: string[] = [];
+                  if (overdueDays !== null && overdueDays > 0) {
+                    subParts.push(`${overdueDays} j de retard`);
+                  }
+                  if (r.reminderCount > 0) subParts.push(`relancée ${r.reminderCount}×`);
+                  return (
+                    <Link
+                      href={target}
+                      key={r.id}
+                      className={`flex items-center gap-2.5 bg-ds-app px-3.5 py-3 transition-colors hover:bg-ds-hover ${i < myRelances.length - 1 ? "border-ds-border border-b" : ""}`}
+                    >
+                      <span
+                        className="size-[9px] flex-none rounded-full"
+                        style={{
+                          background: r.projectId
+                            ? projectTint({ id: r.projectId, color: r.projectColor ?? null })
+                            : "var(--ds-tint-mauve-dot)",
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        {r.projectId ? (
+                          <ProjectName
+                            project={{ id: r.projectId, name: title }}
+                            className="block truncate text-ds-text text-sm"
+                          />
+                        ) : (
+                          <span className="block truncate text-ds-text text-sm">{title}</span>
+                        )}
+                        <div className="truncate text-ds-text-tertiary text-xs">
+                          {r.entityId ? (
+                            <EntityName entity={{ id: r.entityId, name: r.entityName }} />
+                          ) : (
+                            r.label
+                          )}
+                          {subParts.length > 0 ? ` · ${subParts.join(" · ")}` : ""}
+                        </div>
+                      </div>
+                      <span className="font-medium text-ds-text-tertiary text-xs">
+                        {due ? shortDateFmt.format(due) : ""}
+                      </span>
+                    </Link>
+                  );
+                })
               )}
             </div>
           </section>

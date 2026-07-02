@@ -5,6 +5,7 @@ import { type ComptaSegment, DashboardView } from "./dashboard-view";
 import { FacturesView } from "./factures-view";
 import type { ComptaPeriod } from "./period-selector";
 import { RapprochementView } from "./rapprochement-view";
+import { RelancesView, countOverdueInvoices } from "./relances-view";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +26,14 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default async function ComptaPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const tabRaw = params.tab;
-  const tab: "dashboard" | "rapprochement" | "factures" =
-    tabRaw === "rapprochement" ? "rapprochement" : tabRaw === "factures" ? "factures" : "dashboard";
+  const tab: "dashboard" | "rapprochement" | "factures" | "relances" =
+    tabRaw === "rapprochement"
+      ? "rapprochement"
+      : tabRaw === "factures"
+        ? "factures"
+        : tabRaw === "relances"
+          ? "relances"
+          : "dashboard";
   const debug = typeof params.debug === "string" ? params.debug : undefined;
   const periodRaw = typeof params.period === "string" ? params.period : null;
   const period: ComptaPeriod = (
@@ -37,6 +44,9 @@ export default async function ComptaPage({ searchParams }: { searchParams: Searc
     segmentRaw && (VALID_SEGMENTS as string[]).includes(segmentRaw) ? segmentRaw : "conso"
   ) as ComptaSegment;
 
+  const overdueCount = await countOverdueInvoices();
+  const assigneeFilter: "all" | "me" = params.assignee === "me" ? "me" : "all";
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -44,11 +54,13 @@ export default async function ComptaPage({ searchParams }: { searchParams: Searc
         title="Compta"
         description="Vue d'ensemble du signé, facturé, encaissé et rapprochement Dougs."
       />
-      <ComptaTabs current={tab} />
+      <ComptaTabs current={tab} relancesCount={overdueCount} />
       {tab === "dashboard" ? (
         <DashboardView period={period} segment={segment} />
       ) : tab === "factures" ? (
         <FacturesView />
+      ) : tab === "relances" ? (
+        <RelancesView assigneeFilter={assigneeFilter} />
       ) : (
         <Suspense fallback={<RapprochementSkeleton />}>
           <RapprochementView debug={debug} />

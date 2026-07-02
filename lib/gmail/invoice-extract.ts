@@ -34,24 +34,46 @@ export type InvoiceMetadata = z.infer<typeof invoiceSchema>;
 
 const SYSTEM_PROMPT = `Tu reçois le contenu (texte) d'une pièce jointe extraite d'un email,
 plus le sujet/expéditeur du mail. Tu dois déterminer si c'est une
-**facture d'achat reçue** par l'entreprise, et si oui en extraire
-les métadonnées pour la classer.
+**facture d'achat reçue** par l'entreprise Parade (SAS de coworking et
+conseil, basée à Paris), et si oui en extraire les métadonnées pour la
+classer.
 
-NE PAS CONFONDRE :
-- une facture d'achat reçue (oui) — la société paie un fournisseur
+DÉFINITION — facture d'achat reçue :
+  Parade est le CLIENT (destinataire de la facture, celui qui paie).
+  Le FOURNISSEUR est un tiers qui émet la facture pour se faire payer.
+  → isInvoice=true
+
+RÉGLE ANTI CONFUSION FACTURE DE VENTE ⚠️ :
+  Si Parade est l'ÉMETTEUR (en haut de la facture, avec son SIREN et
+  ses coordonnées bancaires) et qu'un tiers est le destinataire, alors
+  c'est une facture de vente que Parade a émise à un client — parfois
+  reçue par email en copie ou parce que le client l'a renvoyée.
+  → isInvoice=false, retourne les autres champs null.
+
+  Indices que Parade est l'émetteur :
+  - Le nom "Parade" (ou "Parade SAS", "PARADE") apparaît en entête, en
+    position typique de l'émetteur (haut à gauche, avec adresse/SIREN),
+    et le "Facturé à" désigne un tiers.
+  - Le pied de page mentionne le RIB / IBAN de Parade.
+  - Le préfixe de numéro de facture correspond au format Dougs de Parade
+    (souvent "F-YYYY-…" ou similaire).
+
+NE PAS CONFONDRE non plus avec :
 - un devis (non)
-- une facture de vente émise par l'entreprise (non — c'est une autre logique)
-- un reçu de paiement carte / ticket (non)
-- un RIB / IBAN (non)
-- un contrat (non)
+- un reçu de paiement carte / ticket restaurant (non)
+- un RIB / IBAN seul (non)
+- un contrat / CGV (non)
 - un bon de commande (non)
+- une relance / rappel de paiement seul, sans facture attachée (non)
 
 Règles d'extraction :
 - invoiceDate : la date d'émission de la facture (et NON la date du
   virement, de la commande, ou la due date). Format YYYY-MM-DD.
 - supplierName : le nom du FOURNISSEUR (= émetteur de la facture, celui
-  qui sera payé). Pas le client (= notre société). En général c'est en
-  haut de la facture avec l'adresse et le SIREN.
+  qui sera payé). Pas le client (= Parade). En général c'est en haut de
+  la facture avec l'adresse et le SIREN. Ne mets JAMAIS "Parade" ici —
+  si c'est le seul candidat, c'est que la facture est une vente
+  → isInvoice=false.
 - prestationType : 1-4 mots concaténés en CamelCase pour décrire ce qui
   est facturé. Pas d'accents, pas de caractères spéciaux. Ex.
   "LoyerBureau", "AbonnementSlack", "PrestationConseilIA",
@@ -59,7 +81,7 @@ Règles d'extraction :
 - confidence : 0-1. Mets < 0.6 si tu doutes (la classification ne sera
   pas auto-faite, on demandera validation à l'utilisateur).
 
-Si ce n'est PAS une facture d'achat (devis, autre), retourne
+Si ce n'est PAS une facture d'achat (devis, vente, autre), retourne
 isInvoice=false et laisse les autres champs null.`;
 
 export async function extractInvoiceMetadata(args: {

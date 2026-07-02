@@ -186,7 +186,7 @@ export async function RapprochementView({ debug }: { debug?: string }) {
             </header>
             {quoteSuggestions.length === 0 ? (
               <p className="px-6 py-8 text-center text-muted-foreground text-sm">
-                Tous les devis Dougs sont déjà liés à un projet Paradeos. 🎉
+                Tous les devis Dougs sont déjà liés à un projet Paradeos.
               </p>
             ) : (
               <ul className="divide-y">
@@ -267,7 +267,7 @@ export async function RapprochementView({ debug }: { debug?: string }) {
             </header>
             {invoiceSuggestions.length === 0 ? (
               <p className="px-6 py-8 text-center text-muted-foreground text-sm">
-                Toutes les factures Dougs sont déjà liées. 🎉
+                Toutes les factures Dougs sont déjà liées.
               </p>
             ) : (
               <ul className="divide-y">

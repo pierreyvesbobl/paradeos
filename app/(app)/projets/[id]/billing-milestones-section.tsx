@@ -41,12 +41,20 @@ type MilestoneView = {
   dougsInvoiceReference: string | null;
   invoicedAt: string | null;
   paidAt: string | null;
+  dueDate: string | null;
+  lastRemindedAt: string | null;
+  reminderCount: number;
+  assignedTo: string | null;
+  assignedFullName: string | null;
 };
+
+type UserOption = { id: string; fullName: string | null; avatarUrl: string | null };
 
 type Props = {
   projectId: string;
   projectValueHt: number;
   milestones: Invoice[];
+  userOptions: UserOption[];
 };
 
 const TYPE_LABEL: Record<MilestoneType, string> = {
@@ -79,7 +87,7 @@ function toDbStatus(s: UiStatus): "draft" | "sent" | "paid" {
   return "draft";
 }
 
-function adapt(i: Invoice): MilestoneView {
+function adapt(i: Invoice, usersById: Map<string, UserOption>): MilestoneView {
   return {
     id: i.id,
     type: (i.milestoneType as MilestoneType) ?? "intermediaire",
@@ -91,6 +99,11 @@ function adapt(i: Invoice): MilestoneView {
     dougsInvoiceReference: i.dougsReference,
     invoicedAt: i.invoicedAt ? i.invoicedAt.toISOString() : null,
     paidAt: i.paidAt ? i.paidAt.toISOString() : null,
+    dueDate: i.dueDate,
+    lastRemindedAt: i.lastRemindedAt ? i.lastRemindedAt.toISOString() : null,
+    reminderCount: i.reminderCount,
+    assignedTo: i.assignedTo,
+    assignedFullName: i.assignedTo ? (usersById.get(i.assignedTo)?.fullName ?? null) : null,
   };
 }
 
@@ -118,13 +131,23 @@ function emptyDraft(projectValueHt: number): Draft {
   };
 }
 
-export function BillingMilestonesSection({ projectId, projectValueHt, milestones }: Props) {
+export function BillingMilestonesSection({
+  projectId,
+  projectValueHt,
+  milestones,
+  userOptions,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  const rows = useMemo(() => milestones.map(adapt), [milestones]);
+  const usersById = useMemo(() => {
+    const m = new Map<string, UserOption>();
+    for (const u of userOptions) m.set(u.id, u);
+    return m;
+  }, [userOptions]);
+  const rows = useMemo(() => milestones.map((m) => adapt(m, usersById)), [milestones, usersById]);
   const total = useMemo(
     () => Math.round(rows.reduce((s, m) => s + m.amountHt, 0) * 100) / 100,
     [rows],
@@ -403,12 +426,26 @@ export function BillingMilestonesSection({ projectId, projectValueHt, milestones
                 </div>
               </div>
               {m.status !== "todo" ? (
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                   {m.invoicedAt ? (
                     <span>Facturé le {new Date(m.invoicedAt).toLocaleDateString("fr-FR")}</span>
                   ) : null}
+                  {m.status === "invoiced" && m.dueDate ? (
+                    <span>· Échéance {new Date(m.dueDate).toLocaleDateString("fr-FR")}</span>
+                  ) : null}
                   {m.paidAt ? (
                     <span>· Payé le {new Date(m.paidAt).toLocaleDateString("fr-FR")}</span>
+                  ) : null}
+                  {m.status === "invoiced" && m.assignedFullName ? (
+                    <span>· Responsable {m.assignedFullName}</span>
+                  ) : null}
+                  {m.status === "invoiced" && m.reminderCount > 0 ? (
+                    <span>
+                      · Relancée {m.reminderCount}×
+                      {m.lastRemindedAt
+                        ? `, dernière le ${new Date(m.lastRemindedAt).toLocaleDateString("fr-FR")}`
+                        : ""}
+                    </span>
                   ) : null}
                   <button
                     type="button"

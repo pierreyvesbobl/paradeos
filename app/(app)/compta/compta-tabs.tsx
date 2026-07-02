@@ -1,10 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { FileText, Gauge, Link as LinkIcon } from "@phosphor-icons/react";
+import { BellRinging, FileText, Gauge, Link as LinkIcon } from "@phosphor-icons/react";
 import Link from "next/link";
 
-type Tab = "dashboard" | "rapprochement" | "factures";
+type Tab = "dashboard" | "rapprochement" | "factures" | "relances";
 
 const TABS: { key: Tab; href: string; label: string; icon: typeof Gauge }[] = [
   { key: "dashboard", href: "/compta?tab=dashboard", label: "Vue d'ensemble", icon: Gauge },
@@ -15,13 +15,22 @@ const TABS: { key: Tab; href: string; label: string; icon: typeof Gauge }[] = [
     icon: LinkIcon,
   },
   { key: "factures", href: "/compta?tab=factures", label: "Factures", icon: FileText },
+  { key: "relances", href: "/compta?tab=relances", label: "Relances", icon: BellRinging },
 ];
 
-export function ComptaTabs({ current }: { current: Tab }) {
+export function ComptaTabs({
+  current,
+  relancesCount,
+}: {
+  current: Tab;
+  /** Nombre de factures en retard, affiché en pastille à côté de "Relances". */
+  relancesCount?: number;
+}) {
   return (
     <nav className="-mb-px flex gap-6 border-b">
       {TABS.map(({ key, href, label, icon: Icon }) => {
         const active = key === current;
+        const showBadge = key === "relances" && relancesCount && relancesCount > 0;
         return (
           <Link
             key={key}
@@ -35,6 +44,17 @@ export function ComptaTabs({ current }: { current: Tab }) {
           >
             <Icon size={16} weight="duotone" />
             {label}
+            {showBadge ? (
+              <span
+                className="inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 font-semibold text-[10px]"
+                style={{
+                  background: "var(--ds-tint-orange-bg)",
+                  color: "var(--ds-tint-orange-text)",
+                }}
+              >
+                {relancesCount}
+              </span>
+            ) : null}
           </Link>
         );
       })}

@@ -251,6 +251,78 @@ export async function findOrCreateFolder(
 }
 
 /**
+ * Normalisation "match fournisseur" : accents supprimés, alnum only,
+ * lowercased, et on retire les suffixes/prefixes de forme juridique
+ * FR courants (SAS, SASU, SARL, SARLU, SA, SCI, SNC, EURL, SELARL,
+ * SCIC, SCOP). Objectif : "Orange", "Orange SA", "ORANGE" → même clé.
+ */
+function normalizeSupplierKey(name: string): string {
+  const stripped = name
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+  const suffixes = [
+    "sasu",
+    "sarl",
+    "sarlu",
+    "selarl",
+    "scic",
+    "scop",
+    "eurl",
+    "sas",
+    "sci",
+    "snc",
+    "sa",
+  ];
+  for (const s of suffixes) {
+    if (stripped.endsWith(s) && stripped.length > s.length) {
+      return stripped.slice(0, -s.length);
+    }
+    if (stripped.startsWith(s) && stripped.length > s.length) {
+      return stripped.slice(s.length);
+    }
+  }
+  return stripped;
+}
+
+/**
+ * Cherche un sous-dossier fournisseur existant sous `parentId` en
+ * matchant sur clé normalisée (ignore accents/casse/ponctuation et
+ * suffixes juridiques). Utilisé pour éviter les doublons du type
+ * "Orange" et "OrangeSA" côte à côte.
+ *
+ * Retourne le premier match, ou null. Liste jusqu'à 200 sous-dossiers,
+ * suffisant pour un dossier annuel de factures.
+ */
+export async function findSupplierFolderFuzzy(
+  parentId: string,
+  supplierName: string,
+  accessToken: string,
+): Promise<DriveFile | null> {
+  const targetKey = normalizeSupplierKey(supplierName);
+  if (!targetKey) return null;
+  const children = await listFolderChildren(parentId, accessToken, 200);
+  const folders = children.filter((f) => f.mimeType === FOLDER_MIME);
+  return folders.find((f) => normalizeSupplierKey(f.name) === targetKey) ?? null;
+}
+
+/**
+ * Variante de `findOrCreateFolder` dédiée aux dossiers fournisseurs :
+ * d'abord un match fuzzy sur clé normalisée (dédup accents/casse/
+ * suffixes juridiques), sinon crée avec `preferredName`.
+ */
+export async function findOrCreateSupplierFolder(
+  parentId: string,
+  preferredName: string,
+  accessToken: string,
+): Promise<DriveFile> {
+  const existing = await findSupplierFolderFuzzy(parentId, preferredName, accessToken);
+  if (existing) return existing;
+  return createFolder(parentId, preferredName, accessToken);
+}
+
+/**
  * Upload un fichier (binaire) dans un dossier Drive via multipart upload.
  * `content` est un Buffer (binaire). `mimeType` ex. "application/pdf".
  * Retourne le DriveFile créé (id, webViewLink…).

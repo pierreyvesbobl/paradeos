@@ -397,6 +397,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
                 quoteTotalHt ?? Number(project.valueAmount ?? project.budgetAmount ?? 0)
               }
               milestones={milestonesRows}
+              userOptions={userOptions}
             />
           </SidebarSection>
         </div>

@@ -90,6 +90,17 @@ export const invoices = pgTable(
     invoicedAt: timestamp("invoiced_at", { withTimezone: true }),
     paidAt: timestamp("paid_at", { withTimezone: true }),
 
+    // Relances : due_date posée à invoiced_at + 30j lors du passage à
+    // status='sent' (modifiable). last_reminded_at + reminder_count
+    // sont mis à jour par l'action markInvoiceReminded.
+    dueDate: date("due_date"),
+    lastRemindedAt: timestamp("last_reminded_at", { withTimezone: true }),
+    reminderCount: integer("reminder_count").notNull().default(0),
+    // Responsable de la facturation/relance. À la création, on copie
+    // projects.owner_id (lead). Pour le coworking sans projet, reste null
+    // jusqu'à assignation explicite.
+    assignedTo: uuid("assigned_to").references(() => users.id, { onDelete: "set null" }),
+
     // Spec milestone
     milestoneType: text("milestone_type"),
     milestonePercent: integer("milestone_percent"),
@@ -125,6 +136,8 @@ export const invoices = pgTable(
     dougsInvoiceIdx: index("invoices_dougs_invoice_idx").on(t.dougsInvoiceId),
     dougsQuoteIdx: index("invoices_dougs_quote_idx").on(t.dougsQuoteId),
     cancelsIdx: index("invoices_cancels_idx").on(t.cancelsInvoiceId),
+    dueDateIdx: index("invoices_due_date_idx").on(t.dueDate).where(sql`status = 'sent'`),
+    assignedToIdx: index("invoices_assigned_to_idx").on(t.assignedTo).where(sql`status = 'sent'`),
   }),
 );
 
