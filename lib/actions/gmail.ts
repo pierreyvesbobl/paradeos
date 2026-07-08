@@ -1,7 +1,8 @@
 "use server";
 
-import { gmailSyncState } from "@/db/schema/gmail";
+import { gmailSyncState, gmailTags, gmailThreadTags } from "@/db/schema/gmail";
 import { googleAccounts } from "@/db/schema/google-accounts";
+import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
@@ -12,12 +13,13 @@ import {
   backfillCrmTags,
   createCategoryTag,
   deleteTag,
+  ensureCrmTag,
   removeTagFromThread,
   renameTag,
 } from "@/lib/gmail/tags";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
 import { SETTING_KEYS, setSetting } from "@/lib/settings";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -86,6 +88,84 @@ export const removeTagAction = action(
     });
     revalidatePath("/emails");
     revalidatePath(`/emails/${input.threadId}`);
+    return { ok: true as const };
+  },
+);
+
+/**
+ * Retagge un thread avec un projet (ou détache) et scelle le choix
+ * humain : le nouveau tag est marqué `manuallyOverridden=true` pour que
+ * l'auto-tagging suivant ne remplace pas le projet choisi. Supprime
+ * tous les autres tags projet du thread au passage (mono-projet par
+ * thread en V1).
+ */
+export const retagThreadProject = action(
+  z.object({
+    threadId: z.string().uuid(),
+    projectId: z.string().uuid().nullable(),
+  }),
+  async ({ input, user }) => {
+    const conn = await db();
+    const targetUserId = (await getGmailUserId()) ?? user.id;
+
+    // Retire tous les tags projet existants sur ce thread (avec push
+    // Gmail best-effort pour synchroniser les labels).
+    const currentProjectTags = await conn
+      .select({ tagId: gmailTags.id })
+      .from(gmailThreadTags)
+      .innerJoin(gmailTags, eq(gmailTags.id, gmailThreadTags.tagId))
+      .where(and(eq(gmailThreadTags.threadId, input.threadId), eq(gmailTags.kind, "project")));
+    for (const t of currentProjectTags) {
+      await removeTagFromThread({
+        userId: targetUserId,
+        threadIdLocal: input.threadId,
+        tagId: t.tagId,
+      });
+    }
+
+    // Applique le nouveau projet si demandé.
+    if (input.projectId) {
+      const [project] = await conn
+        .select({ id: projects.id, name: projects.name })
+        .from(projects)
+        .where(eq(projects.id, input.projectId))
+        .limit(1);
+      if (!project) throw new Error("Projet introuvable.");
+      const tag = await ensureCrmTag({
+        userId: targetUserId,
+        kind: "project",
+        targetId: project.id,
+        displayName: project.name,
+      });
+      await conn
+        .insert(gmailThreadTags)
+        .values({
+          threadId: input.threadId,
+          tagId: tag.id,
+          source: "manual",
+          manuallyOverridden: true,
+          createdBy: user.id,
+        })
+        .onConflictDoUpdate({
+          target: [gmailThreadTags.threadId, gmailThreadTags.tagId],
+          set: { source: "manual", manuallyOverridden: true, createdBy: user.id },
+        });
+      try {
+        await applyTagToThread({
+          userId: targetUserId,
+          threadIdLocal: input.threadId,
+          tagId: tag.id,
+          source: "manual",
+          createdBy: user.id,
+        });
+      } catch {
+        // Push Gmail best-effort ; le tag DB est déjà posé.
+      }
+    }
+
+    revalidatePath("/emails");
+    revalidatePath(`/emails/${input.threadId}`);
+    revalidatePath("/projets");
     return { ok: true as const };
   },
 );

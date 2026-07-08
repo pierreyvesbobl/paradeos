@@ -1,19 +1,19 @@
 "use client";
 
 import { FkCombobox } from "@/components/inline/fk-combobox";
-import { AssigneesPicker, type AssigneeRef } from "@/components/tasks/assignees-picker";
+import { type AssigneeRef, AssigneesPicker } from "@/components/tasks/assignees-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { EmailProposal } from "@/db/schema/gmail";
-import { quickCreateEntity } from "@/lib/actions/entities";
 import {
   acceptEmailProposal,
   rejectEmailProposal,
   revertEmailProposal,
   updateAcceptedEmailProposal,
 } from "@/lib/actions/email-proposals";
+import { quickCreateEntity } from "@/lib/actions/entities";
 import type { ExtractionMeta } from "@/lib/gmail/queries";
 import {
   ArrowCounterClockwise,
@@ -1680,6 +1680,8 @@ const SUCCESS_MSG: Record<EmailKind, string> = {
   task: "Tâche créée.",
   category_tag: "Tag appliqué.",
   project_link: "Lien projet ajouté.",
+  entity_link: "Entité rattachée.",
+  project_contact_link: "Contact rattaché au projet.",
   contact: "Contact créé.",
   entity: "Entité créée.",
   project: "Projet créé.",
@@ -1693,7 +1695,15 @@ function summaryFor(p: ProposalWithMatches, payload: Record<string, unknown>): s
     case "project":
       return String(payload.name ?? "Sans nom");
     case "project_link":
-      return p.matchedProjectName ?? String(payload.projectName ?? "Projet");
+      return (
+        (payload.suggestedProjectName as string | null) ??
+        p.matchedProjectName ??
+        String(payload.projectName ?? "Projet")
+      );
+    case "entity_link":
+      return p.matchedEntityName ?? "Entité";
+    case "project_contact_link":
+      return "Rattacher le contact au projet";
     case "contact":
       return `${payload.firstName ?? ""} ${payload.lastName ?? ""}`.trim() || "Sans nom";
     case "entity":
@@ -1714,6 +1724,10 @@ function matchedSubtitle(p: ProposalWithMatches, payload: Record<string, unknown
     case "project":
     case "project_link":
       return "projet existant";
+    case "entity_link":
+      return "entité existante";
+    case "project_contact_link":
+      return "rattachement contact ↔ projet";
     case "contact": {
       const job = payload.jobTitle as string | null | undefined;
       const ent = payload.entityName as string | null | undefined;

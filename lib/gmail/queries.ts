@@ -2,8 +2,9 @@ import "server-only";
 
 import { contacts } from "@/db/schema/contacts";
 import { gmailMessages, gmailTags, gmailThreadTags, gmailThreads } from "@/db/schema/gmail";
+import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
-import { type SQL, and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { type SQL, and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
 export type GmailThreadRow = {
   id: string;
@@ -213,6 +214,37 @@ export async function listThreads(
     .offset(opts.offset ?? 0);
 }
 
+/**
+ * Batch : pour une liste de thread ids, retourne le map threadId → projets liés.
+ * Utilisé par la liste emails pour afficher un chip projet sur chaque ligne
+ * sans lancer une query par ligne.
+ */
+export async function getProjectsForThreads(
+  threadIds: string[],
+): Promise<Map<string, Array<{ id: string; name: string }>>> {
+  const out = new Map<string, Array<{ id: string; name: string }>>();
+  if (threadIds.length === 0) return out;
+  const conn = await db();
+  const rows = await conn
+    .select({
+      threadId: gmailThreadTags.threadId,
+      projectId: projects.id,
+      name: projects.name,
+    })
+    .from(gmailThreadTags)
+    .innerJoin(gmailTags, eq(gmailTags.id, gmailThreadTags.tagId))
+    .innerJoin(projects, eq(projects.id, gmailTags.targetId))
+    .where(
+      and(inArray(gmailThreadTags.threadId, threadIds), eq(gmailTags.kind, "project")),
+    );
+  for (const r of rows) {
+    const arr = out.get(r.threadId) ?? [];
+    arr.push({ id: r.projectId, name: r.name });
+    out.set(r.threadId, arr);
+  }
+  return out;
+}
+
 export type ThreadTagRow = {
   threadTagId: string;
   tagId: string;
@@ -220,6 +252,7 @@ export type ThreadTagRow = {
   targetId: string | null;
   labelName: string;
   source: string;
+  manuallyOverridden: boolean;
   color: string | null;
 };
 
@@ -281,6 +314,7 @@ export async function getThreadDetail(threadIdLocal: string): Promise<ThreadDeta
         targetId: gmailTags.targetId,
         labelName: gmailTags.labelName,
         source: gmailThreadTags.source,
+        manuallyOverridden: gmailThreadTags.manuallyOverridden,
         color: gmailTags.color,
       })
       .from(gmailThreadTags)

@@ -148,6 +148,10 @@ export const gmailTags = pgTable(
  *   - `auto` : Paradeos l'a posé (match contact email à la sync)
  *   - `gmail` : remonté du label Gmail (l'utilisateur l'a tagué dans Gmail)
  *   - `manual` : ajouté via UI Paradeos
+ *
+ * `manuallyOverridden=true` scelle le choix humain : l'auto-tagging ne
+ * remplacera plus ce lien (utile pour corriger une erreur LLM sans que
+ * la sync suivante rétablisse le mauvais lien).
  */
 export const gmailThreadTags = pgTable(
   "gmail_thread_tags",
@@ -160,6 +164,7 @@ export const gmailThreadTags = pgTable(
       .notNull()
       .references(() => gmailTags.id, { onDelete: "cascade" }),
     source: text("source").notNull().default("gmail"),
+    manuallyOverridden: boolean("manually_overridden").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
   },
@@ -194,6 +199,8 @@ export const emailProposalKind = pgEnum("email_proposal_kind", [
   "task",
   "category_tag",
   "project_link",
+  "entity_link",
+  "project_contact_link",
   "contact",
   "entity",
   "project",

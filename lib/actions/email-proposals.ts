@@ -2,8 +2,9 @@
 
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
-import { emailProposals, gmailMessages, gmailTags, gmailThreadTags } from "@/db/schema/gmail";
+import { emailProposals, gmailMessages, gmailThreadTags } from "@/db/schema/gmail";
 import { googleAccounts } from "@/db/schema/google-accounts";
+import { projectContacts } from "@/db/schema/project-contacts";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
@@ -11,11 +12,11 @@ import { action } from "@/lib/actions/action";
 import { findContactByEmail } from "@/lib/db/queries/contacts";
 import { type AssigneeRef, setTaskAssignees } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
-import { applyTagToThread } from "@/lib/gmail/tags";
+import { applyTagToThread, ensureCrmTag } from "@/lib/gmail/tags";
 import { getValidAccessToken } from "@/lib/google/account";
-import { createGmailDraft, getMessage, getHeader } from "@/lib/google/gmail-api";
+import { createGmailDraft, getHeader, getMessage } from "@/lib/google/gmail-api";
 import { hasGmailComposeScope, hasRequiredGmailScopes } from "@/lib/google/oauth";
-import { and, eq, ilike } from "drizzle-orm";
+import { eq, ilike } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -181,36 +182,89 @@ export const acceptEmailProposal = action(
       });
       createdEntityId = tagId;
     } else if (proposal.kind === "project_link") {
-      // Le project_link s'applique en posant le tag projet correspondant
-      // sur le thread. Le tag a déjà été créé (auto-tag lors d'un
-      // précédent sync), sinon on l'ensure.
-      const projectId = proposal.matchedId;
-      if (!projectId) throw new Error("Projet matché manquant.");
-      // Cherche le tag existant pour ce projet.
-      const [existingTag] = await conn
-        .select({ id: gmailTags.id })
-        .from(gmailTags)
-        .where(
-          and(
-            eq(gmailTags.userId, targetUserId),
-            eq(gmailTags.kind, "project"),
-            eq(gmailTags.targetId, projectId),
-          ),
-        )
+      // L'user peut avoir changé le projet suggéré via combobox — la
+      // sélection courante arrive via `_linkExistingId`. Sinon on retombe
+      // sur le `matchedId` initial (suggéré par le LLM ou côté serveur).
+      const projectId = linkExistingId ?? proposal.matchedId;
+      if (!projectId) throw new Error("Projet à lier manquant.");
+      const [project] = await conn
+        .select({ id: projects.id, name: projects.name })
+        .from(projects)
+        .where(eq(projects.id, projectId))
         .limit(1);
-      if (!existingTag) {
-        throw new Error(
-          "Tag projet pas encore créé. Lance 'Initialiser les tags CRM' depuis /emails/tags.",
-        );
+      if (!project) throw new Error("Projet introuvable.");
+      const tag = await ensureCrmTag({
+        userId: targetUserId,
+        kind: "project",
+        targetId: project.id,
+        displayName: project.name,
+      });
+      // Une décision utilisateur scelle le lien : manuallyOverridden=true
+      // pour que l'auto-tagging n'ajoute plus un autre projet sur ce thread.
+      await conn.transaction(async (tx) => {
+        await tx
+          .insert(gmailThreadTags)
+          .values({
+            threadId: msg.threadId,
+            tagId: tag.id,
+            source: "manual",
+            manuallyOverridden: true,
+            createdBy: user.id,
+          })
+          .onConflictDoUpdate({
+            target: [gmailThreadTags.threadId, gmailThreadTags.tagId],
+            set: { manuallyOverridden: true, source: "manual", createdBy: user.id },
+          });
+      });
+      // Push vers Gmail (best-effort, ne bloque pas la validation).
+      try {
+        await applyTagToThread({
+          userId: targetUserId,
+          threadIdLocal: msg.threadId,
+          tagId: tag.id,
+          source: "manual",
+          createdBy: user.id,
+        });
+      } catch {
+        // Le tag DB est posé — push différé.
       }
+      createdEntityId = tag.id;
+    } else if (proposal.kind === "entity_link") {
+      // Choix parmi les entités candidates (matchées par domaine). L'user
+      // peut avoir sélectionné une entité précise via `_linkExistingId`.
+      const entityId = linkExistingId ?? proposal.matchedId;
+      if (!entityId) throw new Error("Entité à lier manquante.");
+      const [entity] = await conn
+        .select({ id: entities.id, name: entities.name })
+        .from(entities)
+        .where(eq(entities.id, entityId))
+        .limit(1);
+      if (!entity) throw new Error("Entité introuvable.");
+      const tag = await ensureCrmTag({
+        userId: targetUserId,
+        kind: "entity",
+        targetId: entity.id,
+        displayName: entity.name,
+      });
       await applyTagToThread({
         userId: targetUserId,
         threadIdLocal: msg.threadId,
-        tagId: existingTag.id,
-        source: "auto",
+        tagId: tag.id,
+        source: "manual",
         createdBy: user.id,
       });
-      createdEntityId = existingTag.id;
+      createdEntityId = tag.id;
+    } else if (proposal.kind === "project_contact_link") {
+      // Rattache le contact au projet dans project_contacts. Rend le
+      // contact réutilisable pour le tagging auto des mails futurs sur
+      // ce projet.
+      const contactId = (payload.contactId as string | null) ?? proposal.matchedId;
+      const projectId = payload.projectId as string | null;
+      if (!contactId || !projectId) {
+        throw new Error("Contact ou projet manquant pour le rattachement.");
+      }
+      await conn.insert(projectContacts).values({ contactId, projectId }).onConflictDoNothing();
+      createdEntityId = contactId;
     } else if (proposal.kind === "entity") {
       if (linkExistingId) {
         createdEntityId = linkExistingId;

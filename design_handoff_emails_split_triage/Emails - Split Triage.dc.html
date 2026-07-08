@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="tokens/fonts.css">
+<link rel="stylesheet" href="tokens/colors.css">
+<link rel="stylesheet" href="tokens/typography.css">
+<link rel="stylesheet" href="tokens/spacing.css">
+<link rel="stylesheet" href="tokens/radii.css">
+<link rel="stylesheet" href="tokens/base.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+ body{margin:0;background:var(--bg-app);font-family:var(--font-sans);color:var(--text);-webkit-font-smoothing:antialiased;}
+ .er-navrow{cursor:pointer;transition:background .12s;white-space:nowrap;}
+ .er-navrow:hover{background:var(--bg-hover);}
+ .er-row{cursor:pointer;transition:background .12s;}
+ .er-row:hover{background:var(--bg-hover);}
+ .er-pill{cursor:pointer;transition:filter .12s,background .12s,border-color .12s;}
+ .er-pill:hover{filter:brightness(.96);}
+ .er-ibtn{cursor:pointer;transition:background .12s;}
+ .er-ibtn:hover{background:var(--bg-hover);}
+ .er-ibx .t{display:inline-block;max-width:0;overflow:hidden;white-space:nowrap;opacity:0;transition:max-width .16s cubic-bezier(0.2,0,0,1),opacity .16s,margin-left .16s;vertical-align:middle;}
+ .er-ibx:hover .t{max-width:120px;opacity:1;margin-left:5px;}
+ .er-avs>span:first-child{margin-left:0 !important;}
+ .er-scroll::-webkit-scrollbar{width:10px;height:10px;}
+ .er-scroll::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:10px;border:3px solid var(--bg-app);}
+ .er-scroll::-webkit-scrollbar-track{background:transparent;}
+</style>
+</helmet>
+
+<div style="display:flex;height:100vh;width:100vw;overflow:hidden;background:var(--bg-app);font-family:var(--font-sans);color:var(--text);">
+
+  <div style="width:240px;flex:none;background:var(--bg-sidebar);border-right:1px solid var(--border);padding:12px 10px;display:flex;flex-direction:column;gap:2px;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;gap:9px;padding:6px 8px 14px;">
+      <span style="width:28px;height:28px;border-radius:8px;background:var(--primary-500);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-brand);font-weight:700;font-size:16px;">P</span>
+      <span style="font-family:var(--font-brand);font-weight:600;font-size:19px;">Parade</span>
+    </div>
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="9">
+      <div class="er-navrow" style="display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:6px;background:{{ n.bg }};color:{{ n.color }};font-weight:{{ n.weight }};font-size:14px;"><i class="{{ n.icon }}" style="font-size:18px;color:{{ n.icol }};"></i>{{ n.label }}</div>
+    </sc-for>
+    <span style="flex:1;"></span>
+    <div style="padding:8px;font:var(--type-caption);color:var(--text-tertiary);">Parade SAS — Lyon</div>
+  </div>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+    <div style="height:58px;flex:none;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 24px;">
+      <div style="width:400px;display:flex;align-items:center;gap:8px;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;"><i class="ph-duotone ph-magnifying-glass" style="font-size:16px;color:var(--text-tertiary);"></i><span style="flex:1;font:var(--type-ui);color:var(--text-tertiary);">Rechercher…</span><span style="font:var(--type-mono);font-size:11px;color:var(--text-tertiary);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">⌘K</span></div>
+      <span style="flex:1;"></span>
+      <i class="ph-duotone ph-bell" style="font-size:20px;color:var(--text-muted);"></i>
+      <span style="width:30px;height:30px;border-radius:999px;background:var(--tint-red-bg);color:var(--tint-red-text);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">PY</span>
+    </div>
+
+    <div style="flex:1;min-height:0;display:flex;">
+      <!-- list pane -->
+      <div style="width:396px;flex:none;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--bg-surface);">
+        <div style="padding:16px 16px 13px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <h1 style="font-family:var(--font-brand);font-weight:600;font-size:20px;margin:0;">Emails</h1>
+            <span style="min-width:20px;height:19px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;font-size:11px;font-weight:600;background:var(--primary-50);color:var(--primary-900);">11</span>
+            <span style="flex:1;"></span>
+            <span class="er-ibtn" style="width:30px;height:30px;border-radius:7px;border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;"><i class="ph-duotone ph-sparkle" style="font-size:15px;color:var(--primary-500);"></i></span>
+            <span class="er-ibtn" style="width:30px;height:30px;border-radius:7px;border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;"><i class="ph-duotone ph-tag" style="font-size:15px;color:var(--text-muted);"></i></span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+              <span class="er-pill" style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;font-weight:500;font-size:12.5px;background:{{ f.bg }};color:{{ f.color }};border:1px solid {{ f.border }};"><i class="{{ f.icon }}" style="font-size:13px;color:{{ f.iconColor }};"></i>{{ f.label }}<span style="min-width:15px;height:15px;padding:0 4px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;font-size:10px;font-weight:600;background:{{ f.countBg }};color:{{ f.countColor }};">{{ f.count }}</span></span>
+            </sc-for>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;background:var(--bg-app);border:1px solid var(--border);border-radius:8px;padding:7px 10px;"><i class="ph-duotone ph-magnifying-glass" style="font-size:14px;color:var(--text-tertiary);"></i><span style="flex:1;font-size:13px;color:var(--text-tertiary);">Filtrer dans « À traiter »…</span></div>
+        </div>
+        <div class="er-scroll" style="flex:1;overflow-y:auto;">
+          <sc-for list="{{ emails }}" as="e" hint-placeholder-count="8">
+            <div class="er-row" onClick="{{ e.select }}" style="position:relative;padding:13px 16px 13px 19px;border-bottom:1px solid var(--border);background:{{ e.selBg }};">
+              <span style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ e.selBar }};"></span>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+                <sc-if value="{{ e.unread }}" hint-placeholder-val="{{ true }}"><span style="width:7px;height:7px;border-radius:999px;background:var(--primary-500);flex:none;"></span></sc-if>
+                <span style="flex:1;min-width:0;font-size:13.5px;font-weight:{{ e.subjWeight }};color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ e.subject }}</span>
+                <span style="font:var(--type-caption);color:var(--text-tertiary);flex:none;">{{ e.date }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:7px;">
+                <span class="er-avs" style="display:flex;flex:none;"><sc-for list="{{ e.avatars }}" as="a" hint-placeholder-count="2"><span style="width:19px;height:19px;border-radius:999px;margin-left:-5px;box-shadow:0 0 0 1.5px var(--bg-surface);display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:600;background:{{ a.bg }};color:{{ a.t }};">{{ a.i }}</span></sc-for></span>
+                <span style="flex:1;min-width:0;font:var(--type-caption);color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ e.snippet }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+                <sc-if value="{{ e.hasProj }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:6px;font-size:10.5px;font-weight:500;background:{{ e.projBg }};color:{{ e.projText }};"><i class="ph-duotone ph-folder-simple" style="font-size:11px;"></i>{{ e.projLabel }}</span></sc-if>
+                <span style="flex:1;"></span>
+                <sc-if value="{{ e.hasTasks }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:6px;font-size:10.5px;font-weight:600;background:var(--primary-50);color:var(--primary-900);"><i class="ph-fill ph-sparkle" style="font-size:10px;color:var(--primary-500);"></i>{{ e.taskPill }}</span></sc-if>
+                <sc-if value="{{ e.countShow }}" hint-placeholder-val="{{ false }}"><span style="font:var(--type-mono);font-size:11px;color:var(--text-tertiary);">{{ e.countLabel }}</span></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- detail pane -->
+      <div class="er-scroll" style="flex:1;min-width:0;overflow-y:auto;">
+        <div style="padding:24px 30px 40px;max-width:840px;">
+          <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:20px;margin-top:2px;">
+            <h2 style="flex:1;font-family:var(--font-brand);font-weight:600;font-size:23px;line-height:1.22;margin:0;">{{ active.subject }}</h2>
+            <div class="er-ibtn" style="flex:none;display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:var(--type-ui-medium);color:var(--text-muted);"><i class="ph-duotone ph-arrow-square-out" style="font-size:15px;"></i>Ouvrir sur Gmail</div>
+          </div>
+
+          <sc-if value="{{ active.hasReview }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-bottom:22px;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+                <span style="font-size:17px;font-weight:600;color:var(--text);">À valider</span>
+                <span style="font:var(--type-caption);color:var(--text-tertiary);">extrait par l'IA de ce thread</span>
+                <sc-if value="{{ active.hasPend }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--tint-yellow-text);background:var(--tint-yellow-bg);padding:2px 9px;border-radius:999px;"><span style="width:7px;height:7px;border-radius:999px;background:var(--tint-yellow-dot);"></span>{{ active.pendLabel }}</span></sc-if>
+                <sc-if value="{{ active.hasValid }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--tint-green-text);background:var(--tint-green-bg);padding:2px 9px;border-radius:999px;"><i class="ph-bold ph-check" style="font-size:11px;"></i>{{ active.validLabel }}</span></sc-if>
+                <sc-if value="{{ active.hasReject }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--tint-red-text);background:var(--tint-red-bg);padding:2px 9px;border-radius:999px;"><i class="ph-bold ph-x" style="font-size:11px;"></i>{{ active.rejectLabel }}</span></sc-if>
+                <span style="flex:1;"></span>
+                <span class="er-pill" onClick="{{ active.rejectAllR }}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;background:var(--tint-red-bg);color:var(--tint-red-text);font:var(--type-ui-medium);"><i class="ph-bold ph-x" style="font-size:13px;"></i>Tout rejeter</span>
+                <span class="er-pill" onClick="{{ active.validateAllR }}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;background:var(--tint-green-bg);color:var(--tint-green-text);box-shadow:inset 0 0 0 1px var(--tint-green-dot);font:var(--type-ui-medium);"><i class="ph-bold ph-check" style="font-size:13px;"></i>Tout valider</span>
+              </div>
+              <div style="border:1px solid var(--border);border-radius:11px;overflow:hidden;">
+                <sc-for list="{{ active.review }}" as="it" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:13px;padding:13px 15px;border-bottom:1px solid var(--border);background:{{ it.rowBg }};border-left:{{ it.leftBorder }};">
+                    <sc-if value="{{ it.resolved }}" hint-placeholder-val="{{ false }}"><span style="width:30px;height:30px;border-radius:999px;flex:none;display:inline-flex;align-items:center;justify-content:center;background:{{ it.badgeBg }};"><i class="{{ it.badgeIcon }}" style="font-size:15px;color:#fff;"></i></span></sc-if>
+                    <sc-if value="{{ it.pending }}" hint-placeholder-val="{{ true }}"><i class="{{ it.typeIcon }}" style="font-size:18px;color:var(--primary-500);flex:none;"></i></sc-if>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:7px;">
+                      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span style="font:var(--type-ui-medium);color:{{ it.titleColor }};text-decoration:{{ it.titleDeco }};">{{ it.title }}</span>
+                        <sc-if value="{{ it.pending }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:999px;background:var(--tint-green-bg);color:var(--tint-green-text);font-size:11px;font-weight:600;white-space:nowrap;flex:none;"><i class="ph-bold ph-plus-circle" style="font-size:11px;"></i>{{ it.badgeLabel }}</span></sc-if>
+                      </div>
+                      <sc-if value="{{ it.showChips }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;opacity:{{ it.metaOpacity }};">
+                          <sc-for list="{{ it.chips }}" as="c" hint-placeholder-count="2">
+                            <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:6px;font-size:12px;font-weight:500;background:{{ c.bg }};color:{{ c.color }};border:{{ c.border }};white-space:nowrap;flex:none;">
+                              <sc-if value="{{ c.hasIcon }}" hint-placeholder-val="{{ true }}"><i class="{{ c.icon }}" style="font-size:13px;"></i></sc-if>
+                              <sc-if value="{{ c.hasDot }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;border-radius:999px;background:{{ c.dot }};"></span></sc-if>
+                              {{ c.label }}
+                            </span>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{ it.pending }}" hint-placeholder-val="{{ true }}">
+                      <div style="flex:none;display:flex;align-items:center;gap:6px;">
+                        <span class="er-ibtn" style="width:32px;height:32px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);cursor:pointer;"><i class="ph-duotone ph-pencil-simple" style="font-size:16px;"></i></span>
+                        <span class="er-ibx er-pill" onClick="{{ it.reject }}" style="display:inline-flex;align-items:center;padding:7px 9px;border-radius:6px;background:var(--tint-red-bg);color:var(--tint-red-text);font:var(--type-ui-medium);"><i class="ph-bold ph-x" style="font-size:13px;"></i><span class="t">Invalider</span></span>
+                        <span class="er-ibx er-pill" onClick="{{ it.validate }}" style="display:inline-flex;align-items:center;padding:7px 9px;border-radius:6px;background:var(--tint-green-bg);color:var(--tint-green-text);box-shadow:inset 0 0 0 1px var(--tint-green-dot);font:var(--type-ui-medium);"><i class="ph-bold ph-check" style="font-size:13px;"></i><span class="t">Valider</span></span>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ it.resolved }}" hint-placeholder-val="{{ false }}">
+                      <span class="er-pill" onClick="{{ it.revert }}" style="flex:none;width:32px;height:32px;border-radius:6px;border:1px solid {{ it.revertBorder }};background:var(--bg-app);color:{{ it.revertColor }};display:inline-flex;align-items:center;justify-content:center;"><i class="ph-bold ph-arrow-counter-clockwise" style="font-size:14px;"></i></span>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="border:1px solid var(--border);border-radius:12px;background:var(--bg-app);padding:19px 21px;">
+            <div style="display:flex;align-items:flex-start;gap:12px;padding-bottom:15px;border-bottom:1px solid var(--border);margin-bottom:17px;">
+              <span style="width:38px;height:38px;border-radius:999px;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;background:{{ active.senderBg }};color:{{ active.senderText }};">{{ active.senderInit }}</span>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:baseline;gap:8px;"><span style="font:var(--type-ui-medium);color:var(--text);">{{ active.senderName }}</span><span style="font:var(--type-caption);color:var(--text-tertiary);">{{ active.senderEmail }}</span></div>
+                <div style="font:var(--type-caption);color:var(--text-tertiary);margin-top:3px;">{{ active.recipients }}</div>
+              </div>
+              <span style="font:var(--type-caption);color:var(--text-tertiary);flex:none;">{{ active.dateFull }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:13px;">
+              <sc-for list="{{ active.body }}" as="p" hint-placeholder-count="4"><p style="margin:0;font:var(--type-body);color:var(--text-muted);white-space:pre-line;">{{ p }}</p></sc-for>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:21px;padding-top:16px;border-top:1px solid var(--border);">
+              <div class="er-pill" style="display:flex;align-items:center;gap:7px;padding:9px 15px;border-radius:8px;background:var(--primary-500);color:#fff;font:var(--type-ui-medium);"><i class="ph-duotone ph-arrow-bend-up-left" style="font-size:15px;"></i>Répondre</div>
+              <div class="er-pill" style="display:flex;align-items:center;gap:7px;padding:9px 15px;border-radius:8px;border:1px solid var(--border);color:var(--text-muted);font:var(--type-ui-medium);"><i class="ph-duotone ph-arrow-bend-double-up-right" style="font-size:15px;"></i>Transférer</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = { active: 'thermigo', tasks: {} };
+
+  renderVals() {
+    const P = {
+      PA: {i:'PA', bg:'var(--tint-red-bg)', t:'var(--tint-red-text)', name:"Pierre-Yves d'Automato", email:'pierreyves@automato.tech'},
+      BB: {i:'BB', bg:'var(--tint-orange-bg)', t:'var(--tint-orange-text)', name:'Badr Bouslikhin', email:'badr@thermigo.com'},
+      PC: {i:'PC', bg:'var(--tint-green-bg)', t:'var(--tint-green-text)', name:'Paul Chaussivert', email:'paul@thermigo.com'},
+      AP: {i:'AP', bg:'var(--tint-blue-bg)', t:'var(--tint-blue-text)', name:'Alain Picart', email:'alain@mido.fr'},
+      PS: {i:'PS', bg:'var(--tint-brown-bg)', t:'var(--tint-brown-text)', name:'Pierre-Yves Sage', email:'py@automato.tech'},
+      ST: {i:'ST', bg:'var(--tint-mauve-bg)', t:'var(--tint-mauve-text)', name:'Stéphane Ferrand', email:'stephane@flowboreal.fr'},
+      AK: {i:'AK', bg:'var(--tint-yellow-bg)', t:'var(--tint-yellow-text)', name:'Amaury Khelifi', email:'a.khelifi@prevandcare.com'},
+      GS: {i:'GS', bg:'var(--tint-green-bg)', t:'var(--tint-green-text)', name:'Guillaume Staub', email:'g.staub@automato.tech'},
+      SB: {i:'SB', bg:'var(--tint-pink-bg)', t:'var(--tint-pink-text)', name:'Solène Bonnardot', email:'solene@prevandcare.com'},
+      BL: {i:'BL', bg:'var(--tint-brown-bg)', t:'var(--tint-brown-text)', name:'Bénédicte Landrodie', email:'benedicte.landrodie@jephosphore.com'},
+      OR: {i:'OR', bg:'var(--tint-blue-bg)', t:'var(--tint-blue-text)', name:'Olivier Rolin', email:'olivier.rolin@amigest.fr'},
+      NM: {i:'NM', bg:'var(--tint-mauve-bg)', t:'var(--tint-mauve-text)', name:'Nabila Monnet', email:'n.monnet@bc-fournisseurs.fr'},
+    };
+    const PROJ = {
+      thermigo:{label:'Thermigo — Refonte du site', bg:'var(--tint-mauve-bg)', t:'var(--tint-mauve-text)', dot:'var(--tint-mauve-dot)', short:'Thermigo'},
+      mido:{label:'Mido Plantes', bg:'var(--tint-green-bg)', t:'var(--tint-green-text)', dot:'var(--tint-green-dot)', short:'Mido'},
+      flow:{label:'Flow Boreal — APKI', bg:'var(--tint-blue-bg)', t:'var(--tint-blue-text)', dot:'var(--tint-blue-dot)', short:'Flow Boreal'},
+      prevand:{label:'PrevandCare — Refonte', bg:'var(--tint-orange-bg)', t:'var(--tint-orange-text)', dot:'var(--tint-orange-dot)', short:'PrevandCare'},
+    };
+    const TYPE = {
+      tache:   { icon:'ph-duotone ph-list-checks', badge:'Nouvelle tâche' },
+      projet:  { icon:'ph-duotone ph-briefcase',   badge:'Nouveau projet' },
+      contact: { icon:'ph-duotone ph-user',        badge:'Nouveau contact' },
+      entite:  { icon:'ph-duotone ph-buildings',   badge:'Nouvelle entité' },
+    };
+
+    const nav = [
+      ['ph-house','Dashboard'],['ph-briefcase','Projets'],['ph-funnel','Pipeline'],
+      ['ph-clock','Time tracking'],['ph-microphone','Meetings'],['ph-envelope-simple','Emails',true],
+      ['ph-users','CRM'],['ph-calculator','Compta'],['ph-buildings','Coworking'],
+    ].map(([ic,label,active]) => ({
+      icon:'ph-duotone '+ic, label,
+      bg: active ? 'var(--primary-50)' : 'transparent',
+      color: active ? 'var(--primary-900)' : 'var(--text-muted)',
+      weight: active ? 500 : 400,
+      icol: active ? 'var(--primary-700)' : 'var(--primary-500)',
+    }));
+
+    const filters = [
+      {label:'À traiter', count:11, icon:'ph-duotone ph-sparkle', active:true},
+      {label:'Tous', count:183, icon:'ph-duotone ph-tray'},
+      {label:'Facturation', count:9, icon:'ph-duotone ph-receipt'},
+      {label:'Bruits', count:163, icon:'ph-duotone ph-speaker-simple-slash'},
+    ].map(f => ({
+      ...f,
+      bg: f.active ? 'var(--primary-500)' : 'var(--bg-app)',
+      color: f.active ? '#fff' : 'var(--text-muted)',
+      border: f.active ? 'var(--primary-500)' : 'var(--border)',
+      iconColor: f.active ? 'rgba(255,255,255,.85)' : 'var(--text-tertiary)',
+      countBg: f.active ? 'rgba(255,255,255,.22)' : 'var(--bg-hover)',
+      countColor: f.active ? '#fff' : 'var(--text-muted)',
+    }));
+
+    const RAW = [
+      {id:'thermigo', subject:"Re: Suite à la présentation d'Automato pour la création du site de Thermigo", who:['PA','BB','PC'], date:'30/06', count:10, proj:'thermigo', cat:'todo', unread:true,
+        snippet:"Bonjour Badr, Merci, je reprends tes points. 1. GitHub — pas besoin que tu me transfères l'ownership : c'est moi qui pousse le transfert vers votre org.",
+        body:["Bonjour Badr, Cécile et Paul,","Je vous partage une nouvelle version du site, accessible via ce lien : https://thermigo.vercel.app/","Je me suis permis de retravailler certains textes pour gagner en clarté, car le volume de contenu était trop important. La section « Vous êtes » mériterait notamment d'être synthétisée.","Concernant la partie équipe, nous avons pris une petite liberté créative : j'espère que la direction artistique vous plaira :)","Bonne journée,\nPierre-Yves"],
+        tasks:[{id:'thermigo-1',text:"Remplacer Jean-Baptiste par Eric dans l'équipe, en attendant texte et photo à venir"},{id:'thermigo-2',text:"Intégrer les logos et photos des clients dans la section « Ils nous ont fait confiance »"},{id:'thermigo-3',text:"Compléter la section Avis client avec les témoignages restant à récupérer (syndic et tertiaire)"}]},
+      {id:'mido', subject:"Accepté : Mido x Automato", who:['AP','PS'], date:'24/06', count:1, proj:'mido', cat:'todo', unread:true,
+        snippet:"Ravi de vous confirmer que la proposition est acceptée. Je lance la création du projet côté Parade.",
+        body:["Bonjour Alain,","Ravi de vous confirmer que la proposition Mido x Automato est acceptée. Je lance la création du projet côté Parade et reviens vers vous avec un rétroplanning.","Belle journée,\nPierre-Yves"],
+        tasks:[{id:'mido-1',text:"Créer le projet Mido Plantes et planifier le kickoff"}]},
+      {id:'planche', subject:"Planche éditoriale & tonalité de marque", who:['ST','PA'], date:'19/06', count:1, proj:'flow', cat:'todo', unread:true,
+        snippet:"En te souhaitant bonne réception Pierre-Yves. Planche éditoriale & tonalité de marque, posture éditoriale globale, registre vouvoiement.",
+        body:["Pierre-Yves,","En te souhaitant bonne réception. Tu trouveras la planche éditoriale & tonalité de marque de Flow Boreal : posture éditoriale globale, registre, vouvoiement.","Bien cordialement,\nStéphane"],
+        tasks:[{id:'planche-1',text:"Valider le registre de vouvoiement de Flow Boreal"},{id:'planche-2',text:"Décliner la tonalité de marque sur la landing page"}]},
+      {id:'evolution', subject:"Évolution de l'identité – Flow Boreal / Transmission des éléments", who:['ST','PA'], date:'18/06', count:1, proj:'flow', cat:'todo', unread:true,
+        snippet:"Bonsoir Pierre-Yves, j'espère que tu vas bien. À la suite de plusieurs rendez-vous, nous avons engagé une phase de refonte.",
+        body:["Bonsoir Pierre-Yves,","J'espère que tu vas bien. À la suite de plusieurs rendez-vous avec des professionnels du marketing et de la communication, nous avons engagé en interne une phase de refonte de l'identité.","Stéphane"],
+        tasks:[]},
+      {id:'security', subject:"FW: Action required: security vulnerabilities detected in your projects", who:['AK','PA'], date:'17/06', count:1, proj:'prevand', cat:'bruit', unread:false,
+        snippet:"Hello, je te laisse optimiser les RLS si besoin, je n'ai pas du tout regardé. À + Amaury.",
+        body:["Hello,","Je te laisse optimiser les RLS si besoin, je n'ai pas du tout regardé.","À +\nAmaury"],
+        tasks:[]},
+      {id:'devis', subject:"RE: Devis Signé", who:['PA','GS','AK'], date:'02/06', count:4, proj:null, cat:'facturation', unread:false,
+        snippet:"Oui je l'ai lancé ce matin, navré pour le retard. Guillaume.",
+        body:["Guillaume,","Oui je l'ai lancé ce matin, navré pour le retard.","Pierre-Yves"],
+        tasks:[]},
+      {id:'acces', subject:"Accès espace aidant", who:['PA','SB','GS'], date:'06/05', count:4, proj:null, cat:'todo', unread:true,
+        snippet:"Merci Solène, par contre je ne suis pas dispo demain avant 11h. Tu aurais des créneaux après ?",
+        body:["Merci Solène,","Par contre je ne suis pas dispo demain avant 11h. Tu aurais des créneaux après ? Sinon je peux faire sans dans un premier temps et voir ça à l'occasion.","Bonne journée"],
+        tasks:[{id:'acces-1',text:"Proposer des créneaux après 11h à Solène"}]},
+      {id:'cowork', subject:"Documents pour Cowork", who:['PA','BL'], date:'04/05', count:2, proj:null, cat:'todo', unread:false,
+        snippet:"Ci-joint tous les documents pour la mise en place du contrat. Dis-moi si il te manque quoi que ce soit.",
+        body:["Bonjour,","Ci-joint tous les documents pour la mise en place du contrat. Dis-moi si il te manque quoi que ce soit.","Bénédicte"],
+        tasks:[{id:'cowork-1',text:"Récupérer et classer les documents du contrat coworking"}]},
+      {id:'prevcare', subject:"Lancement refonte site PREV&CARE", who:['PA','AK'], date:'30/04', count:2, proj:'prevand', cat:'facturation', unread:false,
+        snippet:"Bonjour à toutes et tous, veuillez trouver ci-joint une version corrigée du devis pour la refonte du site.",
+        body:["Bonjour à toutes et tous,","Veuillez trouver ci-joint une version corrigée du devis pour la refonte du site. Comme convenu, je vous transmets également une proposition pour la réalisation d'un motion.","Pierre-Yves"],
+        tasks:[]},
+      {id:'antia', subject:"Antia – Demande de RDV", who:['PA','OR'], date:'30/04', count:5, proj:null, cat:'todo', unread:true,
+        snippet:"C'est parfait, je crée l'invitation. Merci et bon weekend.",
+        body:["C'est parfait, je crée l'invitation.","Merci et bon weekend.","Pierre-Yves"],
+        tasks:[{id:'antia-1',text:"Créer l'invitation pour le RDV du 07/05 à 10h"}]},
+      {id:'tr', subject:"TR: Suite à notre échange synchronisation BC fournisseurs et perspectives d'intégration", who:['NM','PA','GS'], date:'28/04', count:1, proj:null, cat:'todo', unread:false,
+        snippet:"Pierre-Yves, suite à notre échange, vous pouvez contacter Olivier Rolin de la société Amigest au 04 78 34 27 27.",
+        body:["Pierre-Yves,","Suite à notre échange, vous pouvez contacter Olivier Rolin de la société Amigest au 04 78 34 27 27 (choix 1 puis encore 1). Je viens de l'avoir au téléphone.","Nabila"],
+        tasks:[{id:'tr-1',text:"Contacter Olivier Rolin (Amigest) au 04 78 34 27 27"}]},
+    ];
+
+    const EXTRAS = {
+      thermigo: [
+        { id:'thermigo-c1', type:'contact', title:'Badr Bouslikhin', role:'Développeur', company:'Thermigo' },
+        { id:'thermigo-e1', type:'entite', title:'Thermigo', desc:'PME · génie climatique · Lyon' },
+      ],
+      mido: [
+        { id:'mido-c1', type:'contact', title:'Alain Picart', role:'Gérant', company:'Mido Plantes' },
+        { id:'mido-e1', type:'entite', title:'Mido Plantes', desc:'Commerce · végétal d\'intérieur' },
+      ],
+      acces: [
+        { id:'acces-c1', type:'contact', title:'Solène Bonnardot', role:'Coordinatrice aidants', company:'PrevandCare' },
+      ],
+      tr: [
+        { id:'tr-c1', type:'contact', title:'Olivier Rolin', role:'Contact fournisseur', company:'Amigest' },
+        { id:'tr-e1', type:'entite', title:'Amigest', desc:'Société · Lyon · 04 78 34 27 27' },
+      ],
+    };
+
+    const tget = (id) => this.state.tasks[id] || 'pending';
+    const setTask = (id, val) => () => this.setState(s => ({ tasks: { ...s.tasks, [id]: s.tasks[id] === val ? 'pending' : val } }));
+    const validateAllFor = (ids) => () => this.setState(s => { const tasks = { ...s.tasks }; ids.forEach(i => tasks[i] = 'valid'); return { tasks }; });
+    const rejectAllFor = (ids) => () => this.setState(s => { const tasks = { ...s.tasks }; ids.forEach(i => tasks[i] = 'reject'); return { tasks }; });
+    const itemView = (it) => {
+      const st = tget(it.id);
+      const valid = st === 'valid', rej = st === 'reject', pending = !valid && !rej;
+      return {
+        ...it, pending, resolved: !pending,
+        rowBg: valid ? 'var(--tint-green-bg)' : rej ? 'var(--tint-red-bg)' : 'var(--bg-app)',
+        leftBorder: valid ? '4px solid var(--tint-green-dot)' : rej ? '4px solid var(--tint-red-dot)' : '4px solid transparent',
+        titleColor: rej ? 'var(--text-tertiary)' : 'var(--text)',
+        titleDeco: rej ? 'line-through' : 'none',
+        badgeBg: valid ? 'var(--tint-green-dot)' : 'var(--tint-red-dot)',
+        badgeIcon: valid ? 'ph-bold ph-check' : 'ph-bold ph-x',
+        showChips: it.chips.length > 0,
+        metaOpacity: rej ? '0.55' : '1',
+        validate: setTask(it.id, 'valid'), reject: setTask(it.id, 'reject'), revert: setTask(it.id, st),
+        revertBorder: valid ? 'var(--tint-green-dot)' : 'var(--tint-red-dot)',
+        revertColor: valid ? 'var(--tint-green-text)' : 'var(--tint-red-text)',
+      };
+    };
+
+    const activeId = this.state.active;
+    const emails = RAW.map(e => {
+      const pj = e.proj ? PROJ[e.proj] : null;
+      const nc = e.tasks.length;
+      const sel = e.id === activeId;
+      const restNames = e.who.slice(1).map(k => P[k].name);
+      const projChip = pj ? { hasIcon:true, hasDot:false, icon:'ph-duotone ph-folder-simple', dot:'', label:pj.short, bg:pj.bg, color:pj.t, border:'none' } : null;
+      const nchip = (icon, label) => ({ hasIcon:true, hasDot:false, icon, dot:'', label, bg:'var(--bg-app)', color:'var(--text-muted)', border:'1px solid var(--border)' });
+      const taskItems = e.tasks.map(t => ({ id:t.id, type:'tache', title:t.text, typeIcon:TYPE.tache.icon, badgeLabel:TYPE.tache.badge, chips:[ nchip('ph-duotone ph-user','Pierre-Yves'), ...(projChip ? [projChip] : []) ] }));
+      const extraItems = (EXTRAS[e.id] || []).map(x => {
+        const ti = TYPE[x.type];
+        let chips = [];
+        if (x.type === 'contact') chips = [ nchip('ph-duotone ph-identification-badge', x.role), nchip('ph-duotone ph-buildings', x.company) ];
+        else if (x.type === 'entite') chips = [ nchip('ph-duotone ph-tag', x.desc) ];
+        return { id:x.id, type:x.type, title:x.title, typeIcon:ti.icon, badgeLabel:ti.badge, chips };
+      });
+      const reviewRaw = [ ...taskItems, ...extraItems ];
+      const reviewIds = reviewRaw.map(i => i.id);
+      const review = reviewRaw.map(itemView);
+      const validN = reviewIds.filter(id => tget(id) === 'valid').length;
+      const rejectN = reviewIds.filter(id => tget(id) === 'reject').length;
+      const pendN = reviewIds.length - validN - rejectN;
+      return {
+        ...e,
+        avatars: e.who.map(k => ({ i: P[k].i, bg: P[k].bg, t: P[k].t })),
+        names: e.who.map(k => P[k].name).join(', '),
+        hasProj: !!pj, projBg: pj ? pj.bg : 'transparent', projText: pj ? pj.t : 'var(--text)', projDot: pj ? pj.dot : 'var(--tint-gray-dot)', projLabel: pj ? pj.label : '',
+        hasTasks: nc > 0, taskCount: nc, taskPill: nc + (nc > 1 ? ' tâches' : ' tâche'),
+        countShow: e.count > 1, countLabel: e.count + ' msgs',
+        subjWeight: e.unread ? 600 : 500,
+        selBg: sel ? 'var(--bg-hover)' : 'transparent',
+        selBar: sel ? 'var(--primary-500)' : (e.unread ? 'var(--primary-200)' : 'transparent'),
+        select: () => this.setState({ active: e.id }),
+        senderInit: P[e.who[0]].i, senderBg: P[e.who[0]].bg, senderText: P[e.who[0]].t,
+        senderName: P[e.who[0]].name, senderEmail: P[e.who[0]].email,
+        recipients: restNames.length ? ('À : ' + restNames.join(' · ')) : '',
+        dateFull: e.date + '/2026 · 11:08',
+        review, hasReview: review.length > 0,
+        pendN, validN, rejectN,
+        hasPend: pendN > 0, hasValid: validN > 0, hasReject: rejectN > 0,
+        pendLabel: pendN + ' en attente',
+        validLabel: validN + ' validé' + (validN > 1 ? 's' : ''),
+        rejectLabel: rejectN + ' invalidé' + (rejectN > 1 ? 's' : ''),
+        validateAllR: validateAllFor(reviewIds), rejectAllR: rejectAllFor(reviewIds),
+      };
+    });
+
+    const active = emails.find(e => e.id === activeId) || emails[0];
+
+    return { nav, filters, emails, active };
+  }
+}
+</script>
+</body>
+</html>

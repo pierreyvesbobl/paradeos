@@ -1,0 +1,38 @@
+/* Paradeos — Radii, borders & shadows
+ * Light, Notion-like. Thin hairline borders carry separation; shadows are
+ * reserved for things that float (popovers, dialogs, dragged cards).
+ */
+:root {
+  /* ---- Corner radii ---- */
+  --radius-tag: 6px;     /* tags, status lines, small chips */
+  --radius-control: 6px; /* buttons, inputs, selects */
+  --radius-card: 8px;    /* cards */
+  --radius-panel: 12px;  /* panels, dialogs, large surfaces */
+  --radius-pill: 999px;  /* avatars, fully-round pills */
+
+  /* ---- Borders ---- */
+  --border-width: 1px;
+  --border-hairline: 0.5px solid var(--border);  /* Notion-light hairline */
+  --border-default: 1px solid var(--border);
+  --border-strong-line: 1px solid var(--border-strong);
+
+  /* ---- Shadows (cool-neutral, very soft) ---- */
+  --shadow-none: none;
+  /* Resting card: just a hairline ring, no drop */
+  --shadow-card: 0 0 0 1px var(--border);
+  /* Subtle lift for menus / hover cards */
+  --shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.06), 0 0 0 1px rgba(15, 15, 15, 0.04);
+  /* Popover / dropdown */
+  --shadow-popover: rgba(15, 15, 15, 0.05) 0 0 0 1px, rgba(15, 15, 15, 0.08) 0 3px 6px, rgba(15, 15, 15, 0.12) 0 9px 24px;
+  /* Dialog / modal */
+  --shadow-dialog: rgba(15, 15, 15, 0.06) 0 0 0 1px, rgba(15, 15, 15, 0.1) 0 8px 16px, rgba(15, 15, 15, 0.18) 0 18px 48px;
+  /* Dragged / lifted board card */
+  --shadow-drag: 0 2px 4px rgba(15, 15, 15, 0.1), 0 8px 20px rgba(15, 15, 15, 0.12);
+
+  /* ---- Motion ---- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); /* @kind other */
+  --duration-fast: 90ms; /* @kind other */
+  --duration-base: 140ms; /* @kind other */
+  --duration-slow: 220ms; /* @kind other */
+  --transition-control: background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}

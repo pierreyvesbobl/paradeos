@@ -26,6 +26,8 @@ type ProposalKind =
   | "task"
   | "category_tag"
   | "project_link"
+  | "entity_link"
+  | "project_contact_link"
   | "contact"
   | "entity"
   | "project"
@@ -59,6 +61,8 @@ const KIND_ICON: Record<ProposalKind, typeof ListTodo> = {
   task: ListTodo,
   category_tag: Tag,
   project_link: Briefcase,
+  entity_link: Building2,
+  project_contact_link: UserPlus,
   contact: UserPlus,
   entity: Building2,
   project: Briefcase,
@@ -69,6 +73,8 @@ const KIND_LABEL: Record<ProposalKind, string> = {
   task: "Tâche",
   category_tag: "Catégorie",
   project_link: "Lien projet",
+  entity_link: "Lien entité",
+  project_contact_link: "Contact ↔ projet",
   contact: "Contact",
   entity: "Entité",
   project: "Projet",

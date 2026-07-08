@@ -1,0 +1,33 @@
+/* Paradeos — Spacing tokens
+ * 4px base grid. Notion-like density: tight rows, generous panels.
+ */
+:root {
+  --space-0: 0;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 32px;
+  --space-10: 40px;
+  --space-11: 48px;
+  --space-12: 64px;
+  --space-14: 80px;
+  --space-16: 96px;
+
+  /* ---- Semantic spacing ---- */
+  --gap-inline: var(--space-3);     /* between icon + label */
+  --pad-tag: 3px 8px;               /* tag / pill padding */
+  --pad-row: 6px 8px;               /* list / sidebar rows */
+  --pad-cell: 8px 12px;             /* table cells */
+  --pad-card: 16px;                 /* card inner padding */
+  --pad-panel: 24px;                /* panel inner padding */
+  --pad-control: 6px 12px;          /* buttons, inputs */
+
+  /* ---- Layout ---- */
+  --sidebar-width: 240px;
+  --content-max: 960px;
+}

@@ -1,21 +1,35 @@
 import "server-only";
 
+import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages, gmailTags, gmailThreads } from "@/db/schema/gmail";
+import { projectContacts } from "@/db/schema/project-contacts";
+import { projects } from "@/db/schema/projects";
 import { findContactByEmail } from "@/lib/db/queries/contacts";
 import { db } from "@/lib/db/server";
 import { extractEmail } from "@/lib/gmail/extract";
-import { applyTagToThread } from "@/lib/gmail/tags";
+import { applyTagToThread, computeThreadTaggingSignals } from "@/lib/gmail/tags";
 import {
   fuzzyMatchContact,
   fuzzyMatchEntity,
   fuzzyMatchProject,
   fuzzyMatchTaskInProject,
 } from "@/lib/meetings/extract";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+
+type ProposalKind =
+  | "task"
+  | "category_tag"
+  | "project_link"
+  | "entity_link"
+  | "project_contact_link"
+  | "contact"
+  | "entity"
+  | "project"
+  | "draft_reply";
 
 type ProposalRow = {
   messageId: string;
-  kind: "task" | "category_tag" | "project_link" | "contact" | "entity" | "project" | "draft_reply";
+  kind: ProposalKind;
   payload: Record<string, unknown>;
   matchedId: string | null;
   matchConfidence: string | null;
@@ -168,18 +182,41 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     });
   }
 
-  // 3. Project link inféré → auto-apply (pas de proposition à valider).
-  // L'auto-tag par contact match du sync gère déjà 90% des cas ; cette
-  // branche couvre les emails où le LLM détecte un projet du contenu
-  // au-delà du contact (ex. "concernant le projet X" mentionné dans un
-  // email qui n'a pas de contact CRM dans les participants).
+  // 3. Rattachement projet — signaux combinés :
+  //    - candidateProjectIds : projets actifs matchés par contact ∪ entité (calc côté tags.ts)
+  //    - LLM proposedProjectName : projet mentionné explicitement dans le contenu
+  // Décision :
+  //    - projectDimensionLocked → skip (l'humain a scellé le choix)
+  //    - 1 seul candidat clair (LLM match + 0 candidats côté serveur, ou 1 seul candidat = LLM match)
+  //      → auto-apply direct comme avant
+  //    - N candidats ambigus → proposition project_link à valider avec candidateProjectIds[]
   let autoAppliedProjectLinks = 0;
   let autoLinkedProjectId: string | null = null;
-  if (result.proposedProjectName) {
-    const match = await fuzzyMatchProject(result.proposedProjectName);
-    if (match) {
-      autoLinkedProjectId = match.id;
-      // Cherche le gmail_tag projet correspondant.
+  const signals = await computeThreadTaggingSignals(msg.threadId);
+  const candidateProjectIds = new Set<string>(signals?.candidateProjectIds ?? []);
+  const llmProjectMatch = result.proposedProjectName
+    ? await fuzzyMatchProject(result.proposedProjectName)
+    : null;
+  if (llmProjectMatch) candidateProjectIds.add(llmProjectMatch.id);
+  const candidateList = [...candidateProjectIds];
+
+  if (!signals?.projectDimensionLocked && candidateList.length > 0) {
+    // Récupère les infos des candidats pour le payload (nom lisible côté UI).
+    const projectRows = await conn
+      .select({ id: projects.id, name: projects.name, status: projects.status })
+      .from(projects)
+      .where(inArray(projects.id, candidateList));
+    const candidatesPayload = projectRows.map((p) => ({
+      id: p.id,
+      name: p.name,
+      status: p.status,
+      llmMatched: llmProjectMatch?.id === p.id,
+    }));
+
+    // Cas trivial : 1 seul candidat clair → auto-apply si le tag projet existe déjà.
+    if (candidateList.length === 1) {
+      const projectId = candidateList[0]!;
+      autoLinkedProjectId = projectId;
       const [projectTag] = await conn
         .select({ id: gmailTags.id })
         .from(gmailTags)
@@ -187,7 +224,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
           and(
             eq(gmailTags.userId, msg.userId),
             eq(gmailTags.kind, "project"),
-            eq(gmailTags.targetId, match.id),
+            eq(gmailTags.targetId, projectId),
           ),
         )
         .limit(1);
@@ -201,15 +238,88 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
           });
           autoAppliedProjectLinks++;
         } catch {
-          // Push Gmail peut échouer (token, quota…) — on n'invalide pas
-          // l'extraction pour autant, le tag DB est déjà posé.
+          // Push Gmail peut échouer (token/quota) — tag DB reste posé.
         }
       }
-      // Si le tag projet n'existe pas encore en base, on n'auto-applique
-      // pas (sinon il faudrait aussi créer le label Gmail à la volée
-      // pendant le sync, ce qui ajoute du coût). L'utilisateur peut
-      // déclencher "Initialiser les tags CRM" depuis /emails/tags pour
-      // créer tous les labels manquants.
+    } else {
+      // N candidats → proposition à valider.
+      // suggested = LLM match si présent, sinon premier candidat (le user pourra changer).
+      const suggested: string = llmProjectMatch?.id ?? candidateList[0]!;
+      const suggestedRow = projectRows.find((p) => p.id === suggested);
+      rows.push({
+        messageId,
+        kind: "project_link",
+        payload: {
+          candidates: candidatesPayload,
+          suggestedProjectId: suggested,
+          suggestedProjectName: suggestedRow?.name ?? null,
+          llmMentionedName: result.proposedProjectName ?? null,
+        },
+        matchedId: suggested,
+        matchConfidence: llmProjectMatch ? llmProjectMatch.confidence.toFixed(3) : null,
+      });
+    }
+  }
+
+  // 3b. entity_link : entités matchées par domaine — sync a déjà auto-appliqué
+  // le tag entité, mais si N entités matchent un même domaine (rare mais
+  // possible), on émet une proposition pour laisser l'humain trancher.
+  if (signals && signals.matchedEntityIds.length > 1) {
+    const entityRows = await conn
+      .select({ id: entities.id, name: entities.name })
+      .from(entities)
+      .where(inArray(entities.id, signals.matchedEntityIds));
+    const candidatesPayload = entityRows.map((e) => ({ id: e.id, name: e.name }));
+    rows.push({
+      messageId,
+      kind: "entity_link",
+      payload: {
+        candidates: candidatesPayload,
+        suggestedEntityId: entityRows[0]?.id ?? null,
+      },
+      matchedId: entityRows[0]?.id ?? null,
+      matchConfidence: null,
+    });
+  }
+
+  // 3c. project_contact_link : pour chaque contact CRM matché du thread
+  // qui n'est pas rattaché à un des projets candidats, propose le
+  // rattachement. Rend visible le trou "contact connu mais absent de
+  // project_contacts" qui est la cause #1 des projets vides.
+  if (
+    signals &&
+    signals.matchedContactIds.length > 0 &&
+    candidateList.length > 0 &&
+    !signals.projectDimensionLocked
+  ) {
+    const existingLinks = await conn
+      .select({
+        contactId: projectContacts.contactId,
+        projectId: projectContacts.projectId,
+      })
+      .from(projectContacts)
+      .where(
+        and(
+          inArray(projectContacts.contactId, signals.matchedContactIds),
+          inArray(projectContacts.projectId, candidateList),
+        ),
+      );
+    const linkedPairs = new Set(existingLinks.map((l) => `${l.contactId}:${l.projectId}`));
+    // Ne proposer que sur le projet suggéré (celui que l'user va accepter en priorité)
+    // pour éviter d'exploser la file de propositions.
+    const targetProjectId: string = llmProjectMatch?.id ?? candidateList[0]!;
+    for (const contactId of signals.matchedContactIds) {
+      if (linkedPairs.has(`${contactId}:${targetProjectId}`)) continue;
+      rows.push({
+        messageId,
+        kind: "project_contact_link",
+        payload: {
+          contactId,
+          projectId: targetProjectId,
+        },
+        matchedId: contactId,
+        matchConfidence: null,
+      });
     }
   }
 

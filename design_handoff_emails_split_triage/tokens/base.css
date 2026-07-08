@@ -1,0 +1,51 @@
+/* Paradeos — base element defaults.
+ * Minimal, opt-in resets so specimen cards & kits render consistently.
+ * Tokens (colors/type/spacing) come from the other @imports in styles.css.
+ */
+:root {
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--text);
+  background: var(--bg-app);
+}
+
+a {
+  color: var(--link);
+  text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Phosphor duotone secondary layer tuning: trait (foncé) + fill (~40%). */
+.ph-duotone { line-height: 1; }
+
+/* Brand lettermark — the Fraunces "P" on a blue square.
+ * Set width/height/font-size/border-radius inline (font-size ≈ 0.62 × size).
+ * Usage: <span class="parade-mark" style="width:40px;height:40px;font-size:25px;border-radius:10px">P</span>
+ */
+.parade-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-brand);
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+  border-radius: 24%;
+}
+

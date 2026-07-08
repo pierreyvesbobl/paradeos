@@ -14,7 +14,7 @@ import {
   modifyThreadLabels,
   updateLabel,
 } from "@/lib/google/gmail-api";
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { GENERIC_EMAIL_DOMAINS, domainFromEmail, extractDomain } from "./domain";
 
 /**
@@ -282,19 +282,35 @@ export async function syncThreadLabelsFromGmail(args: {
  * Ne pousse PAS encore le label dans Gmail (économie d'API : le push
  * réel se fait à la demande via applyTagToThread).
  */
-export async function autoTagThreadByParticipants(threadIdLocal: string): Promise<void> {
+/**
+ * Signaux d'auto-tagging d'un thread — utilisés par le sync (pour
+ * appliquer les tags high-confidence) et par l'extraction LLM (pour
+ * générer des propositions à valider sur les cas ambigus).
+ */
+export type ThreadTaggingSignals = {
+  userId: string;
+  involvedEmails: string[];
+  matchedContactIds: string[];
+  matchedEntityIds: string[];
+  /** Projets actifs candidats — union de (via contacts) ∪ (via entités). */
+  candidateProjectIds: string[];
+  /** Un tag projet manuellement scellé existe déjà sur ce thread. */
+  projectDimensionLocked: boolean;
+};
+
+export async function computeThreadTaggingSignals(
+  threadIdLocal: string,
+): Promise<ThreadTaggingSignals | null> {
   const conn = await db();
 
-  // Récupère thread + user_id + emails impliqués.
   const [thread] = await conn
     .select({ userId: gmailThreads.userId })
     .from(gmailThreads)
     .where(eq(gmailThreads.id, threadIdLocal))
     .limit(1);
-  if (!thread) return;
+  if (!thread) return null;
   const userId = thread.userId;
 
-  // Liste des emails impliqués via les messages du thread.
   const msgs = await conn
     .select({
       fromEmail: gmailMessages.fromEmail,
@@ -304,38 +320,124 @@ export async function autoTagThreadByParticipants(threadIdLocal: string): Promis
     .from(gmailMessages)
     .where(eq(gmailMessages.threadId, threadIdLocal));
 
-  const involvedEmails = new Set<string>();
+  const involved = new Set<string>();
   for (const m of msgs) {
-    if (m.fromEmail) involvedEmails.add(m.fromEmail.toLowerCase());
-    for (const e of m.toEmails ?? []) involvedEmails.add(e.toLowerCase());
-    for (const e of m.ccEmails ?? []) involvedEmails.add(e.toLowerCase());
+    if (m.fromEmail) involved.add(m.fromEmail.toLowerCase());
+    for (const e of m.toEmails ?? []) involved.add(e.toLowerCase());
+    for (const e of m.ccEmails ?? []) involved.add(e.toLowerCase());
   }
-  if (involvedEmails.size === 0) return;
-  const involvedList = [...involvedEmails];
+  const involvedEmails = [...involved];
 
-  // Match contacts (sert uniquement à dériver les projets/entités —
-  // on NE crée PAS de tag contact pour éviter la pollution de la liste
-  // de labels Gmail quand le CRM contient des centaines de contacts).
-  const matchedContacts = await conn
-    .select({ id: contacts.id })
-    .from(contacts)
-    .where(inArray(contacts.email, involvedList));
+  const matchedContacts =
+    involvedEmails.length === 0
+      ? []
+      : await conn
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(inArray(contacts.email, involvedEmails));
+  const matchedContactIds = matchedContacts.map((c) => c.id);
 
-  const tagIdsToApply: string[] = [];
+  const overriddenProjectTag = await conn
+    .select({ tagId: gmailThreadTags.tagId })
+    .from(gmailThreadTags)
+    .innerJoin(gmailTags, eq(gmailTags.id, gmailThreadTags.tagId))
+    .where(
+      and(
+        eq(gmailThreadTags.threadId, threadIdLocal),
+        eq(gmailThreadTags.manuallyOverridden, true),
+        eq(gmailTags.kind, "project"),
+      ),
+    )
+    .limit(1);
+  const projectDimensionLocked = overriddenProjectTag.length > 0;
 
-  // Projets via project_contacts.
-  if (matchedContacts.length > 0) {
+  const candidateProjectIds = new Set<string>();
+  if (matchedContactIds.length > 0) {
     const projRows = await conn
-      .select({ id: projects.id, name: projects.name })
+      .select({ id: projects.id })
       .from(projectContacts)
       .innerJoin(projects, eq(projects.id, projectContacts.projectId))
       .where(
-        inArray(
-          projectContacts.contactId,
-          matchedContacts.map((c) => c.id),
-        ),
+        and(inArray(projectContacts.contactId, matchedContactIds), ne(projects.status, "archived")),
       );
-    for (const p of projRows) {
+    for (const p of projRows) candidateProjectIds.add(p.id);
+  }
+
+  const involvedDomains = new Set<string>();
+  for (const e of involved) {
+    const d = domainFromEmail(e);
+    if (d && !GENERIC_EMAIL_DOMAINS.has(d)) involvedDomains.add(d);
+  }
+  const matchedEntityIds = new Set<string>();
+  if (involvedDomains.size > 0) {
+    const entityRows = await conn
+      .select({ id: entities.id, website: entities.website })
+      .from(entities)
+      .where(isNotNull(entities.website));
+    for (const e of entityRows) {
+      const d = extractDomain(e.website);
+      if (d && involvedDomains.has(d)) matchedEntityIds.add(e.id);
+    }
+  }
+
+  if (matchedEntityIds.size > 0) {
+    const entityProjRows = await conn
+      .select({ id: projects.id })
+      .from(projects)
+      .where(
+        and(inArray(projects.entityId, [...matchedEntityIds]), ne(projects.status, "archived")),
+      );
+    for (const p of entityProjRows) candidateProjectIds.add(p.id);
+  }
+
+  return {
+    userId,
+    involvedEmails,
+    matchedContactIds,
+    matchedEntityIds: [...matchedEntityIds],
+    candidateProjectIds: [...candidateProjectIds],
+    projectDimensionLocked,
+  };
+}
+
+export async function autoTagThreadByParticipants(threadIdLocal: string): Promise<void> {
+  const signals = await computeThreadTaggingSignals(threadIdLocal);
+  if (!signals) return;
+  const { userId, matchedEntityIds, candidateProjectIds, projectDimensionLocked } = signals;
+
+  const conn = await db();
+  const tagIdsToApply: string[] = [];
+
+  // Entités matchées par domaine : tag toujours appliqué (safe, 1 domaine
+  // = 1 entité en pratique). Les cas ambigus (multi-entités par domaine)
+  // sont traités en propositions par extract-and-save.
+  if (matchedEntityIds.length > 0) {
+    const entityRows = await conn
+      .select({ id: entities.id, name: entities.name })
+      .from(entities)
+      .where(inArray(entities.id, matchedEntityIds));
+    for (const e of entityRows) {
+      const tag = await ensureCrmTag({
+        userId,
+        kind: "entity",
+        targetId: e.id,
+        displayName: e.name,
+      });
+      tagIdsToApply.push(tag.id);
+    }
+  }
+
+  // Projets : high-confidence auto-apply seulement quand 1 seul candidat
+  // actif est identifié (contact + entité). Les cas ambigus (N candidats)
+  // partent en proposition à valider — voir extract-and-save.
+  if (!projectDimensionLocked && candidateProjectIds.length === 1) {
+    const projectId = candidateProjectIds[0]!;
+    const [p] = await conn
+      .select({ id: projects.id, name: projects.name })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+    if (p) {
       const tag = await ensureCrmTag({
         userId,
         kind: "project",
@@ -346,32 +448,6 @@ export async function autoTagThreadByParticipants(threadIdLocal: string): Promis
     }
   }
 
-  // Entités via domaine d'email (hors domaines génériques).
-  const involvedDomains = new Set<string>();
-  for (const e of involvedEmails) {
-    const d = domainFromEmail(e);
-    if (d && !GENERIC_EMAIL_DOMAINS.has(d)) involvedDomains.add(d);
-  }
-  if (involvedDomains.size > 0) {
-    const entityRows = await conn
-      .select({ id: entities.id, name: entities.name, website: entities.website })
-      .from(entities)
-      .where(isNotNull(entities.website));
-    for (const e of entityRows) {
-      const d = extractDomain(e.website);
-      if (d && involvedDomains.has(d)) {
-        const tag = await ensureCrmTag({
-          userId,
-          kind: "entity",
-          targetId: e.id,
-          displayName: e.name,
-        });
-        tagIdsToApply.push(tag.id);
-      }
-    }
-  }
-
-  // Insère thread_tags (idempotent).
   if (tagIdsToApply.length > 0) {
     await conn
       .insert(gmailThreadTags)

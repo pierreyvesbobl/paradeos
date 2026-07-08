@@ -1,0 +1,12 @@
+/* Paradeos — Webfonts
+ * SUBSTITUTION NOTE: the source spec (paradeos_design_system.pdf) did not
+ * specify type families. These are close, tasteful matches to Notion's warm,
+ * neutral feel:
+ *   - Fraunces        → BRAND typeface (wordmark + display); optical serif
+ *   - Hanken Grotesk  → humanist UI / body sans
+ *   - JetBrains Mono  → code, tokens, monetary figures
+ * Fraunces is a chosen brand direction; the UI/mono pair are substitutions.
+ * If Paradeos has licensed fonts, drop the .woff2 files in assets/fonts/,
+ * replace the @import below with @font-face rules, and update tokens/typography.css.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
