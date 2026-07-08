@@ -12,7 +12,11 @@ import {
 import { addDays, isoDate, startOfIsoWeek } from "@/lib/calendar";
 import { getGlobalProfitability } from "@/lib/db/queries/profitability";
 import { getGlobalTimeStats } from "@/lib/db/queries/time-stats";
-import { formatDate, formatDuration, formatEuro } from "@/lib/format";
+import { formatDate, formatDays, formatDuration, formatEuro } from "@/lib/format";
+import {
+  computeDaysWorked,
+  computeEffectiveDailyRate,
+} from "@/lib/profitability-math";
 import { projectKindLabels } from "@/lib/schemas/projects";
 import { Clock } from "lucide-react";
 import Link from "next/link";
@@ -64,6 +68,8 @@ export async function RapportView({ range, week }: { range?: Range; week?: strin
   const totalRevenue = profitability.reduce((acc, p) => acc + p.revenueAmount, 0);
   const totalCost = profitability.reduce((acc, p) => acc + p.costAmount, 0);
   const totalMargin = totalRevenue - totalCost;
+  const totalDaysWorked = computeDaysWorked(stats.totals.actualMinutes);
+  const effectiveDailyRate = computeEffectiveDailyRate(totalRevenue, stats.totals.actualMinutes);
 
   const prevWeek = activeRange === "week" ? addDays(start, -7) : null;
   const nextWeek = activeRange === "week" ? addDays(start, 7) : null;
@@ -102,7 +108,7 @@ export async function RapportView({ range, week }: { range?: Range; week?: strin
         ) : null}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiBox label="Réalisé" value={formatDuration(stats.totals.actualMinutes)} tone="actual" />
         <KpiBox
           label="Planifié"
@@ -117,15 +123,21 @@ export async function RapportView({ range, week }: { range?: Range; week?: strin
           }
           tone="muted"
         />
+        <KpiBox label="Jours-hommes" value={formatDays(totalDaysWorked)} tone="muted" />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiBox label="Revenu" value={formatEuro(totalRevenue)} tone="actual" />
         <KpiBox label="Coût interne" value={formatEuro(totalCost)} tone="muted" />
         <KpiBox
           label="Marge"
           value={(totalMargin >= 0 ? "+" : "−") + formatEuro(Math.abs(totalMargin))}
           tone={totalMargin >= 0 ? "actual" : "planned"}
+        />
+        <KpiBox
+          label="TJM effectif"
+          value={effectiveDailyRate == null ? "—" : formatEuro(effectiveDailyRate)}
+          tone="muted"
         />
       </div>
 

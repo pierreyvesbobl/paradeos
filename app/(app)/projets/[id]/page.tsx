@@ -30,7 +30,11 @@ import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { getProjectTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
 import { EntityName, EuroAmount, ProjectName } from "@/lib/demo/components";
-import { formatDuration } from "@/lib/format";
+import { formatDays, formatDuration } from "@/lib/format";
+import {
+  computeDaysWorked,
+  computeEffectiveDailyRate,
+} from "@/lib/profitability-math";
 import { projectBillingTypeLabels } from "@/lib/schemas/projects";
 import { cn } from "@/lib/utils";
 import { and, asc, eq } from "drizzle-orm";
@@ -425,7 +429,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
           />
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <CompactStat
                 label="Réalisé"
                 value={formatDuration(timeStats.totals.actualMinutes)}
@@ -444,6 +448,11 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
                     Math.abs(timeStats.totals.actualMinutes - timeStats.totals.plannedMinutes),
                   )
                 }
+                tone="muted"
+              />
+              <CompactStat
+                label="Jours-hommes"
+                value={formatDays(computeDaysWorked(timeStats.totals.actualMinutes))}
                 tone="muted"
               />
             </div>
@@ -509,7 +518,8 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
           <p className="text-muted-foreground text-xs">
             Non facturable. Coût interne :{" "}
             <EuroAmount value={profitability.costAmount} demoId={`cost:${id}`} /> sur{" "}
-            {formatDuration(profitability.actualMinutes)} réalisés.
+            {formatDuration(profitability.actualMinutes)} (
+            {formatDays(computeDaysWorked(profitability.actualMinutes))}) réalisés.
           </p>
         ) : profitability.actualMinutes === 0 ? (
           <EmptyState
@@ -532,15 +542,38 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
               />
               <CompactMargin amount={profitability.marginAmount} pct={profitability.marginPct} />
             </div>
-            {profitability.effectiveHourlyRate != null ? (
-              <p className="text-[11px] text-muted-foreground">
-                Taux effectif :{" "}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+              <span>
+                Jours-hommes :{" "}
                 <span className="font-mono">
-                  <EuroAmount value={profitability.effectiveHourlyRate} demoId={`rate:${id}`} />
-                  /h
+                  {formatDays(computeDaysWorked(profitability.actualMinutes))}
                 </span>
-              </p>
-            ) : null}
+              </span>
+              {profitability.effectiveHourlyRate != null ? (
+                <span>
+                  Taux effectif :{" "}
+                  <span className="font-mono">
+                    <EuroAmount value={profitability.effectiveHourlyRate} demoId={`rate:${id}`} />
+                    /h
+                  </span>
+                </span>
+              ) : null}
+              {(() => {
+                const tjm = computeEffectiveDailyRate(
+                  profitability.revenueAmount,
+                  profitability.actualMinutes,
+                );
+                return tjm != null ? (
+                  <span>
+                    TJM effectif :{" "}
+                    <span className="font-mono">
+                      <EuroAmount value={tjm} demoId={`tjm:${id}`} />
+                      /j
+                    </span>
+                  </span>
+                ) : null;
+              })()}
+            </div>
           </>
         )}
       </SidebarSection>

@@ -1,6 +1,31 @@
 import type { ProjectBillingType } from "@/lib/schemas/projects";
 
 /**
+ * Convention FR pour convertir des heures en jours-hommes (JH) et
+ * exprimer un TJM. 7h/j est le standard consulting côté France.
+ */
+export const HOURS_PER_DAY = 7;
+
+/**
+ * Nombre de jours-hommes (JH) réalisés à partir des minutes.
+ */
+export function computeDaysWorked(actualMinutes: number): number {
+  return actualMinutes / 60 / HOURS_PER_DAY;
+}
+
+/**
+ * TJM effectif = revenu / JH réalisés. Null si pas de temps ou pas
+ * de revenu (par ex. projet R&D non facturable).
+ */
+export function computeEffectiveDailyRate(
+  revenueAmount: number,
+  actualMinutes: number,
+): number | null {
+  if (actualMinutes <= 0 || revenueAmount <= 0) return null;
+  return revenueAmount / computeDaysWorked(actualMinutes);
+}
+
+/**
  * Calcul du revenu d'un projet selon son modèle de facturation.
  * Pure — pas d'accès DB.
  *
