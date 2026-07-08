@@ -46,3 +46,6 @@ supabase/.env
 # claude code local state
 .claude/
 backups/
+
+# exports locaux
+*.zip
