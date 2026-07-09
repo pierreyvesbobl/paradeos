@@ -3,14 +3,15 @@ import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/format";
 import { parseEmailThread } from "@/lib/gmail/thread-parse";
 import { cn } from "@/lib/utils";
-import DOMPurify from "isomorphic-dompurify";
+import sanitizeHtml from "sanitize-html";
 
 /**
  * Rendu d'un message d'un thread : avatar + header propre, corps HTML
  * sanitisé ou texte formaté, historique du fil replié en bas.
  *
- * Server component — la sanitisation DOMPurify tourne côté node (via
- * isomorphic-dompurify + jsdom).
+ * Server component — la sanitisation tourne côté node avec
+ * `sanitize-html` (parser regex, pas de jsdom donc pas de bundling
+ * ESM/CJS foireux sur Vercel).
  */
 export type MessageCardProps = {
   id: string;
@@ -51,10 +52,20 @@ function linkifyText(text: string): string {
   );
 }
 
-const SANITIZE_CONFIG = {
-  ADD_ATTR: ["target", "rel"],
-  FORBID_TAGS: ["script", "style", "iframe", "form", "input", "object", "embed"],
-  FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover"],
+// Config sanitize-html : par défaut `allowedTags` couvre déjà le HTML
+// éditorial (p, a, ul, li, blockquote, h1…h6, strong, em, etc.) et
+// `script/style/iframe/form/input/object/embed` sont bloqués. On ajoute
+// `img` (rendu inline dans les emails) + `target/rel` sur `<a>` pour
+// que les liens ouvrent en nouvel onglet.
+const SANITIZE_OPTS: sanitizeHtml.IOptions = {
+  allowedTags: [...sanitizeHtml.defaults.allowedTags, "img"],
+  allowedAttributes: {
+    ...sanitizeHtml.defaults.allowedAttributes,
+    a: ["href", "name", "target", "rel"],
+    img: ["src", "alt", "title", "width", "height"],
+  },
+  allowedSchemes: ["http", "https", "mailto", "tel", "data"],
+  allowProtocolRelative: false,
 };
 
 export function MessageCard({ m }: { m: MessageCardProps }) {
@@ -62,9 +73,7 @@ export function MessageCard({ m }: { m: MessageCardProps }) {
   const displayName = m.fromName || m.fromEmail || "(expéditeur inconnu)";
 
   const hasHtml = !!parsed.cleanHtml && parsed.cleanHtml.length > 20;
-  const sanitizedHtml = hasHtml
-    ? DOMPurify.sanitize(parsed.cleanHtml ?? "", SANITIZE_CONFIG)
-    : null;
+  const sanitizedHtml = hasHtml ? sanitizeHtml(parsed.cleanHtml ?? "", SANITIZE_OPTS) : null;
   const textAsHtml = !hasHtml && parsed.cleanText ? linkifyText(parsed.cleanText) : null;
 
   return (
