@@ -128,6 +128,15 @@ export const patchTaskSchema = z.object({
   startDate: z
     .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD."), z.null()])
     .optional(),
+  /**
+   * Date de complétion « à la main » (rétroactive). `null` = pas encore
+   * terminée ; une date force `completed_at` à midi local. Séparé du
+   * status : c'est au client de synchroniser status+completedAt s'il
+   * veut la sémantique « marquer terminée »/« non terminée ».
+   */
+  completedAt: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD."), z.null()])
+    .optional(),
   title: z.string().trim().min(1).max(300).optional(),
 });
 

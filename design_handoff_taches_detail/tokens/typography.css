@@ -1,0 +1,54 @@
+/* Paradeos — Typography tokens
+ * Fraunces is the BRAND typeface — used for the wordmark and display moments.
+ * Hanken Grotesk carries product UI & body; mono for code, tokens, and figures.
+ * NOTE: UI/mono families are a close substitution (the source PDF specified no
+ * type); Fraunces (brand) is a chosen direction. See fonts.css + the readme.
+ */
+:root {
+  /* ---- Families ---- */
+  --font-brand: "Fraunces", "Hanken Grotesk", Georgia, "Times New Roman", serif; /* wordmark + display */
+  --font-sans: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ---- Size scale (px) ---- */
+  --text-xs: 12px;    /* captions, meta, tag labels */
+  --text-sm: 13px;    /* dense UI, secondary labels */
+  --text-ui: 14px;    /* default product UI size */
+  --text-base: 15px;  /* body copy */
+  --text-md: 16px;    /* comfortable body / inputs */
+  --text-lg: 18px;    /* lead, small headings */
+  --text-xl: 22px;    /* H3 / panel titles */
+  --text-2xl: 28px;   /* H2 / page titles */
+  --text-3xl: 36px;   /* H1 */
+  --text-4xl: 48px;   /* display */
+
+  /* ---- Weights ---- */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ---- Line heights ---- */
+  --leading-tight: 1.2;   /* headings, display */
+  --leading-snug: 1.35;   /* UI labels, titles */
+  --leading-normal: 1.55; /* body copy */
+
+  /* ---- Letter spacing ---- */
+  --tracking-tight: -0.01em;  /* large headings */
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;    /* eyebrow / section labels (uppercase) */
+  --tracking-wider: 0.12em;   /* tiny all-caps eyebrows like "01 — NEUTRES" */
+
+  /* ---- Semantic roles ---- */
+  /* Brand/display moments use Fraunces; product headings stay sans for clarity. */
+  --type-brand: var(--weight-bold) var(--text-4xl)/var(--leading-tight) var(--font-brand);
+  --type-display: var(--weight-semibold) var(--text-4xl)/var(--leading-tight) var(--font-brand);
+  --type-h1: var(--weight-bold) var(--text-3xl)/var(--leading-tight) var(--font-sans);
+  --type-h2: var(--weight-semibold) var(--text-2xl)/var(--leading-snug) var(--font-sans);
+  --type-h3: var(--weight-semibold) var(--text-xl)/var(--leading-snug) var(--font-sans);
+  --type-body: var(--weight-regular) var(--text-base)/var(--leading-normal) var(--font-sans);
+  --type-ui: var(--weight-regular) var(--text-ui)/var(--leading-snug) var(--font-sans);
+  --type-ui-medium: var(--weight-medium) var(--text-ui)/var(--leading-snug) var(--font-sans);
+  --type-caption: var(--weight-regular) var(--text-xs)/var(--leading-snug) var(--font-sans);
+  --type-mono: var(--weight-regular) var(--text-sm)/var(--leading-snug) var(--font-mono);
+}

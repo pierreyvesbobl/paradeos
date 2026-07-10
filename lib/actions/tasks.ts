@@ -240,6 +240,12 @@ export const patchTask = action(patchTaskSchema, async ({ input, user }) => {
     updates.status = input.status;
     updates.completedAt = computeCompletedAt(input.status, previous.completedAt);
   }
+  // `completedAt` explicite gagne sur la valeur dérivée du status (permet
+  // de saisir une date de fin rétroactive). Convention : midi local pour
+  // rester lisible dans le fuseau utilisateur sans dépendre du TZ serveur.
+  if (input.completedAt !== undefined) {
+    updates.completedAt = input.completedAt ? new Date(`${input.completedAt}T12:00:00`) : null;
+  }
 
   const desiredAssignees = resolveAssignees(input);
 

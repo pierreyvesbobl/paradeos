@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/colors.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/typography.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/radii.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/base.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+  body { margin:0; font-family:var(--font-sans); color:var(--text); }
+  a { color:var(--primary-500); text-decoration:none; }
+  a:hover { color:var(--primary-700); text-decoration:underline; }
+  [contenteditable]:focus { outline:none; }
+  [contenteditable][data-placeholder]:empty:before { content:attr(data-placeholder); color:var(--text-tertiary); }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#e7e5df;padding:52px;box-sizing:border-box;">
+
+  <!-- intro -->
+  <div style="width:900px;max-width:100%;margin-bottom:40px;">
+    <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:10px;">Parade OS — Détail de tâche</div>
+    <h1 style="font-family:var(--font-brand);font-weight:600;font-size:30px;line-height:1.15;color:var(--text);margin:0 0 12px;">Trois mises en page — tout est éditable en ligne</h1>
+    <p style="font:var(--type-body);color:var(--text-muted);max-width:760px;margin:0;">Chaque champ se modifie d'un clic : titre, statut, priorité, dates, projet, personne assignée, temps et notes. Les trois directions partagent la même tâche — une modification dans l'une se reflète dans les autres.</p>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start;">
+
+    <!-- ============ OPTION 1A — Propriétés en colonne (Notion) ============ -->
+    <section id="1a" style="flex:none;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:24px;padding:0 8px;border-radius:6px;background:var(--text);color:#fff;font:var(--type-caption);font-weight:700;letter-spacing:0.04em;">1a</span>
+        <span style="font:var(--type-ui-medium);color:var(--text);">Propriétés en colonne</span>
+        <span style="font:var(--type-caption);color:var(--text-muted);">— liste clé-valeur façon Notion, dense et calme</span>
+      </div>
+      <div style="width:720px;background:var(--bg-app);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:36px 40px 40px;">
+        <div style="display:flex;align-items:center;gap:8px;font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:16px;"><span>Tâches</span><i class="ph-bold ph-caret-right" style="font-size:9px;"></i><span style="color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px;">{{ projectUpper }}</span></div>
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:26px;">
+          <h2 contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveTitle }}" style="flex:1;min-width:0;font-family:var(--font-brand);font-weight:600;font-size:28px;line-height:1.18;color:var(--text);margin:0;border-radius:8px;padding:3px 7px;margin-left:-7px;cursor:text;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ title }}</h2>
+          <span role="button" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;color:var(--tint-red-text);cursor:pointer;margin-top:2px;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-trash" style="font-size:17px;"></i></span>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <!-- Statut -->
+          <div style="display:flex;align-items:center;min-height:38px;padding:4px 8px;border-radius:6px;" style-hover="background:var(--bg-surface);">
+            <span style="width:160px;flex:none;display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-circle-half" style="font-size:17px;color:var(--text-tertiary);"></i>Statut</span>
+            <span style="position:relative;display:inline-flex;">
+              <span role="button" onClick="{{ A.status.onToggle }}" style="display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border-radius:6px;font:var(--type-ui-medium);cursor:pointer;background:{{ A.status.bg }};color:{{ A.status.text }};"><span style="width:7px;height:7px;border-radius:999px;background:{{ A.status.dot }};"></span>{{ A.status.label }}<i class="ph-bold ph-caret-down" style="font-size:9px;opacity:.7;"></i></span>
+              <sc-if value="{{ A.status.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:190px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:6px;"><sc-for list="{{ A.status.options }}" as="o" hint-placeholder-count="4"><div role="button" onClick="{{ o.onSelect }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font:var(--type-ui);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><span style="width:9px;height:9px;border-radius:999px;background:{{ o.dot }};"></span><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><i class="ph-bold ph-check" style="font-size:12px;color:var(--primary-500);"></i></sc-if></div></sc-for></div></sc-if>
+            </span>
+          </div>
+          <!-- Priorité -->
+          <div style="display:flex;align-items:center;min-height:38px;padding:4px 8px;border-radius:6px;" style-hover="background:var(--bg-surface);">
+            <span style="width:160px;flex:none;display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-flag" style="font-size:17px;color:var(--text-tertiary);"></i>Priorité</span>
+            <span style="position:relative;display:inline-flex;">
+              <span role="button" onClick="{{ A.prio.onToggle }}" style="display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border-radius:6px;font:var(--type-ui-medium);cursor:pointer;background:{{ A.prio.bg }};color:{{ A.prio.text }};"><span style="width:7px;height:7px;border-radius:999px;background:{{ A.prio.dot }};"></span>{{ A.prio.label }}<i class="ph-bold ph-caret-down" style="font-size:9px;opacity:.7;"></i></span>
+              <sc-if value="{{ A.prio.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:190px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:6px;"><sc-for list="{{ A.prio.options }}" as="o" hint-placeholder-count="4"><div role="button" onClick="{{ o.onSelect }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font:var(--type-ui);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><span style="width:9px;height:9px;border-radius:999px;background:{{ o.dot }};"></span><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><i class="ph-bold ph-check" style="font-size:12px;color:var(--primary-500);"></i></sc-if></div></sc-for></div></sc-if>
+            </span>
+          </div>
+          <!-- Assignée -->
+          <div style="display:flex;align-items:center;min-height:38px;padding:4px 8px;border-radius:6px;" style-hover="background:var(--bg-surface);">
+            <span style="width:160px;flex:none;display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-user" style="font-size:17px;color:var(--text-tertiary);"></i>Assignée à</span>
+            <span style="display:inline-flex;align-items:center;gap:9px;">
+              <span style="width:24px;height:24px;border-radius:999px;background:var(--tint-brown-bg);color:var(--tint-brown-text);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex:none;">{{ assigneeInitials }}</span>
+              <span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveAssigneeName }}" style="font:var(--type-ui);color:var(--text);border-radius:6px;padding:2px 6px;margin:0 -6px;cursor:text;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ assigneeName }}</span>
+              <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:500;background:var(--tint-yellow-bg);color:var(--tint-yellow-text);">{{ assigneeType }}</span>
+            </span>
+          </div>
+          <!-- Projet -->
+          <div style="display:flex;align-items:center;min-height:38px;padding:4px 8px;border-radius:6px;" style-hover="background:var(--bg-surface);">
+            <span style="width:160px;flex:none;display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-briefcase" style="font-size:17px;color:var(--text-tertiary);"></i>Projet</span>
+            <span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveProject }}" style="flex:1;min-width:0;font:var(--type-ui);color:var(--text);border-radius:6px;padding:3px 7px;margin:0 -7px;cursor:text;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ project }}</span>
+          </div>
+          <!-- Période -->
+          <div style="display:flex;align-items:center;min-height:38px;padding:4px 8px;border-radius:6px;" style-hover="background:var(--bg-surface);">
+            <span style="width:160px;flex:none;display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-calendar-blank" style="font-size:17px;color:var(--text-tertiary);"></i>Période (Gantt)</span>
+            <span style="position:relative;display:inline-flex;">
+              <sc-if value="{{ A.period.filled }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:8px;font:var(--type-ui);color:var(--text);"><span role="button" onClick="{{ A.period.onToggle }}" style="display:inline-flex;align-items:center;gap:7px;padding:4px 8px;border-radius:6px;cursor:pointer;" style-hover="background:var(--bg-hover);">{{ A.period.label }}</span><span role="button" onClick="{{ A.period.onClear }}" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-x" style="font-size:11px;"></i></span></span></sc-if>
+              <sc-if value="{{ A.period.empty }}" hint-placeholder-val="{{ false }}"><span role="button" onClick="{{ A.period.onToggle }}" style="display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;font:var(--type-ui);color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-plus" style="font-size:11px;"></i>Ajouter</span></sc-if>
+              <sc-if value="{{ A.period.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:230px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:12px;"><input type="date" value="{{ A.period.iso }}" onChange="{{ A.period.onChange }}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font:var(--type-ui);color:var(--text);"><div role="button" onClick="{{ A.period.onClear }}" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:7px 8px;border-radius:6px;font:var(--type-ui);color:var(--tint-red-text);cursor:pointer;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-trash" style="font-size:15px;"></i>Retirer</div></div></sc-if>
+            </span>
+          </div>
+          <!-- Terminée le -->
+          <div style="display:flex;align-items:center;min-height:38px;padding:4px 8px;border-radius:6px;" style-hover="background:var(--bg-surface);">
+            <span style="width:160px;flex:none;display:flex;align-items:center;gap:9px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-check-circle" style="font-size:17px;color:var(--text-tertiary);"></i>Terminée le</span>
+            <span style="position:relative;display:inline-flex;">
+              <sc-if value="{{ A.done.filled }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:8px;font:var(--type-ui);color:var(--text);"><span role="button" onClick="{{ A.done.onToggle }}" style="display:inline-flex;align-items:center;gap:7px;padding:4px 8px;border-radius:6px;cursor:pointer;" style-hover="background:var(--bg-hover);">{{ A.done.label }}</span><span role="button" onClick="{{ A.done.onClear }}" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-x" style="font-size:11px;"></i></span></span></sc-if>
+              <sc-if value="{{ A.done.empty }}" hint-placeholder-val="{{ true }}"><span role="button" onClick="{{ A.done.onToggle }}" style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:6px;font-size:18px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);">—</span></sc-if>
+              <sc-if value="{{ A.done.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:230px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:12px;"><input type="date" value="{{ A.done.iso }}" onChange="{{ A.done.onChange }}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font:var(--type-ui);color:var(--text);"><div role="button" onClick="{{ A.done.onClear }}" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:7px 8px;border-radius:6px;font:var(--type-ui);color:var(--tint-red-text);cursor:pointer;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-x-circle" style="font-size:15px;"></i>Non terminée</div></div></sc-if>
+            </span>
+          </div>
+        </div>
+
+        <div style="height:1px;background:var(--border);margin:22px 0;"></div>
+
+        <!-- Temps -->
+        <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:12px;">Temps passé</div>
+        <div style="display:flex;gap:28px;margin-bottom:8px;">
+          <div><div style="font:var(--type-caption);color:var(--text-tertiary);margin-bottom:4px;">Réalisé</div><div style="font-size:22px;font-weight:700;color:var(--tint-green-text);display:flex;align-items:baseline;"><span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveRealise }}" style="border-radius:5px;padding:0 5px;margin:0 -5px;cursor:text;min-width:12px;display:inline-block;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ realiseNum }}</span><span>h</span></div></div>
+          <div><div style="font:var(--type-caption);color:var(--text-tertiary);margin-bottom:4px;">Planifié</div><div style="font-size:22px;font-weight:700;color:var(--text);display:flex;align-items:baseline;"><span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ savePlanifie }}" style="border-radius:5px;padding:0 5px;margin:0 -5px;cursor:text;min-width:12px;display:inline-block;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ planifieNum }}</span><span>h</span></div></div>
+          <div><div style="font:var(--type-caption);color:var(--text-tertiary);margin-bottom:4px;">Écart</div><div style="font-size:22px;font-weight:700;color:{{ ecartColor }};">{{ ecartStr }}</div></div>
+        </div>
+
+        <div style="height:1px;background:var(--border);margin:22px 0;"></div>
+
+        <!-- Notes -->
+        <div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);">Notes</div><span style="flex:1;"></span><span role="button" onClick="{{ addNote }}" style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-surface);font:var(--type-ui);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-plus" style="font-size:12px;"></i>Ajouter</span></div>
+        <sc-if value="{{ noNotes }}" hint-placeholder-val="{{ true }}"><div style="font:var(--type-ui);color:var(--text-tertiary);padding:6px 0;">Aucune note pour l'instant. Mention @prénom, #project:nom pour lier.</div></sc-if>
+        <sc-if value="{{ hasNotes }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:8px;"><sc-for list="{{ notes }}" as="n" hint-placeholder-count="1"><div style="display:flex;gap:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);padding:12px 14px;"><i class="ph-duotone ph-note" style="font-size:17px;color:var(--text-muted);flex:none;"></i><div contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ n.onBlur }}" data-placeholder="Écris une note…" style="flex:1;font:var(--type-ui);color:var(--text);line-height:1.55;cursor:text;">{{ n.text }}</div><span role="button" onClick="{{ n.onRemove }}" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--tint-red-bg);color:var(--tint-red-text);"><i class="ph-bold ph-trash" style="font-size:13px;"></i></span></div></sc-for></div></sc-if>
+      </div>
+    </section>
+
+    <!-- ============ OPTION 1B — Rail de métadonnées (Linear) ============ -->
+    <section id="1b" style="flex:none;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:24px;padding:0 8px;border-radius:6px;background:var(--text);color:#fff;font:var(--type-caption);font-weight:700;letter-spacing:0.04em;">1b</span>
+        <span style="font:var(--type-ui-medium);color:var(--text);">Rail de métadonnées</span>
+        <span style="font:var(--type-caption);color:var(--text-muted);">— contenu à gauche, propriétés dans un panneau latéral</span>
+      </div>
+      <div style="width:900px;background:var(--bg-app);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;overflow:visible;">
+        <!-- main -->
+        <div style="flex:1;min-width:0;padding:34px 36px;">
+          <div style="display:flex;align-items:center;gap:8px;font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:16px;"><span>Tâches</span><i class="ph-bold ph-caret-right" style="font-size:9px;"></i><span style="color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px;">{{ projectUpper }}</span></div>
+          <h2 contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveTitle }}" style="font-family:var(--font-brand);font-weight:600;font-size:27px;line-height:1.18;color:var(--text);margin:0 0 22px;border-radius:8px;padding:3px 7px;margin-left:-7px;cursor:text;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ title }}</h2>
+
+          <!-- Temps strip -->
+          <div style="display:flex;gap:14px;margin-bottom:24px;">
+            <div style="flex:1;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--bg-surface);"><div style="font:var(--type-caption);color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em;">Réalisé</div><div style="font-size:24px;font-weight:700;color:var(--tint-green-text);display:flex;align-items:baseline;"><span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveRealise }}" style="border-radius:5px;padding:0 5px;margin:0 -5px;cursor:text;min-width:12px;display:inline-block;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ realiseNum }}</span><span>h</span></div></div>
+            <div style="flex:1;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--bg-surface);"><div style="font:var(--type-caption);color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em;">Planifié</div><div style="font-size:24px;font-weight:700;color:var(--text);display:flex;align-items:baseline;"><span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ savePlanifie }}" style="border-radius:5px;padding:0 5px;margin:0 -5px;cursor:text;min-width:12px;display:inline-block;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ planifieNum }}</span><span>h</span></div></div>
+            <div style="flex:1;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--bg-surface);"><div style="font:var(--type-caption);color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em;">Écart</div><div style="font-size:24px;font-weight:700;color:{{ ecartColor }};">{{ ecartStr }}</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font:var(--type-ui-medium);color:var(--text);">Notes</div><span style="flex:1;"></span><span role="button" onClick="{{ addNote }}" style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-surface);font:var(--type-ui);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-plus" style="font-size:12px;"></i>Ajouter</span></div>
+          <sc-if value="{{ noNotes }}" hint-placeholder-val="{{ true }}"><div style="border:1px dashed var(--border-strong);border-radius:10px;padding:26px;text-align:center;font:var(--type-ui);color:var(--text-tertiary);">Aucune note. Clique sur « Ajouter » pour garder une trace des échanges.</div></sc-if>
+          <sc-if value="{{ hasNotes }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:8px;"><sc-for list="{{ notes }}" as="n" hint-placeholder-count="1"><div style="display:flex;gap:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);padding:12px 14px;"><i class="ph-duotone ph-note" style="font-size:17px;color:var(--text-muted);flex:none;"></i><div contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ n.onBlur }}" data-placeholder="Écris une note…" style="flex:1;font:var(--type-ui);color:var(--text);line-height:1.55;cursor:text;">{{ n.text }}</div><span role="button" onClick="{{ n.onRemove }}" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--tint-red-bg);color:var(--tint-red-text);"><i class="ph-bold ph-trash" style="font-size:13px;"></i></span></div></sc-for></div></sc-if>
+        </div>
+
+        <!-- rail -->
+        <div style="width:300px;flex:none;background:var(--bg-surface);border-left:1px solid var(--border);border-radius:0 12px 12px 0;padding:26px 24px;display:flex;flex-direction:column;gap:22px;">
+          <div>
+            <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Statut</div>
+            <span style="position:relative;display:inline-flex;">
+              <span role="button" onClick="{{ B.status.onToggle }}" style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:6px;font:var(--type-ui-medium);cursor:pointer;background:{{ B.status.bg }};color:{{ B.status.text }};"><span style="width:7px;height:7px;border-radius:999px;background:{{ B.status.dot }};"></span>{{ B.status.label }}<i class="ph-bold ph-caret-down" style="font-size:9px;opacity:.7;"></i></span>
+              <sc-if value="{{ B.status.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:190px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:6px;"><sc-for list="{{ B.status.options }}" as="o" hint-placeholder-count="4"><div role="button" onClick="{{ o.onSelect }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font:var(--type-ui);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><span style="width:9px;height:9px;border-radius:999px;background:{{ o.dot }};"></span><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><i class="ph-bold ph-check" style="font-size:12px;color:var(--primary-500);"></i></sc-if></div></sc-for></div></sc-if>
+            </span>
+          </div>
+          <div>
+            <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Priorité</div>
+            <span style="position:relative;display:inline-flex;">
+              <span role="button" onClick="{{ B.prio.onToggle }}" style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:6px;font:var(--type-ui-medium);cursor:pointer;background:{{ B.prio.bg }};color:{{ B.prio.text }};"><span style="width:7px;height:7px;border-radius:999px;background:{{ B.prio.dot }};"></span>{{ B.prio.label }}<i class="ph-bold ph-caret-down" style="font-size:9px;opacity:.7;"></i></span>
+              <sc-if value="{{ B.prio.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:190px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:6px;"><sc-for list="{{ B.prio.options }}" as="o" hint-placeholder-count="4"><div role="button" onClick="{{ o.onSelect }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font:var(--type-ui);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><span style="width:9px;height:9px;border-radius:999px;background:{{ o.dot }};"></span><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><i class="ph-bold ph-check" style="font-size:12px;color:var(--primary-500);"></i></sc-if></div></sc-for></div></sc-if>
+            </span>
+          </div>
+          <div>
+            <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Assignée à</div>
+            <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+              <span style="width:26px;height:26px;border-radius:999px;background:var(--tint-brown-bg);color:var(--tint-brown-text);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex:none;">{{ assigneeInitials }}</span>
+              <span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveAssigneeName }}" style="font:var(--type-ui-medium);color:var(--text);border-radius:6px;padding:2px 6px;margin:0 -6px;cursor:text;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ assigneeName }}</span>
+              <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:500;background:var(--tint-yellow-bg);color:var(--tint-yellow-text);">{{ assigneeType }}</span>
+            </div>
+          </div>
+          <div>
+            <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Projet</div>
+            <div contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveProject }}" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-app);font:var(--type-ui);color:var(--text);cursor:text;" style-focus="box-shadow:0 0 0 2px var(--primary-200);border-color:var(--primary-300);">{{ project }}</div>
+          </div>
+          <div>
+            <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Période (Gantt)</div>
+            <span style="position:relative;display:inline-flex;">
+              <sc-if value="{{ B.period.filled }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--bg-app);font:var(--type-ui);color:var(--text);"><span role="button" onClick="{{ B.period.onToggle }}" style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;"><i class="ph-duotone ph-calendar-blank" style="font-size:16px;color:var(--text-muted);"></i>{{ B.period.label }}</span><span role="button" onClick="{{ B.period.onClear }}" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-x" style="font-size:10px;"></i></span></span></sc-if>
+              <sc-if value="{{ B.period.empty }}" hint-placeholder-val="{{ false }}"><span role="button" onClick="{{ B.period.onToggle }}" style="display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px dashed var(--border-strong);border-radius:8px;font:var(--type-ui);color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-duotone ph-calendar-plus" style="font-size:16px;"></i>Ajouter</span></sc-if>
+              <sc-if value="{{ B.period.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:230px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:12px;"><input type="date" value="{{ B.period.iso }}" onChange="{{ B.period.onChange }}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font:var(--type-ui);color:var(--text);"><div role="button" onClick="{{ B.period.onClear }}" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:7px 8px;border-radius:6px;font:var(--type-ui);color:var(--tint-red-text);cursor:pointer;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-trash" style="font-size:15px;"></i>Retirer</div></div></sc-if>
+            </span>
+          </div>
+          <div>
+            <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Terminée le</div>
+            <span style="position:relative;display:inline-flex;">
+              <sc-if value="{{ B.done.filled }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--bg-app);font:var(--type-ui);color:var(--text);"><span role="button" onClick="{{ B.done.onToggle }}" style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;"><i class="ph-duotone ph-check-circle" style="font-size:16px;color:var(--tint-green-dot);"></i>{{ B.done.label }}</span><span role="button" onClick="{{ B.done.onClear }}" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-x" style="font-size:10px;"></i></span></span></sc-if>
+              <sc-if value="{{ B.done.empty }}" hint-placeholder-val="{{ true }}"><span role="button" onClick="{{ B.done.onToggle }}" style="display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px dashed var(--border-strong);border-radius:8px;font:var(--type-ui);color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-duotone ph-check" style="font-size:16px;"></i>Marquer terminée</span></sc-if>
+              <sc-if value="{{ B.done.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:230px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:12px;"><input type="date" value="{{ B.done.iso }}" onChange="{{ B.done.onChange }}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font:var(--type-ui);color:var(--text);"><div role="button" onClick="{{ B.done.onClear }}" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:7px 8px;border-radius:6px;font:var(--type-ui);color:var(--tint-red-text);cursor:pointer;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-x-circle" style="font-size:15px;"></i>Non terminée</div></div></sc-if>
+            </span>
+          </div>
+          <div style="height:1px;background:var(--border);"></div>
+          <span role="button" style="display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 14px;border-radius:6px;color:var(--tint-red-text);font:var(--type-ui-medium);cursor:pointer;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-trash" style="font-size:16px;"></i>Supprimer la tâche</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ OPTION 1C — Barre de propriétés compacte ============ -->
+    <section id="1c" style="flex:none;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:24px;padding:0 8px;border-radius:6px;background:var(--text);color:#fff;font:var(--type-caption);font-weight:700;letter-spacing:0.04em;">1c</span>
+        <span style="font:var(--type-ui-medium);color:var(--text);">Barre de propriétés compacte</span>
+        <span style="font:var(--type-caption);color:var(--text-muted);">— tout sur une ligne de chips, minimum de hauteur</span>
+      </div>
+      <div style="width:820px;background:var(--bg-app);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:32px 36px 38px;">
+        <div style="display:flex;align-items:center;gap:8px;font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:14px;"><span>Tâches</span><i class="ph-bold ph-caret-right" style="font-size:9px;"></i><span style="color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px;">{{ projectUpper }}</span></div>
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:18px;">
+          <h2 contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveTitle }}" style="flex:1;min-width:0;font-family:var(--font-brand);font-weight:600;font-size:27px;line-height:1.18;color:var(--text);margin:0;border-radius:8px;padding:3px 7px;margin-left:-7px;cursor:text;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ title }}</h2>
+          <span role="button" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;color:var(--tint-red-text);cursor:pointer;margin-top:2px;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-trash" style="font-size:17px;"></i></span>
+        </div>
+
+        <!-- chips bar -->
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-bottom:20px;border-bottom:1px solid var(--border);">
+          <!-- statut -->
+          <span style="position:relative;display:inline-flex;">
+            <span role="button" onClick="{{ C.status.onToggle }}" style="display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:6px;font:var(--type-ui-medium);cursor:pointer;background:{{ C.status.bg }};color:{{ C.status.text }};"><span style="width:7px;height:7px;border-radius:999px;background:{{ C.status.dot }};"></span>{{ C.status.label }}<i class="ph-bold ph-caret-down" style="font-size:9px;opacity:.7;"></i></span>
+            <sc-if value="{{ C.status.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:190px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:6px;"><sc-for list="{{ C.status.options }}" as="o" hint-placeholder-count="4"><div role="button" onClick="{{ o.onSelect }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font:var(--type-ui);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><span style="width:9px;height:9px;border-radius:999px;background:{{ o.dot }};"></span><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><i class="ph-bold ph-check" style="font-size:12px;color:var(--primary-500);"></i></sc-if></div></sc-for></div></sc-if>
+          </span>
+          <!-- prio -->
+          <span style="position:relative;display:inline-flex;">
+            <span role="button" onClick="{{ C.prio.onToggle }}" style="display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:6px;font:var(--type-ui-medium);cursor:pointer;background:{{ C.prio.bg }};color:{{ C.prio.text }};"><span style="width:7px;height:7px;border-radius:999px;background:{{ C.prio.dot }};"></span>{{ C.prio.label }}<i class="ph-bold ph-caret-down" style="font-size:9px;opacity:.7;"></i></span>
+            <sc-if value="{{ C.prio.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:190px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:6px;"><sc-for list="{{ C.prio.options }}" as="o" hint-placeholder-count="4"><div role="button" onClick="{{ o.onSelect }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font:var(--type-ui);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><span style="width:9px;height:9px;border-radius:999px;background:{{ o.dot }};"></span><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><i class="ph-bold ph-check" style="font-size:12px;color:var(--primary-500);"></i></sc-if></div></sc-for></div></sc-if>
+          </span>
+          <!-- assignée pill -->
+          <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 11px 5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg-surface);">
+            <span style="width:20px;height:20px;border-radius:999px;background:var(--tint-brown-bg);color:var(--tint-brown-text);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex:none;">{{ assigneeInitials }}</span>
+            <span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveAssigneeName }}" style="font:var(--type-ui);color:var(--text);border-radius:4px;padding:1px 4px;margin:0 -4px;cursor:text;" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ assigneeName }}</span>
+          </span>
+          <!-- période pill -->
+          <span style="position:relative;display:inline-flex;">
+            <sc-if value="{{ C.period.filled }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:7px;padding:5px 8px 5px 11px;border:1px solid var(--border);border-radius:6px;background:var(--bg-surface);font:var(--type-ui);color:var(--text);"><span role="button" onClick="{{ C.period.onToggle }}" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;"><i class="ph-duotone ph-calendar-blank" style="font-size:15px;color:var(--text-muted);"></i>{{ C.period.label }}</span><span role="button" onClick="{{ C.period.onClear }}" style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:4px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-x" style="font-size:10px;"></i></span></span></sc-if>
+            <sc-if value="{{ C.period.empty }}" hint-placeholder-val="{{ false }}"><span role="button" onClick="{{ C.period.onToggle }}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px dashed var(--border-strong);border-radius:6px;font:var(--type-ui);color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-duotone ph-calendar-plus" style="font-size:15px;"></i>Période</span></sc-if>
+            <sc-if value="{{ C.period.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:230px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:12px;"><input type="date" value="{{ C.period.iso }}" onChange="{{ C.period.onChange }}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font:var(--type-ui);color:var(--text);"><div role="button" onClick="{{ C.period.onClear }}" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:7px 8px;border-radius:6px;font:var(--type-ui);color:var(--tint-red-text);cursor:pointer;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-trash" style="font-size:15px;"></i>Retirer</div></div></sc-if>
+          </span>
+          <!-- terminée pill -->
+          <span style="position:relative;display:inline-flex;">
+            <sc-if value="{{ C.done.filled }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:7px;padding:5px 8px 5px 11px;border:1px solid var(--border);border-radius:6px;background:var(--bg-surface);font:var(--type-ui);color:var(--text);"><span role="button" onClick="{{ C.done.onToggle }}" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;"><i class="ph-duotone ph-check-circle" style="font-size:15px;color:var(--tint-green-dot);"></i>{{ C.done.label }}</span><span role="button" onClick="{{ C.done.onClear }}" style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:4px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-x" style="font-size:10px;"></i></span></span></sc-if>
+            <sc-if value="{{ C.done.empty }}" hint-placeholder-val="{{ true }}"><span role="button" onClick="{{ C.done.onToggle }}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px dashed var(--border-strong);border-radius:6px;font:var(--type-ui);color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-duotone ph-check" style="font-size:15px;"></i>Terminée le</span></sc-if>
+            <sc-if value="{{ C.done.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:230px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:12px;"><input type="date" value="{{ C.done.iso }}" onChange="{{ C.done.onChange }}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font:var(--type-ui);color:var(--text);"><div role="button" onClick="{{ C.done.onClear }}" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:7px 8px;border-radius:6px;font:var(--type-ui);color:var(--tint-red-text);cursor:pointer;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-x-circle" style="font-size:15px;"></i>Non terminée</div></div></sc-if>
+          </span>
+        </div>
+
+        <!-- projet inline -->
+        <div style="display:flex;align-items:center;gap:10px;padding:16px 0;border-bottom:1px solid var(--border);">
+          <span style="display:flex;align-items:center;gap:8px;font:var(--type-ui);color:var(--text-muted);"><i class="ph-duotone ph-briefcase" style="font-size:17px;color:var(--text-tertiary);"></i>Projet</span>
+          <span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveProject }}" style="flex:1;font:var(--type-ui);color:var(--text);border-radius:6px;padding:3px 7px;margin:0 -7px;cursor:text;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ project }}</span>
+        </div>
+
+        <!-- temps strip -->
+        <div style="display:flex;align-items:center;gap:20px;padding:16px 0;border-bottom:1px solid var(--border);font:var(--type-ui);">
+          <span style="display:flex;align-items:baseline;gap:7px;color:var(--text-muted);">Réalisé <b style="font-size:17px;color:var(--tint-green-text);display:inline-flex;align-items:baseline;"><span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveRealise }}" style="border-radius:5px;padding:0 4px;margin:0 -4px;cursor:text;min-width:10px;display:inline-block;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ realiseNum }}</span>h</b></span>
+          <span style="color:var(--border-strong);">·</span>
+          <span style="display:flex;align-items:baseline;gap:7px;color:var(--text-muted);">Planifié <b style="font-size:17px;color:var(--text);display:inline-flex;align-items:baseline;"><span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ savePlanifie }}" style="border-radius:5px;padding:0 4px;margin:0 -4px;cursor:text;min-width:10px;display:inline-block;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ planifieNum }}</span>h</b></span>
+          <span style="color:var(--border-strong);">·</span>
+          <span style="display:flex;align-items:baseline;gap:7px;color:var(--text-muted);">Écart <b style="font-size:17px;color:{{ ecartColor }};">{{ ecartStr }}</b></span>
+        </div>
+
+        <!-- notes -->
+        <div style="display:flex;align-items:center;margin:18px 0 12px;"><div style="font:var(--type-ui-medium);color:var(--text);">Notes</div><span style="flex:1;"></span><span role="button" onClick="{{ addNote }}" style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-surface);font:var(--type-ui);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-plus" style="font-size:12px;"></i>Ajouter</span></div>
+        <sc-if value="{{ noNotes }}" hint-placeholder-val="{{ true }}"><div style="font:var(--type-ui);color:var(--text-tertiary);padding:4px 0;">Aucune note pour l'instant.</div></sc-if>
+        <sc-if value="{{ hasNotes }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:8px;"><sc-for list="{{ notes }}" as="n" hint-placeholder-count="1"><div style="display:flex;gap:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);padding:12px 14px;"><i class="ph-duotone ph-note" style="font-size:17px;color:var(--text-muted);flex:none;"></i><div contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ n.onBlur }}" data-placeholder="Écris une note…" style="flex:1;font:var(--type-ui);color:var(--text);line-height:1.55;cursor:text;">{{ n.text }}</div><span role="button" onClick="{{ n.onRemove }}" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--tint-red-bg);color:var(--tint-red-text);"><i class="ph-bold ph-trash" style="font-size:13px;"></i></span></div></sc-for></div></sc-if>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- menu backdrop -->
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeMenu }}" style="position:fixed;inset:0;z-index:40;"></div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    title: "Revoir et valider les contenus des 5 articles de blog régénérés",
+    status: "afaire",
+    priority: "normale",
+    periodEnd: "2025-06-27",
+    doneDate: null,
+    project: "PrevandCare — PrevandCare - Refonte du site",
+    assigneeName: "Amaury Barbier de la Serre",
+    assigneeInitials: "AS",
+    assigneeType: "Externe",
+    assigneeClient: "PrevandCare",
+    realise: 0,
+    planifie: 0,
+    notes: [],
+    menu: null,
+  };
+
+  fmtFr(iso) {
+    if (!iso) return "";
+    const p = iso.split("-").map(Number);
+    const M = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+    return p[2] + " " + M[p[1] - 1] + " " + p[0];
+  }
+  parseH(t) {
+    const n = parseFloat(String(t).replace(/[^0-9.,-]/g, "").replace(",", "."));
+    return isNaN(n) ? 0 : n;
+  }
+  toggleMenu(key) { this.setState(s => ({ menu: s.menu === key ? null : key })); }
+  saveNote(i, text) { const notes = [...this.state.notes]; notes[i] = text; this.setState({ notes }); }
+  removeNote(i) { this.setState({ notes: this.state.notes.filter((_, j) => j !== i) }); }
+
+  mkNs(ns, STATUS, PRIO) {
+    const s = this.state;
+    const isOpen = (f) => s.menu === ns + ":" + f;
+    const toggle = (f) => () => this.toggleMenu(ns + ":" + f);
+    const st = STATUS[s.status], pr = PRIO[s.priority];
+    return {
+      status: {
+        label: st.label, bg: st.bg, text: st.text, dot: st.dot,
+        open: isOpen("status"), onToggle: toggle("status"),
+        options: Object.keys(STATUS).map(k => ({ label: STATUS[k].label, dot: STATUS[k].listDot, active: k === s.status, onSelect: () => this.setState({ status: k, menu: null }) })),
+      },
+      prio: {
+        label: pr.label, bg: pr.bg, text: pr.text, dot: pr.dot,
+        open: isOpen("prio"), onToggle: toggle("prio"),
+        options: Object.keys(PRIO).map(k => ({ label: PRIO[k].label, dot: PRIO[k].dot, active: k === s.priority, onSelect: () => this.setState({ priority: k, menu: null }) })),
+      },
+      period: {
+        filled: !!s.periodEnd, empty: !s.periodEnd, iso: s.periodEnd || "",
+        label: s.periodEnd ? "Jusqu'au " + this.fmtFr(s.periodEnd) : "",
+        open: isOpen("period"), onToggle: toggle("period"),
+        onChange: (e) => this.setState({ periodEnd: e.target.value || null, menu: null }),
+        onClear: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState({ periodEnd: null, menu: null }); },
+      },
+      done: {
+        filled: !!s.doneDate, empty: !s.doneDate, iso: s.doneDate || "",
+        label: this.fmtFr(s.doneDate),
+        open: isOpen("done"), onToggle: toggle("done"),
+        onChange: (e) => this.setState({ doneDate: e.target.value || null, menu: null }),
+        onClear: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState({ doneDate: null, menu: null }); },
+      },
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const STATUS = {
+      afaire:   { label: "À faire",    bg: "var(--primary-500)",    text: "#fff",                  dot: "rgba(255,255,255,.85)", listDot: "var(--primary-500)" },
+      encours:  { label: "En cours",   bg: "var(--tint-blue-bg)",   text: "var(--tint-blue-text)", dot: "var(--tint-blue-dot)",  listDot: "var(--tint-blue-dot)" },
+      attente:  { label: "En attente", bg: "var(--tint-yellow-bg)", text: "var(--tint-yellow-text)",dot: "var(--tint-yellow-dot)",listDot: "var(--tint-yellow-dot)" },
+      terminee: { label: "Terminée",   bg: "var(--tint-green-bg)",  text: "var(--tint-green-text)",dot: "var(--tint-green-dot)", listDot: "var(--tint-green-dot)" },
+    };
+    const PRIO = {
+      basse:   { label: "Basse",   bg: "var(--tint-gray-bg)",   text: "var(--tint-gray-text)",   dot: "var(--tint-gray-dot)" },
+      normale: { label: "Normale", bg: "var(--tint-gray-bg)",   text: "var(--tint-gray-text)",   dot: "var(--tint-gray-dot)" },
+      haute:   { label: "Haute",   bg: "var(--tint-yellow-bg)", text: "var(--tint-yellow-text)", dot: "var(--tint-yellow-dot)" },
+      urgente: { label: "Urgente", bg: "var(--tint-red-bg)",    text: "var(--tint-red-text)",    dot: "var(--tint-red-dot)" },
+    };
+    const ecart = s.realise - s.planifie;
+    const ecartStr = (ecart >= 0 ? "+" : "") + ecart + "h";
+    const ecartColor = ecart > 0 ? "var(--tint-red-text)" : ecart < 0 ? "var(--tint-green-text)" : "var(--text)";
+
+    return {
+      A: this.mkNs("a", STATUS, PRIO),
+      B: this.mkNs("b", STATUS, PRIO),
+      C: this.mkNs("c", STATUS, PRIO),
+
+      title: s.title, projectUpper: s.project.toUpperCase(),
+      project: s.project,
+      assigneeName: s.assigneeName, assigneeInitials: s.assigneeInitials, assigneeType: s.assigneeType,
+      realiseNum: String(s.realise), planifieNum: String(s.planifie),
+      ecartStr, ecartColor,
+      notes: s.notes.map((n, i) => ({ text: n, onBlur: (e) => this.saveNote(i, e.target.textContent), onRemove: () => this.removeNote(i) })),
+      hasNotes: s.notes.length > 0, noNotes: s.notes.length === 0,
+      menuOpen: s.menu !== null,
+      closeMenu: () => this.setState({ menu: null }),
+      addNote: () => this.setState({ notes: [...this.state.notes, ""] }),
+      saveTitle: (e) => this.setState({ title: e.target.textContent.trim() || "Sans titre" }),
+      saveProject: (e) => this.setState({ project: e.target.textContent.trim() }),
+      saveAssigneeName: (e) => this.setState({ assigneeName: e.target.textContent.trim() }),
+      saveRealise: (e) => this.setState({ realise: this.parseH(e.target.textContent) }),
+      savePlanifie: (e) => this.setState({ planifie: this.parseH(e.target.textContent) }),
+    };
+  }
+}
+</script>
+</body>
+</html>

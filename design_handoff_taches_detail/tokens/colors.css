@@ -1,0 +1,121 @@
+/* Paradeos — Color tokens
+ * Warm-gray neutral foundation (never pure black, never cold gray) +
+ * a BLUE brand primary (a full ramp built on the blue categorical tint) +
+ * nine categorical tints.
+ * Each tint = pale surface + dark same-family text + one saturated dot.
+ */
+:root {
+  /* ---- Neutrals: surfaces ---- */
+  --bg-app: #FFFFFF;        /* main application background */
+  --bg-surface: #FBFBFA;    /* cards, panels */
+  --bg-sidebar: #F7F7F5;    /* lateral menu */
+  --bg-hover: #EFEFED;      /* hover, active row, selection */
+  --bg-press: #E7E7E4;      /* pressed state (slightly deeper than hover) */
+  --border: #E3E3E0;        /* separators, hairline outlines */
+  --border-strong: #D6D5D1; /* stronger separators, input outline on focus-within */
+
+  /* ---- Neutrals: text ---- */
+  --text: #37352F;          /* primary text */
+  --text-muted: #605C54;    /* secondary text */
+  --text-tertiary: #9B9890; /* tertiary text, placeholders, captions */
+  --text-on-accent: #FFFFFF;/* text over the saturated accent */
+
+  /* ---- Brand primary scale (blue) ----
+   * Built on the blue categorical tint, extended to a full ramp.
+   * 500 is THE primary; 700 is hover/press/focus; 50 is the pale brand surface.
+   */
+  --primary-50: #E7F3F8;    /* fond de tag, survol doux, bannière */
+  --primary-100: #C3DEEC;   /* bordure de tag, séparateur teinté */
+  --primary-200: #8FC0DA;   /* éléments décoratifs, illustrations */
+  --primary-300: #66ABCC;   /* (interpolated) */
+  --primary-400: #3E94BE;   /* icônes, accents secondaires */
+  --primary-500: #1F6F95;   /* PRIMARY — boutons, liens, actif */
+  --primary-600: #1B6587;   /* (interpolated) */
+  --primary-700: #185A7C;   /* hover, pressé, focus */
+  --primary-800: #134A66;   /* (interpolated) */
+  --primary-900: #10384E;   /* texte sur fond pâle bleu */
+
+  /* ---- Brand accent (aliases onto the primary scale) ---- */
+  --accent: var(--primary-500);       /* brand, links, strong selection */
+  --accent-hover: var(--primary-700); /* accent hover / press / focus */
+  --accent-soft: var(--primary-50);   /* accent pale surface */
+  --accent-dot: var(--primary-400);   /* accent saturated dot / picto fill */
+
+  /* ====================================================================
+   * NINE CATEGORICAL TINTS
+   * Pattern per family:
+   *   --tint-<name>-bg   pale surface (column header, tag fill, pill)
+   *   --tint-<name>-text dark label on the pale surface
+   *   --tint-<name>-dot  saturated dot / duotone icon fill
+   * Color encodes a CATEGORY, not a hierarchy. Never black text on a tint.
+   * ==================================================================== */
+
+  /* Gris / Gray */
+  --tint-gray-bg: #F1F0EE;
+  --tint-gray-text: #605C54;
+  --tint-gray-dot: #908D85;
+
+  /* Brun / Brown */
+  --tint-brown-bg: #F4EEEA;
+  --tint-brown-text: #7A5C44;
+  --tint-brown-dot: #A8825E;
+
+  /* Orange */
+  --tint-orange-bg: #FAEBDD;
+  --tint-orange-text: #9A5E26;
+  --tint-orange-dot: #C2702F;
+
+  /* Jaune / Yellow */
+  --tint-yellow-bg: #FBF3DB;
+  --tint-yellow-text: #8A6A1A;
+  --tint-yellow-dot: #C9A227;
+
+  /* Vert / Green */
+  --tint-green-bg: #EDF3EC;
+  --tint-green-text: #3F6B43;
+  --tint-green-dot: #5E9B63;
+
+  /* Bleu / Blue */
+  --tint-blue-bg: #E7F3F8;
+  --tint-blue-text: #28617E;
+  --tint-blue-dot: #4A93B8;
+
+  /* Mauve (also the brand family) */
+  --tint-mauve-bg: #F2EEFA;
+  --tint-mauve-text: #5E4B8B;
+  --tint-mauve-dot: #9B82CE;
+
+  /* Rose / Pink */
+  --tint-pink-bg: #FBEBF4;
+  --tint-pink-text: #8A3A6B;
+  --tint-pink-dot: #C25E97;
+
+  /* Rouge / Red */
+  --tint-red-bg: #FBE9E7;
+  --tint-red-text: #9B3530;
+  --tint-red-dot: #CE5A52;
+
+  /* ---- Semantic status aliases (map onto tints) ---- */
+  --status-success-bg: var(--tint-green-bg);
+  --status-success-text: var(--tint-green-text);
+  --status-success-dot: var(--tint-green-dot);
+
+  --status-warning-bg: var(--tint-yellow-bg);
+  --status-warning-text: var(--tint-yellow-text);
+  --status-warning-dot: var(--tint-yellow-dot);
+
+  --status-danger-bg: var(--tint-red-bg);
+  --status-danger-text: var(--tint-red-text);
+  --status-danger-dot: var(--tint-red-dot);
+
+  --status-info-bg: var(--tint-blue-bg);
+  --status-info-text: var(--tint-blue-text);
+  --status-info-dot: var(--tint-blue-dot);
+
+  /* ---- Semantic surface/text aliases ---- */
+  --surface-card: var(--bg-surface);
+  --surface-panel: var(--bg-app);
+  --text-body: var(--text);
+  --text-heading: var(--text);
+  --link: var(--accent);
+}

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/colors.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/typography.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/radii.css">
+<link rel="stylesheet" href="_ds/paradeos-design-system-471c38cf-e5de-4f68-a17d-0983349e053a/tokens/base.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+  body { margin:0; font-family:var(--font-sans); color:var(--text); background:var(--bg-app); }
+  a { color:var(--primary-500); text-decoration:none; }
+  a:hover { color:var(--primary-700); text-decoration:underline; }
+  [contenteditable]:focus { outline:none; }
+  [contenteditable][data-placeholder]:empty:before { content:attr(data-placeholder); color:var(--text-tertiary); }
+</style>
+</helmet>
+
+<div style="display:flex;min-height:100vh;background:var(--bg-app);">
+
+  <!-- SIDEBAR -->
+  <div style="width:240px;flex:none;background:var(--bg-sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 12px;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 8px 20px;">
+      <span style="width:30px;height:30px;border-radius:8px;background:var(--primary-500);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-brand);font-weight:600;font-size:18px;">P</span>
+      <span style="font-family:var(--font-brand);font-weight:600;font-size:20px;color:var(--text);">Parade</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:2px;">
+      <div style="display:flex;align-items:center;gap:11px;padding:8px 9px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-house" style="font-size:19px;color:var(--primary-500);"></i>Dashboard</div>
+      <div style="display:flex;align-items:center;gap:11px;padding:8px 9px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-briefcase" style="font-size:19px;color:var(--primary-500);"></i>Projets</div>
+      <div style="display:flex;align-items:center;gap:11px;padding:8px 9px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-funnel" style="font-size:19px;color:var(--primary-500);"></i>Pipeline</div>
+      <div style="display:flex;align-items:center;gap:11px;padding:8px 9px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-clock" style="font-size:19px;color:var(--primary-500);"></i>Time tracking</div>
+      <div style="display:flex;align-items:center;gap:11px;padding:8px 9px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-microphone" style="font-size:19px;color:var(--primary-500);"></i>Meetings</div>
+      <div style="display:flex;align-items:center;gap:11px;padding:8px 9px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-envelope-simple" style="font-size:19px;color:var(--primary-500);"></i>Emails</div>
+      <div style="display:flex;align-items:center;gap:11px;padding:8px 9px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-users" style="font-size:19px;color:var(--primary-500);"></i>CRM</div>
+      <div style="display:flex;align-items:center;gap:11px;padding:8px 9px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-calculator" style="font-size:19px;color:var(--primary-500);"></i>Compta</div>
+      <div style="display:flex;align-items:center;gap:11px;padding:8px 9px;border-radius:6px;color:var(--text-muted);font:var(--type-ui);"><i class="ph-duotone ph-buildings" style="font-size:19px;color:var(--primary-500);"></i>Coworking</div>
+    </div>
+    <span style="flex:1;"></span>
+    <div style="padding:8px;font:var(--type-caption);color:var(--text-tertiary);">Parade SAS — Lyon</div>
+  </div>
+
+  <!-- MAIN -->
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+    <!-- topbar -->
+    <div style="height:64px;flex:none;display:flex;align-items:center;gap:20px;padding:0 28px;">
+      <div style="flex:1;max-width:560px;display:flex;align-items:center;gap:8px;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:9px 14px;">
+        <i class="ph-duotone ph-magnifying-glass" style="font-size:17px;color:var(--text-tertiary);"></i>
+        <span style="flex:1;font:var(--type-ui);color:var(--text-tertiary);">Rechercher…</span>
+        <span style="font:var(--type-mono);font-size:11px;color:var(--text-tertiary);border:1px solid var(--border);border-radius:4px;padding:2px 6px;">⌘K</span>
+      </div>
+      <span style="flex:1;"></span>
+      <i class="ph-duotone ph-bell" style="font-size:21px;color:var(--text-muted);"></i>
+      <span style="width:32px;height:32px;border-radius:999px;background:var(--tint-brown-dot);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">PY</span>
+    </div>
+
+    <!-- content -->
+    <div style="flex:1;overflow:auto;padding:8px 44px 64px;">
+      <div style="max-width:1180px;margin:0 auto;">
+        <div style="display:flex;align-items:center;gap:9px;font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:14px;"><span>Tâches</span><i class="ph-bold ph-caret-right" style="font-size:10px;"></i><span>{{ projectUpper }}</span><i class="ph-bold ph-caret-right" style="font-size:10px;"></i><span style="color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px;">{{ titleUpper }}</span></div>
+
+        <div style="display:flex;gap:0;background:var(--bg-app);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:visible;">
+          <!-- main column -->
+          <div style="flex:1;min-width:0;padding:34px 40px;">
+            <h1 contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveTitle }}" style="font-family:var(--font-brand);font-weight:600;font-size:32px;line-height:1.16;color:var(--text);margin:0 0 26px;border-radius:8px;padding:4px 8px;margin-left:-8px;cursor:text;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ title }}</h1>
+
+            <div style="font:var(--type-ui-medium);font-size:17px;color:var(--text);margin-bottom:14px;">Temps passé</div>
+            <div style="display:flex;gap:16px;margin-bottom:30px;">
+              <div style="flex:1;border:1px solid var(--border);border-radius:10px;padding:16px 18px;background:var(--bg-surface);"><div style="font:var(--type-caption);color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em;">Réalisé</div><div style="font-size:26px;font-weight:700;color:var(--tint-green-text);display:flex;align-items:baseline;"><span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveRealise }}" style="border-radius:5px;padding:0 5px;margin:0 -5px;cursor:text;min-width:12px;display:inline-block;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ realiseNum }}</span><span>h</span></div></div>
+              <div style="flex:1;border:1px solid var(--border);border-radius:10px;padding:16px 18px;background:var(--bg-surface);"><div style="font:var(--type-caption);color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em;">Planifié</div><div style="font-size:26px;font-weight:700;color:var(--text);display:flex;align-items:baseline;"><span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ savePlanifie }}" style="border-radius:5px;padding:0 5px;margin:0 -5px;cursor:text;min-width:12px;display:inline-block;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ planifieNum }}</span><span>h</span></div></div>
+              <div style="flex:1;border:1px solid var(--border);border-radius:10px;padding:16px 18px;background:var(--bg-surface);"><div style="font:var(--type-caption);color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em;">Écart</div><div style="font-size:26px;font-weight:700;color:{{ ecartColor }};">{{ ecartStr }}</div></div>
+            </div>
+            <div style="font:var(--type-ui);color:var(--text-muted);margin:-18px 0 30px;">Aucun créneau enregistré sur cette tâche. Ajoute-en depuis le <a href="#">calendrier</a>.</div>
+
+            <div style="display:flex;align-items:center;margin-bottom:14px;"><div style="font:var(--type-ui-medium);font-size:17px;color:var(--text);">Notes</div><span style="flex:1;"></span><span role="button" onClick="{{ addNote }}" style="display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border:1px solid var(--border);border-radius:6px;background:var(--bg-surface);font:var(--type-ui-medium);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-plus" style="font-size:13px;"></i>Ajouter</span></div>
+            <sc-if value="{{ noNotes }}" hint-placeholder-val="{{ true }}"><div style="border:1px solid var(--border);border-radius:12px;background:var(--bg-surface);padding:44px 24px;text-align:center;"><i class="ph-duotone ph-note-blank" style="font-size:34px;color:var(--text-tertiary);"></i><div style="font:var(--type-ui-medium);color:var(--text);margin:12px 0 6px;">Aucune note pour l'instant.</div><div style="font:var(--type-ui);color:var(--text-muted);line-height:1.6;">Garde une trace des échanges, décisions ou observations utiles.<br>Mention @prénom pour notifier, #project:nom pour lier une ressource.</div></div></sc-if>
+            <sc-if value="{{ hasNotes }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:12px;"><sc-for list="{{ notes }}" as="n" hint-placeholder-count="1"><div style="display:flex;gap:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-surface);padding:16px 18px;" style-hover="border-color:var(--border-strong);"><i class="ph-duotone ph-note" style="font-size:19px;color:var(--text-muted);flex:none;margin-top:1px;"></i><div contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ n.onBlur }}" data-placeholder="Écris une note…" style="flex:1;min-width:0;font:var(--type-ui);color:var(--text);line-height:1.6;cursor:text;">{{ n.text }}</div><span role="button" onClick="{{ n.onRemove }}" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--tint-red-bg);color:var(--tint-red-text);"><i class="ph-bold ph-trash" style="font-size:14px;"></i></span></div></sc-for></div></sc-if>
+          </div>
+
+          <!-- rail -->
+          <div style="width:320px;flex:none;background:var(--bg-surface);border-left:1px solid var(--border);border-radius:0 12px 12px 0;padding:30px 26px;display:flex;flex-direction:column;gap:24px;">
+            <div>
+              <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Statut</div>
+              <span style="position:relative;display:inline-flex;">
+                <span role="button" onClick="{{ toggleStatus }}" style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:6px;font:var(--type-ui-medium);cursor:pointer;background:{{ statusBg }};color:{{ statusText }};"><span style="width:7px;height:7px;border-radius:999px;background:{{ statusDot }};"></span>{{ statusLabel }}<i class="ph-bold ph-caret-down" style="font-size:9px;opacity:.7;"></i></span>
+                <sc-if value="{{ statusOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:200px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:6px;"><sc-for list="{{ statusOptions }}" as="o" hint-placeholder-count="4"><div role="button" onClick="{{ o.onSelect }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font:var(--type-ui);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><span style="width:9px;height:9px;border-radius:999px;background:{{ o.dot }};"></span><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><i class="ph-bold ph-check" style="font-size:12px;color:var(--primary-500);"></i></sc-if></div></sc-for></div></sc-if>
+              </span>
+            </div>
+            <div>
+              <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Priorité</div>
+              <span style="position:relative;display:inline-flex;">
+                <span role="button" onClick="{{ togglePrio }}" style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:6px;font:var(--type-ui-medium);cursor:pointer;background:{{ prioBg }};color:{{ prioText }};"><span style="width:7px;height:7px;border-radius:999px;background:{{ prioDot }};"></span>{{ prioLabel }}<i class="ph-bold ph-caret-down" style="font-size:9px;opacity:.7;"></i></span>
+                <sc-if value="{{ prioOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:200px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:6px;"><sc-for list="{{ prioOptions }}" as="o" hint-placeholder-count="4"><div role="button" onClick="{{ o.onSelect }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font:var(--type-ui);color:var(--text);cursor:pointer;" style-hover="background:var(--bg-hover);"><span style="width:9px;height:9px;border-radius:999px;background:{{ o.dot }};"></span><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><i class="ph-bold ph-check" style="font-size:12px;color:var(--primary-500);"></i></sc-if></div></sc-for></div></sc-if>
+              </span>
+            </div>
+            <div>
+              <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Assignée à</div>
+              <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+                <span style="width:26px;height:26px;border-radius:999px;background:var(--tint-brown-bg);color:var(--tint-brown-text);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex:none;">{{ assigneeInitials }}</span>
+                <span contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveAssigneeName }}" style="font:var(--type-ui-medium);color:var(--text);border-radius:6px;padding:2px 6px;margin:0 -6px;cursor:text;" style-hover="background:var(--bg-hover);" style-focus="box-shadow:0 0 0 2px var(--primary-200);">{{ assigneeName }}</span>
+                <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:500;background:var(--tint-yellow-bg);color:var(--tint-yellow-text);">{{ assigneeType }}</span>
+              </div>
+            </div>
+            <div>
+              <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Projet</div>
+              <div contentEditable="true" suppressContentEditableWarning="{{ true }}" onBlur="{{ saveProject }}" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-app);font:var(--type-ui);color:var(--text);cursor:text;" style-focus="box-shadow:0 0 0 2px var(--primary-200);border-color:var(--primary-300);">{{ project }}</div>
+            </div>
+            <div>
+              <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Période (Gantt)</div>
+              <span style="position:relative;display:inline-flex;">
+                <sc-if value="{{ hasPeriod }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--bg-app);font:var(--type-ui);color:var(--text);"><span role="button" onClick="{{ togglePeriod }}" style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;"><i class="ph-duotone ph-calendar-blank" style="font-size:16px;color:var(--text-muted);"></i>{{ periodLabel }}</span><span role="button" onClick="{{ clearPeriod }}" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-x" style="font-size:10px;"></i></span></span></sc-if>
+                <sc-if value="{{ noPeriod }}" hint-placeholder-val="{{ false }}"><span role="button" onClick="{{ togglePeriod }}" style="display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px dashed var(--border-strong);border-radius:8px;font:var(--type-ui);color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-duotone ph-calendar-plus" style="font-size:16px;"></i>Ajouter</span></sc-if>
+                <sc-if value="{{ periodOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:230px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:12px;"><input type="date" value="{{ periodIso }}" onChange="{{ onPeriodChange }}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font:var(--type-ui);color:var(--text);"><div role="button" onClick="{{ clearPeriod }}" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:7px 8px;border-radius:6px;font:var(--type-ui);color:var(--tint-red-text);cursor:pointer;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-trash" style="font-size:15px;"></i>Retirer</div></div></sc-if>
+              </span>
+            </div>
+            <div>
+              <div style="font:var(--type-caption);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px;">Terminée le</div>
+              <span style="position:relative;display:inline-flex;">
+                <sc-if value="{{ hasDone }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--bg-app);font:var(--type-ui);color:var(--text);"><span role="button" onClick="{{ toggleDone }}" style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;"><i class="ph-duotone ph-check-circle" style="font-size:16px;color:var(--tint-green-dot);"></i>{{ doneLabel }}</span><span role="button" onClick="{{ clearDone }}" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-bold ph-x" style="font-size:10px;"></i></span></span></sc-if>
+                <sc-if value="{{ noDone }}" hint-placeholder-val="{{ true }}"><span role="button" onClick="{{ toggleDone }}" style="display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px dashed var(--border-strong);border-radius:8px;font:var(--type-ui);color:var(--text-tertiary);cursor:pointer;" style-hover="background:var(--bg-hover);"><i class="ph-duotone ph-check" style="font-size:16px;"></i>Marquer terminée</span></sc-if>
+                <sc-if value="{{ doneOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:230px;background:var(--bg-app);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,15,15,.12);padding:12px;"><input type="date" value="{{ doneIso }}" onChange="{{ onDoneChange }}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font:var(--type-ui);color:var(--text);"><div role="button" onClick="{{ clearDone }}" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:7px 8px;border-radius:6px;font:var(--type-ui);color:var(--tint-red-text);cursor:pointer;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-x-circle" style="font-size:15px;"></i>Non terminée</div></div></sc-if>
+              </span>
+            </div>
+            <div style="height:1px;background:var(--border);"></div>
+            <span role="button" style="display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 14px;border-radius:6px;color:var(--tint-red-text);font:var(--type-ui-medium);cursor:pointer;" style-hover="background:var(--tint-red-bg);"><i class="ph-duotone ph-trash" style="font-size:16px;"></i>Supprimer la tâche</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeMenu }}" style="position:fixed;inset:0;z-index:40;"></div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    title: "Revoir et valider les contenus des 5 articles de blog régénérés",
+    status: "afaire",
+    priority: "normale",
+    periodEnd: "2025-06-27",
+    doneDate: null,
+    project: "PrevandCare — PrevandCare - Refonte du site",
+    assigneeName: "Amaury Barbier de la Serre",
+    assigneeInitials: "AS",
+    assigneeType: "Externe",
+    assigneeClient: "PrevandCare",
+    realise: 0,
+    planifie: 0,
+    notes: [],
+    menu: null,
+  };
+
+  fmtFr(iso) {
+    if (!iso) return "";
+    const p = iso.split("-").map(Number);
+    const M = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+    return p[2] + " " + M[p[1] - 1] + " " + p[0];
+  }
+  parseH(t) {
+    const n = parseFloat(String(t).replace(/[^0-9.,-]/g, "").replace(",", "."));
+    return isNaN(n) ? 0 : n;
+  }
+  toggleMenu(name) { this.setState(s => ({ menu: s.menu === name ? null : name })); }
+  saveNote(i, text) { const notes = [...this.state.notes]; notes[i] = text; this.setState({ notes }); }
+  removeNote(i) { this.setState({ notes: this.state.notes.filter((_, j) => j !== i) }); }
+
+  renderVals() {
+    const s = this.state;
+    const STATUS = {
+      afaire:   { label: "À faire",    bg: "var(--primary-500)",    text: "#fff",                  dot: "rgba(255,255,255,.85)", listDot: "var(--primary-500)" },
+      encours:  { label: "En cours",   bg: "var(--tint-blue-bg)",   text: "var(--tint-blue-text)", dot: "var(--tint-blue-dot)",  listDot: "var(--tint-blue-dot)" },
+      attente:  { label: "En attente", bg: "var(--tint-yellow-bg)", text: "var(--tint-yellow-text)",dot: "var(--tint-yellow-dot)",listDot: "var(--tint-yellow-dot)" },
+      terminee: { label: "Terminée",   bg: "var(--tint-green-bg)",  text: "var(--tint-green-text)",dot: "var(--tint-green-dot)", listDot: "var(--tint-green-dot)" },
+    };
+    const PRIO = {
+      basse:   { label: "Basse",   bg: "var(--tint-gray-bg)",   text: "var(--tint-gray-text)",   dot: "var(--tint-gray-dot)" },
+      normale: { label: "Normale", bg: "var(--tint-gray-bg)",   text: "var(--tint-gray-text)",   dot: "var(--tint-gray-dot)" },
+      haute:   { label: "Haute",   bg: "var(--tint-yellow-bg)", text: "var(--tint-yellow-text)", dot: "var(--tint-yellow-dot)" },
+      urgente: { label: "Urgente", bg: "var(--tint-red-bg)",    text: "var(--tint-red-text)",    dot: "var(--tint-red-dot)" },
+    };
+    const st = STATUS[s.status], pr = PRIO[s.priority];
+    const statusOptions = Object.keys(STATUS).map(k => ({ label: STATUS[k].label, dot: STATUS[k].listDot, active: k === s.status, onSelect: () => this.setState({ status: k, menu: null }) }));
+    const prioOptions = Object.keys(PRIO).map(k => ({ label: PRIO[k].label, dot: PRIO[k].dot, active: k === s.priority, onSelect: () => this.setState({ priority: k, menu: null }) }));
+    const ecart = s.realise - s.planifie;
+    const ecartStr = (ecart >= 0 ? "+" : "") + ecart + "h";
+    const ecartColor = ecart > 0 ? "var(--tint-red-text)" : ecart < 0 ? "var(--tint-green-text)" : "var(--text)";
+
+    return {
+      title: s.title, titleUpper: s.title.toUpperCase(),
+      project: s.project, projectUpper: s.project.toUpperCase(),
+      statusLabel: st.label, statusBg: st.bg, statusText: st.text, statusDot: st.dot,
+      prioLabel: pr.label, prioBg: pr.bg, prioText: pr.text, prioDot: pr.dot,
+      statusOptions, prioOptions,
+      statusOpen: s.menu === "status", prioOpen: s.menu === "prio", periodOpen: s.menu === "period", doneOpen: s.menu === "done",
+      menuOpen: s.menu !== null,
+      hasPeriod: !!s.periodEnd, noPeriod: !s.periodEnd, periodLabel: s.periodEnd ? "Jusqu'au " + this.fmtFr(s.periodEnd) : "", periodIso: s.periodEnd || "",
+      hasDone: !!s.doneDate, noDone: !s.doneDate, doneLabel: this.fmtFr(s.doneDate), doneIso: s.doneDate || "",
+      assigneeName: s.assigneeName, assigneeInitials: s.assigneeInitials, assigneeType: s.assigneeType,
+      realiseNum: String(s.realise), planifieNum: String(s.planifie), ecartStr, ecartColor,
+      notes: s.notes.map((n, i) => ({ text: n, onBlur: (e) => this.saveNote(i, e.target.textContent), onRemove: () => this.removeNote(i) })),
+      hasNotes: s.notes.length > 0, noNotes: s.notes.length === 0,
+
+      toggleStatus: () => this.toggleMenu("status"),
+      togglePrio: () => this.toggleMenu("prio"),
+      togglePeriod: () => this.toggleMenu("period"),
+      toggleDone: () => this.toggleMenu("done"),
+      closeMenu: () => this.setState({ menu: null }),
+      saveTitle: (e) => this.setState({ title: e.target.textContent.trim() || "Sans titre" }),
+      saveProject: (e) => this.setState({ project: e.target.textContent.trim() }),
+      saveAssigneeName: (e) => this.setState({ assigneeName: e.target.textContent.trim() }),
+      onPeriodChange: (e) => this.setState({ periodEnd: e.target.value || null, menu: null }),
+      clearPeriod: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState({ periodEnd: null, menu: null }); },
+      onDoneChange: (e) => this.setState({ doneDate: e.target.value || null, menu: null }),
+      clearDone: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState({ doneDate: null, menu: null }); },
+      saveRealise: (e) => this.setState({ realise: this.parseH(e.target.textContent) }),
+      savePlanifie: (e) => this.setState({ planifie: this.parseH(e.target.textContent) }),
+      addNote: () => this.setState({ notes: [...this.state.notes, ""] }),
+    };
+  }
+}
+</script>
+</body>
+</html>
