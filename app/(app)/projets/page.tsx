@@ -20,13 +20,7 @@ import { UserFocus, X } from "@phosphor-icons/react/dist/ssr";
 import { asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { Briefcase, Plus } from "lucide-react";
 import Link from "next/link";
-import {
-  FacetsPanel,
-  type Nature,
-  type Role,
-  type Scope,
-  type State,
-} from "./facets-panel";
+import { FacetsPanel, type Nature, type Role, type Scope, type State } from "./facets-panel";
 import { type ProjectRow, ResultsTable } from "./results-table";
 
 export const dynamic = "force-dynamic";

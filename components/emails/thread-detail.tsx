@@ -75,10 +75,7 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
   // (indépendants entre eux, tous deux dépendent seulement de `detail`).
   const [proposalRowsRaw, linkedProjectRow] = await Promise.all([
     messageIds.length > 0
-      ? conn
-          .select()
-          .from(emailProposals)
-          .where(inArray(emailProposals.messageId, messageIds))
+      ? conn.select().from(emailProposals).where(inArray(emailProposals.messageId, messageIds))
       : Promise.resolve([] as (typeof emailProposals.$inferSelect)[]),
     projectTag?.targetId
       ? conn

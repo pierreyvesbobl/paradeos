@@ -13,10 +13,7 @@ export function ThreadDetailSkeleton() {
         <div className="h-5 flex-1 rounded bg-[var(--ds-bg-hover)]" />
         <div className="h-6 w-16 rounded bg-[var(--ds-bg-hover)]" />
       </div>
-      <div
-        className="space-y-3 rounded-xl border p-4"
-        style={{ borderColor: "var(--ds-border)" }}
-      >
+      <div className="space-y-3 rounded-xl border p-4" style={{ borderColor: "var(--ds-border)" }}>
         <div className="h-5 w-24 rounded bg-[var(--ds-bg-hover)]" />
         <div className="h-14 rounded bg-[var(--ds-bg-hover)]" />
         <div className="h-14 rounded bg-[var(--ds-bg-hover)]" />

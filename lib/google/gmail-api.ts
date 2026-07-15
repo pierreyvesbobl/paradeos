@@ -419,7 +419,6 @@ function base64urlEncode(text: string): string {
  * accents (usuel en français).
  */
 function encodeHeaderIfNeeded(value: string): string {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: check for non-ASCII printable.
   if (/^[\x20-\x7e]*$/.test(value)) return value;
   return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
 }

@@ -143,10 +143,7 @@ export function ResultsTable({ rows }: { rows: ProjectRow[] }) {
                 style={{ background: row.color ?? "var(--ds-border-strong)" }}
                 aria-hidden="true"
               />
-              <span
-                className="truncate text-[14px]"
-                style={{ color: "var(--ds-text)" }}
-              >
+              <span className="truncate text-[14px]" style={{ color: "var(--ds-text)" }}>
                 {row.name}
               </span>
             </div>
@@ -184,7 +181,7 @@ export function ResultsTable({ rows }: { rows: ProjectRow[] }) {
 function HeaderCell({ label, sortActive }: { label: string; sortActive?: boolean }) {
   return (
     <span
-      className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase"
+      className="inline-flex items-center gap-1 font-semibold text-[11px] uppercase"
       style={{
         color: sortActive ? "var(--ds-primary-700)" : "var(--ds-text-muted)",
         letterSpacing: "0.02em",
@@ -289,7 +286,11 @@ function TeamCluster({ lead, members }: { lead: Person | null; members: Person[]
   }
 
   if (people.length === 0) {
-    return <span className="text-[12px]" style={{ color: "var(--ds-text-tertiary)" }}>—</span>;
+    return (
+      <span className="text-[12px]" style={{ color: "var(--ds-text-tertiary)" }}>
+        —
+      </span>
+    );
   }
 
   const shown = people.slice(0, MAX_AVATARS);
@@ -298,16 +299,11 @@ function TeamCluster({ lead, members }: { lead: Person | null; members: Person[]
   return (
     <div className="flex items-center pl-1.5">
       {shown.map(({ person, isLead }, i) => (
-        <ClusterAvatar
-          key={person.id}
-          name={person.name ?? "?"}
-          isLead={isLead}
-          overlap={i > 0}
-        />
+        <ClusterAvatar key={person.id} name={person.name ?? "?"} isLead={isLead} overlap={i > 0} />
       ))}
       {extra > 0 ? (
         <span
-          className="inline-flex flex-none items-center justify-center rounded-full text-[10px] font-semibold"
+          className="inline-flex flex-none items-center justify-center rounded-full font-semibold text-[10px]"
           style={{
             width: CIRCLE_SIZE,
             height: CIRCLE_SIZE,
@@ -336,14 +332,12 @@ function ClusterAvatar({
   const tint = tintOf(name);
   return (
     <span
-      className="inline-flex flex-none items-center justify-center rounded-full text-[9px] font-bold"
+      className="inline-flex flex-none items-center justify-center rounded-full font-bold text-[9px]"
       style={{
         width: CIRCLE_SIZE,
         height: CIRCLE_SIZE,
         marginLeft: overlap ? -6 : 0,
-        border: isLead
-          ? "2px solid var(--ds-primary-400)"
-          : "2px solid var(--ds-bg-surface)",
+        border: isLead ? "2px solid var(--ds-primary-400)" : "2px solid var(--ds-bg-surface)",
         background: `var(--ds-tint-${tint}-bg)`,
         color: `var(--ds-tint-${tint}-text)`,
       }}

@@ -218,9 +218,7 @@ function ScopeRow({
         active ? "" : "text-ds-text-muted hover:bg-ds-bg-hover",
       )}
       style={
-        active
-          ? { background: "var(--ds-primary-50)", color: "var(--ds-primary-900)" }
-          : undefined
+        active ? { background: "var(--ds-primary-50)", color: "var(--ds-primary-900)" } : undefined
       }
     >
       <span style={{ color: active ? "var(--ds-primary-700)" : "var(--ds-text-tertiary)" }}>
@@ -241,7 +239,7 @@ function FacetGroup({ title, children }: { title: string; children: React.ReactN
   return (
     <div className="flex flex-col gap-1.5">
       <div
-        className="mb-0.5 text-[11px] font-semibold uppercase"
+        className="mb-0.5 font-semibold text-[11px] uppercase"
         style={{ color: "var(--ds-text-tertiary)", letterSpacing: "0.06em" }}
       >
         {title}
@@ -270,9 +268,7 @@ function RoleRow({
         active ? "" : "text-ds-text-muted",
       )}
       style={
-        active
-          ? { background: "var(--ds-primary-50)", color: "var(--ds-primary-900)" }
-          : undefined
+        active ? { background: "var(--ds-primary-50)", color: "var(--ds-primary-900)" } : undefined
       }
     >
       <CheckboxSquare checked={active} />

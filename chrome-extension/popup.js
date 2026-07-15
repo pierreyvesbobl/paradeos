@@ -42,8 +42,6 @@ async function getDougsCookieString() {
   // à cette URL — incluant les cookies de domaine parent (.dougs.fr),
   // sans avoir à matcher les valeurs de `domain` à la main.
   const cookies = await chrome.cookies.getAll({ url: "https://app.dougs.fr/" });
-  // Debug : affiche ce qu'on voit dans la console de la popup.
-  console.log("[Paradeos Sync] cookies trouvés :", cookies);
   return {
     cookieString: cookies.map((c) => `${c.name}=${c.value}`).join("; "),
     count: cookies.length,

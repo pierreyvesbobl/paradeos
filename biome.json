@@ -13,7 +13,8 @@
       "dist",
       "db/migrations",
       "supabase/migrations",
-      "types/database.ts"
+      "types/database.ts",
+      "design_handoff_*/**"
     ]
   },
   "formatter": {

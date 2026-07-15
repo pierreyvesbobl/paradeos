@@ -45,7 +45,6 @@ async function main() {
       `;
       if (existingEntity) {
         entityId = existingEntity.id;
-        console.log(`  entité existante : ${t.entityName} → ${entityId}`);
       } else {
         const [row] = await sql`
           insert into public.entities (name, kind)
@@ -53,12 +52,10 @@ async function main() {
           returning id
         `;
         entityId = row.id;
-        console.log(`  entité créée    : ${t.entityName} → ${entityId}`);
       }
       // Linke le contact à l'entité.
       await sql`update public.contacts set entity_id = ${entityId} where id = ${contact.id}`;
     } else {
-      console.log(`  contact ${t.firstName} déjà linké à entité ${entityId}`);
     }
 
     // 3. Update les contrats coworking de ce contact pour pointer
@@ -69,8 +66,7 @@ async function main() {
       where contact_id = ${contact.id} and bill_to_entity_id is null
       returning id, name
     `;
-    for (const c of updated) {
-      console.log(`    contrat ${c.name} → bill_to_entity_id = ${entityId}`);
+    for (const _c of updated) {
     }
   }
 }

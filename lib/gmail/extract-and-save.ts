@@ -214,8 +214,8 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     }));
 
     // Cas trivial : 1 seul candidat clair → auto-apply si le tag projet existe déjà.
-    if (candidateList.length === 1) {
-      const projectId = candidateList[0]!;
+    if (candidateList.length === 1 && candidateList[0]) {
+      const projectId = candidateList[0];
       autoLinkedProjectId = projectId;
       const [projectTag] = await conn
         .select({ id: gmailTags.id })
@@ -244,7 +244,8 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     } else {
       // N candidats → proposition à valider.
       // suggested = LLM match si présent, sinon premier candidat (le user pourra changer).
-      const suggested: string = llmProjectMatch?.id ?? candidateList[0]!;
+      // Fallback vide impossible : le branche else n'est atteinte qu'avec candidateList.length >= 2.
+      const suggested = llmProjectMatch?.id ?? candidateList[0] ?? "";
       const suggestedRow = projectRows.find((p) => p.id === suggested);
       rows.push({
         messageId,
@@ -307,7 +308,8 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     const linkedPairs = new Set(existingLinks.map((l) => `${l.contactId}:${l.projectId}`));
     // Ne proposer que sur le projet suggéré (celui que l'user va accepter en priorité)
     // pour éviter d'exploser la file de propositions.
-    const targetProjectId: string = llmProjectMatch?.id ?? candidateList[0]!;
+    // candidateList.length > 0 (garanti par le if outer) → [0] est défini.
+    const targetProjectId = llmProjectMatch?.id ?? (candidateList[0] as string);
     for (const contactId of signals.matchedContactIds) {
       if (linkedPairs.has(`${contactId}:${targetProjectId}`)) continue;
       rows.push({

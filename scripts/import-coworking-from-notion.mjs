@@ -510,7 +510,6 @@ async function main() {
         set qualification = 'coworker'
         where id = ${existing.id} and (qualification is null or qualification != 'coworker')
       `;
-      console.log(`  contact existant : ${c.firstName} ${c.lastName} → ${existing.id}`);
     } else {
       const [row] = await sql`
         insert into public.contacts (first_name, last_name, qualification)
@@ -518,7 +517,6 @@ async function main() {
         returning id
       `;
       contactIdByCoworker[notionId] = row.id;
-      console.log(`  contact créé    : ${c.firstName} ${c.lastName} → ${row.id}`);
     }
   }
 
@@ -534,11 +532,10 @@ async function main() {
       returning id
     `;
     contractIdByNotion[notionId] = row.id;
-    console.log(`  contrat         : ${c.name} → ${row.id}`);
   }
 
   // 3. Factures (snapshot desks/prix depuis le contrat)
-  let invoiceCount = 0;
+  let _invoiceCount = 0;
   for (const inv of INVOICES) {
     const ct = CONTRACTS[inv.contract];
     if (!ct) {
@@ -554,13 +551,8 @@ async function main() {
          ${inv.periodStart}, ${inv.periodEnd}, ${STATUS_MAP[inv.status]},
          ${BILLED_BY_MAP[inv.billedBy]}, ${ct.desks}, ${ct.unitPriceHt}, '0.2')
     `;
-    invoiceCount++;
+    _invoiceCount++;
   }
-  console.log(`  ${invoiceCount} factures créées`);
-
-  console.log(
-    `\nOK. ${Object.keys(COWORKERS).length} coworkers, ${Object.keys(CONTRACTS).length} contrats, ${invoiceCount} factures importés.`,
-  );
 }
 
 main()

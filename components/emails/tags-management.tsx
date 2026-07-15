@@ -169,7 +169,6 @@ function CategoriesSection({ categories }: { categories: TagRow[] }) {
             placeholder="Nom de la catégorie (Compta, Annexe, Admin…)"
             disabled={pending}
             className="h-8 text-xs"
-            // biome-ignore lint/a11y/noAutofocus: form inline
             autoFocus
           />
           <Button type="button" size="sm" onClick={create} disabled={pending || !name.trim()}>
@@ -255,7 +254,6 @@ function CategoryRow({ tag }: { tag: TagRow }) {
             onChange={(e) => setName(e.target.value)}
             disabled={pending}
             className="h-7 flex-1 text-xs"
-            // biome-ignore lint/a11y/noAutofocus: edit inline
             autoFocus
           />
           <Button type="button" size="sm" variant="ghost" onClick={rename} disabled={pending}>

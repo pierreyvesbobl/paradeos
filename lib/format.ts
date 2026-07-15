@@ -72,9 +72,8 @@ export function formatRelativeShort(value: Date | string, now: Date = new Date()
 export function formatDays(days: number): string {
   if (!Number.isFinite(days) || days <= 0) return "0 j";
   const rounded = Math.round(days * 10) / 10;
-  const formatted =
-    Number.isInteger(rounded)
-      ? String(rounded)
-      : rounded.toFixed(1).replace(".", ",");
+  const formatted = Number.isInteger(rounded)
+    ? String(rounded)
+    : rounded.toFixed(1).replace(".", ",");
   return `${formatted} j`;
 }

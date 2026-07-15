@@ -9,4 +9,3 @@ const sqlText = readFileSync(file, "utf8");
 const sql = postgres(dbUrl, { prepare: false, max: 1, onnotice: () => {} });
 await sql.unsafe(sqlText);
 await sql.end({ timeout: 5 });
-console.log("OK", file);

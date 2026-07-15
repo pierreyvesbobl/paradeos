@@ -430,8 +430,8 @@ export async function autoTagThreadByParticipants(threadIdLocal: string): Promis
   // Projets : high-confidence auto-apply seulement quand 1 seul candidat
   // actif est identifié (contact + entité). Les cas ambigus (N candidats)
   // partent en proposition à valider — voir extract-and-save.
-  if (!projectDimensionLocked && candidateProjectIds.length === 1) {
-    const projectId = candidateProjectIds[0]!;
+  if (!projectDimensionLocked && candidateProjectIds.length === 1 && candidateProjectIds[0]) {
+    const projectId = candidateProjectIds[0];
     const [p] = await conn
       .select({ id: projects.id, name: projects.name })
       .from(projects)

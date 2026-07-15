@@ -1,4 +1,4 @@
-import { EmailsListPane, type Bucket } from "@/components/emails/emails-list-pane";
+import { type Bucket, EmailsListPane } from "@/components/emails/emails-list-pane";
 import { EmailThreadDetail } from "@/components/emails/thread-detail";
 import { ThreadDetailSkeleton } from "@/components/emails/thread-detail-skeleton";
 import { requireUser } from "@/lib/auth/server";
@@ -56,10 +56,7 @@ export default async function EmailsPage({ searchParams }: { searchParams: Searc
         projectsByThread={projectsByThread}
         query={q}
       />
-      <div
-        className="min-w-0 flex-1 overflow-y-auto"
-        style={{ background: "var(--ds-bg-app)" }}
-      >
+      <div className="min-w-0 flex-1 overflow-y-auto" style={{ background: "var(--ds-bg-app)" }}>
         {activeThreadId ? (
           // La `key` force React à démonter/remonter le Suspense boundary
           // à chaque changement de thread → le skeleton s'affiche pendant

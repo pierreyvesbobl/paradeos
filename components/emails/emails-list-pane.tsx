@@ -22,10 +22,7 @@ export type EmailListRow = {
 
 export type Bucket = "important" | "invoices" | "noise" | "all";
 
-const BUCKET_META: Record<
-  Bucket,
-  { label: string; icon: typeof Sparkle; description: string }
-> = {
+const BUCKET_META: Record<Bucket, { label: string; icon: typeof Sparkle; description: string }> = {
   important: { label: "À traiter", icon: Sparkle, description: "" },
   all: { label: "Tous", icon: Tray, description: "" },
   invoices: { label: "Facturation", icon: Receipt, description: "" },
@@ -61,7 +58,7 @@ function initialsFor(raw: unknown): Array<{ label: string; tint: string }> {
     "var(--ds-tint-green-bg)",
     "var(--ds-tint-orange-bg)",
     "var(--ds-tint-pink-bg)",
-  ];
+  ] as const;
   return arr.slice(0, 3).map((p, i) => {
     const name = p.name || p.email;
     const label = name
@@ -70,7 +67,7 @@ function initialsFor(raw: unknown): Array<{ label: string; tint: string }> {
       .slice(0, 2)
       .map((s) => s[0]?.toUpperCase() ?? "")
       .join("");
-    return { label: label || "?", tint: tints[i % tints.length]! };
+    return { label: label || "?", tint: tints[i % tints.length] ?? tints[0] };
   });
 }
 
@@ -272,13 +269,12 @@ export function EmailsListPane({
                   <div className="flex shrink-0">
                     {initials.map((av, i) => (
                       <span
-                        key={i}
+                        key={`${av.label}-${i}`}
                         className="flex size-[19px] items-center justify-center rounded-full font-semibold text-[9px] ring-[1.5px]"
                         style={{
                           background: av.tint,
                           color: "var(--ds-text-muted)",
                           marginLeft: i === 0 ? 0 : "-5px",
-                          // biome-ignore lint/style/useNamingConvention: css var
                           ["--tw-ring-color" as string]: "var(--ds-bg-surface)",
                         }}
                       >

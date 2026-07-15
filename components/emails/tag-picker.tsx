@@ -122,7 +122,6 @@ export function TagPicker({ threadId, allTags, appliedTagIds }: Props) {
           placeholder="Rechercher ou créer une catégorie…"
           disabled={pending}
           className="h-8 text-xs"
-          // biome-ignore lint/a11y/noAutofocus: dialog-like picker
           autoFocus
         />
         <button

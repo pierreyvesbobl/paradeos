@@ -13,10 +13,7 @@ import { addDays, isoDate, startOfIsoWeek } from "@/lib/calendar";
 import { getGlobalProfitability } from "@/lib/db/queries/profitability";
 import { getGlobalTimeStats } from "@/lib/db/queries/time-stats";
 import { formatDate, formatDays, formatDuration, formatEuro } from "@/lib/format";
-import {
-  computeDaysWorked,
-  computeEffectiveDailyRate,
-} from "@/lib/profitability-math";
+import { computeDaysWorked, computeEffectiveDailyRate } from "@/lib/profitability-math";
 import { projectKindLabels } from "@/lib/schemas/projects";
 import { Clock } from "lucide-react";
 import Link from "next/link";

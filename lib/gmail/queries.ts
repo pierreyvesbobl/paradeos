@@ -234,9 +234,7 @@ export async function getProjectsForThreads(
     .from(gmailThreadTags)
     .innerJoin(gmailTags, eq(gmailTags.id, gmailThreadTags.tagId))
     .innerJoin(projects, eq(projects.id, gmailTags.targetId))
-    .where(
-      and(inArray(gmailThreadTags.threadId, threadIds), eq(gmailTags.kind, "project")),
-    );
+    .where(and(inArray(gmailThreadTags.threadId, threadIds), eq(gmailTags.kind, "project")));
   for (const r of rows) {
     const arr = out.get(r.threadId) ?? [];
     arr.push({ id: r.projectId, name: r.name });
