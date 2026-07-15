@@ -1,3 +1,10 @@
+import { ActivityFeedCard } from "@/app/(app)/projets/[id]/overview/activity-feed-card";
+import { getProjectActivity } from "@/app/(app)/projets/[id]/overview/activity-query";
+import { DescriptionCard } from "@/app/(app)/projets/[id]/overview/description-card";
+import { FactsBand } from "@/app/(app)/projets/[id]/overview/facts-band";
+import { RecentExchangesCard } from "@/app/(app)/projets/[id]/overview/recent-exchanges-card";
+import { StakeholdersCard } from "@/app/(app)/projets/[id]/overview/stakeholders-card";
+import { StatusBanner } from "@/app/(app)/projets/[id]/overview/status-banner";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { DriveFolderSection } from "@/components/drive/drive-folder-section";
@@ -5,9 +12,7 @@ import { EmailsTab } from "@/components/emails/emails-tab";
 import { EmptyState } from "@/components/empty-state";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
-import { ProjectContactsField } from "@/components/projects/project-contacts-field";
 import { ProjectEntityField } from "@/components/projects/project-entity-field";
-import { ProjectMembersField } from "@/components/projects/project-members-field";
 import { ProjectMeetingsSection } from "@/components/projets/project-meetings-section";
 import { ProjectSecretsSection } from "@/components/projets/project-secrets-section";
 import { ProjectTabs } from "@/components/projets/project-tabs";
@@ -31,10 +36,7 @@ import { getProjectTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
 import { EntityName, EuroAmount, ProjectName } from "@/lib/demo/components";
 import { formatDays, formatDuration } from "@/lib/format";
-import {
-  computeDaysWorked,
-  computeEffectiveDailyRate,
-} from "@/lib/profitability-math";
+import { computeDaysWorked, computeEffectiveDailyRate } from "@/lib/profitability-math";
 import { projectBillingTypeLabels } from "@/lib/schemas/projects";
 import { cn } from "@/lib/utils";
 import { and, asc, eq } from "drizzle-orm";
@@ -44,24 +46,7 @@ import { Suspense } from "react";
 import { BillingMilestonesSection } from "./billing-milestones-section";
 import { BillingSummary } from "./billing-summary";
 import { DougsQuoteSection } from "./dougs-quote-section";
-import {
-  ProjBilling,
-  ProjBudget,
-  ProjColor,
-  ProjDate,
-  ProjDescription,
-  ProjHourlyRate,
-  ProjIcon,
-  ProjKind,
-  ProjName,
-  ProjOwner,
-  ProjPeriod,
-  ProjProbability,
-  ProjSource,
-  ProjStatus,
-  ProjValueAmount,
-} from "./inline-fields";
-import { ProjectTransitionButtons } from "./transition-button";
+import { ProjColor, ProjIcon, ProjName } from "./inline-fields";
 
 type Params = Promise<{ id: string }>;
 
@@ -74,8 +59,6 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       project: projects,
       entity: entities,
       ownerId: users.id,
-      ownerName: users.fullName,
-      ownerAvatarUrl: users.avatarUrl,
     })
     .from(projects)
     .leftJoin(entities, eq(projects.entityId, entities.id))
@@ -84,7 +67,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     .limit(1);
 
   if (!row) notFound();
-  const { project, entity, ownerId, ownerName, ownerAvatarUrl } = row;
+  const { project, entity, ownerId } = row;
 
   // Requêtes en 2 vagues parallèles séquentielles. Un Promise.all de
   // 12+ queries sur le pooler Supabase 6543 (transaction mode) déclenche
@@ -140,7 +123,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     getProjectSecretsList(id),
   ]);
 
-  const [entityList, userOptions, contactOptions] = await Promise.all([
+  const [entityList, userOptions, contactOptions, activityItems] = await Promise.all([
     conn
       .select({ id: entities.id, name: entities.name })
       .from(entities)
@@ -160,6 +143,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       .from(contactsTable)
       .leftJoin(entities, eq(entities.id, contactsTable.entityId))
       .orderBy(asc(contactsTable.lastName), asc(contactsTable.firstName)),
+    getProjectActivity(id),
   ]);
 
   const contactAssigneeOptions = contactOptions.map((c) => ({
@@ -237,131 +221,73 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     </Suspense>
   );
 
+  // Prévisionnel : le devis Dougs prévaut ; sinon le montant manuel ;
+  // sinon le budget. Cohérent avec la logique de BillingSummary.
+  const forecastAmount =
+    quoteInvoice?.dougsTotalHt != null
+      ? Number(quoteInvoice.dougsTotalHt)
+      : project.valueAmount != null
+        ? Number(project.valueAmount)
+        : project.budgetAmount != null
+          ? Number(project.budgetAmount)
+          : null;
+
+  // « Dernier mail » = le premier item email de la feed d'activité.
+  const lastEmailAt = activityItems.find((i) => i.kind === "email")?.at ?? null;
+
   const overviewContent = (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <SidebarSection title="Transition">
-        <ProjectTransitionButtons projectId={id} status={project.status} />
-      </SidebarSection>
-
-      <SidebarSection title="Informations">
-        <dl className="space-y-3">
-          <ProjField label="Type">
-            <ProjKind id={id} value={project.kind} />
-          </ProjField>
-          <ProjField label="Statut">
-            <ProjStatus id={id} value={project.status} />
-          </ProjField>
-          <ProjField label="Lead">
-            <ProjOwner
-              id={id}
-              value={
-                ownerId
-                  ? {
-                      id: ownerId,
-                      fullName: ownerName ?? null,
-                      avatarUrl: ownerAvatarUrl ?? null,
-                    }
-                  : null
-              }
-              options={userOptions}
-            />
-          </ProjField>
-          <ProjField label="Période">
-            <ProjPeriod id={id} startValue={project.startDate} endValue={project.endDate} />
-          </ProjField>
-          <ProjField label="Facturation">
-            <ProjBilling id={id} value={project.billingType} />
-          </ProjField>
-          {project.billingType === "fixed" ? (
-            <ProjField label="Budget">
-              <ProjBudget id={id} value={project.budgetAmount} />
-            </ProjField>
-          ) : null}
-          {project.billingType === "hourly" ? (
-            <ProjField label="Taux horaire">
-              <ProjHourlyRate id={id} value={project.hourlyRate} />
-            </ProjField>
-          ) : null}
-        </dl>
-        <ProjField label="Description">
-          <ProjDescription id={id} value={project.description} />
-        </ProjField>
-      </SidebarSection>
-
-      <SidebarSection title="Entité">
-        <ProjectEntityField
-          projectId={id}
-          entity={entity ? { id: entity.id, name: entity.name } : null}
-          options={entityList}
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="space-y-4 lg:col-span-2">
+        <FactsBand
+          budgetAmount={project.budgetAmount}
+          forecastAmount={forecastAmount}
+          probability={project.probability}
+          billingType={project.billingType}
+          periodStart={project.startDate}
         />
-      </SidebarSection>
+      </div>
 
-      <SidebarSection title="Membres">
-        <ProjectMembersField
+      {/* Colonne gauche */}
+      <div className="space-y-4">
+        <StatusBanner projectId={id} status={project.status} />
+
+        <StakeholdersCard
           projectId={id}
           members={projectMemberRows}
-          options={userOptions}
           ownerId={ownerId}
-        />
-      </SidebarSection>
-
-      <SidebarSection title="Contacts liés" count={projectContactRows.length}>
-        <ProjectContactsField
-          projectId={id}
-          projectEntityId={project.entityId ?? null}
+          userOptions={userOptions}
           contacts={projectContactRows}
-          options={contactOptions}
+          contactOptions={contactOptions}
+          projectEntityId={project.entityId ?? null}
+          entityName={entity?.name ?? null}
           primaryContactId={project.contactId ?? null}
         />
-      </SidebarSection>
 
-      {project.kind === "client" ? (
-        <SidebarSection title="Commercial">
-          <dl className="space-y-3">
-            <ProjField
-              label={
-                quoteInvoice?.dougsTotalHt != null
-                  ? "Montant prévisionnel (manuel)"
-                  : "Montant prévisionnel"
-              }
-            >
-              <div className="space-y-1">
-                <ProjValueAmount id={id} value={project.valueAmount} />
-                {quoteInvoice?.dougsTotalHt != null ? (
-                  <p className="text-[10px] text-muted-foreground">
-                    ⓘ Source de vérité : devis Dougs (
-                    {Number(quoteInvoice.dougsTotalHt).toLocaleString("fr-FR", {
-                      style: "currency",
-                      currency: "EUR",
-                    })}
-                    )
-                  </p>
-                ) : null}
-              </div>
-            </ProjField>
-            <ProjField label="Probabilité">
-              <ProjProbability id={id} value={project.probability} />
-            </ProjField>
-            <ProjField label="Source">
-              <ProjSource id={id} value={project.source} />
-            </ProjField>
-            <div className="grid grid-cols-2 gap-3">
-              <ProjField label="1er contact">
-                <ProjDate id={id} field="firstContactDate" value={project.firstContactDate} />
-              </ProjField>
-              <ProjField label="Dernier contact">
-                <ProjDate id={id} field="lastContactDate" value={project.lastContactDate} />
-              </ProjField>
-              <ProjField label="Relance prévue">
-                <ProjDate id={id} field="followUpDate" value={project.followUpDate} />
-              </ProjField>
-              <ProjField label="Closing estimé">
-                <ProjDate id={id} field="expectedCloseDate" value={project.expectedCloseDate} />
-              </ProjField>
-            </div>
-          </dl>
-        </SidebarSection>
-      ) : null}
+        <DescriptionCard projectId={id} value={project.description} />
+
+        {/* Entité — pas dans le handoff mais utile pour changer d'entité rattachée */}
+        <section className="space-y-2 rounded-[10px] border border-ds-border bg-ds-surface p-5">
+          <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-[0.05em]">
+            Entité
+          </p>
+          <ProjectEntityField
+            projectId={id}
+            entity={entity ? { id: entity.id, name: entity.name } : null}
+            options={entityList}
+          />
+        </section>
+      </div>
+
+      {/* Colonne droite (rail) */}
+      <div className="flex flex-col gap-4">
+        <RecentExchangesCard
+          lastContactDate={project.lastContactDate}
+          lastEmailAt={lastEmailAt}
+          followUpDate={project.followUpDate}
+          expectedCloseDate={project.expectedCloseDate}
+        />
+        <ActivityFeedCard items={activityItems} />
+      </div>
     </div>
   );
 
@@ -659,15 +585,6 @@ function SidebarSection({
         ) : null}
       </h3>
       <div className="space-y-3">{children}</div>
-    </div>
-  );
-}
-
-function ProjField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</dt>
-      <dd className="mt-0.5 text-sm">{children}</dd>
     </div>
   );
 }
