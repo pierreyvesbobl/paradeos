@@ -25,6 +25,7 @@ type Props = {
   states: State[];
   totalCount: number;
   myCount: number;
+  roleCounts: Record<Role, number>;
   typeCounts: Record<ProjectKind, number>;
   natureCounts: Record<Nature, number>;
   stateCounts: Record<State, number>;
@@ -60,7 +61,12 @@ function buildParams(
   },
 ): string {
   const sp = new URLSearchParams();
+  // On sème toujours `q` (même vide) pour bloquer applyViewPrefRedirect —
+  // sans ce sentinelle, un clic qui vide tous les filtres retomberait sur
+  // les prefs sauvegardées et l'utilisateur ne pourrait jamais échapper.
+  sp.set("q", preserved.q ?? "");
   for (const [k, v] of Object.entries(preserved)) {
+    if (k === "q") continue;
     if (v) sp.set(k, v);
   }
   if (next.scope && next.scope !== "all") sp.set("scope", next.scope);
@@ -86,6 +92,7 @@ export function FacetsPanel({
   states,
   totalCount,
   myCount,
+  roleCounts,
   typeCounts,
   natureCounts,
   stateCounts,
@@ -96,7 +103,7 @@ export function FacetsPanel({
     const currentState = { scope, roles, types, entities, natures, states };
     const merged = { ...currentState, ...patch };
     const qs = buildParams(preservedParams, merged);
-    return qs ? `${pathname}?${qs}` : pathname;
+    return `${pathname}?${qs}`;
   }
 
   return (
@@ -125,12 +132,14 @@ export function FacetsPanel({
             href={href({ roles: toggle(roles, "lead") })}
             icon={<Crown size={14} weight="duotone" />}
             label="Lead"
+            count={roleCounts.lead}
           />
           <RoleRow
             active={roles.includes("member")}
             href={href({ roles: toggle(roles, "member") })}
             icon={<User size={14} weight="duotone" />}
             label="Membre"
+            count={roleCounts.member}
           />
         </FacetGroup>
       ) : null}
@@ -254,11 +263,13 @@ function RoleRow({
   href,
   icon,
   label,
+  count,
 }: {
   active: boolean;
   href: string;
   icon: React.ReactNode;
   label: string;
+  count: number;
 }) {
   return (
     <Link
@@ -275,6 +286,12 @@ function RoleRow({
       <span className="flex-1 text-[13px]">{label}</span>
       <span style={{ color: active ? "var(--ds-primary-700)" : "var(--ds-text-tertiary)" }}>
         {icon}
+      </span>
+      <span
+        className="text-[12px] tabular-nums"
+        style={{ color: active ? "var(--ds-primary-700)" : "var(--ds-text-tertiary)" }}
+      >
+        {count}
       </span>
     </Link>
   );
