@@ -332,10 +332,16 @@ export async function computeThreadTaggingSignals(
     involvedEmails.length === 0
       ? []
       : await conn
-          .select({ id: contacts.id })
+          .select({ id: contacts.id, entityId: contacts.entityId })
           .from(contacts)
           .where(inArray(contacts.email, involvedEmails));
   const matchedContactIds = matchedContacts.map((c) => c.id);
+  // L'entité rattachée au contact matché est aussi un signal fort (couvre
+  // le cas où entities.website est null → le match par domaine ne
+  // s'active pas, mais on connaît quand même l'entité).
+  const contactDerivedEntityIds = matchedContacts
+    .map((c) => c.entityId)
+    .filter((id): id is string => !!id);
 
   const overriddenProjectTag = await conn
     .select({ tagId: gmailThreadTags.tagId })
@@ -369,6 +375,7 @@ export async function computeThreadTaggingSignals(
     if (d && !GENERIC_EMAIL_DOMAINS.has(d)) involvedDomains.add(d);
   }
   const matchedEntityIds = new Set<string>();
+  for (const id of contactDerivedEntityIds) matchedEntityIds.add(id);
   if (involvedDomains.size > 0) {
     const entityRows = await conn
       .select({ id: entities.id, website: entities.website })

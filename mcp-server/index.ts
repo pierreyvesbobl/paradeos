@@ -229,7 +229,7 @@ server.tool(
 
 server.tool(
   "list_emails",
-  "Liste les threads Gmail liés à un sujet CRM. subjectType='project' (le plus fréquent) ou 'entity' utilise les tags Gmail dédiés ; 'contact' dérive au runtime via match d'adresse. Args : subjectType, subjectId, since? ISO, limit?. Scopé à l'utilisateur courant (sa boîte uniquement).",
+  "Liste les threads Gmail liés à un sujet CRM. subjectType='project' : UNION tag projet + tag entité du projet + threads où un contact (rattaché au projet ou à son entité) est participant. 'entity' : tag entité + participants des contacts de l'entité. 'contact' : threads où l'email du contact est participant. Args : subjectType, subjectId, since? ISO, limit?. Scopé à l'utilisateur courant (sa boîte uniquement).",
   listEmailsSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await listEmails(args, ctx), null, 2) }],
