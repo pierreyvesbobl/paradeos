@@ -55,8 +55,13 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
   );
   const dedupedProjects = dedupeBy(result.proposedProjects, (p) => norm(p.name));
 
+  // On mémorise les entités matchées pour scoper le match projet ensuite :
+  // "GpasPlus - Nouveau X" ne doit pas être confondu avec "GpasPlus -
+  // Automatisation" juste parce qu'ils partagent le préfixe entité.
+  const entityMatchByName = new Map<string, string | null>();
   for (const e of dedupedEntities) {
     const match = await fuzzyMatchEntity(e.name);
+    entityMatchByName.set(norm(e.name), match?.id ?? null);
     proposalsRows.push({
       meetingId: meeting.id,
       kind: "entity",
@@ -76,7 +81,11 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
     });
   }
   for (const p of dedupedProjects) {
-    const match = await fuzzyMatchProject(p.name);
+    const entityId = await resolveProposedEntityId(p.entityName, entityMatchByName);
+    const match = await fuzzyMatchProject(
+      p.name,
+      entityId !== undefined ? { entityId } : undefined,
+    );
     proposalsRows.push({
       meetingId: meeting.id,
       kind: "project",
@@ -148,4 +157,27 @@ function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
     out.push(item);
   }
   return out;
+}
+
+/**
+ * Résout l'entité d'un projet proposé pour scoper le fuzzy match.
+ * Retour :
+ *  - `string` (entityId) si l'entité résout à un existant → scope strict
+ *  - `null` si le LLM déclare un projet sans entité → scope internes
+ *  - `undefined` si l'entité est un nouvel objet non encore en base → pas
+ *    de scope (le projet est peut-être nouveau aussi, on laisse le seuil
+ *    global 0.55 filtrer)
+ */
+async function resolveProposedEntityId(
+  entityName: string | null,
+  entityMatchByName: Map<string, string | null>,
+): Promise<string | null | undefined> {
+  if (entityName === null) return null;
+  const key = entityName.trim().toLowerCase();
+  if (entityMatchByName.has(key)) {
+    const cached = entityMatchByName.get(key);
+    return cached === null ? undefined : cached;
+  }
+  const match = await fuzzyMatchEntity(entityName);
+  return match?.id ?? undefined;
 }

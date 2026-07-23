@@ -140,8 +140,13 @@ export const extractMeetingProposals = action(extractMeetingSchema, async ({ inp
     matchConfidence: string | null;
   }[] = [];
 
+  // Mémoire entité → id existant pour scoper le match projet et éviter le
+  // faux positif "MêmeClient - Nouveau X" ↔ "MêmeClient - Ancien Y".
+  const norm = (s: string) => s.trim().toLowerCase();
+  const entityMatchByName = new Map<string, string | null>();
   for (const e of result.proposedEntities) {
     const match = await fuzzyMatchEntity(e.name);
+    entityMatchByName.set(norm(e.name), match?.id ?? null);
     proposalsRows.push({
       meetingId: meeting.id,
       kind: "entity",
@@ -161,7 +166,11 @@ export const extractMeetingProposals = action(extractMeetingSchema, async ({ inp
     });
   }
   for (const p of result.proposedProjects) {
-    const match = await fuzzyMatchProject(p.name);
+    const entityId = await resolveProposedProjectEntityId(p.entityName, entityMatchByName);
+    const match = await fuzzyMatchProject(
+      p.name,
+      entityId !== undefined ? { entityId } : undefined,
+    );
     proposalsRows.push({
       meetingId: meeting.id,
       kind: "project",
@@ -434,6 +443,24 @@ export async function deleteMeetingAndRedirect(formData: FormData) {
 }
 
 // ----- helpers -----
+
+/**
+ * Résout l'entité d'un projet proposé pour scoper le fuzzy match.
+ * Voir `lib/meetings/extract-and-save.ts` pour la sémantique complète.
+ */
+async function resolveProposedProjectEntityId(
+  entityName: string | null,
+  entityMatchByName: Map<string, string | null>,
+): Promise<string | null | undefined> {
+  if (entityName === null) return null;
+  const key = entityName.trim().toLowerCase();
+  if (entityMatchByName.has(key)) {
+    const cached = entityMatchByName.get(key);
+    return cached === null ? undefined : cached;
+  }
+  const match = await fuzzyMatchEntity(entityName);
+  return match?.id ?? undefined;
+}
 
 async function createForKind(
   kind: "task" | "project" | "opportunity" | "contact" | "entity",

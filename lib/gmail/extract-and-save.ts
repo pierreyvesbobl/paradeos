@@ -194,8 +194,16 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   let autoLinkedProjectId: string | null = null;
   const signals = await computeThreadTaggingSignals(msg.threadId);
   const candidateProjectIds = new Set<string>(signals?.candidateProjectIds ?? []);
+  // Scope le match par l'entité du thread si elle est univoque : évite de
+  // rattacher "GpasPlus - Nouveau X" à "GpasPlus - Autre Y" sur le seul
+  // préfixe de nom.
+  const threadEntityId =
+    signals?.matchedEntityIds.length === 1 ? signals.matchedEntityIds[0] : undefined;
   const llmProjectMatch = result.proposedProjectName
-    ? await fuzzyMatchProject(result.proposedProjectName)
+    ? await fuzzyMatchProject(
+        result.proposedProjectName,
+        threadEntityId !== undefined ? { entityId: threadEntityId } : undefined,
+      )
     : null;
   if (llmProjectMatch) candidateProjectIds.add(llmProjectMatch.id);
   const candidateList = [...candidateProjectIds];
@@ -328,10 +336,16 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   // 4. Entités proposées (nouvelles) — fuzzy match côté serveur en
   // défense en profondeur, même si le LLM est consigné de ne pas
   // re-proposer ce qui est dans le vocabulaire.
+  //
+  // On mémorise les correspondances pour scoper le match projet (étape 6)
+  // et éviter le faux positif "MêmeClient - Nouveau X" ↔ "MêmeClient -
+  // Ancien Y" sur le seul préfixe entité.
+  const entityMatchByName = new Map<string, string | null>();
   for (const e of result.proposedEntities) {
     const name = e.name.trim();
     if (!name) continue;
     const match = await fuzzyMatchEntity(name);
+    entityMatchByName.set(name.toLowerCase(), match?.id ?? null);
     rows.push({
       messageId,
       kind: "entity",
@@ -378,7 +392,12 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   for (const p of result.proposedProjects) {
     const name = p.name.trim();
     if (!name) continue;
-    const match = await fuzzyMatchProject(name);
+    const entityId = await resolveProjectEntityIdForMatch(
+      p.entityName,
+      entityMatchByName,
+      signals?.matchedEntityIds ?? [],
+    );
+    const match = await fuzzyMatchProject(name, entityId !== undefined ? { entityId } : undefined);
     if (match && match.id === autoLinkedProjectId) continue;
     rows.push({
       messageId,
@@ -443,4 +462,36 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     .where(eq(gmailMessages.id, messageId));
 
   return { count: rows.length, autoAppliedProjectLinks, skipped: false };
+}
+
+/**
+ * Résout l'entité cible d'un projet proposé pour scoper le fuzzy match.
+ * Ordre de priorité :
+ *   1. Le LLM a nommé une entité → on cherche l'id (via la mémoire d'étape
+ *      4, puis fuzzyMatch en fallback).
+ *   2. Sinon, si le thread matche EXACTEMENT une entité côté domaine → on
+ *      utilise ce contexte.
+ * Sinon : `undefined` (pas de scope). Le seuil global 0.55 filtre.
+ */
+async function resolveProjectEntityIdForMatch(
+  entityName: string | null,
+  entityMatchByName: Map<string, string | null>,
+  matchedEntityIdsFromThread: string[],
+): Promise<string | null | undefined> {
+  if (entityName) {
+    const key = entityName.trim().toLowerCase();
+    if (entityMatchByName.has(key)) {
+      const cached = entityMatchByName.get(key);
+      if (cached !== null && cached !== undefined) return cached;
+      // cached === null → entité déclarée nouvelle par le LLM → pas de scope
+      return undefined;
+    }
+    const match = await fuzzyMatchEntity(entityName);
+    if (match) return match.id;
+    return undefined;
+  }
+  if (matchedEntityIdsFromThread.length === 1) {
+    return matchedEntityIdsFromThread[0];
+  }
+  return undefined;
 }

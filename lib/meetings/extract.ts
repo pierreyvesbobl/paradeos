@@ -330,8 +330,16 @@ Règles :
    - "on bosse sur X", "tâches X", "deadline X" → **active**
 3. Pour les projets internes (kind=product/transverse), \`status\` est
    normalement \`active\` directement.
-4. **Si un projet du vocabulaire correspond** : ne re-propose pas, mentionne
-   juste l'avancée dans le résumé.`;
+4. **Ré-mention d'un projet existant** vs **nouveau projet** :
+   - Si le transcript parle du MÊME deal/projet qu'un projet du vocabulaire
+     (même objet, même périmètre) → ne re-propose pas, mentionne l'avancée
+     dans le résumé.
+   - Si le transcript parle d'un NOUVEAU deal/projet pour une entité qui a
+     déjà d'autres projets → propose-le comme nouveau projet (nom distinct),
+     même si l'entité est la même. Ne fusionne pas deux objets différents
+     sous prétexte qu'ils partagent le client. En cas de doute, choisis
+     "nouveau projet" plutôt que "ré-mention" — un doublon est plus facile
+     à rejeter qu'un projet manqué.`;
 
   const vocabBlock = formatVocabulary(vocab);
 
@@ -454,8 +462,33 @@ export async function fuzzyMatchContact(
     : null;
 }
 
-export async function fuzzyMatchProject(name: string, threshold = 0.4): Promise<Match> {
+/**
+ * Fuzzy match d'un projet par nom, avec scope entité facultatif.
+ *
+ * `opts.entityId` :
+ *  - `string` → restreint la recherche aux projets de cette entité. Évite
+ *    le faux positif "GpasPlus - Nouveau X" ↔ "GpasPlus - Automatisation
+ *    des processus" quand le nom d'entité domine la similarité trigram.
+ *  - `null` → restreint aux projets internes (entityId is null).
+ *  - `undefined` (défaut) → pas de scope.
+ *
+ * Seuil par défaut relevé à 0.55 : le 0.4 historique faisait matcher deux
+ * projets différents partageant seulement le préfixe entité.
+ */
+export async function fuzzyMatchProject(
+  name: string,
+  opts?: { entityId?: string | null; threshold?: number },
+): Promise<Match> {
+  const threshold = opts?.threshold ?? 0.55;
   const conn = await db();
+  const conditions = [sql`similarity(${projects.name}, ${name}) > ${threshold}`];
+  if (opts && "entityId" in opts) {
+    conditions.push(
+      opts.entityId === null
+        ? sql`${projects.entityId} is null`
+        : sql`${projects.entityId} = ${opts.entityId}`,
+    );
+  }
   const rows = await conn
     .select({
       id: projects.id,
@@ -463,7 +496,7 @@ export async function fuzzyMatchProject(name: string, threshold = 0.4): Promise<
       sim: sql<number>`similarity(${projects.name}, ${name})`,
     })
     .from(projects)
-    .where(sql`similarity(${projects.name}, ${name}) > ${threshold}`)
+    .where(sql.join(conditions, sql` and `))
     .orderBy(sql`similarity(${projects.name}, ${name}) desc`)
     .limit(1);
   const top = rows[0];
