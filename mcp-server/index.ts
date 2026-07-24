@@ -77,6 +77,8 @@ import {
   listMyTimeSchema,
   listNotes,
   listNotesSchema,
+  listProjectInvoices,
+  listProjectInvoicesSchema,
   listProjects,
   listProjectsSchema,
   listTasks,
@@ -121,7 +123,7 @@ const server = new McpServer(
 
 server.tool(
   "list_projects",
-  "Liste les projets Paradeos avec filtres (status, kind, recherche fuzzy par nom).",
+  "Liste les projets Paradeos avec filtres (status, kind, recherche fuzzy par nom). Chaque row inclut un bloc `billing` (totalHt, invoicedHt, paidHt, outstandingHt, remainingToInvoiceHt, nextDueDate, overdueCount) pour repérer rapidement ce qui reste à facturer ou à relancer.",
   listProjectsSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await listProjects(args), null, 2) }],
@@ -130,10 +132,19 @@ server.tool(
 
 server.tool(
   "get_project",
-  "Détail complet d'un projet (entité, owner, tâches, temps passé). Lookup par id UUID ou nom.",
+  "Détail complet d'un projet : entité, owner, tâches, temps passé, ET facturation (devis Dougs, jalons, factures libres, avoirs + rollup totalHt/invoicedHt/paidHt/outstandingHt/remainingToInvoiceHt/nextDueDate/overdueCount). Lookup par id UUID ou nom.",
   getProjectSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await getProject(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "list_project_invoices",
+  "Historique de facturation d'un projet : devis (kind=quote), jalons (kind=milestone), factures libres (kind=one_off), avoirs (kind=credit_note). Filtres : kind, status (draft/sent/accepted/refused/paid). Trié par createdAt asc. Inclut le snapshot Dougs (ID, référence, statut, totaux). Lookup projet par `projectId` UUID ou `projectName` (fuzzy).",
+  listProjectInvoicesSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await listProjectInvoices(args), null, 2) }],
   }),
 );
 
