@@ -1,5 +1,6 @@
 "use client";
 
+import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { decideInboxItem, loadInboxPreview } from "@/lib/actions/inbox";
 import type {
@@ -35,6 +36,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
+import type { CoworkingInvoiceOption } from "../compta/reconciliation-actions";
 
 type FilterKey = "all" | InboxExtractionKind;
 
@@ -224,7 +226,13 @@ function projectTint(id: string, color: string | null | undefined): string {
   return PROJECT_TINTS[h % PROJECT_TINTS.length] ?? "var(--ds-tint-blue-dot)";
 }
 
-export function InboxView({ items }: { items: InboxItem[] }) {
+export function InboxView({
+  items,
+  coworkingInvoiceOptions,
+}: {
+  items: InboxItem[];
+  coworkingInvoiceOptions: CoworkingInvoiceOption[];
+}) {
   const router = useRouter();
   const [kindFilter, setKindFilter] = useState<FilterKey>("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | InboxSource>("all");
@@ -441,6 +449,7 @@ export function InboxView({ items }: { items: InboxItem[] }) {
               key={it.id}
               item={it}
               isLast={i === visible.length - 1}
+              coworkingInvoiceOptions={coworkingInvoiceOptions}
               onDismiss={(id) => {
                 dismissLocally(id);
                 if (previewItem?.id === id) setPreviewItem(null);
@@ -470,11 +479,13 @@ const EDITABLE_KINDS = new Set<InboxExtractionKind>([
 function InboxRow({
   item,
   isLast,
+  coworkingInvoiceOptions,
   onDismiss,
   onOpenPreview,
 }: {
   item: InboxItem;
   isLast: boolean;
+  coworkingInvoiceOptions: CoworkingInvoiceOption[];
   onDismiss: (id: string) => void;
   onOpenPreview: () => void;
 }) {
@@ -721,6 +732,7 @@ function InboxRow({
         <RowEditor
           item={item}
           disabled={pending}
+          coworkingInvoiceOptions={coworkingInvoiceOptions}
           onCancel={() => setEditing(false)}
           onSave={(overrides) => {
             setEditing(false);
@@ -869,11 +881,13 @@ function PreviewSheet({ item, onClose }: { item: InboxItem | null; onClose: () =
 function RowEditor({
   item,
   disabled,
+  coworkingInvoiceOptions,
   onSave,
   onCancel,
 }: {
   item: InboxItem;
   disabled: boolean;
+  coworkingInvoiceOptions: CoworkingInvoiceOption[];
   onSave: (overrides: {
     payloadOverride?: Record<string, unknown>;
     reconciliation?: InboxReconciliation | null;
@@ -903,6 +917,10 @@ function RowEditor({
   // pré-sélectionné (top score, stocké dans item.reconciliation).
   const initialRecoTargetId = item.reconciliation?.targetId ?? "";
   const [recoTargetId, setRecoTargetId] = useState(initialRecoTargetId);
+  // Fallback manuel : rattacher à une facture coworking non listée dans
+  // les candidats auto-scorés (souvent < 0.3 à cause du clientName manquant
+  // sur le contrat, ou d'un écart montant/date). Prioritaire sur recoTargetId.
+  const [manualCoworkingId, setManualCoworkingId] = useState<string | null>(null);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -933,9 +951,17 @@ function RowEditor({
     }
 
     // Rapprochement : si le user a changé de candidat, on override la
-    // reconciliation avec le candidat sélectionné.
+    // reconciliation avec le candidat sélectionné. Le manuel coworking
+    // prime sur la sélection radio pour couvrir le cas où la facture
+    // coworking n'est pas dans les candidats auto-scorés.
     let recoOverride: InboxReconciliation | null | undefined;
-    if (item.kind === "quote_reconciliation" || item.kind === "invoice_reconciliation") {
+    if (item.kind === "invoice_reconciliation" && manualCoworkingId && item.reconciliation) {
+      recoOverride = {
+        action: "link_invoice_to_dougs",
+        dougsId: item.reconciliation.dougsId,
+        targetId: manualCoworkingId,
+      };
+    } else if (item.kind === "quote_reconciliation" || item.kind === "invoice_reconciliation") {
       const picked = item.reconciliationCandidates?.find(
         (c) => c.reconciliation.targetId === recoTargetId,
       );
@@ -1062,6 +1088,31 @@ function RowEditor({
             />
           </Field>
         )}
+        {isReconciliation && item.kind === "invoice_reconciliation" && (
+          <Field label="Ou rattacher à une facture coworking existante" full>
+            <FkCombobox
+              value={manualCoworkingId}
+              onValueChange={(v) => {
+                setManualCoworkingId(v);
+                if (v) setRecoTargetId("");
+              }}
+              options={coworkingInvoiceOptions.map((i) => ({
+                id: i.id,
+                label: i.label,
+                searchValue: `${i.contractName} ${i.clientName ?? ""} ${i.label} ${i.periodStart}`,
+              }))}
+              searchPlaceholder="Rechercher (contrat / période)…"
+              placeholder="Choisir une facture coworking…"
+              disabled={disabled}
+              clearLabel="Aucune (garder la sélection auto)"
+              emptyLabel={
+                coworkingInvoiceOptions.length === 0
+                  ? "Aucune facture coworking non liée."
+                  : "Aucun résultat."
+              }
+            />
+          </Field>
+        )}
         {isReconciliation && candidates.length > 0 && (
           <Field label="Rattacher à" full>
             <div className="flex flex-col gap-1">
@@ -1090,7 +1141,10 @@ function RowEditor({
                       name={`${item.id}-reco`}
                       value={c.reconciliation.targetId}
                       checked={c.reconciliation.targetId === recoTargetId}
-                      onChange={() => setRecoTargetId(c.reconciliation.targetId)}
+                      onChange={() => {
+                        setRecoTargetId(c.reconciliation.targetId);
+                        setManualCoworkingId(null);
+                      }}
                       className="size-3"
                     />
                     <span className="min-w-0 flex-1 truncate">
