@@ -342,17 +342,24 @@ export async function getInvoiceSuggestions(
     return true;
   });
 
-  // Pour les coworking, on a besoin de l'entité de facturation (billToEntity)
-  // qui n'a pas été ramenée par le join (la colonne entities ci-dessus
-  // est sur projects.entityId). On fait un second batch.
+  // Pour les coworking, on collecte toutes les identités possibles du
+  // "client" (billToEntity, entité rattachée au contact, contact lui-même,
+  // contrat lui-même). Dougs peut avoir facturé n'importe laquelle de ces
+  // identités selon la config (ex : contrat billTo="Acme SAS" mais Dougs
+  // facture "Alice Martin", ou l'inverse). Le scoring plus bas prend le
+  // max de similarité sur cette liste → beaucoup moins de faux 0.
   const cwContractIds = candidatesData
     .filter((c) => c.kind === "coworking" && c.coworkingContractId)
     .map((c) => c.coworkingContractId as string);
-  const cwBillingMap = new Map<string, string | null>();
+  const cwCandidatesMap = new Map<string, string[]>();
+  const cwPrimaryNameMap = new Map<string, string | null>();
   if (cwContractIds.length > 0) {
+    // 1er join : billToEntity + contact du contrat.
     const cwBilling = await conn
       .select({
         contractId: coworkingContracts.id,
+        contractName: coworkingContracts.name,
+        contactId: coworkingContracts.contactId,
         billToEntityName: entities.name,
         contactFirstName: contacts.firstName,
         contactLastName: contacts.lastName,
@@ -360,9 +367,33 @@ export async function getInvoiceSuggestions(
       .from(coworkingContracts)
       .leftJoin(entities, eq(entities.id, coworkingContracts.billToEntityId))
       .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId));
+    // 2e join : entité employeur du contact (contact.entityId → entities).
+    // Souvent renseigné quand le contrat n'a pas de billToEntity mais que
+    // Dougs facture l'entreprise du contact.
+    const contactIds = Array.from(
+      new Set(cwBilling.map((r) => r.contactId).filter((x): x is string => !!x)),
+    );
+    const contactEntityMap = new Map<string, string | null>();
+    if (contactIds.length > 0) {
+      const rows = await conn
+        .select({
+          contactId: contacts.id,
+          entityName: entities.name,
+        })
+        .from(contacts)
+        .leftJoin(entities, eq(entities.id, contacts.entityId));
+      for (const r of rows) contactEntityMap.set(r.contactId, r.entityName ?? null);
+    }
     for (const r of cwBilling) {
-      const fromContact = `${r.contactFirstName ?? ""} ${r.contactLastName ?? ""}`.trim();
-      cwBillingMap.set(r.contractId, r.billToEntityName ?? (fromContact || null));
+      const fromContact = `${r.contactFirstName ?? ""} ${r.contactLastName ?? ""}`.trim() || null;
+      const contactEntity = r.contactId ? (contactEntityMap.get(r.contactId) ?? null) : null;
+      const names = [r.billToEntityName, contactEntity, fromContact, r.contractName].filter(
+        (x): x is string => !!x,
+      );
+      cwCandidatesMap.set(r.contractId, names);
+      // Nom "canonique" affiché dans le picker (priorité : entité de
+      // facturation > entité du contact > personne > contrat).
+      cwPrimaryNameMap.set(r.contractId, names[0] ?? null);
     }
   }
 
@@ -446,43 +477,60 @@ export async function getInvoiceSuggestions(
 
     // 5a. Candidats : invoices Paradeos existantes (kind ∈
     //     {milestone, coworking, one_off}) sans lien Dougs.
+    //
+    // Scoring unifié : chaque candidat expose N noms de client possibles
+    // (billToEntity, entité employeur du contact, contact lui-même,
+    // contrat/projet). On score contre chacun et on garde le max total.
+    // Ça règle le cas classique où Dougs facture "Alice Martin" mais le
+    // contrat coworking a billToEntity="Acme SAS" (ou l'inverse) → sans
+    // ça, similarityName renvoie 0 et le candidat est écarté.
     const existingScored: Array<Extract<InvoiceCandidate, { kind: "invoice" }>> = [];
     for (const c of candidatesData) {
       const amountHt = Number(c.amountHt) || 0;
-      const clientName =
+      const clientNames: string[] =
         c.kind === "coworking"
-          ? (cwBillingMap.get(c.coworkingContractId ?? "") ?? null)
-          : c.projectEntityName;
+          ? (cwCandidatesMap.get(c.coworkingContractId ?? "") ?? [])
+          : ([c.projectEntityName, c.projectName].filter((x): x is string => !!x) as string[]);
+      const primaryName =
+        c.kind === "coworking"
+          ? (cwPrimaryNameMap.get(c.coworkingContractId ?? "") ?? null)
+          : (c.projectEntityName ?? null);
       const label =
         c.kind === "milestone"
           ? `${c.projectName ?? "?"} — ${c.label}`
           : c.kind === "coworking"
             ? `${c.contractName ?? "?"} — ${c.label}`
             : c.label;
-      const score = scoreMatch(
-        {
-          legalName: dougsClientName,
-          firstName: inv.clientData?.firstName ?? null,
-          lastName: inv.clientData?.lastName ?? null,
-          amount: dougsAmount,
-          createdAt: inv.createdAt ?? null,
-        },
-        {
-          clientName,
+      const dougsSide = {
+        legalName: dougsClientName,
+        firstName: inv.clientData?.firstName ?? null,
+        lastName: inv.clientData?.lastName ?? null,
+        amount: dougsAmount,
+        createdAt: inv.createdAt ?? null,
+      };
+      let bestScore = scoreMatch(dougsSide, {
+        clientName: clientNames[0] ?? null,
+        amount: amountHt,
+        date: c.periodStart ?? c.createdAt,
+      });
+      for (let i = 1; i < clientNames.length; i++) {
+        const s = scoreMatch(dougsSide, {
+          clientName: clientNames[i] ?? null,
           amount: amountHt,
           date: c.periodStart ?? c.createdAt,
-        },
-      );
-      if (score.total < 0.3) continue;
+        });
+        if (s.total > bestScore.total) bestScore = s;
+      }
+      if (bestScore.total < 0.3) continue;
       existingScored.push({
         kind: "invoice",
         invoiceId: c.id,
         label,
         projectName: c.projectName ?? null,
         contractName: c.contractName ?? null,
-        entityName: clientName,
+        entityName: primaryName,
         amountHt,
-        score,
+        score: bestScore,
       });
     }
 
