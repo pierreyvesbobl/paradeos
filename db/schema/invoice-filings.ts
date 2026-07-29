@@ -21,7 +21,7 @@ export const invoiceFilingStatus = pgEnum("invoice_filing_status", [
 ]);
 
 /**
- * Audit log de l'agent de classement des factures d'achat.
+ * Audit log de l'agent de classement des factures fournisseurs.
  * Une ligne par PJ traitée. Idempotence : (message_id, gmail_attachment_id)
  * unique → relancer un sync ne reclasse pas un PDF déjà filé.
  */

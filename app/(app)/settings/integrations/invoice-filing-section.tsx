@@ -25,7 +25,7 @@ export async function InvoiceFilingSection({ userId }: { userId: string }) {
     <section className="rounded-lg border bg-card p-6">
       <header className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h2 className="font-medium text-sm">Agent factures d'achat</h2>
+          <h2 className="font-medium text-sm">Agent factures fournisseurs</h2>
           <p className="mt-1 text-muted-foreground text-xs">
             À chaque sync Gmail, les PDF des emails matchés CRM passent dans un pipeline LLM qui
             extrait date / fournisseur / prestation, renomme et range dans Drive (

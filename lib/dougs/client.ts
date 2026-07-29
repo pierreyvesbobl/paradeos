@@ -201,8 +201,8 @@ export function buildDougsInvoiceUrl(
 }
 
 /**
- * URL du devis dans l'UI Dougs. Pattern symétrique aux factures de
- * vente. Pour l'instant on suppose `quoteId` + `status` (draft /
+ * URL du devis dans l'UI Dougs. Pattern symétrique aux factures
+ * clients. Pour l'instant on suppose `quoteId` + `status` (draft /
  * pending / accepted / refused).
  */
 export function buildDougsQuoteUrl(
@@ -314,7 +314,7 @@ export async function getDougsDraftUrl(userId: string, draftId: string): Promise
 }
 
 /**
- * GET d'une facture de vente (draft ou finalisée). Retourne le payload
+ * GET d'une facture client (draft ou finalisée). Retourne le payload
  * complet incluant `status`, `totalNetAmount`, `totalVatAmount`,
  * `totalAmountWithVat`, `issuedAt`, `paidAt`. Utilisé pour rafraîchir
  * le snapshot Paradeos après push ou via cron.
@@ -504,7 +504,7 @@ export async function listDougsQuotes(
 }
 
 /**
- * Liste les factures de vente Dougs (drafts + finalisées).
+ * Liste les factures clients Dougs (drafts + finalisées).
  */
 export type DougsSalesInvoiceListItem = {
   id: string;

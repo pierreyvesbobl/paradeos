@@ -169,18 +169,21 @@ export async function processInvoiceFiling(filingId: string): Promise<{
     return { status: "rejected", errorMessage: "champs manquants" };
   }
 
-  // Garde-fou dur : si le supplier extrait est Parade elle-même, c'est
-  // une facture de vente qu'on a émise (arrive par mail en copie côté
-  // Gmail), pas une facture d'achat à classer. Le prompt LLM demande
+  // Garde-fou dur : si le supplier extrait commence par "parade", c'est
+  // une facture client qu'on a émise (arrive par mail en copie côté
+  // Gmail), pas une facture fournisseur à classer. Le prompt LLM demande
   // déjà de rejeter mais on double-checke.
+  // Préfixe et pas égalité stricte : le LLM colle parfois l'adresse à
+  // la suite du nom ("Parade SAS 42 rue X 75011 Paris") — sans le
+  // préfixe on laisse passer.
   const supplierKey = meta.supplierName
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
-  if (supplierKey === "parade" || supplierKey === "paradesas" || supplierKey === "sasparade") {
-    await markRejected(filing.id, "facture de vente émise par Parade (pas un achat).");
-    return { status: "rejected", errorMessage: "facture de vente Parade" };
+  if (supplierKey.startsWith("parade") || supplierKey.startsWith("sasparade")) {
+    await markRejected(filing.id, "facture client émise par Parade (pas une fournisseur).");
+    return { status: "rejected", errorMessage: "facture client Parade" };
   }
 
   // Sécurité : on n'auto-file que si confiance suffisante. Sinon on

@@ -36,7 +36,7 @@ export const SETTING_KEYS = {
    */
   GMAIL_EXTRACTION_ENABLED: "GMAIL_EXTRACTION_ENABLED",
   /**
-   * ID du dossier Drive racine où l'agent classe les factures d'achat.
+   * ID du dossier Drive racine où l'agent classe les factures fournisseurs.
    * Sous ce dossier, l'agent crée la hiérarchie <year>/<supplier>/.
    * Sans cette valeur, le classement est désactivé.
    */
