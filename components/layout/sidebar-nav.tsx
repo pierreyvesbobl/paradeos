@@ -11,6 +11,7 @@ import {
   House,
   Microphone,
   type Icon as PhosphorIcon,
+  Tray,
   Users,
 } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -38,6 +39,7 @@ const sections: NavSection[] = [
   {
     items: [
       { label: "Dashboard", href: "/", icon: House },
+      { label: "À traiter", href: "/inbox", icon: Tray },
       { label: "Projets", href: "/projets", icon: Briefcase },
       {
         label: "Pipeline",
@@ -86,7 +88,7 @@ function activeHref(pathname: string): string | null {
   return best;
 }
 
-export function SidebarNav() {
+export function SidebarNav({ inboxCount = 0 }: { inboxCount?: number }) {
   const pathname = usePathname();
   const active = activeHref(pathname);
 
@@ -115,6 +117,7 @@ export function SidebarNav() {
               );
             }
             const isActive = item.href === active;
+            const showInboxBadge = item.href === "/inbox" && inboxCount > 0;
             return (
               <Link
                 key={item.href}
@@ -131,7 +134,17 @@ export function SidebarNav() {
                   weight="duotone"
                   className={cn("shrink-0", isActive ? "text-primary-700" : "text-primary-500")}
                 />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {showInboxBadge ? (
+                  <span
+                    className={cn(
+                      "inline-flex min-w-4 items-center justify-center rounded-full px-1.5 py-0 font-mono font-semibold text-[10px] tabular-nums",
+                      isActive ? "bg-primary-500 text-white" : "bg-ds-hover text-ds-text-tertiary",
+                    )}
+                  >
+                    {inboxCount > 99 ? "99+" : inboxCount}
+                  </span>
+                ) : null}
               </Link>
             );
           })}

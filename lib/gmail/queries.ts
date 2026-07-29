@@ -289,7 +289,15 @@ export type ExtractionMeta = {
   needsReply: boolean;
 };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getThreadDetail(threadIdLocal: string): Promise<ThreadDetail | null> {
+  // Guard : cette fonction attend l'uuid local du thread. Un id Gmail brut
+  // (16 hex) casserait postgres ("invalid input syntax for type uuid").
+  // On no-op silencieusement plutôt que planter — utile pour les URLs
+  // legacy et pour tout appelant qui passerait la mauvaise clé.
+  if (!UUID_RE.test(threadIdLocal)) return null;
+
   const conn = await db();
   const [threadRow] = await conn
     .select()

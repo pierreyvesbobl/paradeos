@@ -445,6 +445,7 @@ export const acceptEmailProposal = action(
     revalidatePath("/contacts");
     revalidatePath("/entites");
     revalidatePath("/projets");
+    revalidatePath("/inbox");
     return { ok: true as const, kind: proposal.kind, createdEntityId };
   },
 );
@@ -458,6 +459,7 @@ export const rejectEmailProposal = action(
       .set({ status: "rejected", decidedBy: user.id, decidedAt: new Date() })
       .where(eq(emailProposals.id, input.proposalId));
     revalidatePath("/emails/propositions");
+    revalidatePath("/inbox");
     return { ok: true as const };
   },
 );
@@ -588,6 +590,7 @@ export const updateAcceptedEmailProposal = action(
     revalidatePath("/contacts");
     revalidatePath("/entites");
     revalidatePath("/projets");
+    revalidatePath("/inbox");
     return { ok: true as const };
   },
 );
@@ -607,6 +610,7 @@ export const revertEmailProposal = action(
       .set({ status: "pending", decidedAt: null, decidedBy: null })
       .where(eq(emailProposals.id, input.proposalId));
     revalidatePath("/emails/propositions");
+    revalidatePath("/inbox");
     return { ok: true as const };
   },
 );

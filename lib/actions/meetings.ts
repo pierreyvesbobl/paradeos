@@ -249,6 +249,7 @@ export const extractMeetingProposals = action(extractMeetingSchema, async ({ inp
 
   revalidatePath(`/meetings/${meeting.id}`);
   revalidatePath("/meetings");
+  revalidatePath("/inbox");
   return { count: proposalsRows.length };
 });
 
@@ -285,6 +286,7 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
       .set({ status: "rejected", decidedBy: user.id, decidedAt: new Date() })
       .where(eq(meetingProposals.id, proposal.id));
     revalidatePath(`/meetings/${proposal.meetingId}`);
+    revalidatePath("/inbox");
     return { ok: true as const };
   }
 
@@ -346,6 +348,7 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
   revalidatePath("/projets");
   revalidatePath("/projets");
   revalidatePath("/taches");
+  revalidatePath("/inbox");
   return { ok: true as const, createdEntityId };
 });
 
