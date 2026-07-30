@@ -1,82 +1,57 @@
-import { formatDate } from "@/lib/format";
-import { type ProjectBillingType, projectBillingTypeLabels } from "@/lib/schemas/projects";
-import { cn } from "@/lib/utils";
-
-const FMT_EUR = new Intl.NumberFormat("fr-FR", {
-  style: "currency",
-  currency: "EUR",
-  maximumFractionDigits: 2,
-});
-
-function formatEuroOrDash(value: number | string | null | undefined): string {
-  if (value === null || value === undefined || value === "") return "—";
-  const num = typeof value === "string" ? Number(value) : value;
-  if (!Number.isFinite(num)) return "—";
-  return FMT_EUR.format(num);
-}
+import {
+  ProjBilling,
+  ProjBudget,
+  ProjPeriod,
+  ProjProbability,
+  ProjValueAmount,
+} from "@/app/(app)/projets/[id]/inline-fields";
+import type { ProjectBillingType } from "@/lib/schemas/projects";
 
 /**
  * Bandeau « facts » 5 colonnes en tête de la Vue d'ensemble : Budget /
- * Prévisionnel / Probabilité / Facturation / Période. Cellules
- * séparées par des hairlines réalisées via un `gap:1px` sur `--border`
- * (technique CSS grid + fond) — chaque cellule reprend le fond `app`.
+ * Prévisionnel / Probabilité / Facturation / Période. Tout est éditable
+ * inline — clic sur la valeur ouvre l'éditeur adéquat (nombre, slider,
+ * select, date range). Cellules séparées par des hairlines (grid gap=1px).
+ *
+ * Le prévisionnel édite `valueAmount` (le montant contrat manuel). Si un
+ * devis Dougs est déjà remonté, son montant peut piloter le prévisionnel
+ * affiché ailleurs — mais la valeur éditable ici reste bien le champ
+ * projet, pas le devis.
  */
 export function FactsBand({
+  projectId,
   budgetAmount,
-  forecastAmount,
+  valueAmount,
   probability,
   billingType,
-  periodStart,
+  startDate,
+  endDate,
 }: {
-  budgetAmount: number | string | null;
-  forecastAmount: number | string | null;
+  projectId: string;
+  budgetAmount: string | null;
+  valueAmount: string | null;
   probability: number | null;
   billingType: ProjectBillingType;
-  periodStart: string | Date | null;
+  startDate: string | null;
+  endDate: string | null;
 }) {
-  const probaClamped =
-    probability == null ? null : Math.max(0, Math.min(100, Math.round(probability)));
-  const periodLabel = periodStart ? `Dès le ${formatDate(periodStart)}` : "—";
-
   return (
     <div className="overflow-hidden rounded-[10px] border border-ds-border bg-ds-border">
       <div className="grid grid-cols-2 gap-px sm:grid-cols-3 lg:grid-cols-5">
         <Cell label="Budget">
-          <span className="font-mono font-semibold text-[15px] text-foreground">
-            {formatEuroOrDash(budgetAmount)}
-          </span>
+          <ProjBudget id={projectId} value={budgetAmount} />
         </Cell>
         <Cell label="Prévisionnel">
-          <span className="font-mono font-semibold text-[15px] text-foreground">
-            {formatEuroOrDash(forecastAmount)}
-          </span>
+          <ProjValueAmount id={projectId} value={valueAmount} />
         </Cell>
         <Cell label="Probabilité">
-          <div className="space-y-1.5">
-            <span className="font-mono font-semibold text-[15px] text-foreground">
-              {probaClamped == null ? "—" : `${probaClamped} %`}
-            </span>
-            {probaClamped == null ? null : (
-              <div className="h-[5px] w-full overflow-hidden rounded-full bg-ds-press">
-                <div
-                  className="h-full rounded-full bg-primary"
-                  style={{ width: `${probaClamped}%` }}
-                />
-              </div>
-            )}
-          </div>
+          <ProjProbability id={projectId} value={probability} />
         </Cell>
         <Cell label="Facturation">
-          <span
-            className={cn(
-              "inline-flex w-fit items-center rounded-md border border-ds-border bg-ds-app px-2 py-0.5 text-[13px] text-foreground",
-            )}
-          >
-            {projectBillingTypeLabels[billingType]}
-          </span>
+          <ProjBilling id={projectId} value={billingType} />
         </Cell>
         <Cell label="Période">
-          <span className="font-medium text-[13px] text-foreground">{periodLabel}</span>
+          <ProjPeriod id={projectId} startValue={startDate} endValue={endDate} />
         </Cell>
       </div>
     </div>

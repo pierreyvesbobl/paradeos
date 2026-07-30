@@ -221,17 +221,6 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     </Suspense>
   );
 
-  // Prévisionnel : le devis Dougs prévaut ; sinon le montant manuel ;
-  // sinon le budget. Cohérent avec la logique de BillingSummary.
-  const forecastAmount =
-    quoteInvoice?.dougsTotalHt != null
-      ? Number(quoteInvoice.dougsTotalHt)
-      : project.valueAmount != null
-        ? Number(project.valueAmount)
-        : project.budgetAmount != null
-          ? Number(project.budgetAmount)
-          : null;
-
   // « Dernier mail » = le premier item email de la feed d'activité.
   const lastEmailAt = activityItems.find((i) => i.kind === "email")?.at ?? null;
 
@@ -239,11 +228,13 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-4 lg:col-span-2">
         <FactsBand
+          projectId={id}
           budgetAmount={project.budgetAmount}
-          forecastAmount={forecastAmount}
+          valueAmount={project.valueAmount}
           probability={project.probability}
           billingType={project.billingType}
-          periodStart={project.startDate}
+          startDate={project.startDate}
+          endDate={project.endDate}
         />
       </div>
 
@@ -281,6 +272,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       {/* Colonne droite (rail) */}
       <div className="flex flex-col gap-4">
         <RecentExchangesCard
+          projectId={id}
           lastContactDate={project.lastContactDate}
           lastEmailAt={lastEmailAt}
           followUpDate={project.followUpDate}
