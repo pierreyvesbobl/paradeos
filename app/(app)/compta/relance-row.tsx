@@ -2,12 +2,14 @@
 
 import { UserAvatar } from "@/components/user/user-avatar";
 import { markInvoiceReminded, setInvoiceAssignee, setInvoiceDueDate } from "@/lib/actions/invoices";
+import type { DougsPaymentHint } from "@/lib/dougs/client";
 import {
   ArrowRight,
   BellRinging,
   Buildings,
   Check,
   FlagPennant,
+  HandCoins,
   Pencil,
   UserCircle,
 } from "@phosphor-icons/react";
@@ -60,6 +62,12 @@ export type RelanceItem = {
   assignedTo: string | null;
   assignedFullName: string | null;
   assignedAvatarUrl: string | null;
+  /**
+   * Virement entrant que Dougs a rattaché tout seul à cette facture,
+   * sans que le rapprochement soit encore validé. Présent = ne pas
+   * relancer sans vérifier.
+   */
+  paymentHint: DougsPaymentHint | null;
 };
 
 export function RelanceRow({
@@ -180,6 +188,8 @@ export function RelanceRow({
           {item.entityName ? ` · ${item.entityName}` : ""}
         </div>
       </div>
+
+      {item.paymentHint ? <PaymentHintBadge hint={item.paymentHint} /> : null}
 
       {/* Échéance + retard */}
       <div className="flex flex-none items-center gap-1.5">
@@ -335,4 +345,28 @@ function daysBetween(dueISO: string, todayISO: string): number {
   const b = Date.parse(`${todayISO}T00:00:00Z`);
   if (Number.isNaN(a) || Number.isNaN(b)) return 0;
   return Math.round((b - a) / 86_400_000);
+}
+
+/**
+ * Pastille "encaissement détecté". Le tooltip porte le détail utile
+ * pour trancher sans quitter la page : date, montant et libellé brut du
+ * relevé bancaire tels que Dougs les voit.
+ */
+function PaymentHintBadge({ hint }: { hint: DougsPaymentHint }) {
+  const parts = [
+    hint.date ? formatDateFR(hint.date) : null,
+    hint.amount !== null ? formatEur(hint.amount) : null,
+    hint.wording,
+  ].filter(Boolean);
+
+  return (
+    <span
+      className="inline-flex flex-none items-center gap-1 rounded-full px-2 py-0.5 font-semibold text-[11px]"
+      style={tintStyles("green")}
+      title={`Virement détecté par Dougs, rapprochement non validé — ${parts.join(" · ")}`}
+    >
+      <HandCoins size={12} weight="duotone" />
+      Encaissé ?
+    </span>
+  );
 }

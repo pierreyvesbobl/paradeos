@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { Suspense } from "react";
+import { AchatsView } from "./achats-view";
 import { ComptaTabs } from "./compta-tabs";
 import { type ComptaSegment, DashboardView } from "./dashboard-view";
 import { FacturesView } from "./factures-view";
@@ -26,14 +27,16 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default async function ComptaPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const tabRaw = params.tab;
-  const tab: "dashboard" | "rapprochement" | "factures" | "relances" =
+  const tab: "dashboard" | "rapprochement" | "factures" | "achats" | "relances" =
     tabRaw === "rapprochement"
       ? "rapprochement"
       : tabRaw === "factures"
         ? "factures"
-        : tabRaw === "relances"
-          ? "relances"
-          : "dashboard";
+        : tabRaw === "achats"
+          ? "achats"
+          : tabRaw === "relances"
+            ? "relances"
+            : "dashboard";
   const debug = typeof params.debug === "string" ? params.debug : undefined;
   const periodRaw = typeof params.period === "string" ? params.period : null;
   const period: ComptaPeriod = (
@@ -59,6 +62,10 @@ export default async function ComptaPage({ searchParams }: { searchParams: Searc
         <DashboardView period={period} segment={segment} />
       ) : tab === "factures" ? (
         <FacturesView />
+      ) : tab === "achats" ? (
+        <Suspense fallback={<AchatsSkeleton />}>
+          <AchatsView />
+        </Suspense>
       ) : tab === "relances" ? (
         <RelancesView assigneeFilter={assigneeFilter} />
       ) : (
@@ -66,6 +73,27 @@ export default async function ComptaPage({ searchParams }: { searchParams: Searc
           <RapprochementView debug={debug} />
         </Suspense>
       )}
+    </div>
+  );
+}
+
+/** Squelette pendant le fetch Dougs des factures d'achat. */
+function AchatsSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-[86px] animate-pulse rounded-xl border bg-muted-foreground/5" />
+        ))}
+      </div>
+      <ul className="divide-y rounded-xl border bg-card">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <li key={i} className="space-y-2 px-4 py-3">
+            <div className="h-4 w-1/3 animate-pulse rounded bg-muted-foreground/15" />
+            <div className="h-3 w-1/4 animate-pulse rounded bg-muted-foreground/10" />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

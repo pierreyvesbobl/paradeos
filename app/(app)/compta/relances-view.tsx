@@ -8,7 +8,12 @@ import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
 import { demoAmount, demoCompanyName, demoProjectName } from "@/lib/demo/anonymize";
 import { isDemoMode } from "@/lib/demo/server";
-import { BellRinging, Clock, CurrencyEur } from "@phosphor-icons/react/dist/ssr";
+import {
+  type DougsAgingSummary,
+  getDougsAgingSummary,
+  getDougsPaymentHints,
+} from "@/lib/dougs/signals";
+import { BellRinging, Clock, CurrencyEur, HandCoins, Scales } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import Link from "next/link";
 import { type RelanceItem, RelanceRow } from "./relance-row";
@@ -45,6 +50,14 @@ export async function RelancesView({ assigneeFilter }: { assigneeFilter: "all" |
     .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
     .from(users)
     .orderBy(asc(users.fullName));
+
+  // Signaux Dougs, en parallèle et sans jamais bloquer la page : les
+  // deux helpers avalent leurs erreurs et renvoient vide si Dougs est
+  // injoignable ou le cookie expiré.
+  const [paymentHints, aging] = await Promise.all([
+    getDougsPaymentHints(authUser.id),
+    getDougsAgingSummary(authUser.id),
+  ]);
 
   const baseWhere = and(
     eq(invoices.status, "sent"),
@@ -106,6 +119,7 @@ export async function RelancesView({ assigneeFilter }: { assigneeFilter: "all" |
       assignedTo: r.assignedTo,
       assignedFullName: r.assignedFullName,
       assignedAvatarUrl: r.assignedAvatarUrl,
+      paymentHint: r.dougsInvoiceId ? (paymentHints.get(r.dougsInvoiceId) ?? null) : null,
     };
     if (!r.dueDate) {
       later.push(item);
@@ -119,7 +133,11 @@ export async function RelancesView({ assigneeFilter }: { assigneeFilter: "all" |
   const overdueTotal = overdue.reduce((s, i) => s + i.amountHt, 0);
   const soonTotal = soon.reduce((s, i) => s + i.amountHt, 0);
 
-  const recentlyRemindedCount = [...overdue, ...soon, ...later].filter((i) => {
+  const allItems = [...overdue, ...soon, ...later];
+  const alreadyPaid = allItems.filter((i) => i.paymentHint);
+  const alreadyPaidTotal = alreadyPaid.reduce((s, i) => s + i.amountHt, 0);
+
+  const recentlyRemindedCount = allItems.filter((i) => {
     if (!i.lastRemindedAt) return false;
     const ago = (Date.now() - Date.parse(i.lastRemindedAt)) / 86_400_000;
     return ago <= 7;
@@ -128,6 +146,10 @@ export async function RelancesView({ assigneeFilter }: { assigneeFilter: "all" |
   return (
     <div className="space-y-6">
       <AssigneeFilterBar current={assigneeFilter} />
+
+      {alreadyPaid.length > 0 ? (
+        <PaymentHintBanner count={alreadyPaid.length} total={alreadyPaidTotal} />
+      ) : null}
 
       {overdue.length === 0 && soon.length === 0 && later.length === 0 ? (
         <EmptyState
@@ -197,7 +219,93 @@ export async function RelancesView({ assigneeFilter }: { assigneeFilter: "all" |
           ) : null}
         </>
       )}
+
+      {aging ? <AgingCrossCheck aging={aging} paradeosOverdue={overdueTotal} /> : null}
     </div>
+  );
+}
+
+/**
+ * Dougs a repéré un virement entrant qui correspond à une facture qu'on
+ * s'apprête à relancer, mais l'écriture n'est pas encore validée côté
+ * compta. Relancer là-dessus, c'est réclamer de l'argent déjà reçu.
+ */
+function PaymentHintBanner({ count, total }: { count: number; total: number }) {
+  return (
+    <div
+      className="flex items-start gap-2.5 rounded-xl border px-4 py-3"
+      style={{ background: "var(--ds-tint-green-bg)", borderColor: "var(--ds-tint-green-bg)" }}
+    >
+      <span className="mt-0.5 flex-none" style={{ color: "var(--ds-tint-green-dot)" }}>
+        <HandCoins size={18} weight="duotone" />
+      </span>
+      <div className="space-y-0.5 text-[13px]">
+        <p className="font-semibold" style={{ color: "var(--ds-tint-green-text)" }}>
+          {count === 1
+            ? "1 facture semble déjà encaissée"
+            : `${count} factures semblent déjà encaissées`}{" "}
+          — {formatEur(total)} HT
+        </p>
+        <p className="text-[var(--ds-text-tertiary)]">
+          Dougs a détecté le virement correspondant sur le compte, mais le rapprochement n'est pas
+          encore validé. Vérifie avant de relancer.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Contrôle croisé avec la balance âgée native de Dougs. Un écart marqué
+ * signale en général une facture émise directement depuis Dougs qui n'a
+ * jamais été redescendue dans Paradeos — donc invisible dans les
+ * relances ci-dessus.
+ *
+ * Seuil : on n'alerte qu'au-delà de 500 € ET 10 % d'écart, pour ne pas
+ * crier au loup sur des décalages de TVA ou de date d'arrêté.
+ */
+function AgingCrossCheck({
+  aging,
+  paradeosOverdue,
+}: {
+  aging: DougsAgingSummary;
+  paradeosOverdue: number;
+}) {
+  const gap = aging.total - paradeosOverdue;
+  const significant = gap > 500 && paradeosOverdue > 0 && gap / paradeosOverdue > 0.1;
+
+  return (
+    <section className="rounded-xl border bg-card px-4 py-3 sm:px-5">
+      <header className="flex items-center gap-2">
+        <span style={{ color: "var(--ds-tint-blue-dot)" }}>
+          <Scales size={16} weight="duotone" />
+        </span>
+        <h2 className="font-semibold text-[13px] text-foreground">Balance âgée Dougs</h2>
+        <span className="flex-1" />
+        <span className="text-[12px] text-muted-foreground tabular-nums">
+          Total {formatEur(aging.total)}
+        </span>
+      </header>
+
+      <dl className="mt-2.5 flex flex-wrap gap-x-6 gap-y-1.5">
+        {aging.buckets.map((b) => (
+          <div key={b.label} className="flex items-baseline gap-1.5">
+            <dt className="text-[12px] text-[var(--ds-text-tertiary)]">{b.label}</dt>
+            <dd className="font-medium text-[13px] text-foreground tabular-nums">
+              {formatEur(b.amount)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      {significant ? (
+        <p className="mt-2.5 text-[12px] text-[var(--ds-text-tertiary)]">
+          Dougs voit {formatEur(gap)} d'impayé de plus que Paradeos ({formatEur(paradeosOverdue)} en
+          retard ci-dessus) — probablement une facture émise depuis Dougs et jamais rapatriée. À
+          vérifier dans l'onglet Rapprochement.
+        </p>
+      ) : null}
+    </section>
   );
 }
 

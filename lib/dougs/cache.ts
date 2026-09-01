@@ -2,14 +2,18 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 import {
+  type DougsAgingBalance,
   type DougsQuote,
   type DougsQuoteListItem,
   type DougsSalesInvoice,
   type DougsSalesInvoiceListItem,
+  type DougsVendorInvoice,
+  getDougsAgingBalance,
   getDougsQuote,
   getDougsSalesInvoice,
   listDougsQuotes,
   listDougsSalesInvoices,
+  listDougsVendorInvoices,
 } from "./client";
 
 /**
@@ -65,4 +69,22 @@ export function cachedGetDougsQuote(userId: string, quoteId: string): Promise<Do
     revalidate: TTL,
     tags: [`dougs:${userId}`, `dougs-quote:${quoteId}`],
   })();
+}
+
+export function cachedGetDougsAgingBalance(userId: string): Promise<DougsAgingBalance> {
+  return unstable_cache(() => getDougsAgingBalance(userId), ["dougs-aging-balance", userId], {
+    revalidate: TTL,
+    tags: [`dougs:${userId}`],
+  })();
+}
+
+export function cachedListDougsVendorInvoices(
+  userId: string,
+  opts: { limit?: number; page?: number } = {},
+): Promise<DougsVendorInvoice[]> {
+  return unstable_cache(
+    () => listDougsVendorInvoices(userId, opts),
+    ["dougs-vendor-invoices", userId, String(opts.limit ?? 100), String(opts.page ?? 1)],
+    { revalidate: TTL, tags: [`dougs:${userId}`] },
+  )();
 }

@@ -1,10 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { BellRinging, FileText, Gauge, Link as LinkIcon } from "@phosphor-icons/react";
+import { BellRinging, FileText, Gauge, Link as LinkIcon, Receipt } from "@phosphor-icons/react";
 import Link from "next/link";
 
-type Tab = "dashboard" | "rapprochement" | "factures" | "relances";
+type Tab = "dashboard" | "rapprochement" | "factures" | "achats" | "relances";
 
 const TABS: { key: Tab; href: string; label: string; icon: typeof Gauge }[] = [
   { key: "dashboard", href: "/compta?tab=dashboard", label: "Vue d'ensemble", icon: Gauge },
@@ -15,6 +15,7 @@ const TABS: { key: Tab; href: string; label: string; icon: typeof Gauge }[] = [
     icon: LinkIcon,
   },
   { key: "factures", href: "/compta?tab=factures", label: "Factures", icon: FileText },
+  { key: "achats", href: "/compta?tab=achats", label: "Achats", icon: Receipt },
   { key: "relances", href: "/compta?tab=relances", label: "Relances", icon: BellRinging },
 ];
 
