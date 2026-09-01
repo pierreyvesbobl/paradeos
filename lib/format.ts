@@ -84,7 +84,7 @@ export function formatDays(days: number): string {
  * `"undefined"` viennent d'un `String(x)` sur une valeur manquante,
  * quelque part entre une extraction IA et un import.
  */
-function presentName(value: string | null | undefined): string | null {
+export function presentName(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
   const v = value.trim();
   if (!v) return null;
@@ -126,4 +126,17 @@ export function personNameOrNull(
 ): string | null {
   const name = formatPersonName(firstName, lastName, "");
   return name || null;
+}
+
+/**
+ * Normalise une valeur de nom venue d'un payload non fiable (extraction
+ * IA, import) en vue d'un **stockage** : renvoie `""` plutôt que `null`
+ * pour les colonnes NOT NULL, et neutralise les chaînes-poubelles.
+ *
+ * À utiliser sur tout chemin d'écriture qui recopie un prénom/nom
+ * fourni par un modèle : sans ça, un `lastName: "null"` généré par le
+ * LLM se retrouve tel quel en base et ressort en « Frédéric null ».
+ */
+export function sanitizeNameInput(value: unknown): string {
+  return presentName(typeof value === "string" ? value : null) ?? "";
 }

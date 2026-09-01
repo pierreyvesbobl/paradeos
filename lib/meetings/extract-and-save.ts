@@ -12,6 +12,7 @@ import {
 } from "@/lib/meetings/extract";
 import { eq } from "drizzle-orm";
 
+import { formatPersonName, sanitizeNameInput } from "@/lib/format";
 /**
  * Helper coeur du pipeline d'extraction : prend un meetingId, lit son
  * transcript, appelle le LLM, persiste les propositions (avec fuzzy
@@ -50,8 +51,16 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
   // l'acceptation en masse. On garde la 1re occurrence par nom normalisé.
   const norm = (s: string) => s.trim().toLowerCase();
   const dedupedEntities = dedupeBy(result.proposedEntities, (e) => norm(e.name));
-  const dedupedContacts = dedupeBy(result.proposedContacts, (c) =>
-    norm(`${c.firstName} ${c.lastName}`),
+  // Le nom est nettoyé dès l'écriture du payload : une chaîne "null"
+  // ou "undefined" produite par le modèle ne doit jamais être stockée,
+  // sinon elle ressort à l'affichage et finit copiée dans `contacts`.
+  const cleanedContacts = result.proposedContacts.map((c) => ({
+    ...c,
+    firstName: sanitizeNameInput(c.firstName),
+    lastName: sanitizeNameInput(c.lastName),
+  }));
+  const dedupedContacts = dedupeBy(cleanedContacts, (c) =>
+    norm(formatPersonName(c.firstName, c.lastName, "")),
   );
   const dedupedProjects = dedupeBy(result.proposedProjects, (p) => norm(p.name));
 

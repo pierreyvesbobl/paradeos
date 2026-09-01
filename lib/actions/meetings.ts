@@ -32,7 +32,7 @@ import { and, eq, ilike } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { formatPersonName } from "@/lib/format";
+import { formatPersonName, sanitizeNameInput } from "@/lib/format";
 export const createMeeting = action(createMeetingSchema, async ({ input, user }) => {
   const conn = await db();
   const occurredAt = input.occurredAt ? new Date(input.occurredAt) : null;
@@ -156,7 +156,15 @@ export const extractMeetingProposals = action(extractMeetingSchema, async ({ inp
       matchConfidence: match ? match.confidence.toFixed(3) : null,
     });
   }
-  for (const c of result.proposedContacts) {
+  for (const raw of result.proposedContacts) {
+    // Même nettoyage que dans extract-and-save : le modèle peut rendre
+    // la chaîne "null" faute de nom de famille, et elle se propagerait
+    // jusqu'en base à l'acceptation de la proposition.
+    const c = {
+      ...raw,
+      firstName: sanitizeNameInput(raw.firstName),
+      lastName: sanitizeNameInput(raw.lastName),
+    };
     const match = await fuzzyMatchContact(c.firstName, c.lastName);
     proposalsRows.push({
       meetingId: meeting.id,

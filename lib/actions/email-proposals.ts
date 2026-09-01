@@ -20,6 +20,7 @@ import { eq, ilike } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { sanitizeNameInput } from "@/lib/format";
 /**
  * Extrait la liste d'assignés d'un payload de proposition task. Supporte :
  *   - le format multi (`assignees: [{ kind, id }]`) — nouveau, produit
@@ -299,8 +300,8 @@ export const acceptEmailProposal = action(
       if (linkExistingId) {
         createdEntityId = linkExistingId;
       } else {
-        const firstName = String(payload.firstName ?? "").trim();
-        const lastName = String(payload.lastName ?? "").trim();
+        const firstName = sanitizeNameInput(payload.firstName);
+        const lastName = sanitizeNameInput(payload.lastName);
         if (!firstName && !lastName) throw new Error("Nom du contact vide.");
         const email = (payload.email as string | null | undefined)?.trim() || null;
 
@@ -542,8 +543,8 @@ export const updateAcceptedEmailProposal = action(
         })
         .where(eq(entities.id, proposal.createdEntityId));
     } else if (proposal.kind === "contact") {
-      const firstName = String(merged.firstName ?? "").trim();
-      const lastName = String(merged.lastName ?? "").trim();
+      const firstName = sanitizeNameInput(merged.firstName);
+      const lastName = sanitizeNameInput(merged.lastName);
       const email = (merged.email as string | null | undefined)?.trim() || null;
       const entityId =
         (merged.entityId as string | null | undefined) ??

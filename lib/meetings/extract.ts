@@ -52,7 +52,11 @@ const extractionSchema = z.object({
   proposedContacts: z.array(
     z.object({
       firstName: z.string(),
-      lastName: z.string(),
+      // Nullable : forcer une chaîne pousse le modèle à écrire
+      // littéralement "null" quand la signature ne donne qu'un prénom
+      // (« Frédéric », m.frederic@…). Cette chaîne se propageait
+      // ensuite jusqu'en base et à l'affichage.
+      lastName: z.string().nullable(),
       email: z.string().nullable(),
       jobTitle: z.string().nullable(),
       entityName: z.string().nullable(),
@@ -294,7 +298,7 @@ Règles générales :
 - Ne pas inventer. Si un champ n'est pas explicite, retourne null.
 - Pour les listes (attendees, decisions, proposed*), si rien à extraire,
   retourne un tableau vide [], jamais omis.
-- Pour les contacts, sépare clairement firstName / lastName.
+- Pour les contacts, sépare clairement firstName / lastName. Si le nom de famille est introuvable, mets la valeur JSON null, jamais la chaîne « null » ni un nom inventé.
 - Pour les tâches, dueDate au format YYYY-MM-DD si une date est mentionnée.
 - Pour les projets, valueAmount en euros (sans symbole) si mentionné.
 - Reste factuel et neutre dans le résumé.

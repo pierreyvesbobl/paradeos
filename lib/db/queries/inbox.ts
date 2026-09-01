@@ -344,9 +344,11 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
       meta.assigneeName = (payload.assigneeName as string) ?? null;
       meta.projectName = linkedProject?.name ?? (payload.projectName as string) ?? null;
     } else if (r.kind === "contact") {
-      const first = String(payload.firstName ?? "").trim();
-      const last = String(payload.lastName ?? "").trim();
-      title = `${first} ${last}`.trim() || "Contact sans nom";
+      title = formatPersonName(
+        payload.firstName as string | null,
+        payload.lastName as string | null,
+        "Contact sans nom",
+      );
       meta.contactEmail = (payload.email as string) ?? null;
       meta.entityName = (payload.entityName as string) ?? null;
     } else if (r.kind === "entity") {
@@ -382,7 +384,9 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
       dedupKey = `task:${norm(payload.title)}:${payloadProjectId ?? ""}`;
     } else if (r.kind === "contact") {
       const emailPart = norm(payload.email);
-      const namePart = `${norm(payload.firstName)} ${norm(payload.lastName)}`.trim();
+      const namePart = norm(
+        formatPersonName(payload.firstName as string | null, payload.lastName as string | null, ""),
+      );
       dedupKey = `contact:${emailPart || namePart}`;
     } else if (r.kind === "entity") {
       dedupKey = `entity:${norm(payload.name)}`;
@@ -452,9 +456,11 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
       meta.assigneeName = (payload.assigneeName as string) ?? null;
       meta.projectName = linkedProjectName ?? (payload.projectName as string) ?? null;
     } else if (r.kind === "contact") {
-      const first = String(payload.firstName ?? "").trim();
-      const last = String(payload.lastName ?? "").trim();
-      title = `${first} ${last}`.trim() || "Contact sans nom";
+      title = formatPersonName(
+        payload.firstName as string | null,
+        payload.lastName as string | null,
+        "Contact sans nom",
+      );
       meta.contactEmail = (payload.email as string) ?? null;
       meta.entityName = (payload.entityName as string) ?? null;
     } else if (r.kind === "entity") {
@@ -472,7 +478,9 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
       dedupKey = `task:${norm(payload.title)}:${payloadProjectId ?? r.projectId ?? ""}`;
     } else if (r.kind === "contact") {
       const emailPart = norm(payload.email);
-      const namePart = `${norm(payload.firstName)} ${norm(payload.lastName)}`.trim();
+      const namePart = norm(
+        formatPersonName(payload.firstName as string | null, payload.lastName as string | null, ""),
+      );
       dedupKey = `contact:${emailPart || namePart}`;
     } else if (r.kind === "entity") {
       dedupKey = `entity:${norm(payload.name)}`;

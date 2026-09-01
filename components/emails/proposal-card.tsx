@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { acceptEmailProposal, rejectEmailProposal } from "@/lib/actions/email-proposals";
 import { DemoBlur } from "@/lib/demo/components";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatPersonName } from "@/lib/format";
 import {
   Briefcase,
   Building2,
@@ -225,8 +225,11 @@ function describeProposal(p: Proposal): string {
   }
   if (p.kind === "contact") {
     return (
-      `${String(p.payload.firstName ?? "").trim()} ${String(p.payload.lastName ?? "").trim()}`.trim() ||
-      "Contact"
+      formatPersonName(
+        p.payload.firstName as string | null,
+        p.payload.lastName as string | null,
+        "",
+      ) || "Contact"
     );
   }
   if (p.kind === "entity") {

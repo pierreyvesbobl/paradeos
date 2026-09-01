@@ -69,7 +69,11 @@ const extractionSchema = z.object({
   proposedContacts: z.array(
     z.object({
       firstName: z.string(),
-      lastName: z.string(),
+      // Nullable : forcer une chaîne pousse le modèle à écrire
+      // littéralement "null" quand la signature ne donne qu'un prénom
+      // (« Frédéric », m.frederic@…). Cette chaîne se propageait
+      // ensuite jusqu'en base et à l'affichage.
+      lastName: z.string().nullable(),
       email: z.string().nullable(),
       jobTitle: z.string().nullable(),
       entityName: z.string().nullable(),
@@ -177,7 +181,7 @@ Classifie l'affaire portée par cet email :
 # Entités, contacts, projets — propositions de création
 
 - **proposedEntities** : sociétés/organisations mentionnées qui ne sont PAS dans le vocabulaire existant. Ne re-propose JAMAIS une entité déjà connue. Si une entité connue correspond (même approximativement), on l'utilise comme \`entityName\` sur les contacts/projets mais on ne la propose pas à nouveau.
-- **proposedContacts** : personnes mentionnées (sender, recipients dans le body, signatures) qui ne sont PAS déjà dans la liste des contacts connus. Pour chaque contact, donne son email si tu le trouves dans le body ou les en-têtes (l'email est le matcher le plus fiable). Toujours séparer firstName/lastName.
+- **proposedContacts** : personnes mentionnées (sender, recipients dans le body, signatures) qui ne sont PAS déjà dans la liste des contacts connus. Pour chaque contact, donne son email si tu le trouves dans le body ou les en-têtes (l'email est le matcher le plus fiable). Toujours séparer firstName/lastName. Si le nom de famille est introuvable, mets la valeur JSON null, jamais la chaîne « null » ni un nom inventé.
 - **proposedProjects** : projets/deals NOUVEAUX évoqués qui ne correspondent PAS à un projet déjà connu. Ne pas re-proposer un projet du vocabulaire. valueAmount en euros sans symbole si mentionné.
 
 # Différence proposedProjectName vs proposedProjects

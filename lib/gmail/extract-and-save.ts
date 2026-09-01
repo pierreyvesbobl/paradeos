@@ -16,6 +16,7 @@ import {
 } from "@/lib/meetings/extract";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { sanitizeNameInput } from "@/lib/format";
 type ProposalKind =
   | "task"
   | "category_tag"
@@ -362,8 +363,8 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   // précis et évite de polluer la file de propositions avec des contacts
   // qu'on a déjà.
   for (const c of result.proposedContacts) {
-    const firstName = c.firstName.trim();
-    const lastName = c.lastName.trim();
+    const firstName = sanitizeNameInput(c.firstName);
+    const lastName = sanitizeNameInput(c.lastName);
     if (!firstName && !lastName) continue;
     const email = c.email?.trim() ?? null;
     if (email) {

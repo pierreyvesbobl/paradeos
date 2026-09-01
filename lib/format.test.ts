@@ -6,6 +6,7 @@ import {
   formatEuro,
   formatPersonName,
   personNameOrNull,
+  sanitizeNameInput,
 } from "./format";
 
 describe("formatEuro", () => {
@@ -102,5 +103,42 @@ describe("personNameOrNull", () => {
     expect(personNameOrNull(null, null)).toBeNull();
     expect(personNameOrNull("null", "")).toBeNull();
     expect(personNameOrNull("Frédéric", null)).toBe("Frédéric");
+  });
+});
+
+describe("sanitizeNameInput", () => {
+  it("neutralise la chaîne « null » produite par l'extraction IA", () => {
+    // Cas réel : email signé « Frédéric » (m.frederic@gpasplus.com).
+    // Le schéma exigeait une chaîne pour lastName, le modèle a écrit
+    // littéralement "null", qui finissait affiché et recopié en base.
+    expect(sanitizeNameInput("null")).toBe("");
+    expect(sanitizeNameInput("NULL")).toBe("");
+    expect(sanitizeNameInput("undefined")).toBe("");
+  });
+
+  it("renvoie une chaîne vide, jamais null (colonnes NOT NULL)", () => {
+    expect(sanitizeNameInput(null)).toBe("");
+    expect(sanitizeNameInput(undefined)).toBe("");
+    expect(sanitizeNameInput(42)).toBe("");
+    expect(sanitizeNameInput({})).toBe("");
+  });
+
+  it("préserve un vrai nom en le trimmant", () => {
+    expect(sanitizeNameInput("  Frédéric ")).toBe("Frédéric");
+    expect(sanitizeNameInput("Nn")).toBe("Nn");
+  });
+
+  it("chaînée avec formatPersonName, ne laisse rien passer", () => {
+    const first = sanitizeNameInput("Frédéric");
+    const last = sanitizeNameInput("null");
+    expect(formatPersonName(first, last)).toBe("Frédéric");
+  });
+
+  it("donne la même clé de dédup aux deux formes du même contact", () => {
+    // Le modèle avait produit deux propositions pour Frédéric : une
+    // avec lastName "null", une avec "". Clés différentes → doublon.
+    const a = formatPersonName(sanitizeNameInput("Frédéric"), sanitizeNameInput("null"), "");
+    const b = formatPersonName(sanitizeNameInput("Frédéric"), sanitizeNameInput(""), "");
+    expect(a).toBe(b);
   });
 });
