@@ -41,6 +41,7 @@ import { type SQL, and, asc, desc, or, sql } from "drizzle-orm";
 import Link from "next/link";
 import { CrmTabs } from "../crm-tabs";
 
+import { formatPersonName } from "@/lib/format";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const SORT_FIELDS = ["lastName", "firstName", "jobTitle", "entity", "email"] as const;
@@ -246,7 +247,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
             </TableHeader>
             <TableBody>
               {rows.map((row) => {
-                const fullName = `${row.firstName} ${row.lastName}`.trim();
+                const fullName = formatPersonName(row.firstName, row.lastName);
                 return (
                   <TableRow
                     key={row.id}

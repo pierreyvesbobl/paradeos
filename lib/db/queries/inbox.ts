@@ -9,6 +9,7 @@ import { DougsAuthError } from "@/lib/dougs/client";
 import { getInvoiceSuggestions, getQuoteSuggestions } from "@/lib/dougs/reconciliation";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
+import { formatPersonName } from "@/lib/format";
 /**
  * L'inbox liste chaque extraction IA à valider individuellement, tous
  * sources confondues (email / meeting / classement de facture). La
@@ -287,7 +288,7 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
 
   const projectMap = new Map(projectNames.map((p) => [p.id, p]));
   const contactMap = new Map(
-    contactNames.map((c) => [c.id, `${c.firstName} ${c.lastName}`.trim()]),
+    contactNames.map((c) => [c.id, formatPersonName(c.firstName, c.lastName)]),
   );
   const entityMap = new Map(entityNames.map((e) => [e.id, e.name]));
   const tagMap = new Map(tagNames.map((t) => [t.id, t.labelName]));

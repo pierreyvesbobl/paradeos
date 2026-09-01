@@ -8,6 +8,7 @@ import { entities } from "@/db/schema/entities";
 import { deleteContactAndRedirect } from "@/lib/actions/contacts";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { db } from "@/lib/db/server";
+import { formatPersonName } from "@/lib/format";
 import { asc, eq } from "drizzle-orm";
 import { ExternalLink, Mail, MapPin, Phone } from "lucide-react";
 import Link from "next/link";
@@ -67,7 +68,7 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
             items={[
               { label: "Contacts", href: "/contacts" },
               ...(entity ? [{ label: entity.name, href: `/entites/${entity.id}` }] : []),
-              { label: `${contact.firstName} ${contact.lastName}` },
+              { label: formatPersonName(contact.firstName, contact.lastName) },
             ]}
           />
         }
@@ -97,7 +98,7 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
             action={deleteContactAndRedirect}
             id={id}
             label="Supprimer"
-            confirmTitle={`Supprimer "${contact.firstName} ${contact.lastName}" ?`}
+            confirmTitle={`Supprimer "${formatPersonName(contact.firstName, contact.lastName)}" ?`}
           />
         }
       />

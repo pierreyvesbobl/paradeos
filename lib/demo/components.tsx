@@ -1,6 +1,6 @@
 "use client";
 
-import { formatEuro } from "@/lib/format";
+import { formatEuro, formatPersonName } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Eye } from "@phosphor-icons/react";
 import {
@@ -56,7 +56,7 @@ export function ContactName({
     const { firstName, lastName } = demoContactName(contact.id);
     return <span className={className}>{`${firstName} ${lastName}`}</span>;
   }
-  const real = [contact.firstName, contact.lastName].filter(Boolean).join(" ");
+  const real = formatPersonName(contact.firstName, contact.lastName, "");
   return <span className={className}>{real || fallback}</span>;
 }
 

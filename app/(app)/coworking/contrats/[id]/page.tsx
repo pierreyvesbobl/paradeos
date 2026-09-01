@@ -21,7 +21,7 @@ import { getCoworkingContractWithInvoices } from "@/lib/db/queries/coworking";
 import { db } from "@/lib/db/server";
 import { demoAmount, demoCompanyName } from "@/lib/demo/anonymize";
 import { isDemoMode } from "@/lib/demo/server";
-import { formatEuro } from "@/lib/format";
+import { formatEuro, formatPersonName } from "@/lib/format";
 import {
   coworkingInvoiceBilledByLabels,
   coworkingInvoiceStatusLabels,
@@ -120,7 +120,7 @@ export default async function ContractDetailPage({ params }: { params: Params })
             mode="edit"
             contactOptions={contactRows.map((c) => ({
               id: c.id,
-              label: `${c.firstName} ${c.lastName}`.trim(),
+              label: formatPersonName(c.firstName, c.lastName),
             }))}
             entityOptions={entityRows.map((e) => ({ id: e.id, label: e.name }))}
             defaultValues={{

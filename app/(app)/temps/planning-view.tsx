@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth/server";
 import { addDays, formatWeekRange, startOfIsoWeek } from "@/lib/calendar";
 import { getCalendarEventsForRange } from "@/lib/db/queries/calendar";
 import { db } from "@/lib/db/server";
-import { formatDuration } from "@/lib/format";
+import { formatDuration, formatPersonName } from "@/lib/format";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq, gte, lt } from "drizzle-orm";
 import Link from "next/link";
@@ -171,7 +171,7 @@ export async function PlanningView({ week }: { week?: string }) {
         projects={projectList}
         contacts={contactList.map((c) => ({
           id: c.id,
-          label: `${c.firstName} ${c.lastName}`,
+          label: formatPersonName(c.firstName, c.lastName),
         }))}
       />
     </div>

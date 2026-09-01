@@ -14,6 +14,7 @@ import { asc, desc, sql } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { formatPersonName } from "@/lib/format";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 // Limite la taille du vocabulaire injecté pour ne pas exploser le prompt
@@ -164,7 +165,7 @@ export async function getKnownVocabulary(): Promise<Vocabulary> {
   return {
     entities: entityRows.map((r) => ({ name: r.name, kind: r.kind })),
     contacts: contactRows.map((r) => ({
-      fullName: `${r.firstName} ${r.lastName}`.trim(),
+      fullName: formatPersonName(r.firstName, r.lastName),
       entityName: r.entityName ?? null,
       jobTitle: r.jobTitle ?? null,
     })),
@@ -458,7 +459,11 @@ export async function fuzzyMatchContact(
     .limit(1);
   const top = rows[0];
   return top
-    ? { id: top.id, name: `${top.firstName} ${top.lastName}`, confidence: Number(top.sim) }
+    ? {
+        id: top.id,
+        name: formatPersonName(top.firstName, top.lastName),
+        confidence: Number(top.sim),
+      }
     : null;
 }
 

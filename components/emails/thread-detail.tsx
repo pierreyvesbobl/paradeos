@@ -15,6 +15,7 @@ import { getThreadDetail, listAllTags } from "@/lib/gmail/queries";
 import { ArrowSquareOut } from "@phosphor-icons/react/dist/ssr";
 import { asc, eq, inArray } from "drizzle-orm";
 
+import { formatPersonName } from "@/lib/format";
 function targetHrefFor(
   kind: "project" | "contact" | "entity" | "category",
   targetId: string | null,
@@ -100,7 +101,7 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
 
   const contactOptionsFmt = contactOptions.map((c) => ({
     id: c.id,
-    fullName: `${c.firstName} ${c.lastName}`.trim(),
+    fullName: formatPersonName(c.firstName, c.lastName),
     entityName: c.entityName,
   }));
 
@@ -133,7 +134,7 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
 
   const projectNameById = new Map(projectRows.map((r) => [r.id, r.name]));
   const contactNameById = new Map(
-    contactRows.map((r) => [r.id, `${r.firstName} ${r.lastName}`.trim()]),
+    contactRows.map((r) => [r.id, formatPersonName(r.firstName, r.lastName)]),
   );
   const entityNameById = new Map(entityRows.map((r) => [r.id, r.name]));
   const tagLabelById = new Map(tagRows.map((r) => [r.id, r.labelName]));

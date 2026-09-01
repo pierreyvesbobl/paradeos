@@ -34,6 +34,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { formatPersonName } from "@/lib/format";
 const KIND_ORDER: MeetingProposal["kind"][] = [
   "task",
   "opportunity",
@@ -1579,7 +1580,10 @@ function summaryFor(p: MeetingProposal, payload: Record<string, unknown>): strin
     case "opportunity":
       return String(payload.title ?? "Sans titre");
     case "contact":
-      return `${payload.firstName ?? ""} ${payload.lastName ?? ""}`.trim() || "Sans nom";
+      return formatPersonName(
+        payload.firstName as string | null,
+        payload.lastName as string | null,
+      );
     case "entity":
       return String(payload.name ?? "Sans nom");
   }

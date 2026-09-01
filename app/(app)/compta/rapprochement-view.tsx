@@ -218,8 +218,9 @@ export async function RapprochementView({ debug }: { debug?: string }) {
 
                     {s.candidates.length === 0 ? (
                       <p className="text-[11px] text-muted-foreground italic">
-                        Aucun candidat Paradeos pertinent (score ≥ 0.3). Lie manuellement depuis la
-                        fiche projet si besoin.
+                        Aucun candidat Paradeos dont le nom client corresponde. Le montant et la
+                        date seuls ne suffisent pas à proposer un rapprochement — lie manuellement
+                        depuis la fiche projet si besoin.
                       </p>
                     ) : (
                       <ul className="space-y-1.5">
@@ -315,7 +316,8 @@ export async function RapprochementView({ debug }: { debug?: string }) {
 
                     {s.candidates.length === 0 ? (
                       <p className="text-[11px] text-muted-foreground italic">
-                        Aucun candidat Paradeos pertinent.
+                        Aucun candidat Paradeos dont le nom client corresponde. Utilise le picker
+                        manuel ci-dessous.
                       </p>
                     ) : (
                       <ul className="space-y-1.5">

@@ -4,6 +4,7 @@ import { demoCompanyName, demoContactName } from "@/lib/demo/anonymize";
 import { useDemoMode } from "@/lib/demo/context";
 import { cn } from "@/lib/utils";
 
+import { formatPersonName } from "@/lib/format";
 const TINTS = [
   "gray",
   "brown",
@@ -71,7 +72,7 @@ export function HashedAvatar({
     if (demoKind === "entity") displayName = demoCompanyName(demoId);
     else if (demoKind === "contact") {
       const c = demoContactName(demoId);
-      displayName = `${c.firstName} ${c.lastName}`;
+      displayName = formatPersonName(c.firstName, c.lastName);
     }
   }
   const tint = hashTint(seed?.trim() || displayName?.trim() || "?");

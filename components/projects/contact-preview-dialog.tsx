@@ -21,6 +21,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LinkGlyph, type LinkItem } from "../link-field/link-chip";
 
+import { formatPersonName } from "@/lib/format";
 type Preview = {
   id: string;
   firstName: string;
@@ -81,7 +82,7 @@ export function ContactPreviewDialog({
   }, [contactId]);
 
   const open = contactId !== null;
-  const fullName = data ? `${data.firstName} ${data.lastName}`.trim() : "";
+  const fullName = data ? formatPersonName(data.firstName, data.lastName) : "";
 
   const linkItem: LinkItem | null = data
     ? {

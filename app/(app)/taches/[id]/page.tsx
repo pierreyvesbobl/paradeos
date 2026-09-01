@@ -17,7 +17,7 @@ import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/not
 import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { getTaskTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
-import { formatDateTime, formatDuration } from "@/lib/format";
+import { formatDateTime, formatDuration, formatPersonName } from "@/lib/format";
 import { timeEntryKindLabels } from "@/lib/schemas/time-entries";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { asc, eq } from "drizzle-orm";
@@ -74,7 +74,7 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
   const assignees = assigneesByTask.get(id) ?? [];
   const contactOptions = contactRows.map((c) => ({
     id: c.id,
-    fullName: `${c.firstName} ${c.lastName}`.trim(),
+    fullName: formatPersonName(c.firstName, c.lastName),
     entityName: c.entityName ?? null,
   }));
 

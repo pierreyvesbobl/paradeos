@@ -8,6 +8,7 @@ import type { TaskPriority, TaskStatus } from "@/lib/schemas/tasks";
 import { asc, eq } from "drizzle-orm";
 import { TaskForm } from "../task-form";
 
+import { formatPersonName } from "@/lib/format";
 type SearchParams = Promise<{ projectId?: string; assigneeId?: string }>;
 
 export default async function NewTaskPage({ searchParams }: { searchParams: SearchParams }) {
@@ -37,7 +38,7 @@ export default async function NewTaskPage({ searchParams }: { searchParams: Sear
 
   const contactOptions = contactList.map((c) => ({
     id: c.id,
-    fullName: `${c.firstName} ${c.lastName}`.trim(),
+    fullName: formatPersonName(c.firstName, c.lastName),
     entityName: c.entityName ?? null,
   }));
 

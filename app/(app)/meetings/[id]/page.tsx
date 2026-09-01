@@ -19,6 +19,7 @@ import { ProposalsPanel } from "./proposals-panel";
 import { ReExtractButton } from "./re-extract-button";
 import { SummaryEditor } from "./summary-editor";
 
+import { formatPersonName } from "@/lib/format";
 // Pas de cache statique sur cette page : les propositions et le résumé
 // changent en continu à chaque action humaine, on veut toujours la
 // donnée fraîche.
@@ -129,7 +130,7 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
             entities={entityOptions}
             contacts={contactOptions.map((c) => ({
               id: c.id,
-              fullName: `${c.firstName} ${c.lastName}`.trim(),
+              fullName: formatPersonName(c.firstName, c.lastName),
               entityName: c.entityName ?? null,
             }))}
             existingTasks={taskOptions}

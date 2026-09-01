@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { formatPersonName } from "@/lib/format";
 type EntityOption = { id: string; name: string };
 type ContactOption = { id: string; firstName: string; lastName: string };
 type UserOption = { id: string; fullName: string | null };
@@ -244,7 +245,7 @@ export function ProjectForm({ mode, entities, contacts, users, defaultValues }: 
                 onValueChange={setContactId}
                 options={contacts.map((c) => ({
                   id: c.id,
-                  label: `${c.firstName} ${c.lastName}`.trim(),
+                  label: formatPersonName(c.firstName, c.lastName),
                 }))}
                 searchPlaceholder="Rechercher un contact…"
                 disabled={pending}

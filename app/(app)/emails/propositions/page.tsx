@@ -11,6 +11,7 @@ import { db } from "@/lib/db/server";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Inbox } from "lucide-react";
 
+import { formatPersonName } from "@/lib/format";
 export default async function EmailPropositionsPage() {
   const user = await requireUser();
   const conn = await db();
@@ -91,7 +92,7 @@ export default async function EmailPropositionsPage() {
   const projectNameMap = new Map(projectNamesById.map((p) => [p.id, p.name]));
   const tagLabelMap = new Map(tagNamesById.map((t) => [t.id, t.labelName]));
   const contactNameMap = new Map(
-    contactNamesById.map((c) => [c.id, `${c.firstName} ${c.lastName}`.trim()]),
+    contactNamesById.map((c) => [c.id, formatPersonName(c.firstName, c.lastName)]),
   );
   const entityNameMap = new Map(entityNamesById.map((e) => [e.id, e.name]));
 

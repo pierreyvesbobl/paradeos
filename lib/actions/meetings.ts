@@ -32,6 +32,7 @@ import { and, eq, ilike } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { formatPersonName } from "@/lib/format";
 export const createMeeting = action(createMeetingSchema, async ({ input, user }) => {
   const conn = await db();
   const occurredAt = input.occurredAt ? new Date(input.occurredAt) : null;
@@ -118,7 +119,7 @@ export const extractMeetingProposals = action(extractMeetingSchema, async ({ inp
         name: proj.name,
         entityName: proj.entityName ?? null,
         contacts: projectContacts.map((c) => ({
-          fullName: `${c.firstName} ${c.lastName}`.trim(),
+          fullName: formatPersonName(c.firstName, c.lastName),
           jobTitle: c.jobTitle ?? null,
         })),
       };

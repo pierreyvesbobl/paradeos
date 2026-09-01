@@ -77,3 +77,53 @@ export function formatDays(days: number): string {
     : rounded.toFixed(1).replace(".", ",");
   return `${formatted} j`;
 }
+
+/**
+ * Une valeur de nom est "absente" si elle est nulle, vide, ou porte une
+ * des chaînes-poubelles qu'on retrouve en base : `"null"` /
+ * `"undefined"` viennent d'un `String(x)` sur une valeur manquante,
+ * quelque part entre une extraction IA et un import.
+ */
+function presentName(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const v = value.trim();
+  if (!v) return null;
+  const lower = v.toLowerCase();
+  if (lower === "null" || lower === "undefined") return null;
+  return v;
+}
+
+/**
+ * Nom affichable d'une personne à partir d'un prénom et d'un nom, dont
+ * l'un ou l'autre peut manquer.
+ *
+ * À utiliser partout plutôt que `` `${firstName} ${lastName}` ``, qui
+ * produit « Frédéric null » dès qu'un des deux champs manque — `.trim()`
+ * ne rattrape pas le cas, il n'enlève que les espaces de bord.
+ *
+ * Renvoie `fallback` (par défaut « Sans nom ») si les deux manquent, de
+ * sorte qu'un appelant puisse toujours afficher le résultat tel quel.
+ */
+export function formatPersonName(
+  firstName: string | null | undefined,
+  lastName: string | null | undefined,
+  fallback = "Sans nom",
+): string {
+  const parts = [presentName(firstName), presentName(lastName)].filter(
+    (p): p is string => p !== null,
+  );
+  return parts.length > 0 ? parts.join(" ") : fallback;
+}
+
+/**
+ * Variante qui renvoie `null` plutôt qu'un libellé de repli, pour les
+ * appelants qui veulent décider eux-mêmes quoi afficher (ou qui s'en
+ * servent comme clé de recherche / de matching).
+ */
+export function personNameOrNull(
+  firstName: string | null | undefined,
+  lastName: string | null | undefined,
+): string | null {
+  const name = formatPersonName(firstName, lastName, "");
+  return name || null;
+}

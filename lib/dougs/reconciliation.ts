@@ -15,11 +15,14 @@ import {
 import { type DougsQuote, type DougsSalesInvoice, pickDougsClientName } from "@/lib/dougs/client";
 import {
   type MatchScore,
+  NAME_MATCH_FLOOR,
   scoreMatch,
+  scoreMatchBest,
   similarityAmountPartial,
   similarityDate,
   similarityName,
 } from "@/lib/dougs/match";
+import { personNameOrNull } from "@/lib/format";
 import { monthsBetween } from "@/lib/schemas/coworking";
 import { and, eq, isNull } from "drizzle-orm";
 
@@ -306,9 +309,6 @@ export async function getInvoiceSuggestions(
       projectEntityName: entities.name,
       contractName: coworkingContracts.name,
       contractContactId: coworkingContracts.contactId,
-      contractEntityName: entities.name,
-      contactFirstName: contacts.firstName,
-      contactLastName: contacts.lastName,
     })
     .from(invoices)
     .leftJoin(projects, eq(projects.id, invoices.projectId))
@@ -324,7 +324,6 @@ export async function getInvoiceSuggestions(
         projects.entityId,
       ),
     )
-    .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId))
     .where(
       and(
         isNull(invoices.dougsInvoiceId),
@@ -385,7 +384,7 @@ export async function getInvoiceSuggestions(
       for (const r of rows) contactEntityMap.set(r.contactId, r.entityName ?? null);
     }
     for (const r of cwBilling) {
-      const fromContact = `${r.contactFirstName ?? ""} ${r.contactLastName ?? ""}`.trim() || null;
+      const fromContact = personNameOrNull(r.contactFirstName, r.contactLastName);
       const contactEntity = r.contactId ? (contactEntityMap.get(r.contactId) ?? null) : null;
       const names = [r.billToEntityName, contactEntity, fromContact, r.contractName].filter(
         (x): x is string => !!x,
@@ -508,19 +507,10 @@ export async function getInvoiceSuggestions(
         amount: dougsAmount,
         createdAt: inv.createdAt ?? null,
       };
-      let bestScore = scoreMatch(dougsSide, {
-        clientName: clientNames[0] ?? null,
+      const bestScore = scoreMatchBest(dougsSide, clientNames, {
         amount: amountHt,
         date: c.periodStart ?? c.createdAt,
       });
-      for (let i = 1; i < clientNames.length; i++) {
-        const s = scoreMatch(dougsSide, {
-          clientName: clientNames[i] ?? null,
-          amount: amountHt,
-          date: c.periodStart ?? c.createdAt,
-        });
-        if (s.total > bestScore.total) bestScore = s;
-      }
       if (bestScore.total < 0.3) continue;
       existingScored.push({
         kind: "invoice",
@@ -551,7 +541,15 @@ export async function getInvoiceSuggestions(
         if (projectIdsWithCandidate.has(p.id)) continue;
         const projectValueHt = Number(p.valueAmount ?? p.budgetAmount ?? 0);
         if (projectValueHt <= 0) continue;
-        const nameSim = similarityName(dougsClientName, p.entityName);
+        // Dougs facture tantôt au nom de l'entité, tantôt au nom du
+        // projet — on retient la meilleure des deux lectures.
+        const nameSim = Math.max(
+          similarityName(dougsClientName, p.entityName),
+          similarityName(dougsClientName, p.name),
+        );
+        // Même plancher que scoreMatch : un montant qui tombe pile sur
+        // un pourcentage standard n'est pas une preuve d'identité.
+        if (nameSim < NAME_MATCH_FLOOR) continue;
         const partial = similarityAmountPartial(dougsAmount, projectValueHt);
         const dateSim = similarityDate(inv.createdAt ?? null, p.startDate ?? p.createdAt);
         const total =

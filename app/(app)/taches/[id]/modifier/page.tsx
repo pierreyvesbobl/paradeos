@@ -11,6 +11,7 @@ import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { TaskForm } from "../../task-form";
 
+import { formatPersonName } from "@/lib/format";
 type Params = Promise<{ id: string }>;
 
 export default async function EditTaskPage({ params }: { params: Params }) {
@@ -45,7 +46,7 @@ export default async function EditTaskPage({ params }: { params: Params }) {
 
   const contactOptions = contactList.map((c) => ({
     id: c.id,
-    fullName: `${c.firstName} ${c.lastName}`.trim(),
+    fullName: formatPersonName(c.firstName, c.lastName),
     entityName: c.entityName ?? null,
   }));
 

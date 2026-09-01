@@ -6,6 +6,7 @@ import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
 import { asc } from "drizzle-orm";
 
+import { formatPersonName } from "@/lib/format";
 export default async function NewContractPage() {
   const conn = await db();
   const [contactRows, entityRows] = await Promise.all([
@@ -38,7 +39,7 @@ export default async function NewContractPage() {
           mode="create"
           contactOptions={contactRows.map((c) => ({
             id: c.id,
-            label: `${c.firstName} ${c.lastName}`.trim(),
+            label: formatPersonName(c.firstName, c.lastName),
           }))}
           entityOptions={entityRows.map((e) => ({ id: e.id, label: e.name }))}
         />

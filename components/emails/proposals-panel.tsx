@@ -43,6 +43,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { formatPersonName } from "@/lib/format";
 type ProjectOption = { id: string; name: string };
 type UserOption = { id: string; fullName: string | null; avatarUrl?: string | null };
 type NamedOption = { id: string; name: string };
@@ -1705,7 +1706,10 @@ function summaryFor(p: ProposalWithMatches, payload: Record<string, unknown>): s
     case "project_contact_link":
       return "Rattacher le contact au projet";
     case "contact":
-      return `${payload.firstName ?? ""} ${payload.lastName ?? ""}`.trim() || "Sans nom";
+      return formatPersonName(
+        payload.firstName as string | null,
+        payload.lastName as string | null,
+      );
     case "entity":
       return String(payload.name ?? "Sans nom");
     case "category_tag": {

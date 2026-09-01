@@ -28,7 +28,7 @@ import {
 } from "@/lib/db/queries/coworking";
 import { demoAmount, demoCompanyName } from "@/lib/demo/anonymize";
 import { isDemoMode } from "@/lib/demo/server";
-import { formatEuro } from "@/lib/format";
+import { formatEuro, formatPersonName } from "@/lib/format";
 import { invoiceTotalHt, invoiceTotalTtc, monthsBetween } from "@/lib/schemas/coworking";
 import { ArrowRight, Banknote, Clock, FileText, Mail, Plus, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
@@ -294,7 +294,7 @@ export default async function CoworkingPage() {
                 <TableRow key={c.id}>
                   <TableCell className="font-medium">
                     <Link href={`/contacts/${c.id}`} className="hover:underline">
-                      {c.firstName} {c.lastName}
+                      {formatPersonName(c.firstName, c.lastName)}
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">

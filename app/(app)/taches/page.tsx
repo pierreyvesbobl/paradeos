@@ -24,6 +24,7 @@ import { type SQL, and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { CheckSquare, Plus } from "lucide-react";
 import Link from "next/link";
 
+import { formatPersonName } from "@/lib/format";
 const SORT_FIELDS = ["title", "project", "status", "priority", "assignee", "dueDate"] as const;
 
 const PERSISTED_KEYS = ["q", "f", "sort", "status", "scope"] as const;
@@ -239,7 +240,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
 
   const contactOptionsForEditor = contactOptions.map((c) => ({
     id: c.id,
-    fullName: `${c.firstName} ${c.lastName}`.trim(),
+    fullName: formatPersonName(c.firstName, c.lastName),
     entityName: c.entityName ?? null,
   }));
 

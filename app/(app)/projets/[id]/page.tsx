@@ -35,7 +35,7 @@ import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { getProjectTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
 import { EntityName, EuroAmount, ProjectName } from "@/lib/demo/components";
-import { formatDays, formatDuration } from "@/lib/format";
+import { formatDays, formatDuration, formatPersonName } from "@/lib/format";
 import { computeDaysWorked, computeEffectiveDailyRate } from "@/lib/profitability-math";
 import { projectBillingTypeLabels } from "@/lib/schemas/projects";
 import { cn } from "@/lib/utils";
@@ -148,7 +148,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
 
   const contactAssigneeOptions = contactOptions.map((c) => ({
     id: c.id,
-    fullName: `${c.firstName} ${c.lastName}`.trim(),
+    fullName: formatPersonName(c.firstName, c.lastName),
     entityName: c.entityName ?? null,
   }));
 

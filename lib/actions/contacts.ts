@@ -16,6 +16,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { formatPersonName } from "@/lib/format";
 export const createContact = action(createContactSchema, async ({ input, user }) => {
   const conn = await db();
   const [row] = await conn
@@ -97,7 +98,7 @@ export const quickCreateContact = action(quickCreateContactSchema, async ({ inpu
   if (input.entityId) revalidatePath(`/entites/${input.entityId}`);
   return {
     id: row.id,
-    fullName: `${row.firstName} ${row.lastName}`.trim(),
+    fullName: formatPersonName(row.firstName, row.lastName),
   };
 });
 

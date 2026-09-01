@@ -1,3 +1,5 @@
+import { personNameOrNull } from "@/lib/format";
+
 /**
  * Scoring de rapprochement Dougs ↔ Paradeos. Combine 3 signaux :
  *  - similarité nom client (50 %)
@@ -147,7 +149,45 @@ export type MatchScore = {
   name: number;
   amount: number;
   date: number;
+  /**
+   * Vrai si le candidat a été écarté par le plancher de nom. Le détail
+   * des sous-scores reste renseigné pour le mode debug de la page
+   * Rapprochement.
+   */
+  rejectedOnName?: boolean;
 };
+
+/**
+ * Plancher de similarité de nom. En dessous, un candidat n'est pas
+ * proposable **quels que soient** le montant et la date.
+ *
+ * Pourquoi un plancher et pas seulement un poids : avec la pondération
+ * seule, un candidat dont le nom ne correspond à rien (nom = 0) mais
+ * dont le montant et la date coïncident sortait à 0 × 0,5 + 1 × 0,3 +
+ * 1 × 0,2 = **0,5**, donc au-dessus du seuil de proposition de 0,3.
+ *
+ * En pratique ça mélangeait coworking et projets clients : les loyers
+ * coworking sont des montants ronds et récurrents (600, 750, 3000 €),
+ * souvent identiques d'un contrat à l'autre et émis en début de mois.
+ * N'importe quelle facture Dougs du même montant tombait donc sur le
+ * premier contrat venu. Le montant et la date ne sont pas des preuves
+ * d'identité : sans un minimum d'accord sur le nom, il n'y a pas de
+ * candidat.
+ *
+ * 0,35 laisse passer un token commun sur trois (« Cabinet Dupont » vs
+ * « Dupont Conseil » = 0,33 est écarté, un token sur deux = 0,5 passe).
+ */
+export const NAME_MATCH_FLOOR = 0.35;
+
+/** Nom client tel que Dougs le porte, quelle que soit la forme du payload. */
+function dougsClientName(dougs: {
+  legalName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+}): string | null {
+  if (dougs.legalName?.trim()) return dougs.legalName.trim();
+  return personNameOrNull(dougs.firstName, dougs.lastName);
+}
 
 export function scoreMatch(
   dougs: {
@@ -163,11 +203,36 @@ export function scoreMatch(
     date?: string | Date | null;
   },
 ): MatchScore {
-  const dougsName =
-    dougs.legalName ?? `${dougs.firstName ?? ""} ${dougs.lastName ?? ""}`.trim() ?? null;
-  const name = similarityName(dougsName, paradeos.clientName);
+  const name = similarityName(dougsClientName(dougs), paradeos.clientName);
   const amount = similarityAmount(dougs.amount, paradeos.amount);
   const date = similarityDate(dougs.createdAt, paradeos.date);
+  if (name < NAME_MATCH_FLOOR) {
+    return { total: 0, name, amount, date, rejectedOnName: true };
+  }
   const total = name * 0.5 + amount * 0.3 + date * 0.2;
   return { total: Math.round(total * 1000) / 1000, name, amount, date };
+}
+
+/**
+ * Score une facture Dougs contre plusieurs identités possibles du même
+ * candidat Paradeos, et garde la meilleure.
+ *
+ * Un contrat coworking peut être facturé sous plusieurs noms selon la
+ * config (entité de facturation, entreprise du coworker, le coworker
+ * lui-même, le libellé du contrat) — d'où la liste plutôt qu'un nom
+ * unique.
+ */
+export function scoreMatchBest(
+  dougs: Parameters<typeof scoreMatch>[0],
+  clientNames: readonly (string | null | undefined)[],
+  paradeos: { amount?: number | null; date?: string | Date | null },
+): MatchScore {
+  let best: MatchScore | null = null;
+  for (const clientName of clientNames.length > 0 ? clientNames : [null]) {
+    const s = scoreMatch(dougs, { clientName, amount: paradeos.amount, date: paradeos.date });
+    if (!best || s.total > best.total || (s.total === best.total && s.name > best.name)) {
+      best = s;
+    }
+  }
+  return best ?? { total: 0, name: 0, amount: 0, date: 0, rejectedOnName: true };
 }

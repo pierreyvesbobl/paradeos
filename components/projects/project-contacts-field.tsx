@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { LinkChip, LinkGlyph, type LinkItem } from "../link-field/link-chip";
 import { LinkPeek, type PeekField } from "../link-field/link-peek";
 
+import { formatPersonName } from "@/lib/format";
 type Contact = {
   id: string;
   firstName: string | null;
@@ -20,7 +21,7 @@ type Contact = {
 };
 
 function contactName(c: Contact): string {
-  const n = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
+  const n = formatPersonName(c.firstName, c.lastName, "");
   return n || c.email || "(sans nom)";
 }
 

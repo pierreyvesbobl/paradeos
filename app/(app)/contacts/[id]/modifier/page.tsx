@@ -7,6 +7,7 @@ import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { ContactForm } from "../../contact-form";
 
+import { formatPersonName } from "@/lib/format";
 type Params = Promise<{ id: string }>;
 
 export default async function EditContactPage({ params }: { params: Params }) {
@@ -28,14 +29,14 @@ export default async function EditContactPage({ params }: { params: Params }) {
             items={[
               { label: "Contacts", href: "/contacts" },
               {
-                label: `${contact.firstName} ${contact.lastName}`,
+                label: formatPersonName(contact.firstName, contact.lastName),
                 href: `/contacts/${contact.id}`,
               },
               { label: "Modifier" },
             ]}
           />
         }
-        title={`Modifier — ${contact.firstName} ${contact.lastName}`}
+        title={`Modifier — ${formatPersonName(contact.firstName, contact.lastName)}`}
       />
       <ContactForm
         mode="edit"

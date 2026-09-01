@@ -6,6 +6,7 @@ import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { asc } from "drizzle-orm";
 
+import { formatPersonName } from "@/lib/format";
 function slug(s: string): string {
   return s
     .toLowerCase()
@@ -66,7 +67,7 @@ export async function buildMarkdownResolver() {
   return {
     users: usersResolver,
     entities: asHrefMap(entityRows, (e) => e.name, "/entites"),
-    contacts: asHrefMap(contactRows, (c) => `${c.firstName} ${c.lastName}`, "/contacts"),
+    contacts: asHrefMap(contactRows, (c) => formatPersonName(c.firstName, c.lastName), "/contacts"),
     projects: asHrefMap(projectRows, (p) => p.name, "/projets"),
     tasks: asHrefMap(taskRows, (t) => t.title, "/taches"),
   } as const;
