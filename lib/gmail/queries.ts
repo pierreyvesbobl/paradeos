@@ -2,9 +2,10 @@ import "server-only";
 
 import { contacts } from "@/db/schema/contacts";
 import { gmailMessages, gmailTags, gmailThreadTags, gmailThreads } from "@/db/schema/gmail";
+import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
-import { type SQL, and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { type SQL, and, asc, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
 
 export type GmailThreadRow = {
   id: string;
@@ -100,7 +101,30 @@ export type GmailThreadFilters = {
    *   - undefined : pas de segmentation.
    */
   bucket?: "important" | "invoices" | "noise";
+  /**
+   * Sens de la facture détectée sur le thread. Ne s'applique qu'au
+   * bucket `invoices` en pratique — un thread sans PJ classifiée ne
+   * matche ni `purchase` ni `sale`.
+   */
+  invoiceDirection?: InvoiceDirectionFilter;
 };
+
+export type InvoiceDirectionFilter = "purchase" | "sale";
+
+/**
+ * Le thread porte au moins une PJ classifiée dans ce sens. On passe par
+ * `invoice_filings` plutôt que par le tag Gmail : la colonne est la
+ * source de vérité, le tag n'en est que le miroir (et l'utilisateur peut
+ * le retirer à la main sans qu'on perde la classification).
+ */
+function invoiceDirectionSql(direction: InvoiceDirectionFilter): SQL {
+  return sql`exists (
+    select 1 from public.invoice_filings f
+    join public.gmail_messages im on im.id = f.message_id
+    where im.thread_id = gmail_threads.id
+      and f.direction = ${direction}::invoice_filing_direction
+  )`;
+}
 
 /**
  * Prédicats SQL réutilisés entre `listThreads` et `countBuckets`.
@@ -181,6 +205,10 @@ export async function listThreads(
                   where thread_id = ${gmailThreads.id}
                   and tag_id = ${filters.tagId})`,
     );
+  }
+
+  if (filters.invoiceDirection) {
+    conditions.push(invoiceDirectionSql(filters.invoiceDirection));
   }
 
   if (filters.bucket === "invoices") {
@@ -424,6 +452,66 @@ export async function countBuckets(
     invoices: row?.invoices ?? 0,
     noise: row?.noise ?? 0,
     total: row?.total ?? 0,
+  };
+}
+
+/**
+ * Batch : pour une liste de thread ids, retourne le map threadId → sens
+ * des factures détectées dessus. Un thread peut porter les deux (mail
+ * comptable avec une facture fournisseur et une facture client en PJ).
+ */
+export async function getInvoiceDirectionsForThreads(
+  threadIds: string[],
+): Promise<Map<string, InvoiceDirectionFilter[]>> {
+  const out = new Map<string, InvoiceDirectionFilter[]>();
+  if (threadIds.length === 0) return out;
+  const conn = await db();
+  const rows = await conn
+    .selectDistinct({
+      threadId: gmailMessages.threadId,
+      direction: invoiceFilings.direction,
+    })
+    .from(invoiceFilings)
+    .innerJoin(gmailMessages, eq(gmailMessages.id, invoiceFilings.messageId))
+    .where(
+      and(inArray(gmailMessages.threadId, threadIds), ne(invoiceFilings.direction, "unknown")),
+    );
+  for (const r of rows) {
+    if (r.direction === "unknown") continue;
+    const arr = out.get(r.threadId) ?? [];
+    arr.push(r.direction);
+    out.set(r.threadId, arr);
+  }
+  return out;
+}
+
+/**
+ * Compte les threads du bucket facturation par sens, pour les sous-filtres
+ * "Achats / Ventes". `unclassified` = threads facturation sans PJ
+ * classifiée (mail compta sans pièce jointe, PJ encore en attente).
+ */
+export async function countInvoiceDirections(userId: string): Promise<{
+  purchase: number;
+  sale: number;
+  unclassified: number;
+}> {
+  const conn = await db();
+  const purchaseSql = invoiceDirectionSql("purchase");
+  const saleSql = invoiceDirectionSql("sale");
+  const [row] = await conn
+    .select({
+      purchase: sql<number>`count(*) filter (where ${purchaseSql})::int`,
+      sale: sql<number>`count(*) filter (where ${saleSql})::int`,
+      unclassified: sql<number>`count(*) filter (
+        where not (${purchaseSql}) and not (${saleSql})
+      )::int`,
+    })
+    .from(gmailThreads)
+    .where(and(eq(gmailThreads.userId, userId), BUCKET_SQL.invoices));
+  return {
+    purchase: row?.purchase ?? 0,
+    sale: row?.sale ?? 0,
+    unclassified: row?.unclassified ?? 0,
   };
 }
 

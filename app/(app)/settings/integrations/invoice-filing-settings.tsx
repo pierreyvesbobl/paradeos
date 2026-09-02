@@ -74,7 +74,7 @@ export function InvoiceFilingSettings({ currentFolderId, enabled }: Props) {
         return;
       }
       toast.success(
-        `Classées : ${res.data.filed} · Écartées : ${res.data.rejected} · Erreurs : ${res.data.error}`,
+        `Classées : ${res.data.filed} · Ventes détectées : ${res.data.sales} · Écartées : ${res.data.rejected} · Erreurs : ${res.data.error}`,
       );
       router.refresh();
     });

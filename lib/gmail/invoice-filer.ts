@@ -9,11 +9,14 @@ import { type GmailAttachmentRef, getAttachment } from "@/lib/google/gmail-api";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { eq } from "drizzle-orm";
 import {
+  type InvoiceDirection,
   buildInvoiceFilename,
+  directionFromDocumentKind,
   extractInvoiceMetadata,
   sanitizeForFilename,
 } from "./invoice-extract";
 import { extractPdfText } from "./pdf";
+import { tagThreadWithInvoiceDirection } from "./tags";
 
 const PDF_MIME = "application/pdf";
 
@@ -65,6 +68,8 @@ export async function queueInvoiceCandidates(args: {
  */
 export async function processInvoiceFiling(filingId: string): Promise<{
   status: "filed" | "rejected" | "error";
+  /** Sens détecté — `sale` signifie « détectée et taguée, pas classée ». */
+  direction?: InvoiceDirection;
   driveFileId?: string;
   generatedFilename?: string;
   errorMessage?: string;
@@ -79,22 +84,17 @@ export async function processInvoiceFiling(filingId: string): Promise<{
   if (filing.status === "filed") {
     return {
       status: "filed",
+      direction: filing.direction,
       driveFileId: filing.driveFileId ?? undefined,
       generatedFilename: filing.generatedFilename ?? undefined,
     };
-  }
-
-  // Garde-fou : on doit avoir le folder racine configuré.
-  const rootFolderId = await getSetting(SETTING_KEYS.INVOICE_FILING_ROOT_FOLDER_ID);
-  if (!rootFolderId) {
-    await markError(filing.id, "INVOICE_FILING_ROOT_FOLDER_ID non configuré.");
-    return { status: "error", errorMessage: "INVOICE_FILING_ROOT_FOLDER_ID non configuré." };
   }
 
   // Charge le message parent pour subject/from/body + gmail_message_id.
   const [msg] = await conn
     .select({
       gmailMessageId: gmailMessages.gmailMessageId,
+      threadId: gmailMessages.threadId,
       subject: gmailMessages.subject,
       fromEmail: gmailMessages.fromEmail,
       fromName: gmailMessages.fromName,
@@ -157,56 +157,96 @@ export async function processInvoiceFiling(filingId: string): Promise<{
     return { status: "error", errorMessage: errMsg };
   }
 
-  if (!meta.isInvoice) {
+  // Garde-fou dur : si l'émetteur extrait commence par "parade", c'est une
+  // facture qu'on a émise — donc une VENTE, quoi qu'en dise le LLM. Le
+  // prompt le demande déjà, on double-checke ici.
+  // Préfixe et pas égalité stricte : le LLM colle parfois l'adresse à
+  // la suite du nom ("Parade SAS 42 rue X 75011 Paris") — sans le
+  // préfixe on laisse passer.
+  const issuedByParade = meta.supplierName ? isParadeName(meta.supplierName) : false;
+  const direction: InvoiceDirection = issuedByParade
+    ? "sale"
+    : directionFromDocumentKind(meta.documentKind);
+
+  // Persiste la classification + les deux parties dès maintenant : même
+  // une PJ non classée dans Drive doit rester lisible côté UI (la boîte
+  // mail affiche « Achat » / « Vente » à partir de cette colonne).
+  await conn
+    .update(invoiceFilings)
+    .set({
+      direction,
+      invoiceDate: meta.invoiceDate,
+      supplierRaw: meta.supplierName,
+      supplierSanitized: meta.supplierName ? sanitizeForFilename(meta.supplierName) : null,
+      customerRaw: meta.customerName,
+      prestationType: meta.prestationType,
+      confidence: meta.confidence.toFixed(3),
+    })
+    .where(eq(invoiceFilings.id, filing.id));
+
+  // Tag le thread dès qu'on sait de quel côté on est — c'est le livrable
+  // « détecter et taguer » côté boîte mail, indépendant du classement
+  // Drive qui suit. Best-effort : un échec de push Gmail (quota, token)
+  // ne doit pas faire échouer le filing.
+  if (direction !== "unknown") {
+    try {
+      await tagThreadWithInvoiceDirection({
+        userId: filing.userId,
+        threadIdLocal: msg.threadId,
+        direction,
+      });
+    } catch (err) {
+      console.warn("[invoice filer] tag direction failed", err);
+    }
+  }
+
+  if (direction === "sale") {
+    // Facture de vente : détectée et taguée, mais pas classée ici — elle
+    // est gérée via le rapprochement Dougs.
+    await markRejected(filing.id, "facture de vente émise par Parade — gérée via Dougs.");
+    return { status: "rejected", direction, errorMessage: "facture de vente" };
+  }
+  if (direction === "unknown") {
     await markRejected(filing.id, "LLM a classé comme non-facture.");
-    return { status: "rejected", errorMessage: "non-facture" };
+    return { status: "rejected", direction, errorMessage: "non-facture" };
   }
   if (!meta.invoiceDate || !meta.supplierName || !meta.prestationType) {
     await markRejected(
       filing.id,
       `champs manquants (date=${meta.invoiceDate}, supplier=${meta.supplierName}, prestation=${meta.prestationType})`,
     );
-    return { status: "rejected", errorMessage: "champs manquants" };
-  }
-
-  // Garde-fou dur : si le supplier extrait commence par "parade", c'est
-  // une facture client qu'on a émise (arrive par mail en copie côté
-  // Gmail), pas une facture fournisseur à classer. Le prompt LLM demande
-  // déjà de rejeter mais on double-checke.
-  // Préfixe et pas égalité stricte : le LLM colle parfois l'adresse à
-  // la suite du nom ("Parade SAS 42 rue X 75011 Paris") — sans le
-  // préfixe on laisse passer.
-  const supplierKey = meta.supplierName
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-  if (supplierKey.startsWith("parade") || supplierKey.startsWith("sasparade")) {
-    await markRejected(filing.id, "facture client émise par Parade (pas une fournisseur).");
-    return { status: "rejected", errorMessage: "facture client Parade" };
+    return { status: "rejected", direction, errorMessage: "champs manquants" };
   }
 
   // Sécurité : on n'auto-file que si confiance suffisante. Sinon on
   // garde en `pending` pour re-traitement / validation manuelle.
   if (meta.confidence < 0.6) {
+    // Les métadonnées sont déjà persistées ci-dessus ; on reste en
+    // `pending` pour permettre un retry / une validation manuelle.
     await conn
       .update(invoiceFilings)
-      .set({
-        invoiceDate: meta.invoiceDate,
-        supplierRaw: meta.supplierName,
-        supplierSanitized: sanitizeForFilename(meta.supplierName),
-        prestationType: meta.prestationType,
-        confidence: meta.confidence.toFixed(3),
-        errorMessage: "confidence < 0.6 — validation manuelle requise",
-      })
+      .set({ errorMessage: "confidence < 0.6 — validation manuelle requise" })
       .where(eq(invoiceFilings.id, filing.id));
-    return { status: "rejected", errorMessage: "confidence faible" };
+    return { status: "rejected", direction, errorMessage: "confidence faible" };
   }
 
   const invoiceDate = new Date(meta.invoiceDate);
   if (Number.isNaN(invoiceDate.getTime())) {
     await markRejected(filing.id, `date invalide: ${meta.invoiceDate}`);
-    return { status: "rejected", errorMessage: "date invalide" };
+    return { status: "rejected", direction, errorMessage: "date invalide" };
+  }
+
+  // Garde-fou : le classement Drive a besoin du dossier racine. On ne le
+  // vérifie qu'ici — la détection et le tag ci-dessus doivent marcher même
+  // sans Drive configuré.
+  const rootFolderId = await getSetting(SETTING_KEYS.INVOICE_FILING_ROOT_FOLDER_ID);
+  if (!rootFolderId) {
+    await markError(filing.id, "INVOICE_FILING_ROOT_FOLDER_ID non configuré.");
+    return {
+      status: "error",
+      direction,
+      errorMessage: "INVOICE_FILING_ROOT_FOLDER_ID non configuré.",
+    };
   }
 
   // 4. Construit le filename selon la nomenclature.
@@ -254,11 +294,7 @@ export async function processInvoiceFiling(filingId: string): Promise<{
   await conn
     .update(invoiceFilings)
     .set({
-      invoiceDate: meta.invoiceDate,
-      supplierRaw: meta.supplierName,
       supplierSanitized,
-      prestationType: meta.prestationType,
-      confidence: meta.confidence.toFixed(3),
       generatedFilename: filename,
       driveYearFolderId: yearFolderId,
       driveSupplierFolderId: supplierFolderId,
@@ -268,7 +304,20 @@ export async function processInvoiceFiling(filingId: string): Promise<{
     })
     .where(eq(invoiceFilings.id, filing.id));
 
-  return { status: "filed", driveFileId, generatedFilename: filename };
+  return { status: "filed", direction, driveFileId, generatedFilename: filename };
+}
+
+/**
+ * Vrai si le nom extrait désigne Parade. Normalise accents / casse /
+ * ponctuation avant de comparer sur le préfixe.
+ */
+function isParadeName(name: string): boolean {
+  const key = name
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+  return key.startsWith("parade") || key.startsWith("sasparade");
 }
 
 async function markError(filingId: string, msg: string) {

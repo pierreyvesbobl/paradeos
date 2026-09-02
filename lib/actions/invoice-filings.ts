@@ -92,10 +92,13 @@ export const processAllPendingFilings = action(z.object({}), async ({ user }) =>
     .from(invoiceFilings)
     .where(eq(invoiceFilings.userId, targetUserId))
     .limit(20);
-  const stats = { filed: 0, rejected: 0, error: 0 };
+  const stats = { filed: 0, rejected: 0, error: 0, sales: 0 };
   for (const p of pending) {
     try {
       const r = await processInvoiceFiling(p.id);
+      // Une vente est détectée + taguée, jamais classée : on la compte à
+      // part pour ne pas la faire passer pour un échec côté UI.
+      if (r.direction === "sale") stats.sales++;
       if (r.status === "filed") stats.filed++;
       else if (r.status === "rejected") stats.rejected++;
       else stats.error++;

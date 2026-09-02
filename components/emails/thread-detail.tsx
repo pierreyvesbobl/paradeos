@@ -7,12 +7,13 @@ import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import type { EmailProposal } from "@/db/schema/gmail";
 import { emailProposals, gmailTags } from "@/db/schema/gmail";
+import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
 import { getThreadDetail, listAllTags } from "@/lib/gmail/queries";
-import { ArrowSquareOut } from "@phosphor-icons/react/dist/ssr";
+import { ArrowDownLeft, ArrowSquareOut, ArrowUpRight } from "@phosphor-icons/react/dist/ssr";
 import { asc, eq, inArray } from "drizzle-orm";
 
 import { formatPersonName } from "@/lib/format";
@@ -74,7 +75,7 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
   const messageIds = detail.messages.map((m) => m.id);
   // Étape 2 : propositions du thread + lookup du projet lié, en parallèle
   // (indépendants entre eux, tous deux dépendent seulement de `detail`).
-  const [proposalRowsRaw, linkedProjectRow] = await Promise.all([
+  const [proposalRowsRaw, linkedProjectRow, filingRows] = await Promise.all([
     messageIds.length > 0
       ? conn.select().from(emailProposals).where(inArray(emailProposals.messageId, messageIds))
       : Promise.resolve([] as (typeof emailProposals.$inferSelect)[]),
@@ -84,6 +85,24 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
           .from(projects)
           .where(eq(projects.id, projectTag.targetId))
           .limit(1)
+      : Promise.resolve([]),
+    messageIds.length > 0
+      ? conn
+          .select({
+            id: invoiceFilings.id,
+            direction: invoiceFilings.direction,
+            status: invoiceFilings.status,
+            originalFilename: invoiceFilings.originalFilename,
+            generatedFilename: invoiceFilings.generatedFilename,
+            supplierRaw: invoiceFilings.supplierRaw,
+            customerRaw: invoiceFilings.customerRaw,
+            prestationType: invoiceFilings.prestationType,
+            invoiceDate: invoiceFilings.invoiceDate,
+            driveFileId: invoiceFilings.driveFileId,
+            errorMessage: invoiceFilings.errorMessage,
+          })
+          .from(invoiceFilings)
+          .where(inArray(invoiceFilings.messageId, messageIds))
       : Promise.resolve([]),
   ]);
 
@@ -186,6 +205,8 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
         projects={projectOptions}
       />
 
+      {filingRows.length > 0 ? <InvoiceFilingsCard filings={filingRows} /> : null}
+
       <EmailProposalsPanel
         proposals={proposalRows}
         extractionMeta={lastMessage?.extractionMeta ?? null}
@@ -235,5 +256,97 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
         />
       </section>
     </div>
+  );
+}
+
+const DIRECTION_META = {
+  purchase: {
+    label: "Facture d'achat",
+    hint: "Reçue d'un fournisseur — classée dans Drive.",
+    icon: ArrowUpRight,
+    bg: "var(--ds-tint-orange-bg)",
+    fg: "var(--ds-tint-orange-text)",
+  },
+  sale: {
+    label: "Facture de vente",
+    hint: "Émise par Parade — suivie via Dougs, pas classée ici.",
+    icon: ArrowDownLeft,
+    bg: "var(--ds-tint-green-bg)",
+    fg: "var(--ds-tint-green-text)",
+  },
+} as const;
+
+type FilingRow = {
+  id: string;
+  direction: "purchase" | "sale" | "unknown";
+  status: string;
+  originalFilename: string | null;
+  generatedFilename: string | null;
+  supplierRaw: string | null;
+  customerRaw: string | null;
+  prestationType: string | null;
+  invoiceDate: string | null;
+  driveFileId: string | null;
+  errorMessage: string | null;
+};
+
+/**
+ * Ce qu'a détecté l'agent facture sur les PJ du thread. Les PJ encore
+ * `unknown` (en attente de traitement, ou écartées comme non-factures)
+ * sont listées sans badge de sens plutôt que masquées — sinon on ne
+ * comprend pas pourquoi une facture visible n'est pas taguée.
+ */
+function InvoiceFilingsCard({ filings }: { filings: FilingRow[] }) {
+  return (
+    <section
+      className="space-y-2 rounded-xl border bg-card p-4"
+      style={{ borderColor: "var(--ds-border)" }}
+    >
+      <h3 className="font-semibold text-[14px]">Factures détectées</h3>
+      <ul className="space-y-2">
+        {filings.map((f) => {
+          const meta = f.direction === "unknown" ? null : DIRECTION_META[f.direction];
+          const Icon = meta?.icon;
+          const counterparty = f.direction === "sale" ? f.customerRaw : f.supplierRaw;
+          return (
+            <li key={f.id} className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                {meta && Icon ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-[11px]"
+                    style={{ background: meta.bg, color: meta.fg }}
+                  >
+                    <Icon size={11} weight="bold" />
+                    {meta.label}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-[var(--ds-text-tertiary)]">Non classée</span>
+                )}
+                <span className="min-w-0 truncate text-[12px] text-[var(--ds-text-muted)]">
+                  {f.generatedFilename ?? f.originalFilename ?? "(sans nom)"}
+                </span>
+                {f.driveFileId ? (
+                  <a
+                    href={`https://drive.google.com/file/d/${f.driveFileId}/view`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-[var(--ds-text-tertiary)] hover:underline"
+                  >
+                    Drive
+                    <ArrowSquareOut size={10} weight="bold" />
+                  </a>
+                ) : null}
+              </div>
+              <p className="text-[11px] text-[var(--ds-text-tertiary)]">
+                {counterparty ? <span>{counterparty}</span> : null}
+                {f.prestationType ? ` · ${f.prestationType}` : ""}
+                {f.invoiceDate ? ` · ${f.invoiceDate}` : ""}
+                {meta ? ` — ${meta.hint}` : f.errorMessage ? ` — ${f.errorMessage}` : ""}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

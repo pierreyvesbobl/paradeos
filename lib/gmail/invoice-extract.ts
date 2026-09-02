@@ -9,17 +9,35 @@ import { z } from "zod";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 /**
- * Schéma d'extraction métadonnées de facture fournisseur. Tous champs
- * nullable — le LLM peut ne pas trouver l'info (cas litigieux : la
- * proposition est marquée error et reste manuelle).
+ * Schéma d'extraction métadonnées de facture. Tous champs nullable — le
+ * LLM peut ne pas trouver l'info (cas litigieux : la PJ est marquée
+ * `rejected` et reste à traiter manuellement).
+ *
+ * `documentKind` porte la distinction achat/vente : une facture émise par
+ * Parade et reçue en copie n'est pas une non-facture, c'est une facture de
+ * VENTE — on la détecte et on la tague sans la classer dans Drive.
  */
 const invoiceSchema = z.object({
-  /** Est-ce VRAIMENT une facture fournisseur reçue (pas devis, RIB, reçu CB) ? */
-  isInvoice: z.boolean(),
+  /**
+   * Nature du document :
+   *   - `purchase_invoice` : facture d'ACHAT reçue d'un fournisseur.
+   *   - `sales_invoice`    : facture de VENTE émise par Parade (reçue en
+   *     copie : BCC compta, renvoi client, notification Dougs).
+   *   - `other`            : devis, RIB, reçu CB, contrat, relance seule…
+   */
+  documentKind: z.enum(["purchase_invoice", "sales_invoice", "other"]),
   /** Date d'émission de la facture (YYYY-MM-DD). */
   invoiceDate: z.string().nullable(),
-  /** Nom complet du fournisseur tel qu'il apparaît sur la facture. */
+  /**
+   * Nom de l'ÉMETTEUR de la facture (celui qui vend, qui sera payé).
+   * Côté achat c'est le fournisseur ; côté vente c'est Parade.
+   */
   supplierName: z.string().nullable(),
+  /**
+   * Nom du DESTINATAIRE de la facture (celui qui achète, qui paie).
+   * Côté vente c'est le client ; côté achat c'est Parade.
+   */
+  customerName: z.string().nullable(),
   /**
    * Description courte des prestations facturées en français
    * (CamelCase sans espaces, sans accents). Ex. "LoyerBureau",
@@ -32,11 +50,19 @@ const invoiceSchema = z.object({
 
 export type InvoiceMetadata = z.infer<typeof invoiceSchema>;
 
+/** Sens de la facture du point de vue de Parade. */
+export type InvoiceDirection = "purchase" | "sale" | "unknown";
+
+export function directionFromDocumentKind(kind: InvoiceMetadata["documentKind"]): InvoiceDirection {
+  if (kind === "purchase_invoice") return "purchase";
+  if (kind === "sales_invoice") return "sale";
+  return "unknown";
+}
+
 const SYSTEM_PROMPT = `Tu reçois le contenu (texte) d'une pièce jointe extraite d'un email,
-plus le sujet/expéditeur du mail. Tu dois déterminer si c'est une
-**facture fournisseur reçue** par l'entreprise Parade (SAS de coworking
-et conseil, basée à Paris), et si oui en extraire les métadonnées pour
-la classer.
+plus le sujet/expéditeur du mail. Tu dois déterminer la nature du document du
+point de vue de l'entreprise Parade (SAS de coworking et conseil, basée à
+Paris), et si c'est une facture, en extraire les métadonnées.
 
 ═══ RAISONNEMENT OBLIGATOIRE — 2 étapes avant de décider ═══
 
@@ -52,19 +78,22 @@ la classer.
     - avec adresse de facturation
     - sans coordonnées bancaires
 
-═══ CLASSIFICATION ═══
+Remplis TOUJOURS supplierName (= émetteur) et customerName (= destinataire)
+dès qu'il s'agit d'une facture, quel que soit le sens.
 
-CAS A — facture FOURNISSEUR (à classer) :
+═══ CLASSIFICATION (documentKind) ═══
+
+CAS A — documentKind = "purchase_invoice" : facture d'ACHAT.
   Émetteur = un tiers (fournisseur), Destinataire = Parade.
-  → isInvoice=true, remplis les champs.
+  C'est une dépense de Parade. → à classer dans Drive.
 
-CAS B — facture CLIENT (à REJETER) ⚠️ :
+CAS B — documentKind = "sales_invoice" : facture de VENTE ⚠️.
   Émetteur = Parade (SAS Parade / Parade SAS / PARADE, avec son SIREN
   ou son RIB), Destinataire = un tiers client.
   Ces factures arrivent en copie côté Gmail (BCC comptable, renvoi du
-  client, notification Dougs) mais ne sont PAS à classer ici : elles
-  sont déjà gérées via le rapprochement Dougs.
-  → isInvoice=false, TOUS les autres champs à null.
+  client, notification Dougs). Elles ne sont PAS classées ici (elles sont
+  gérées via le rapprochement Dougs) mais elles DOIVENT être identifiées
+  comme telles — surtout pas confondues avec un document non-facture.
 
   Indices que Parade est l'émetteur (au moindre doute → CAS B) :
   - "Parade", "Parade SAS", "PARADE" apparaît en position d'émetteur
@@ -74,24 +103,28 @@ CAS B — facture CLIENT (à REJETER) ⚠️ :
     Parade (souvent "F-YYYY-…" ou similaire).
   - L'email vient d'une adresse Parade / d'une notification Dougs.
 
-CAS C — pas une facture du tout :
+CAS C — documentKind = "other" : pas une facture du tout.
   - un devis / une proposition commerciale
   - un reçu de paiement carte / ticket restaurant
   - un RIB / IBAN seul
   - un contrat / CGV
   - un bon de commande
   - une relance / rappel de paiement seul, sans facture attachée
-  → isInvoice=false, autres champs null.
+  → tous les autres champs à null.
 
-═══ RÈGLES D'EXTRACTION (uniquement pour CAS A) ═══
+Un AVOIR (note de crédit) suit le même axe que la facture qu'il annule :
+avoir reçu d'un fournisseur → "purchase_invoice" ; avoir émis par Parade
+pour un client → "sales_invoice".
+
+═══ RÈGLES D'EXTRACTION (CAS A et CAS B) ═══
 
 - invoiceDate : la date d'émission de la facture (et NON la date du
   virement, de la commande, ou la due date). Format YYYY-MM-DD.
-- supplierName : le nom du FOURNISSEUR (= émetteur de la facture, celui
-  qui sera payé). Pas le client (= Parade). En général c'est en haut de
-  la facture avec l'adresse et le SIREN. Ne mets JAMAIS "Parade" ici —
-  si le seul candidat émetteur commence par "Parade", c'est le CAS B
-  → isInvoice=false.
+- supplierName : le nom de l'ÉMETTEUR (celui qui sera payé). En général en
+  haut de la facture avec l'adresse et le SIREN. Si c'est "Parade", alors
+  documentKind DOIT être "sales_invoice".
+- customerName : le nom du DESTINATAIRE (celui qui paie). Si c'est
+  "Parade", alors documentKind DOIT être "purchase_invoice".
 - prestationType : 1-4 mots concaténés en CamelCase pour décrire ce qui
   est facturé. Pas d'accents, pas de caractères spéciaux. Ex.
   "LoyerBureau", "AbonnementSlack", "PrestationConseilIA",

@@ -18,6 +18,16 @@ const STATUS_LABEL: Record<string, string> = {
   error: "Erreur",
 };
 
+const DIRECTION_LABEL: Record<string, string> = {
+  purchase: "Achat",
+  sale: "Vente",
+};
+
+const DIRECTION_TONE: Record<string, string> = {
+  purchase: "border-orange-300 bg-orange-50 text-orange-800",
+  sale: "border-emerald-300 bg-emerald-50 text-emerald-800",
+};
+
 const STATUS_TONE: Record<string, string> = {
   pending: "border-amber-300 bg-amber-50 text-amber-800",
   filed: "border-emerald-300 bg-emerald-50 text-emerald-800",
@@ -33,10 +43,12 @@ export async function FacturesView() {
     .select({
       id: invoiceFilings.id,
       status: invoiceFilings.status,
+      direction: invoiceFilings.direction,
       originalFilename: invoiceFilings.originalFilename,
       generatedFilename: invoiceFilings.generatedFilename,
       supplierRaw: invoiceFilings.supplierRaw,
       supplierSanitized: invoiceFilings.supplierSanitized,
+      customerRaw: invoiceFilings.customerRaw,
       prestationType: invoiceFilings.prestationType,
       invoiceDate: invoiceFilings.invoiceDate,
       confidence: invoiceFilings.confidence,
@@ -57,8 +69,10 @@ export async function FacturesView() {
   return (
     <div className="space-y-4">
       <p className="text-muted-foreground text-sm">
-        L'agent IA détecte les factures PDF reçues par mail, extrait date / fournisseur / prestation
-        et les range automatiquement dans Drive (Parade/YYYY/Fournisseur/AAMMJJ_facture_*.pdf).
+        L'agent IA détecte les factures PDF reçues par mail et distingue les <strong>achats</strong>{" "}
+        (fournisseurs) des <strong>ventes</strong> (émises par Parade). Les achats sont rangés dans
+        Drive (Parade/YYYY/Fournisseur/AAMMJJ_facture_*.pdf) ; les ventes sont seulement taguées
+        dans la boîte mail — elles restent suivies via Dougs.
       </p>
 
       {rows.length === 0 ? (
@@ -87,12 +101,19 @@ export async function FacturesView() {
                     {r.createdAt ? ` · ${formatDate(r.createdAt.toISOString())}` : ""}
                   </p>
                 </div>
-                <Badge
-                  variant="outline"
-                  className={`shrink-0 text-[10px] ${STATUS_TONE[r.status]}`}
-                >
-                  {STATUS_LABEL[r.status] ?? r.status}
-                </Badge>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {r.direction !== "unknown" ? (
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] ${DIRECTION_TONE[r.direction]}`}
+                    >
+                      {DIRECTION_LABEL[r.direction] ?? r.direction}
+                    </Badge>
+                  ) : null}
+                  <Badge variant="outline" className={`text-[10px] ${STATUS_TONE[r.status]}`}>
+                    {STATUS_LABEL[r.status] ?? r.status}
+                  </Badge>
+                </div>
               </header>
 
               {r.status === "filed" && r.driveFileId ? (
@@ -106,10 +127,14 @@ export async function FacturesView() {
                 </a>
               ) : null}
 
-              {r.status === "filed" ? (
+              {r.status === "filed" || r.direction === "sale" ? (
                 <p className="text-[11px] text-muted-foreground">
                   <span className="text-foreground/80">
-                    <DemoBlur>{r.supplierSanitized ?? r.supplierRaw}</DemoBlur>
+                    <DemoBlur>
+                      {r.direction === "sale"
+                        ? (r.customerRaw ?? "client inconnu")
+                        : (r.supplierSanitized ?? r.supplierRaw)}
+                    </DemoBlur>
                   </span>
                   {" · "}
                   {r.prestationType ?? "—"}
@@ -120,13 +145,14 @@ export async function FacturesView() {
                 </p>
               ) : null}
 
-              {r.status !== "filed" && r.errorMessage ? (
+              {r.status !== "filed" && r.direction !== "sale" && r.errorMessage ? (
                 <p className="text-[11px] text-amber-700 dark:text-amber-400">
                   <span className="font-medium">Raison :</span> {r.errorMessage}
                 </p>
               ) : null}
 
-              {r.status === "error" || r.status === "rejected" || r.status === "pending" ? (
+              {r.direction !== "sale" &&
+              (r.status === "error" || r.status === "rejected" || r.status === "pending") ? (
                 <FilingActions filingId={r.id} status={r.status} />
               ) : null}
             </li>

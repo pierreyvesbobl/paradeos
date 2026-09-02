@@ -1,5 +1,8 @@
 import { formatDate } from "@/lib/format";
+import type { InvoiceDirectionFilter } from "@/lib/gmail/queries";
 import {
+  ArrowDownLeft,
+  ArrowUpRight,
   Briefcase,
   MagnifyingGlass,
   Receipt,
@@ -22,6 +25,37 @@ export type EmailListRow = {
 
 export type Bucket = "important" | "invoices" | "noise" | "all";
 
+/**
+ * Sous-filtre du bucket "Facturation". `all` = pas de filtre (inclut les
+ * mails compta sans PJ classifiée).
+ */
+export type InvoiceDir = InvoiceDirectionFilter | "all";
+
+/**
+ * Achat = dépense (facture reçue d'un fournisseur), vente = recette
+ * (facture émise par Parade, reçue en copie). Les deux flèches donnent le
+ * sens de l'argent sans avoir à lire le label.
+ */
+const DIRECTION_META: Record<
+  InvoiceDirectionFilter,
+  { label: string; icon: typeof ArrowDownLeft; bg: string; fg: string }
+> = {
+  purchase: {
+    label: "Achat",
+    icon: ArrowUpRight,
+    bg: "var(--ds-tint-orange-bg)",
+    fg: "var(--ds-tint-orange-text)",
+  },
+  sale: {
+    label: "Vente",
+    icon: ArrowDownLeft,
+    bg: "var(--ds-tint-green-bg)",
+    fg: "var(--ds-tint-green-text)",
+  },
+};
+
+const DIRECTION_ORDER: InvoiceDir[] = ["all", "purchase", "sale"];
+
 const BUCKET_META: Record<Bucket, { label: string; icon: typeof Sparkle; description: string }> = {
   important: { label: "À traiter", icon: Sparkle, description: "" },
   all: { label: "Tous", icon: Tray, description: "" },
@@ -33,12 +67,18 @@ const BUCKET_ORDER: Bucket[] = ["important", "all", "invoices", "noise"];
 
 type BucketCounts = { important: number; invoices: number; noise: number; total: number };
 
+type DirectionCounts = { purchase: number; sale: number; unclassified: number };
+
 type Props = {
   threads: EmailListRow[];
   counts: BucketCounts;
+  directionCounts: DirectionCounts;
   activeBucket: Bucket;
+  activeDirection: InvoiceDir;
   activeThreadId: string | null;
   projectsByThread: Map<string, Array<{ id: string; name: string }>>;
+  /** threadId → sens des factures détectées (peut porter les deux). */
+  invoiceDirectionsByThread: Map<string, InvoiceDirectionFilter[]>;
   query: string;
 };
 
@@ -71,6 +111,7 @@ function initialsFor(raw: unknown): Array<{ label: string; tint: string }> {
   });
 }
 
+/** Changer de bucket réinitialise le sous-filtre facture. */
 function bucketHref(next: Bucket, q: string): string {
   const sp = new URLSearchParams();
   if (q) sp.set("q", q);
@@ -79,20 +120,37 @@ function bucketHref(next: Bucket, q: string): string {
   return `/emails${qs ? `?${qs}` : ""}`;
 }
 
-function threadHref(threadId: string, activeBucket: Bucket, q: string): string {
+function directionHref(next: InvoiceDir, q: string): string {
+  const sp = new URLSearchParams();
+  if (q) sp.set("q", q);
+  sp.set("bucket", "invoices");
+  if (next !== "all") sp.set("dir", next);
+  return `/emails?${sp.toString()}`;
+}
+
+function threadHref(
+  threadId: string,
+  activeBucket: Bucket,
+  activeDirection: InvoiceDir,
+  q: string,
+): string {
   const sp = new URLSearchParams();
   sp.set("thread", threadId);
   if (q) sp.set("q", q);
   if (activeBucket !== "important") sp.set("bucket", activeBucket);
+  if (activeDirection !== "all") sp.set("dir", activeDirection);
   return `/emails?${sp.toString()}`;
 }
 
 export function EmailsListPane({
   threads,
   counts,
+  directionCounts,
   activeBucket,
+  activeDirection,
   activeThreadId,
   projectsByThread,
+  invoiceDirectionsByThread,
   query,
 }: Props) {
   return (
@@ -186,6 +244,52 @@ export function EmailsListPane({
           })}
         </div>
 
+        {activeBucket === "invoices" ? (
+          <div className="flex flex-wrap items-center gap-[6px]">
+            {DIRECTION_ORDER.map((d) => {
+              const isActive = activeDirection === d;
+              const meta = d === "all" ? null : DIRECTION_META[d];
+              const Icon = meta?.icon ?? Receipt;
+              const count =
+                d === "all"
+                  ? counts.invoices
+                  : d === "purchase"
+                    ? directionCounts.purchase
+                    : directionCounts.sale;
+              return (
+                <Link
+                  key={d}
+                  href={directionHref(d, query)}
+                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-[3px] font-medium text-[11.5px]"
+                  style={
+                    isActive
+                      ? {
+                          background: meta?.bg ?? "var(--ds-bg-hover)",
+                          color: meta?.fg ?? "var(--ds-text)",
+                          boxShadow: "inset 0 0 0 1px currentColor",
+                        }
+                      : {
+                          background: "transparent",
+                          color: "var(--ds-text-tertiary)",
+                          boxShadow: "inset 0 0 0 1px var(--ds-border)",
+                        }
+                  }
+                >
+                  <Icon size={11} weight="bold" />
+                  <span>{meta?.label ?? "Toutes"}</span>
+                  <span className="font-semibold opacity-70">{count}</span>
+                </Link>
+              );
+            })}
+            {directionCounts.unclassified > 0 ? (
+              <span className="text-[10.5px] text-[var(--ds-text-tertiary)]">
+                {directionCounts.unclassified} non classée
+                {directionCounts.unclassified > 1 ? "s" : ""}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
         <form method="GET" action="/emails" className="relative">
           <MagnifyingGlass
             size={13}
@@ -206,6 +310,9 @@ export function EmailsListPane({
           {activeBucket !== "important" ? (
             <input type="hidden" name="bucket" value={activeBucket} />
           ) : null}
+          {activeDirection !== "all" ? (
+            <input type="hidden" name="dir" value={activeDirection} />
+          ) : null}
         </form>
       </header>
 
@@ -218,6 +325,7 @@ export function EmailsListPane({
         {threads.map((t) => {
           const isActive = t.id === activeThreadId;
           const projects = projectsByThread.get(t.id) ?? [];
+          const directions = invoiceDirectionsByThread.get(t.id) ?? [];
           const initials = initialsFor(t.participants);
           const preview = participantsPreview(t.participants);
           const accent = isActive
@@ -236,7 +344,7 @@ export function EmailsListPane({
                 style={{ background: accent }}
               />
               <Link
-                href={threadHref(t.id, activeBucket, query)}
+                href={threadHref(t.id, activeBucket, activeDirection, query)}
                 className="block py-[13px] pr-4 pl-[19px] transition-colors"
                 style={{
                   background: isActive ? "var(--ds-bg-hover)" : "transparent",
@@ -292,8 +400,22 @@ export function EmailsListPane({
                     {t.snippet ? <span className="ml-1.5">— {t.snippet}</span> : null}
                   </p>
                 </div>
-                {projects.length > 0 || t.messageCount > 1 ? (
+                {projects.length > 0 || directions.length > 0 || t.messageCount > 1 ? (
                   <div className="mt-1.5 flex items-center gap-1.5">
+                    {directions.map((d) => {
+                      const meta = DIRECTION_META[d];
+                      const DirIcon = meta.icon;
+                      return (
+                        <span
+                          key={d}
+                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-[10.5px]"
+                          style={{ background: meta.bg, color: meta.fg }}
+                        >
+                          <DirIcon size={10} weight="bold" />
+                          <span>{meta.label}</span>
+                        </span>
+                      );
+                    })}
                     {projects.map((p) => (
                       <span
                         key={p.id}

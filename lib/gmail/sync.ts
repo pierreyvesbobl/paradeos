@@ -45,6 +45,17 @@ const MAX_EXTRACTIONS_PER_RUN = 10;
 /** Cap classement de factures par run (chaque appel = download PJ + LLM + upload ~10s). */
 const MAX_INVOICE_FILINGS_PER_RUN = 5;
 
+/**
+ * Un mail dont le sujet parle de facturation mérite qu'on télécharge son
+ * contenu même sans match CRM : la plupart des factures d'achat viennent
+ * de fournisseurs (EDF, OVH, SaaS…) qui ne sont pas des contacts du CRM,
+ * et sans le `format=full` on n'a pas les références de PJ.
+ *
+ * Volontairement restrictif — le mot doit ressembler à du vocabulaire de
+ * facturation, pas au "bien reçu" d'une conversation ordinaire.
+ */
+const INVOICE_SUBJECT_RE = /(factur|invoice|billing|quittance|note de d[ée]bit)/i;
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -65,8 +76,12 @@ export type GmailSyncResult = {
   extractionsSkipped: number;
   /** Total des propositions créées (toutes extractions confondues). */
   proposalsCreated: number;
+  /** Messages ingérés pour leurs PJ sur le seul signal "sujet facturation". */
+  invoiceCandidatesIngested: number;
   /** Factures PDF classées avec succès sur ce run. */
   invoicesFiled: number;
+  /** Factures de VENTE détectées et taguées (non classées — cf. Dougs). */
+  invoiceSalesDetected: number;
   /** Factures écartées (non-facture, champs manquants, confidence faible…). */
   invoicesRejected: number;
   /** Erreurs techniques pendant le classement (download/upload/LLM). */
@@ -121,6 +136,11 @@ function messageMatchesCrm(
     if (dom && matchers.domains.has(dom)) return true;
   }
   return false;
+}
+
+/** Sujet évocateur de facturation — cf. `INVOICE_SUBJECT_RE`. */
+function messageLooksLikeInvoice(message: GmailMessage): boolean {
+  return INVOICE_SUBJECT_RE.test(getHeader(message.payload, "Subject") ?? "");
 }
 
 /**
@@ -287,7 +307,9 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
     extractionsDone: 0,
     extractionsSkipped: 0,
     proposalsCreated: 0,
+    invoiceCandidatesIngested: 0,
     invoicesFiled: 0,
+    invoiceSalesDetected: 0,
     invoicesRejected: 0,
     invoicesErrored: 0,
     errors: [],
@@ -418,15 +440,22 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
         continue;
       }
       const matched = messageMatchesCrm(meta, matchers);
+      // Sans match CRM, un sujet de facturation suffit à déclencher le
+      // `format=full` : c'est le seul moyen de voir les PJ, et donc de
+      // détecter les factures d'achat de fournisseurs inconnus du CRM.
+      // On ne met PAS ces messages en `pending` pour autant — pas
+      // d'extraction LLM email, seulement le pipeline facture.
+      const invoiceCandidate = !matched && messageLooksLikeInvoice(meta);
 
       let body: { text: string | null; html: string | null } | null = null;
       let extractionStatus: "skipped" | "pending" = "skipped";
-      if (matched) {
+      if (matched || invoiceCandidate) {
         await sleep(SLEEP_MS_BETWEEN_CALLS);
         const full = await getMessage(accessToken, m.id, "full");
         body = extractBodies(full.payload);
-        extractionStatus = "pending";
+        extractionStatus = matched ? "pending" : "skipped";
         result.bodiesFetched++;
+        if (invoiceCandidate) result.invoiceCandidatesIngested++;
         // On utilise les headers du full (plus complets).
         const { threadIdLocal, messageIdLocal } = await upsertThreadAndMessage(
           userId,
@@ -564,6 +593,7 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
     for (const pf of pendingFilings) {
       try {
         const r = await processInvoiceFiling(pf.id);
+        if (r.direction === "sale") result.invoiceSalesDetected++;
         if (r.status === "filed") result.invoicesFiled++;
         else if (r.status === "rejected") result.invoicesRejected++;
         else result.invoicesErrored++;

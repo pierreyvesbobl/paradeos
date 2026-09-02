@@ -186,6 +186,53 @@ export async function createCategoryTag(args: {
   return inserted;
 }
 
+// ─── Catégories système : direction des factures ───────────────────────
+
+/**
+ * Catégories posées automatiquement par le détecteur de factures pour
+ * distinguer les achats des ventes. Ce sont des tags `category`
+ * ordinaires — visibles et éditables depuis /emails/tags, miroir d'un
+ * label Gmail `Paradeos/…` comme les autres. La seule différence est que
+ * Paradeos les crée à la demande au lieu d'attendre l'utilisateur.
+ */
+export const INVOICE_DIRECTION_CATEGORY = {
+  purchase: "Facture achat",
+  sale: "Facture vente",
+} as const;
+
+export type InvoiceTagDirection = keyof typeof INVOICE_DIRECTION_CATEGORY;
+
+export function invoiceDirectionLabelName(direction: InvoiceTagDirection): string {
+  return buildLabelName("category", INVOICE_DIRECTION_CATEGORY[direction]);
+}
+
+/**
+ * Tague un thread comme portant une facture d'achat / de vente, et
+ * pousse le label correspondant dans Gmail. Idempotent (get-or-create du
+ * tag + insert onConflictDoNothing côté association).
+ *
+ * On ne retire jamais le tag opposé : un même thread peut légitimement
+ * porter les deux (ex. un mail comptable avec une facture fournisseur et
+ * une facture client en PJ).
+ */
+export async function tagThreadWithInvoiceDirection(args: {
+  userId: string;
+  threadIdLocal: string;
+  direction: InvoiceTagDirection;
+}): Promise<{ tagId: string; labelName: string }> {
+  const tag = await createCategoryTag({
+    userId: args.userId,
+    name: INVOICE_DIRECTION_CATEGORY[args.direction],
+  });
+  await applyTagToThread({
+    userId: args.userId,
+    threadIdLocal: args.threadIdLocal,
+    tagId: tag.id,
+    source: "auto",
+  });
+  return { tagId: tag.id, labelName: tag.labelName };
+}
+
 /**
  * Pousse la création du label côté Gmail si pas encore fait, et met à
  * jour `gmail_label_id` en base. Idempotent.
