@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signInWithPassword, signUpWithPassword } from "@/lib/actions/auth";
+import type { Route } from "next";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -13,6 +14,12 @@ type Mode = "signin" | "signup";
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // `next` porte la destination d'origine (ex. l'écran de consentement
+  // OAuth avec ses paramètres). On ne suit qu'un chemin relatif à cette
+  // origine — "//autre-site" serait une redirection ouverte.
+  const rawNext = searchParams.get("next");
+  const next = rawNext?.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,7 +38,7 @@ export function LoginForm() {
         return;
       }
       toast.success(mode === "signin" ? "Connecté." : "Compte créé.");
-      router.push("/");
+      router.push(next as Route);
       router.refresh();
     });
   }

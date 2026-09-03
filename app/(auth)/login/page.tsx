@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { LoginForm } from "./login-form";
 
 export default function LoginPage() {
@@ -12,7 +13,11 @@ export default function LoginPage() {
           <h1 className="font-semibold text-2xl tracking-tight">Connexion</h1>
           <p className="text-muted-foreground text-sm">Reçois un lien magique par e-mail.</p>
         </div>
-        <LoginForm />
+        {/* `LoginForm` lit `?next=` via useSearchParams — sans Suspense,
+            Next refuse de prérendre la page statiquement. */}
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
       </div>
     </main>
   );

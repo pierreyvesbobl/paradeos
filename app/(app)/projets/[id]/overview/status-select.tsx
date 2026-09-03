@@ -82,7 +82,10 @@ export function ProjectStatusSelect({
             "inline-flex items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-60",
             appearance === "pill"
               ? cn("px-2.5 py-1.5 font-medium text-[13px]", tone.bg, tone.text)
-              : cn("-mx-1.5 px-1.5 py-0.5 font-medium text-[14px] hover:bg-foreground/5", tone.text),
+              : cn(
+                  "-mx-1.5 px-1.5 py-0.5 font-medium text-[14px] hover:bg-foreground/5",
+                  tone.text,
+                ),
             className,
           )}
         >
