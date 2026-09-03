@@ -3,11 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { patchProject } from "@/lib/actions/projects";
-import {
-  COMMERCIAL_STATUSES,
-  type ProjectStatus,
-  projectStatusLabels,
-} from "@/lib/schemas/projects";
+import { COMMERCIAL_STATUSES, type ProjectStatus } from "@/lib/schemas/projects";
 import { ArrowLeft, ArrowRight, Trophy, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -123,9 +119,6 @@ export function ProjectTransitionButtons({ projectId, status }: Props) {
 
   return (
     <div className="space-y-2">
-      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">
-        Statut : {projectStatusLabels[status]}
-      </p>
       <div className="flex flex-wrap gap-2">
         {transitions.map((t) => (
           <Button

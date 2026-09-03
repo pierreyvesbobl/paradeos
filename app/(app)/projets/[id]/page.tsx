@@ -5,6 +5,7 @@ import { FactsBand } from "@/app/(app)/projets/[id]/overview/facts-band";
 import { RecentExchangesCard } from "@/app/(app)/projets/[id]/overview/recent-exchanges-card";
 import { StakeholdersCard } from "@/app/(app)/projets/[id]/overview/stakeholders-card";
 import { StatusBanner } from "@/app/(app)/projets/[id]/overview/status-banner";
+import { ProjectStatusSelect } from "@/app/(app)/projets/[id]/overview/status-select";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { DriveFolderSection } from "@/components/drive/drive-folder-section";
@@ -521,6 +522,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         }
         actions={
           <>
+            <ProjectStatusSelect projectId={id} status={project.status} appearance="pill" />
             <Button variant="outline" size="sm" asChild>
               <Link href={`/taches/gantt?project=${id}`}>Gantt</Link>
             </Button>

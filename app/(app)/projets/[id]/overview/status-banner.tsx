@@ -1,6 +1,7 @@
 import { statusTone } from "@/app/(app)/projets/[id]/overview/status-pill";
+import { ProjectStatusSelect } from "@/app/(app)/projets/[id]/overview/status-select";
 import { ProjectTransitionButtons } from "@/app/(app)/projets/[id]/transition-button";
-import { type ProjectStatus, projectStatusLabels } from "@/lib/schemas/projects";
+import type { ProjectStatus } from "@/lib/schemas/projects";
 import { FlowArrow, PlayCircle } from "@phosphor-icons/react/dist/ssr";
 
 const DESCRIPTION: Partial<Record<ProjectStatus, string>> = {
@@ -18,8 +19,9 @@ const DESCRIPTION: Partial<Record<ProjectStatus, string>> = {
 
 /**
  * Bannière « Statut » de la Vue d'ensemble. Fond tinté selon le statut,
- * icône duotone, label, description discrète et actions de transition
- * (Repasser au pipeline, Démarrer la delivery, etc.) alignées à droite.
+ * icône duotone, label cliquable (n'importe quel statut), description
+ * discrète et raccourcis de transition (Repasser au pipeline, Démarrer la
+ * delivery, etc.) alignés à droite.
  */
 export function StatusBanner({
   projectId,
@@ -42,9 +44,7 @@ export function StatusBanner({
         style={{ borderColor: "var(--ds-border)" }}
       >
         <PlayCircle size={20} weight="duotone" className={tone.text} />
-        <span className={`font-medium text-[14px] ${tone.text}`}>
-          {projectStatusLabels[status]}
-        </span>
+        <ProjectStatusSelect projectId={projectId} status={status} />
         <span className="truncate text-[12px] text-muted-foreground">{description}</span>
         <span className="ml-auto">
           <ProjectTransitionButtons projectId={projectId} status={status} />
