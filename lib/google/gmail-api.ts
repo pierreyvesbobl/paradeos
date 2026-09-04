@@ -56,6 +56,31 @@ export async function listMessages(
   );
 }
 
+export type GmailListThreadsResponse = {
+  threads?: Array<{ id: string; snippet?: string; historyId?: string }>;
+  nextPageToken?: string;
+  resultSizeEstimate?: number;
+};
+
+/**
+ * Liste les threads portant un label donné. Sert au rapatriement des
+ * mails rangés à la main dans Gmail : contrairement à `history.list`, ça
+ * voit les threads dormants, quel que soit leur âge.
+ */
+export async function listThreadsByLabel(
+  accessToken: string,
+  labelId: string,
+  opts: { pageToken?: string; maxResults?: number } = {},
+): Promise<GmailListThreadsResponse> {
+  const params = new URLSearchParams({ labelIds: labelId });
+  if (opts.pageToken) params.set("pageToken", opts.pageToken);
+  params.set("maxResults", String(opts.maxResults ?? 100));
+  return gmailFetch<GmailListThreadsResponse>(
+    `/users/me/threads?${params.toString()}`,
+    accessToken,
+  );
+}
+
 // ─── messages.get ───────────────────────────────────────────────────────
 
 export type GmailHeader = { name: string; value: string };

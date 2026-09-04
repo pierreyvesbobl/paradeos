@@ -4,11 +4,11 @@ import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
-import { emailProposals, gmailMessages, gmailTags, gmailThreads } from "@/db/schema/gmail";
+import { emailProposals, gmailMessages, gmailThreads } from "@/db/schema/gmail";
 import { projects } from "@/db/schema/projects";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { Inbox } from "lucide-react";
 
 import { formatPersonName } from "@/lib/format";
@@ -35,20 +35,26 @@ export default async function EmailPropositionsPage() {
     .from(emailProposals)
     .innerJoin(gmailMessages, eq(gmailMessages.id, emailProposals.messageId))
     .innerJoin(gmailThreads, eq(gmailThreads.id, gmailMessages.threadId))
-    .where(and(eq(gmailMessages.userId, user.id), eq(emailProposals.status, "pending")))
+    // `category_tag` : kind historique, sans surface depuis la
+    // suppression de la taxonomie libre — on ne l'affiche plus.
+    .where(
+      and(
+        eq(gmailMessages.userId, user.id),
+        eq(emailProposals.status, "pending"),
+        ne(emailProposals.kind, "category_tag"),
+      ),
+    )
     .orderBy(desc(emailProposals.createdAt));
 
-  // Résout les noms des projets / catégories / contacts / entités matchés
-  // pour affichage. On bucket par kind (matchedId pointe sur des tables
+  // Résout les noms des projets / contacts / entités matchés pour
+  // affichage. On bucket par kind (matchedId pointe sur des tables
   // différentes selon le kind, donc pas de jointure polymorphique).
   const projectIds = new Set<string>();
-  const tagIds = new Set<string>();
   const contactIds = new Set<string>();
   const entityIds = new Set<string>();
   for (const r of rows) {
     if (r.matchedId) {
       if (r.kind === "project_link" || r.kind === "project") projectIds.add(r.matchedId);
-      else if (r.kind === "category_tag") tagIds.add(r.matchedId);
       else if (r.kind === "contact") contactIds.add(r.matchedId);
       else if (r.kind === "entity") entityIds.add(r.matchedId);
     }
@@ -58,18 +64,12 @@ export default async function EmailPropositionsPage() {
     }
   }
 
-  const [projectNamesById, tagNamesById, contactNamesById, entityNamesById] = await Promise.all([
+  const [projectNamesById, contactNamesById, entityNamesById] = await Promise.all([
     projectIds.size > 0
       ? conn
           .select({ id: projects.id, name: projects.name })
           .from(projects)
           .where(inArray(projects.id, [...projectIds]))
-      : Promise.resolve([]),
-    tagIds.size > 0
-      ? conn
-          .select({ id: gmailTags.id, labelName: gmailTags.labelName })
-          .from(gmailTags)
-          .where(inArray(gmailTags.id, [...tagIds]))
       : Promise.resolve([]),
     contactIds.size > 0
       ? conn
@@ -90,7 +90,6 @@ export default async function EmailPropositionsPage() {
   ]);
 
   const projectNameMap = new Map(projectNamesById.map((p) => [p.id, p.name]));
-  const tagLabelMap = new Map(tagNamesById.map((t) => [t.id, t.labelName]));
   const contactNameMap = new Map(
     contactNamesById.map((c) => [c.id, formatPersonName(c.firstName, c.lastName)]),
   );
@@ -111,7 +110,7 @@ export default async function EmailPropositionsPage() {
           <Breadcrumbs items={[{ label: "Emails", href: "/emails" }, { label: "Propositions" }]} />
         }
         title="Propositions LLM"
-        description="Tâches et catégories à valider, extraites par le LLM depuis les emails matchés CRM. Les liens projet inférés s'appliquent automatiquement (pas de validation requise)."
+        description="Décisions à prendre sur les emails matchés CRM : tâches à créer, rattachements à confirmer. Un rattachement non ambigu s'applique tout seul ; le refus d'un rattachement, lui, est mémorisé."
       />
 
       {rows.length === 0 ? (
@@ -136,7 +135,8 @@ export default async function EmailPropositionsPage() {
                     threadId: first.threadId,
                     gmailThreadId: first.threadGmailId,
                   }}
-                  proposals={proposals.map((p) => {
+                  proposals={proposals.flatMap((p) => {
+                    if (p.kind === "category_tag") return [];
                     const pl = p.payload as Record<string, unknown>;
                     const taskProjectId = (pl.projectId as string | null) ?? null;
                     const projectName =
@@ -145,26 +145,24 @@ export default async function EmailPropositionsPage() {
                         : (p.kind === "project_link" || p.kind === "project") && p.matchedId
                           ? (projectNameMap.get(p.matchedId) ?? null)
                           : null;
-                    return {
-                      id: p.id,
-                      kind: p.kind,
-                      payload: pl,
-                      matchedId: p.matchedId,
-                      matchConfidence: p.matchConfidence,
-                      matchedProjectName: projectName,
-                      matchedTagLabel:
-                        p.kind === "category_tag" && p.matchedId
-                          ? (tagLabelMap.get(p.matchedId) ?? null)
-                          : null,
-                      matchedContactName:
-                        p.kind === "contact" && p.matchedId
-                          ? (contactNameMap.get(p.matchedId) ?? null)
-                          : null,
-                      matchedEntityName:
-                        p.kind === "entity" && p.matchedId
-                          ? (entityNameMap.get(p.matchedId) ?? null)
-                          : null,
-                    };
+                    return [
+                      {
+                        id: p.id,
+                        kind: p.kind,
+                        payload: pl,
+                        matchedId: p.matchedId,
+                        matchConfidence: p.matchConfidence,
+                        matchedProjectName: projectName,
+                        matchedContactName:
+                          p.kind === "contact" && p.matchedId
+                            ? (contactNameMap.get(p.matchedId) ?? null)
+                            : null,
+                        matchedEntityName:
+                          p.kind === "entity" && p.matchedId
+                            ? (entityNameMap.get(p.matchedId) ?? null)
+                            : null,
+                      },
+                    ];
                   })}
                 />
               </li>

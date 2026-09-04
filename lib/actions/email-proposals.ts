@@ -2,7 +2,7 @@
 
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
-import { emailProposals, gmailMessages, gmailThreadTags } from "@/db/schema/gmail";
+import { emailProposals, gmailMessages } from "@/db/schema/gmail";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { projectContacts } from "@/db/schema/project-contacts";
 import { projects } from "@/db/schema/projects";
@@ -12,11 +12,16 @@ import { action } from "@/lib/actions/action";
 import { findContactByEmail } from "@/lib/db/queries/contacts";
 import { type AssigneeRef, setTaskAssignees } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
-import { applyTagToThread, ensureCrmTag } from "@/lib/gmail/tags";
+import {
+  clearThreadLinkDecisions,
+  dismissThreadLinksOfKind,
+  ensureCrmLabel,
+  linkThread,
+} from "@/lib/gmail/links";
 import { getValidAccessToken } from "@/lib/google/account";
 import { createGmailDraft, getHeader, getMessage } from "@/lib/google/gmail-api";
 import { hasGmailComposeScope, hasRequiredGmailScopes } from "@/lib/google/oauth";
-import { eq, ilike } from "drizzle-orm";
+import { eq, ilike, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -75,10 +80,16 @@ async function getGmailUserId(): Promise<string | null> {
 
 /**
  * Accepte une proposition LLM. Dispatch selon `kind` :
- *   - task         : crée une tâche
- *   - category_tag : applique le tag catégorie au thread (crée la
- *                    catégorie en base + Gmail label si nouvelle)
- *   - project_link : lie le thread au projet matché (via tag projet)
+ *   - task                 : crée une tâche
+ *   - project_link         : lie le thread au projet retenu
+ *   - entity_link          : lie le thread à l'entité retenue
+ *   - project_contact_link : rattache le contact au projet
+ *   - contact/entity/project : crée (ou relie) le record CRM
+ *   - draft_reply          : crée le brouillon Gmail
+ *
+ * Les liaisons posées ici sont scellées : ce sont des décisions
+ * humaines, l'auto-link ne doit plus les contredire. Le label Gmail
+ * suit automatiquement.
  */
 export const acceptEmailProposal = action(
   z.object({
@@ -87,8 +98,8 @@ export const acceptEmailProposal = action(
      * Édition user du payload avant acceptation. Merge sur `proposal.payload`.
      * Clé spéciale `_linkExistingId` : quand présente, on lie la proposition
      * au record existant dont c'est l'id (au lieu de créer un nouveau record).
-     * Utile pour contact/entity/project/task ; ignorée pour draft_reply /
-     * category_tag / project_link qui utilisent déjà `matchedId`.
+     * Utile pour contact/entity/project/task ; ignorée pour draft_reply
+     * qui n'a pas de record à relier.
      */
     payloadOverride: z.record(z.string(), z.unknown()).nullish(),
   }),
@@ -164,24 +175,6 @@ export const acceptEmailProposal = action(
           return inserted.id;
         });
       }
-    } else if (proposal.kind === "category_tag") {
-      // matchedId est toujours set (cf. extract-and-save : on n'accepte
-      // pas de catégorie non-existante). Garde-fou si une vieille
-      // proposition pré-changement traîne.
-      const tagId = proposal.matchedId;
-      if (!tagId) {
-        throw new Error(
-          "Catégorie introuvable. Crée-la d'abord depuis /emails/tags avant de l'appliquer.",
-        );
-      }
-      await applyTagToThread({
-        userId: targetUserId,
-        threadIdLocal: msg.threadId,
-        tagId,
-        source: "auto",
-        createdBy: user.id,
-      });
-      createdEntityId = tagId;
     } else if (proposal.kind === "project_link") {
       // L'user peut avoir changé le projet suggéré via combobox — la
       // sélection courante arrive via `_linkExistingId`. Sinon on retombe
@@ -194,42 +187,28 @@ export const acceptEmailProposal = action(
         .where(eq(projects.id, projectId))
         .limit(1);
       if (!project) throw new Error("Projet introuvable.");
-      const tag = await ensureCrmTag({
+      const label = await ensureCrmLabel({
         userId: targetUserId,
         kind: "project",
         targetId: project.id,
         displayName: project.name,
       });
-      // Une décision utilisateur scelle le lien : manuallyOverridden=true
-      // pour que l'auto-tagging n'ajoute plus un autre projet sur ce thread.
-      await conn.transaction(async (tx) => {
-        await tx
-          .insert(gmailThreadTags)
-          .values({
-            threadId: msg.threadId,
-            tagId: tag.id,
-            source: "manual",
-            manuallyOverridden: true,
-            createdBy: user.id,
-          })
-          .onConflictDoUpdate({
-            target: [gmailThreadTags.threadId, gmailThreadTags.tagId],
-            set: { manuallyOverridden: true, source: "manual", createdBy: user.id },
-          });
-      });
-      // Push vers Gmail (best-effort, ne bloque pas la validation).
+      // Décision humaine → liaison scellée : l'auto-link n'ajoutera plus
+      // un autre projet sur ce thread. Le push Gmail est best-effort et
+      // ne bloque pas la validation.
       try {
-        await applyTagToThread({
+        await linkThread({
           userId: targetUserId,
           threadIdLocal: msg.threadId,
-          tagId: tag.id,
+          labelId: label.id,
           source: "manual",
-          createdBy: user.id,
+          decidedBy: user.id,
+          seal: true,
         });
       } catch {
-        // Le tag DB est posé — push différé.
+        // La liaison est posée en base — push différé.
       }
-      createdEntityId = tag.id;
+      createdEntityId = label.id;
     } else if (proposal.kind === "entity_link") {
       // Choix parmi les entités candidates (matchées par domaine). L'user
       // peut avoir sélectionné une entité précise via `_linkExistingId`.
@@ -241,20 +220,25 @@ export const acceptEmailProposal = action(
         .where(eq(entities.id, entityId))
         .limit(1);
       if (!entity) throw new Error("Entité introuvable.");
-      const tag = await ensureCrmTag({
+      const label = await ensureCrmLabel({
         userId: targetUserId,
         kind: "entity",
         targetId: entity.id,
         displayName: entity.name,
       });
-      await applyTagToThread({
-        userId: targetUserId,
-        threadIdLocal: msg.threadId,
-        tagId: tag.id,
-        source: "manual",
-        createdBy: user.id,
-      });
-      createdEntityId = tag.id;
+      try {
+        await linkThread({
+          userId: targetUserId,
+          threadIdLocal: msg.threadId,
+          labelId: label.id,
+          source: "manual",
+          decidedBy: user.id,
+          seal: true,
+        });
+      } catch {
+        // La liaison est posée en base — push différé.
+      }
+      createdEntityId = label.id;
     } else if (proposal.kind === "project_contact_link") {
       // Rattache le contact au projet dans project_contacts. Rend le
       // contact réutilisable pour le tagging auto des mails futurs sur
@@ -451,19 +435,112 @@ export const acceptEmailProposal = action(
   },
 );
 
+/**
+ * Rejette une proposition. Pour les propositions de rattachement, le
+ * refus a une conséquence réelle : la liaison correspondante est
+ * invalidée et le label Gmail retiré. Le refus porte sur la question
+ * posée, pas seulement sur le candidat affiché — rejeter « à quel projet
+ * rattacher ce mail ? » vaut « aucun de ceux-là », y compris le lien que
+ * l'auto-link avait déjà posé. La ligne invalidée reste en base : c'est
+ * elle qui empêche le prochain sync de reposer la question.
+ */
 export const rejectEmailProposal = action(
   z.object({ proposalId: z.string().uuid() }),
   async ({ input, user }) => {
     const conn = await db();
+    const [proposal] = await conn
+      .select()
+      .from(emailProposals)
+      .where(eq(emailProposals.id, input.proposalId))
+      .limit(1);
+    if (!proposal) throw new Error("Proposition introuvable.");
+
     await conn
       .update(emailProposals)
       .set({ status: "rejected", decidedBy: user.id, decidedAt: new Date() })
       .where(eq(emailProposals.id, input.proposalId));
+
+    if (proposal.kind === "project_link" || proposal.kind === "entity_link") {
+      const [msg] = await conn
+        .select({ threadId: gmailMessages.threadId })
+        .from(gmailMessages)
+        .where(eq(gmailMessages.id, proposal.messageId))
+        .limit(1);
+      if (msg) {
+        const targetUserId = (await getGmailUserId()) ?? user.id;
+        const kind = proposal.kind === "project_link" ? "project" : "entity";
+        try {
+          await dismissThreadLinksOfKind({
+            userId: targetUserId,
+            threadIdLocal: msg.threadId,
+            kind,
+            decidedBy: user.id,
+            // Scelle aussi les candidats jamais liés : sans ça, un
+            // candidat écarté pourrait être posé au sync suivant.
+            extraLabelIds: await labelIdsForCandidates(
+              targetUserId,
+              kind,
+              candidateIdsFromPayload(proposal.payload, proposal.matchedId),
+            ),
+          });
+        } catch {
+          // Best-effort : le rejet est enregistré même si Gmail refuse.
+        }
+        revalidatePath(`/emails/${msg.threadId}`);
+      }
+    }
+
+    revalidatePath("/emails");
     revalidatePath("/emails/propositions");
     revalidatePath("/inbox");
     return { ok: true as const };
   },
 );
+
+/** Ids des records candidats portés par une proposition de rattachement. */
+function candidateIdsFromPayload(payload: unknown, matchedId: string | null): string[] {
+  const ids = new Set<string>();
+  if (matchedId) ids.add(matchedId);
+  const candidates = (payload as Record<string, unknown> | null)?.candidates;
+  if (Array.isArray(candidates)) {
+    for (const c of candidates) {
+      const id = (c as Record<string, unknown> | null)?.id;
+      if (typeof id === "string" && id.length > 0) ids.add(id);
+    }
+  }
+  return [...ids];
+}
+
+/** Get-or-create des libellés Paradeos de ces records CRM. */
+async function labelIdsForCandidates(
+  userId: string,
+  kind: "project" | "entity",
+  recordIds: string[],
+): Promise<string[]> {
+  if (recordIds.length === 0) return [];
+  const conn = await db();
+  const rows =
+    kind === "project"
+      ? await conn
+          .select({ id: projects.id, name: projects.name })
+          .from(projects)
+          .where(inArray(projects.id, recordIds))
+      : await conn
+          .select({ id: entities.id, name: entities.name })
+          .from(entities)
+          .where(inArray(entities.id, recordIds));
+  const out: string[] = [];
+  for (const r of rows) {
+    const label = await ensureCrmLabel({
+      userId,
+      kind,
+      targetId: r.id,
+      displayName: r.name,
+    });
+    out.push(label.id);
+  }
+  return out;
+}
 
 /**
  * Met à jour le record lié à une proposition déjà acceptée. Permet de
@@ -601,15 +678,50 @@ export const updateAcceptedEmailProposal = action(
  * records créés côté CRM (contact, entité, projet…) — l'utilisateur les
  * supprime manuellement s'il le veut. Pour draft_reply, le brouillon
  * Gmail est laissé en place (Gmail garde son propre historique).
+ *
+ * Pour les rattachements, en revanche, la décision EST la liaison : la
+ * remettre en attente efface donc la liaison et son label Gmail, dans un
+ * sens comme dans l'autre (validation annulée, refus annulé). L'auto-link
+ * reprend la main au sync suivant.
  */
 export const revertEmailProposal = action(
   z.object({ proposalId: z.string().uuid() }),
-  async ({ input }) => {
+  async ({ input, user }) => {
     const conn = await db();
+    const [proposal] = await conn
+      .select()
+      .from(emailProposals)
+      .where(eq(emailProposals.id, input.proposalId))
+      .limit(1);
+    if (!proposal) throw new Error("Proposition introuvable.");
+
     await conn
       .update(emailProposals)
       .set({ status: "pending", decidedAt: null, decidedBy: null })
       .where(eq(emailProposals.id, input.proposalId));
+
+    if (proposal.kind === "project_link" || proposal.kind === "entity_link") {
+      const [msg] = await conn
+        .select({ threadId: gmailMessages.threadId })
+        .from(gmailMessages)
+        .where(eq(gmailMessages.id, proposal.messageId))
+        .limit(1);
+      if (msg) {
+        const targetUserId = (await getGmailUserId()) ?? user.id;
+        try {
+          await clearThreadLinkDecisions({
+            userId: targetUserId,
+            threadIdLocal: msg.threadId,
+            kind: proposal.kind === "project_link" ? "project" : "entity",
+          });
+        } catch {
+          // Best-effort : la proposition est repassée en attente.
+        }
+        revalidatePath(`/emails/${msg.threadId}`);
+      }
+    }
+
+    revalidatePath("/emails");
     revalidatePath("/emails/propositions");
     revalidatePath("/inbox");
     return { ok: true as const };
@@ -641,6 +753,3 @@ export const requeueExtraction = action(
     return { ok: true as const };
   },
 );
-
-// Garde-fou imports inutilisés.
-void gmailThreadTags;

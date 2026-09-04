@@ -21,7 +21,6 @@ type SearchParams = Promise<{
   filter?: string | string[];
   bucket?: string | string[];
   dir?: string | string[];
-  tag?: string | string[];
   thread?: string | string[];
 }>;
 
@@ -32,7 +31,6 @@ export default async function EmailsPage({ searchParams }: { searchParams: Searc
   const user = await requireUser();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
-  const tagId = typeof params.tag === "string" ? params.tag : undefined;
   const activeThreadId = typeof params.thread === "string" ? params.thread : null;
   const rawBucket = typeof params.bucket === "string" ? params.bucket : "important";
   const bucket: Bucket = BUCKETS.includes(rawBucket as Bucket)
@@ -50,7 +48,6 @@ export default async function EmailsPage({ searchParams }: { searchParams: Searc
       user.id,
       {
         query: q || undefined,
-        tagId,
         bucket: bucket === "all" ? undefined : bucket,
         invoiceDirection: direction === "all" ? undefined : direction,
       },

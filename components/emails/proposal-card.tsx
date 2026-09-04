@@ -13,7 +13,6 @@ import {
   ListTodo,
   Mail,
   Reply,
-  Tag,
   UserPlus,
   X,
 } from "lucide-react";
@@ -24,7 +23,6 @@ import { toast } from "sonner";
 
 type ProposalKind =
   | "task"
-  | "category_tag"
   | "project_link"
   | "entity_link"
   | "project_contact_link"
@@ -40,7 +38,6 @@ type Proposal = {
   matchedId: string | null;
   matchConfidence: string | null;
   matchedProjectName: string | null;
-  matchedTagLabel: string | null;
   matchedContactName: string | null;
   matchedEntityName: string | null;
 };
@@ -59,7 +56,6 @@ type Props = {
 
 const KIND_ICON: Record<ProposalKind, typeof ListTodo> = {
   task: ListTodo,
-  category_tag: Tag,
   project_link: Briefcase,
   entity_link: Building2,
   project_contact_link: UserPlus,
@@ -71,7 +67,6 @@ const KIND_ICON: Record<ProposalKind, typeof ListTodo> = {
 
 const KIND_LABEL: Record<ProposalKind, string> = {
   task: "Tâche",
-  category_tag: "Catégorie",
   project_link: "Lien projet",
   entity_link: "Lien entité",
   project_contact_link: "Contact ↔ projet",
@@ -137,17 +132,15 @@ function ProposalRow({ proposal: p }: { proposal: Proposal }) {
       toast.success(
         p.kind === "task"
           ? "Tâche créée."
-          : p.kind === "category_tag"
-            ? "Tag appliqué."
-            : p.kind === "project_link"
-              ? "Lien projet ajouté."
-              : p.kind === "contact"
-                ? "Contact créé."
-                : p.kind === "entity"
-                  ? "Entité créée."
-                  : p.kind === "draft_reply"
-                    ? "Brouillon Gmail créé."
-                    : "Projet créé.",
+          : p.kind === "project_link"
+            ? "Thread rattaché au projet."
+            : p.kind === "contact"
+              ? "Contact créé."
+              : p.kind === "entity"
+                ? "Entité créée."
+                : p.kind === "draft_reply"
+                  ? "Brouillon Gmail créé."
+                  : "Projet créé.",
       );
       router.refresh();
     });
@@ -216,10 +209,6 @@ function describeProposal(p: Proposal): string {
   if (p.kind === "task") {
     return String(p.payload.title ?? "Sans titre");
   }
-  if (p.kind === "category_tag") {
-    const name = String(p.payload.name ?? "");
-    return p.matchedTagLabel ? (p.matchedTagLabel.split("/").pop() ?? name) : name;
-  }
   if (p.kind === "project_link") {
     return p.matchedProjectName ?? String(p.payload.projectName ?? "Projet");
   }
@@ -252,12 +241,9 @@ function describeDetails(p: Proposal): string {
     if (p.payload.priority) parts.push(`priorité ${p.payload.priority as string}`);
     return parts.join(" · ") || "—";
   }
-  if (p.kind === "category_tag") {
-    return "Catégorie existante — sera appliquée au thread.";
-  }
   if (p.kind === "project_link") {
     return p.matchedProjectName
-      ? "Lie le thread à ce projet (label Gmail ajouté)."
+      ? "Rattache le thread à ce projet — le libellé Gmail suit."
       : "Projet pas encore créé dans le CRM.";
   }
   if (p.kind === "contact") {

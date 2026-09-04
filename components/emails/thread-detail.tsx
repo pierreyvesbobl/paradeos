@@ -1,65 +1,52 @@
 import { MessageCard } from "@/components/emails/message-card";
 import { ProjectLinkBadge } from "@/components/emails/project-link-badge";
 import { EmailProposalsPanel } from "@/components/emails/proposals-panel";
-import { TagChip } from "@/components/emails/tag-chip";
-import { TagPicker } from "@/components/emails/tag-picker";
+import { type ThreadLinkItem, ThreadLinks } from "@/components/emails/thread-links";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import type { EmailProposal } from "@/db/schema/gmail";
-import { emailProposals, gmailTags } from "@/db/schema/gmail";
+import { emailProposals } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
-import { getThreadDetail, listAllTags } from "@/lib/gmail/queries";
+import { getThreadDetail } from "@/lib/gmail/queries";
 import { ArrowDownLeft, ArrowSquareOut, ArrowUpRight } from "@phosphor-icons/react/dist/ssr";
 import { asc, eq, inArray } from "drizzle-orm";
 
 import { formatPersonName } from "@/lib/format";
-function targetHrefFor(
-  kind: "project" | "contact" | "entity" | "category",
-  targetId: string | null,
-): string | null {
-  if (!targetId) return null;
-  if (kind === "project") return `/projets/${targetId}`;
-  if (kind === "contact") return `/contacts/${targetId}`;
-  if (kind === "entity") return `/entites/${targetId}`;
-  return null;
-}
-
 export async function EmailThreadDetail({ threadId }: { threadId: string }) {
-  const user = await requireUser();
+  // Garde d'auth : le détail d'un thread n'est jamais rendu anonymement.
+  await requireUser();
   const conn = await db();
   // Étape 1 : queries indépendantes du thread, toutes lancées en parallèle
-  // (options globales, listing des tags, détail du thread).
-  const [detail, allTags, projectOptions, userOptions, entityOptions, contactOptions] =
-    await Promise.all([
-      getThreadDetail(threadId),
-      listAllTags(user.id),
-      conn
-        .select({ id: projects.id, name: projects.name })
-        .from(projects)
-        .orderBy(asc(projects.name)),
-      conn
-        .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
-        .from(users)
-        .orderBy(asc(users.fullName)),
-      conn
-        .select({ id: entities.id, name: entities.name })
-        .from(entities)
-        .orderBy(asc(entities.name)),
-      conn
-        .select({
-          id: contacts.id,
-          firstName: contacts.firstName,
-          lastName: contacts.lastName,
-          entityName: entities.name,
-        })
-        .from(contacts)
-        .leftJoin(entities, eq(entities.id, contacts.entityId))
-        .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
-    ]);
+  // (options globales de rattachement, détail du thread).
+  const [detail, projectOptions, userOptions, entityOptions, contactOptions] = await Promise.all([
+    getThreadDetail(threadId),
+    conn
+      .select({ id: projects.id, name: projects.name })
+      .from(projects)
+      .orderBy(asc(projects.name)),
+    conn
+      .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
+      .from(users)
+      .orderBy(asc(users.fullName)),
+    conn
+      .select({ id: entities.id, name: entities.name })
+      .from(entities)
+      .orderBy(asc(entities.name)),
+    conn
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        entityName: entities.name,
+      })
+      .from(contacts)
+      .leftJoin(entities, eq(entities.id, contacts.entityId))
+      .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
+  ]);
 
   if (!detail) {
     return (
@@ -70,7 +57,7 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
   }
 
   const lastMessage = detail.messages.at(-1) ?? null;
-  const projectTag = detail.tags.find((t) => t.kind === "project" && t.targetId);
+  const projectLink = detail.links.find((l) => l.kind === "project" && l.targetId);
 
   const messageIds = detail.messages.map((m) => m.id);
   // Étape 2 : propositions du thread + lookup du projet lié, en parallèle
@@ -79,11 +66,11 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
     messageIds.length > 0
       ? conn.select().from(emailProposals).where(inArray(emailProposals.messageId, messageIds))
       : Promise.resolve([] as (typeof emailProposals.$inferSelect)[]),
-    projectTag?.targetId
+    projectLink?.targetId
       ? conn
           .select({ status: projects.status, name: projects.name })
           .from(projects)
-          .where(eq(projects.id, projectTag.targetId))
+          .where(eq(projects.id, projectLink.targetId))
           .limit(1)
       : Promise.resolve([]),
     messageIds.length > 0
@@ -109,13 +96,11 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
   const projectIds = new Set<string>();
   const contactIds = new Set<string>();
   const entityIds = new Set<string>();
-  const tagIds = new Set<string>();
   for (const r of proposalRowsRaw) {
     if (!r.matchedId) continue;
     if (r.kind === "project_link" || r.kind === "project") projectIds.add(r.matchedId);
     else if (r.kind === "contact") contactIds.add(r.matchedId);
     else if (r.kind === "entity") entityIds.add(r.matchedId);
-    else if (r.kind === "category_tag") tagIds.add(r.matchedId);
   }
 
   const contactOptionsFmt = contactOptions.map((c) => ({
@@ -124,7 +109,7 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
     entityName: c.entityName,
   }));
 
-  const [projectRows, contactRows, entityRows, tagRows] = await Promise.all([
+  const [projectRows, contactRows, entityRows] = await Promise.all([
     projectIds.size > 0
       ? conn
           .select({ id: projects.id, name: projects.name })
@@ -143,12 +128,6 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
           .from(entities)
           .where(inArray(entities.id, [...entityIds]))
       : Promise.resolve([]),
-    tagIds.size > 0
-      ? conn
-          .select({ id: gmailTags.id, labelName: gmailTags.labelName })
-          .from(gmailTags)
-          .where(inArray(gmailTags.id, [...tagIds]))
-      : Promise.resolve([]),
   ]);
 
   const projectNameById = new Map(projectRows.map((r) => [r.id, r.name]));
@@ -156,15 +135,45 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
     contactRows.map((r) => [r.id, formatPersonName(r.firstName, r.lastName)]),
   );
   const entityNameById = new Map(entityRows.map((r) => [r.id, r.name]));
-  const tagLabelById = new Map(tagRows.map((r) => [r.id, r.labelName]));
 
-  const proposalRows = proposalRowsRaw.map((p) => ({
-    ...(p as EmailProposal),
-    matchedProjectName: (p.matchedId && projectNameById.get(p.matchedId)) || null,
-    matchedContactName: (p.matchedId && contactNameById.get(p.matchedId)) || null,
-    matchedEntityName: (p.matchedId && entityNameById.get(p.matchedId)) || null,
-    matchedTagLabel: (p.matchedId && tagLabelById.get(p.matchedId)) || null,
-  }));
+  // `category_tag` : kind historique, sans surface depuis la suppression
+  // de la taxonomie libre — on ne l'affiche plus.
+  const proposalRows = proposalRowsRaw.flatMap((p) => {
+    if (p.kind === "category_tag") return [];
+    return [
+      {
+        ...(p as EmailProposal),
+        kind: p.kind,
+        matchedProjectName: (p.matchedId && projectNameById.get(p.matchedId)) || null,
+        matchedContactName: (p.matchedId && contactNameById.get(p.matchedId)) || null,
+        matchedEntityName: (p.matchedId && entityNameById.get(p.matchedId)) || null,
+      },
+    ];
+  });
+
+  // Rattachements affichés à part : le projet a sa propre carte, et les
+  // libellés système de facture apparaissent avec les factures détectées.
+  // Reste l'entité et le contact — montrés uniquement pour pouvoir les
+  // invalider, jamais pour en ajouter.
+  const allEntityNameById = new Map(entityOptions.map((e) => [e.id, e.name]));
+  const allContactNameById = new Map(contactOptionsFmt.map((c) => [c.id, c.fullName]));
+  const otherLinks: ThreadLinkItem[] = detail.links.flatMap((l) => {
+    if ((l.kind !== "entity" && l.kind !== "contact") || !l.targetId) return [];
+    const name =
+      l.kind === "entity" ? allEntityNameById.get(l.targetId) : allContactNameById.get(l.targetId);
+    if (!name) return [];
+    return [
+      {
+        linkId: l.linkId,
+        labelId: l.labelId,
+        kind: l.kind,
+        name,
+        href: l.kind === "entity" ? `/entites/${l.targetId}` : `/contacts/${l.targetId}`,
+        source: l.source,
+        manuallyOverridden: l.manuallyOverridden,
+      },
+    ];
+  });
 
   const linkedProjectStatus = linkedProjectRow[0]?.status ?? null;
   const linkedProjectName = linkedProjectRow[0]?.name ?? null;
@@ -193,12 +202,12 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
       <ProjectLinkBadge
         threadId={threadId}
         currentProject={
-          projectTag?.targetId && linkedProjectName
+          projectLink?.targetId && linkedProjectName
             ? {
-                id: projectTag.targetId,
+                id: projectLink.targetId,
                 name: linkedProjectName,
-                source: projectTag.source,
-                manuallyOverridden: projectTag.manuallyOverridden,
+                source: projectLink.source,
+                manuallyOverridden: projectLink.manuallyOverridden,
               }
             : null
         }
@@ -225,36 +234,7 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
         ))}
       </section>
 
-      <section
-        className="space-y-2 rounded-xl border bg-card p-4"
-        style={{ borderColor: "var(--ds-border)" }}
-      >
-        <h3 className="font-semibold text-[14px]">Tags</h3>
-        {detail.tags.filter((t) => t.kind !== "project").length === 0 ? (
-          <p className="text-muted-foreground text-xs italic">Aucun tag.</p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {detail.tags
-              .filter((t) => t.kind !== "project")
-              .map((t) => (
-                <TagChip
-                  key={t.threadTagId}
-                  threadId={threadId}
-                  tagId={t.tagId}
-                  kind={t.kind}
-                  labelName={t.labelName}
-                  source={t.source}
-                  targetHref={targetHrefFor(t.kind, t.targetId)}
-                />
-              ))}
-          </div>
-        )}
-        <TagPicker
-          threadId={threadId}
-          allTags={allTags.map((t) => ({ id: t.id, kind: t.kind, labelName: t.labelName }))}
-          appliedTagIds={detail.tags.map((t) => t.tagId)}
-        />
-      </section>
+      <ThreadLinks threadId={threadId} links={otherLinks} />
     </div>
   );
 }
@@ -294,7 +274,7 @@ type FilingRow = {
  * Ce qu'a détecté l'agent facture sur les PJ du thread. Les PJ encore
  * `unknown` (en attente de traitement, ou écartées comme non-factures)
  * sont listées sans badge de sens plutôt que masquées — sinon on ne
- * comprend pas pourquoi une facture visible n'est pas taguée.
+ * comprend pas pourquoi une facture visible n'est pas classée.
  */
 function InvoiceFilingsCard({ filings }: { filings: FilingRow[] }) {
   return (

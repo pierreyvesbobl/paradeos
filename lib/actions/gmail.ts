@@ -1,25 +1,24 @@
 "use server";
 
-import { gmailSyncState, gmailTags, gmailThreadTags } from "@/db/schema/gmail";
+import { gmailSyncState } from "@/db/schema/gmail";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
-import { cleanupSpamThreads, purgeGmailData, syncIncremental } from "@/lib/gmail/sync";
 import {
-  applyTagToThread,
-  autoTagThreadByParticipants,
-  backfillCrmTags,
-  createCategoryTag,
-  deleteTag,
-  ensureCrmTag,
-  removeTagFromThread,
-  renameTag,
-} from "@/lib/gmail/tags";
+  autoLinkThreadByParticipants,
+  backfillCrmLabels,
+  dismissThreadLinksOfKind,
+  ensureCrmLabel,
+  linkThread,
+  unlinkThread,
+} from "@/lib/gmail/links";
+import { pullLabeledThreadsFromGmail } from "@/lib/gmail/pull-labels";
+import { cleanupSpamThreads, purgeGmailData, syncIncremental } from "@/lib/gmail/sync";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
 import { SETTING_KEYS, setSetting } from "@/lib/settings";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -52,54 +51,21 @@ export const triggerGmailSync = action(z.object({}), async ({ user }) => {
   };
 });
 
-// ─── Tags : appliquer / retirer sur un thread ─────────────────────────
-
-export const addTagToThread = action(
-  z.object({
-    threadId: z.string().uuid(),
-    tagId: z.string().uuid(),
-  }),
-  async ({ input, user }) => {
-    const targetUserId = (await getGmailUserId()) ?? user.id;
-    await applyTagToThread({
-      userId: targetUserId,
-      threadIdLocal: input.threadId,
-      tagId: input.tagId,
-      source: "manual",
-      createdBy: user.id,
-    });
-    revalidatePath("/emails");
-    revalidatePath(`/emails/${input.threadId}`);
-    return { ok: true as const };
-  },
-);
-
-export const removeTagAction = action(
-  z.object({
-    threadId: z.string().uuid(),
-    tagId: z.string().uuid(),
-  }),
-  async ({ input, user }) => {
-    const targetUserId = (await getGmailUserId()) ?? user.id;
-    await removeTagFromThread({
-      userId: targetUserId,
-      threadIdLocal: input.threadId,
-      tagId: input.tagId,
-    });
-    revalidatePath("/emails");
-    revalidatePath(`/emails/${input.threadId}`);
-    return { ok: true as const };
-  },
-);
+// ─── Liaison projet d'un thread ───────────────────────────────────────
 
 /**
- * Retagge un thread avec un projet (ou détache) et scelle le choix
- * humain : le nouveau tag est marqué `manuallyOverridden=true` pour que
- * l'auto-tagging suivant ne remplace pas le projet choisi. Supprime
- * tous les autres tags projet du thread au passage (mono-projet par
- * thread en V1).
+ * Rattache un thread à un projet, ou l'en détache. C'est la seule
+ * manière de toucher une liaison à la main : il n'y a pas d'UI de
+ * tagging — le libellé Gmail n'est que la conséquence de cette décision.
+ *
+ * Dans les deux sens, la décision est scellée (`manuallyOverridden`) pour
+ * que l'auto-link ne la contredise pas au sync suivant :
+ *   - projectId défini  → « c'est ce projet » ; les autres liaisons
+ *     projet du thread sont invalidées (mono-projet par thread en V1).
+ *   - projectId null    → « aucun projet » ; toutes les liaisons projet
+ *     du thread sont invalidées et le label Gmail retiré.
  */
-export const retagThreadProject = action(
+export const setThreadProject = action(
   z.object({
     threadId: z.string().uuid(),
     projectId: z.string().uuid().nullable(),
@@ -108,22 +74,14 @@ export const retagThreadProject = action(
     const conn = await db();
     const targetUserId = (await getGmailUserId()) ?? user.id;
 
-    // Retire tous les tags projet existants sur ce thread (avec push
-    // Gmail best-effort pour synchroniser les labels).
-    const currentProjectTags = await conn
-      .select({ tagId: gmailTags.id })
-      .from(gmailThreadTags)
-      .innerJoin(gmailTags, eq(gmailTags.id, gmailThreadTags.tagId))
-      .where(and(eq(gmailThreadTags.threadId, input.threadId), eq(gmailTags.kind, "project")));
-    for (const t of currentProjectTags) {
-      await removeTagFromThread({
-        userId: targetUserId,
-        threadIdLocal: input.threadId,
-        tagId: t.tagId,
-      });
-    }
+    // Invalide les liaisons projet existantes (push Gmail best-effort).
+    await dismissThreadLinksOfKind({
+      userId: targetUserId,
+      threadIdLocal: input.threadId,
+      kind: "project",
+      decidedBy: user.id,
+    });
 
-    // Applique le nouveau projet si demandé.
     if (input.projectId) {
       const [project] = await conn
         .select({ id: projects.id, name: projects.name })
@@ -131,35 +89,23 @@ export const retagThreadProject = action(
         .where(eq(projects.id, input.projectId))
         .limit(1);
       if (!project) throw new Error("Projet introuvable.");
-      const tag = await ensureCrmTag({
+      const label = await ensureCrmLabel({
         userId: targetUserId,
         kind: "project",
         targetId: project.id,
         displayName: project.name,
       });
-      await conn
-        .insert(gmailThreadTags)
-        .values({
-          threadId: input.threadId,
-          tagId: tag.id,
-          source: "manual",
-          manuallyOverridden: true,
-          createdBy: user.id,
-        })
-        .onConflictDoUpdate({
-          target: [gmailThreadTags.threadId, gmailThreadTags.tagId],
-          set: { source: "manual", manuallyOverridden: true, createdBy: user.id },
-        });
       try {
-        await applyTagToThread({
+        await linkThread({
           userId: targetUserId,
           threadIdLocal: input.threadId,
-          tagId: tag.id,
+          labelId: label.id,
           source: "manual",
-          createdBy: user.id,
+          decidedBy: user.id,
+          seal: true,
         });
       } catch {
-        // Push Gmail best-effort ; le tag DB est déjà posé.
+        // Push Gmail best-effort ; la liaison est déjà en base.
       }
     }
 
@@ -170,63 +116,61 @@ export const retagThreadProject = action(
   },
 );
 
-// ─── CRUD catégories ──────────────────────────────────────────────────
-
-export const createCategoryTagAction = action(
+/**
+ * Invalide une liaison précise d'un thread (entité rattachée à tort,
+ * par exemple). Décision négative : la liaison est scellée, donc le
+ * prochain sync ne la reposera pas, et le label Gmail est retiré.
+ */
+export const dismissThreadLink = action(
   z.object({
-    name: z.string().min(1).max(80),
-    color: z.string().optional(),
+    threadId: z.string().uuid(),
+    labelId: z.string().uuid(),
   }),
   async ({ input, user }) => {
     const targetUserId = (await getGmailUserId()) ?? user.id;
-    const tag = await createCategoryTag({
+    await unlinkThread({
       userId: targetUserId,
-      name: input.name,
-      color: input.color,
+      threadIdLocal: input.threadId,
+      labelId: input.labelId,
+      seal: true,
+      decidedBy: user.id,
     });
-    revalidatePath("/emails/tags");
     revalidatePath("/emails");
-    return tag;
-  },
-);
-
-export const renameTagAction = action(
-  z.object({
-    tagId: z.string().uuid(),
-    newName: z.string().min(1).max(80),
-  }),
-  async ({ input, user }) => {
-    const targetUserId = (await getGmailUserId()) ?? user.id;
-    await renameTag({ userId: targetUserId, tagId: input.tagId, newName: input.newName });
-    revalidatePath("/emails/tags");
+    revalidatePath(`/emails/${input.threadId}`);
+    revalidatePath("/entites");
     return { ok: true as const };
   },
 );
 
-export const deleteTagAction = action(
-  z.object({ tagId: z.string().uuid() }),
-  async ({ input, user }) => {
-    const targetUserId = (await getGmailUserId()) ?? user.id;
-    await deleteTag(targetUserId, input.tagId);
-    revalidatePath("/emails/tags");
-    revalidatePath("/emails");
-    return { ok: true as const };
-  },
-);
+/**
+ * Rapatrie les mails que tu as rangés à la main dans Gmail sous un label
+ * `Paradeos/Projets/…` ou `Paradeos/Entités/…`. C'est le seul chemin qui
+ * voit les fils dormants : le sync, lui, ne lit les labels que des
+ * threads ayant reçu un nouveau message.
+ */
+export const pullGmailLabels = action(z.object({}), async ({ user }) => {
+  const targetUserId = (await getGmailUserId()) ?? user.id;
+  const r = await pullLabeledThreadsFromGmail(targetUserId);
+  revalidatePath("/emails");
+  revalidatePath("/projets");
+  revalidatePath("/entites");
+  revalidatePath("/settings/integrations");
+  return r;
+});
 
 // ─── Backfill / réindex / purge ───────────────────────────────────────
 
-export const backfillCrmTagsAction = action(z.object({}), async ({ user }) => {
-  const targetUserId = (await getGmailUserId()) ?? user.id;
-  const stats = await backfillCrmTags(targetUserId);
-  revalidatePath("/emails/tags");
-  revalidatePath("/settings/integrations");
-  return stats;
-});
-
+/**
+ * Recalcule les liaisons automatiques de tous les threads. Deux étapes :
+ *   1. s'assurer qu'un libellé Paradeos existe pour chaque projet/entité,
+ *      et que son label Gmail porte bien le nom courant du record (sinon
+ *      l'auto-link n'a rien à poser, ou pose un label périmé) ;
+ *   2. rejouer l'auto-link sur chaque thread — sans jamais rétablir une
+ *      liaison que l'utilisateur a invalidée.
+ */
 export const rebuildAutoLinks = action(z.object({}), async ({ user }) => {
   const targetUserId = (await getGmailUserId()) ?? user.id;
-  // Re-tag tous les threads du user via les participants.
+  const backfill = await backfillCrmLabels(targetUserId);
   const conn = await db();
   const { gmailThreads } = await import("@/db/schema/gmail");
   const rows = await conn
@@ -235,13 +179,18 @@ export const rebuildAutoLinks = action(z.object({}), async ({ user }) => {
     .where(eq(gmailThreads.userId, targetUserId));
   for (const r of rows) {
     try {
-      await autoTagThreadByParticipants(r.id);
+      await autoLinkThreadByParticipants(r.id);
     } catch {
       // continue
     }
   }
   revalidatePath("/emails");
-  return { rebuilt: rows.length };
+  revalidatePath("/settings/integrations");
+  return {
+    rebuilt: rows.length,
+    labelsCreated: backfill.labelsCreated,
+    labelsRenamed: backfill.labelsRenamed,
+  };
 });
 
 /**

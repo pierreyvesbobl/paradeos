@@ -22,11 +22,11 @@ import { GENERIC_EMAIL_DOMAINS, domainFromEmail, extractDomain } from "./domain"
 import { extractAndSaveEmailProposals } from "./extract-and-save";
 import { processInvoiceFiling, queueInvoiceCandidates } from "./invoice-filer";
 import {
-  autoTagThreadByParticipants,
+  autoLinkThreadByParticipants,
   loadGmailLabelCache,
-  pushThreadTagsToGmail,
+  pushThreadLabelsToGmail,
   syncThreadLabelsFromGmail,
-} from "./tags";
+} from "./links";
 
 // `-in:spam -in:trash` exclut les emails dans la corbeille et le dossier
 // spam de Gmail. `-in:promotions` filtre l'onglet Promotions (newsletters
@@ -35,7 +35,7 @@ const BOOTSTRAP_QUERY = "newer_than:90d -in:spam -in:trash";
 const MAX_MESSAGES_PER_RUN = 50;
 const SLEEP_MS_BETWEEN_CALLS = 100;
 /** Labels Gmail qui causent un skip silencieux à l'ingestion. */
-const SKIP_LABELS = new Set(["SPAM", "TRASH"]);
+export const SKIP_LABELS = new Set(["SPAM", "TRASH"]);
 /**
  * Cap LLM extractions par run pour borner le temps (chaque extraction
  * ~2-3s) et le coût. Les messages restant en `pending` seront repris
@@ -149,7 +149,7 @@ function messageLooksLikeInvoice(message: GmailMessage): boolean {
  * participants). Renvoie l'id local du thread pour les hooks downstream
  * (autoLinkThread).
  */
-async function upsertThreadAndMessage(
+export async function upsertThreadAndMessage(
   userId: string,
   metaMessage: GmailMessage,
   body: { text: string | null; html: string | null } | null,
@@ -500,17 +500,18 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
     }
   }
 
-  // ─── 4. Auto-tag les threads touchés ─────────────────────────────
-  // (a) Auto-tag par participants : pose les tags project/contact/entity
-  //     côté Paradeos (idempotent).
-  // (b) Sync labels Gmail → thread_tags : lit les labels Gmail du thread,
-  //     insère un thread_tag pour chaque label Paradeos/ déjà connu.
+  // ─── 4. Lie les threads touchés ──────────────────────────────────
+  // (a) Auto-link par participants : pose les liaisons project/contact/
+  //     entity non ambiguës côté Paradeos (idempotent, et sans jamais
+  //     rétablir une liaison que l'utilisateur a invalidée).
+  // (b) Sync labels Gmail → liaisons : lit les labels Gmail du thread,
+  //     insère une liaison pour chaque label Paradeos/ déjà connu.
   let labelCache: Awaited<ReturnType<typeof loadGmailLabelCache>> | null = null;
   for (const tid of touchedThreads) {
     try {
-      await autoTagThreadByParticipants(tid);
+      await autoLinkThreadByParticipants(tid);
     } catch (err) {
-      result.errors.push(`autotag ${tid}: ${err instanceof Error ? err.message : String(err)}`);
+      result.errors.push(`autolink ${tid}: ${err instanceof Error ? err.message : String(err)}`);
     }
     // Pour la sync labels Gmail, on a besoin du cache labels.list (1 call
     // par run, partagé). On le construit lazy.
@@ -540,17 +541,17 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
     } catch (err) {
       result.errors.push(`sync labels ${tid}: ${err instanceof Error ? err.message : String(err)}`);
     }
-    // Push les tags auto vers Gmail pour qu'ils soient visibles côté
-    // Gmail UI (objectif : "rapprochement direct dans Gmail").
+    // Projette les liaisons actives en labels Gmail, pour que le
+    // rapprochement soit visible directement dans Gmail.
     try {
-      await pushThreadTagsToGmail({
+      await pushThreadLabelsToGmail({
         userId,
         threadIdLocal: tid,
         cache: labelCache,
         accessToken,
       });
     } catch (err) {
-      result.errors.push(`push tags ${tid}: ${err instanceof Error ? err.message : String(err)}`);
+      result.errors.push(`push labels ${tid}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

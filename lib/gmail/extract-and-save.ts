@@ -7,19 +7,18 @@ import { projects } from "@/db/schema/projects";
 import { findContactByEmail } from "@/lib/db/queries/contacts";
 import { db } from "@/lib/db/server";
 import { extractEmail } from "@/lib/gmail/extract";
-import { applyTagToThread, computeThreadTaggingSignals } from "@/lib/gmail/tags";
+import { computeThreadLinkSignals, linkThread } from "@/lib/gmail/links";
 import {
   fuzzyMatchContact,
   fuzzyMatchEntity,
   fuzzyMatchProject,
   fuzzyMatchTaskInProject,
 } from "@/lib/meetings/extract";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { sanitizeNameInput } from "@/lib/format";
 type ProposalKind =
   | "task"
-  | "category_tag"
   | "project_link"
   | "entity_link"
   | "project_contact_link"
@@ -47,7 +46,7 @@ type ProposalRow = {
  */
 export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   count: number;
-  /** Tags projet appliqués directement (sans proposition à valider). */
+  /** Liaisons projet posées directement (sans proposition à valider). */
   autoAppliedProjectLinks: number;
   skipped: boolean;
   reason?: string;
@@ -71,17 +70,6 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     return { count: 0, autoAppliedProjectLinks: 0, skipped: true, reason: "pas de body" };
   }
 
-  // Catégories existantes pour ce user → injectées dans le prompt LLM
-  // pour qu'il réutilise les noms canoniques au lieu d'inventer des
-  // doublons ("Comptabilité" vs "Compta").
-  const existingCategoryRows = await conn
-    .select({ labelName: gmailTags.labelName })
-    .from(gmailTags)
-    .where(and(eq(gmailTags.userId, msg.userId), eq(gmailTags.kind, "category")));
-  const existingCategories = existingCategoryRows
-    .map((r) => r.labelName.split("/").pop() ?? r.labelName)
-    .sort();
-
   let result: Awaited<ReturnType<typeof extractEmail>>;
   try {
     result = await extractEmail({
@@ -92,7 +80,6 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       ccEmails: msg.ccEmails,
       bodyText: msg.bodyText,
       bodyHtml: msg.bodyHtml,
-      existingCategories,
     });
   } catch (err) {
     await conn
@@ -154,46 +141,18 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     );
   }
 
-  // 2. Catégories proposées — UNIQUEMENT si elles existent déjà en base.
-  // Le LLM est consigné de ne proposer que des catégories existantes
-  // (cf. prompt), mais en défense en profondeur on filtre ici aussi :
-  // pas de nouvelle catégorie créée par le LLM, jamais. La taxonomie
-  // reste 100% gérée par l'utilisateur depuis /emails/tags.
-  for (const cat of result.proposedCategoryTags) {
-    const name = cat.trim();
-    if (!name) continue;
-    const [existing] = await conn
-      .select({ id: gmailTags.id })
-      .from(gmailTags)
-      .where(
-        and(
-          eq(gmailTags.userId, msg.userId),
-          eq(gmailTags.kind, "category"),
-          sql`split_part(${gmailTags.labelName}, '/', -1) = ${name}`,
-        ),
-      )
-      .limit(1);
-    if (!existing) continue;
-    rows.push({
-      messageId,
-      kind: "category_tag",
-      payload: { name },
-      matchedId: existing.id,
-      matchConfidence: "1.000",
-    });
-  }
-
-  // 3. Rattachement projet — signaux combinés :
-  //    - candidateProjectIds : projets actifs matchés par contact ∪ entité (calc côté tags.ts)
+  // 2. Rattachement projet — signaux combinés :
+  //    - candidateProjectIds : projets actifs matchés par contact ∪ entité (calc côté links.ts)
   //    - LLM proposedProjectName : projet mentionné explicitement dans le contenu
   // Décision :
-  //    - projectDimensionLocked → skip (l'humain a scellé le choix)
+  //    - projectDimensionLocked → skip (l'humain a tranché, dans un sens
+  //      ou dans l'autre)
   //    - 1 seul candidat clair (LLM match + 0 candidats côté serveur, ou 1 seul candidat = LLM match)
-  //      → auto-apply direct comme avant
+  //      → liaison posée directement
   //    - N candidats ambigus → proposition project_link à valider avec candidateProjectIds[]
   let autoAppliedProjectLinks = 0;
   let autoLinkedProjectId: string | null = null;
-  const signals = await computeThreadTaggingSignals(msg.threadId);
+  const signals = await computeThreadLinkSignals(msg.threadId);
   const candidateProjectIds = new Set<string>(signals?.candidateProjectIds ?? []);
   // Scope le match par l'entité du thread si elle est univoque : évite de
   // rattacher "GpasPlus - Nouveau X" à "GpasPlus - Autre Y" sur le seul
@@ -222,11 +181,11 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       llmMatched: llmProjectMatch?.id === p.id,
     }));
 
-    // Cas trivial : 1 seul candidat clair → auto-apply si le tag projet existe déjà.
+    // Cas trivial : 1 seul candidat clair → liaison posée si le libellé projet existe déjà.
     if (candidateList.length === 1 && candidateList[0]) {
       const projectId = candidateList[0];
       autoLinkedProjectId = projectId;
-      const [projectTag] = await conn
+      const [projectLabel] = await conn
         .select({ id: gmailTags.id })
         .from(gmailTags)
         .where(
@@ -237,17 +196,17 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
           ),
         )
         .limit(1);
-      if (projectTag) {
+      if (projectLabel) {
         try {
-          await applyTagToThread({
+          await linkThread({
             userId: msg.userId,
             threadIdLocal: msg.threadId,
-            tagId: projectTag.id,
+            labelId: projectLabel.id,
             source: "auto",
           });
           autoAppliedProjectLinks++;
         } catch {
-          // Push Gmail peut échouer (token/quota) — tag DB reste posé.
+          // Push Gmail peut échouer (token/quota) — la liaison reste posée.
         }
       }
     } else {
@@ -271,7 +230,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     }
   }
 
-  // 3b. entity_link : entités matchées par domaine — sync a déjà auto-appliqué
+  // 2b. entity_link : entités matchées par domaine — sync a déjà auto-appliqué
   // le tag entité, mais si N entités matchent un même domaine (rare mais
   // possible), on émet une proposition pour laisser l'humain trancher.
   if (signals && signals.matchedEntityIds.length > 1) {
@@ -292,7 +251,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     });
   }
 
-  // 3c. project_contact_link : pour chaque contact CRM matché du thread
+  // 2c. project_contact_link : pour chaque contact CRM matché du thread
   // qui n'est pas rattaché à un des projets candidats, propose le
   // rattachement. Rend visible le trou "contact connu mais absent de
   // project_contacts" qui est la cause #1 des projets vides.

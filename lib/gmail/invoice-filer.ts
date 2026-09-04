@@ -15,8 +15,8 @@ import {
   extractInvoiceMetadata,
   sanitizeForFilename,
 } from "./invoice-extract";
+import { markThreadInvoiceDirection } from "./links";
 import { extractPdfText } from "./pdf";
-import { tagThreadWithInvoiceDirection } from "./tags";
 
 const PDF_MIME = "application/pdf";
 
@@ -184,19 +184,19 @@ export async function processInvoiceFiling(filingId: string): Promise<{
     })
     .where(eq(invoiceFilings.id, filing.id));
 
-  // Tag le thread dès qu'on sait de quel côté on est — c'est le livrable
-  // « détecter et taguer » côté boîte mail, indépendant du classement
-  // Drive qui suit. Best-effort : un échec de push Gmail (quota, token)
-  // ne doit pas faire échouer le filing.
+  // Marque le thread dès qu'on sait de quel côté on est — le libellé
+  // Gmail projette un fait vérifiable (`invoice_filings.direction`),
+  // indépendant du classement Drive qui suit. Best-effort : un échec de
+  // push Gmail (quota, token) ne doit pas faire échouer le filing.
   if (direction !== "unknown") {
     try {
-      await tagThreadWithInvoiceDirection({
+      await markThreadInvoiceDirection({
         userId: filing.userId,
         threadIdLocal: msg.threadId,
         direction,
       });
     } catch (err) {
-      console.warn("[invoice filer] tag direction failed", err);
+      console.warn("[invoice filer] label direction failed", err);
     }
   }
 

@@ -28,12 +28,10 @@ export const MAX_BODY_CHARS_FOR_LLM = 50_000;
  *
  * Spécificités email vs meeting :
  * - intent : auto-classification du type d'email (info, request, etc.).
- * - proposedCategoryTags : tags catégorie libres ; le LLM ne peut piocher
- *   QUE dans la taxonomie existante (cf. système prompt).
- * - proposedProjectName : projet inféré pour AUTO-apply le tag projet
- *   correspondant si un projet en base matche (au-delà du contact match
- *   déjà géré par le sync). Distinct du nouveau `proposedProjects` qui
- *   propose la CRÉATION d'un projet inconnu.
+ * - proposedProjectName : projet inféré pour lier automatiquement le
+ *   thread au projet correspondant si un projet en base matche (au-delà
+ *   du contact match déjà géré par le sync). Distinct du
+ *   `proposedProjects` qui propose la CRÉATION d'un projet inconnu.
  * - sensitiveDetected : sécurité — si true on ne persiste rien.
  */
 const extractionSchema = z.object({
@@ -49,7 +47,6 @@ const extractionSchema = z.object({
    * changement de statut quand un projet existant est déjà matché.
    */
   pipelineStage: z.enum(["lead", "opportunity", "project", "none"]),
-  proposedCategoryTags: z.array(z.string()),
   proposedProjectName: z.string().nullable(),
   proposedTasks: z.array(
     z.object({
@@ -132,28 +129,24 @@ type EmailInput = {
   ccEmails: string[];
   bodyText: string | null;
   bodyHtml: string | null;
-  /** Catégories existantes à proposer en priorité au LLM. */
-  existingCategories: string[];
 };
 
 function buildSystemPrompt(args: {
-  existingCategories: string[];
   vocab: Awaited<ReturnType<typeof getKnownVocabulary>>;
 }): string {
   const baseRules = `Tu analyses un email professionnel reçu/envoyé et en extrais :
 1. Un résumé court (2-3 phrases en français)
 2. L'intention principale (info / request / fyi / decision / follow_up / compta / admin / other)
 3. Le stade pipeline (lead / opportunity / project / none)
-4. Les catégories libres pertinentes pour le ranger (Compta, Annexe, Admin, Support, etc.)
-5. Le projet éventuellement mentionné dans le contenu (auto-apply)
-6. Les tâches à faire qui ressortent
-7. Les entités, contacts et projets NOUVEAUX évoqués (à créer dans le CRM)
-8. Un brouillon de réponse si le mail attend une action
+4. Le projet éventuellement mentionné dans le contenu (à relier au thread)
+5. Les tâches à faire qui ressortent
+6. Les entités, contacts et projets NOUVEAUX évoqués (à créer dans le CRM)
+7. Un brouillon de réponse si le mail attend une action
 
 Règles générales :
 - Reste factuel. Pas de paraphrase, pas d'extrapolation.
 - Si un champ n'est pas explicite, retourne null (ou tableau vide pour les listes).
-- Pour proposedCategoryTags : reste minimaliste. 0 à 2 catégories max. UNIQUEMENT depuis la liste des catégories existantes ci-dessous. **NE JAMAIS** proposer une catégorie qui n'est pas dans la liste — si aucune ne correspond, retourne un tableau vide. La taxonomie est gérée par l'utilisateur, pas par toi.
+- Ne classe rien dans une taxonomie : Paradeos ne range pas les mails par catégorie, il les relie à des projets/contacts/entités.
 - Pour proposedTasks : uniquement les ACTIONS EXPLICITES ("merci de m'envoyer", "peux-tu vérifier", "il faut faire X"). Pas de tâches déduites/imaginées.
 - dueDate au format YYYY-MM-DD si une date concrète est mentionnée.
 - sensitiveDetected = true si tu repères des mots de passe, clés API, numéros bancaires, etc.
@@ -186,14 +179,9 @@ Classifie l'affaire portée par cet email :
 
 # Différence proposedProjectName vs proposedProjects
 
-- \`proposedProjectName\` (string, singulier) : nom d'un projet **déjà existant** que cet email mentionne — sera auto-relié au thread comme tag projet. Utilise EXACTEMENT le nom du vocabulaire.
+- \`proposedProjectName\` (string, singulier) : nom d'un projet **déjà existant** que cet email mentionne — servira à relier le thread à ce projet. Utilise EXACTEMENT le nom du vocabulaire.
 - \`proposedProjects\` (array) : projets NOUVEAUX à créer. Si le projet est connu, n'apparait QUE dans proposedProjectName.
-
-${
-  args.existingCategories.length > 0
-    ? `Catégories existantes (UNIQUEMENT celles-ci, jamais en inventer) :\n${args.existingCategories.map((c) => `- ${c}`).join("\n")}`
-    : "Aucune catégorie existante. Retourne donc proposedCategoryTags = []."
-}`;
+`;
 
   const vocabBlock = formatVocabulary(args.vocab);
   if (vocabBlock.length === 0) return baseRules;
@@ -265,7 +253,7 @@ export async function extractEmail(input: EmailInput): Promise<EmailExtraction> 
   const { object } = await generateObject({
     model: openrouter(modelId),
     schema: extractionSchema,
-    system: buildSystemPrompt({ existingCategories: input.existingCategories, vocab }),
+    system: buildSystemPrompt({ vocab }),
     prompt: buildUserPrompt(input),
     temperature: 0.2,
   });

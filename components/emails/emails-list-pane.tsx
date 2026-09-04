@@ -8,7 +8,6 @@ import {
   Receipt,
   Sparkle,
   SpeakerSimpleSlash,
-  Tag,
   Tray,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
@@ -185,14 +184,6 @@ export function EmailsListPane({
             aria-label="Propositions LLM"
           >
             <Sparkle size={16} weight="duotone" />
-          </Link>
-          <Link
-            href="/emails/tags"
-            className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border"
-            style={{ borderColor: "var(--ds-border)", color: "var(--ds-text-muted)" }}
-            aria-label="Gérer les tags"
-          >
-            <Tag size={16} weight="duotone" />
           </Link>
         </div>
 

@@ -106,9 +106,7 @@ async function main() {
         `Re-tagging terminé : +${stats.newEntityTags} tag(s) entité, +${stats.newProjectTags} tag(s) projet sur ${stats.threadsScanned} threads.`,
       );
     } else if (!RETAG) {
-      console.log(
-        "\nPasse --retag pour rejouer autoTagThreadByParticipants sur les threads existants.",
-      );
+      console.log("\nPasse --retag pour rejouer l'auto-link sur les threads existants.");
     }
   } finally {
     await sql.end({ timeout: 3 });
@@ -117,10 +115,10 @@ async function main() {
 
 /**
  * Rejoue l'auto-tagging sur tous les threads, réimplémenté en SQL pour
- * éviter d'importer `lib/gmail/tags.ts` (qui dépend de `server-only`).
+ * éviter d'importer `lib/gmail/links.ts` (qui dépend de `server-only`).
  *
- * Réplique la logique de `computeThreadTaggingSignals` +
- * `autoTagThreadByParticipants` :
+ * Réplique la logique de `computeThreadLinkSignals` +
+ * `autoLinkThreadByParticipants` :
  *   - Match contact par email (from/to/cc).
  *   - Match entité par domaine (via entities.website) — non-génériques.
  *   - Entité rattachée au contact matché → également candidate (nouveau).

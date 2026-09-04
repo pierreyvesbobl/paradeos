@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   cleanupSpamAction,
+  pullGmailLabels,
   purgeLocalGmail,
   rebuildAutoLinks,
   triggerGmailSync,
 } from "@/lib/actions/gmail";
-import { Filter, RefreshCw, Trash2, Wand2 } from "lucide-react";
+import { Filter, RefreshCw, Tags, Trash2, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -66,7 +67,35 @@ export function GmailActions() {
         toast.error(res.message);
         return;
       }
-      toast.success(`Auto-link recalculé sur ${res.data.rebuilt} thread(s).`);
+      const { rebuilt, labelsCreated, labelsRenamed } = res.data;
+      const suffix = [
+        labelsCreated > 0 ? `${labelsCreated} label(s) Gmail créé(s)` : "",
+        labelsRenamed > 0 ? `${labelsRenamed} resynchronisé(s)` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      toast.success(`Liens recalculés sur ${rebuilt} thread(s)${suffix ? ` · ${suffix}` : ""}.`);
+      router.refresh();
+    });
+  }
+
+  function pullLabels() {
+    startTransition(async () => {
+      const res = await pullGmailLabels({});
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      const { linksCreated, threadsImported, threadsSeen, errors } = res.data;
+      if (linksCreated === 0 && threadsImported === 0) {
+        toast.success(`Rien de nouveau — ${threadsSeen} thread(s) déjà à jour.`);
+      } else {
+        toast.success(
+          `${linksCreated} rattachement(s) importé(s)` +
+            `${threadsImported > 0 ? ` · ${threadsImported} thread(s) ajouté(s)` : ""}` +
+            `${errors.length > 0 ? ` · ${errors.length} erreur(s)` : ""}.`,
+        );
+      }
       router.refresh();
     });
   }
@@ -97,10 +126,22 @@ export function GmailActions() {
         onClick={rebuild}
         disabled={pending}
         className="gap-1.5"
-        title="Recalcule les liens auto contact/projet/entité"
+        title="Rejoue les liaisons auto contact/projet/entité — sans rétablir celles que tu as retirées"
       >
         <Wand2 className="size-3.5" />
         Recalculer les liens
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={pullLabels}
+        disabled={pending}
+        className="gap-1.5"
+        title="Récupère les mails que tu as rangés à la main dans Gmail sous un label Paradeos/Projets ou Paradeos/Entités — y compris les vieux fils que le sync ne voit pas"
+      >
+        <Tags className="size-3.5" />
+        Importer les labels Gmail
       </Button>
       <Button
         type="button"

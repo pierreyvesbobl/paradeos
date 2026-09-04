@@ -34,7 +34,6 @@ import {
   PlusCircle,
   ArrowBendUpLeft as Reply,
   Sparkle,
-  Tag,
   User,
   X,
 } from "@phosphor-icons/react";
@@ -56,27 +55,24 @@ type LinkOptions = {
   contacts: ContactOption[];
 };
 
-type EmailKind = EmailProposal["kind"];
+/**
+ * `category_tag` reste dans l'enum Postgres pour les propositions
+ * historiques, mais n'a plus de surface : la taxonomie libre a disparu.
+ */
+type EmailKind = Exclude<EmailProposal["kind"], "category_tag">;
 
 /**
  * Ordre d'affichage cohérent avec meetings : actions humaines en premier
- * (task, project, contact, entity), puis liens automatiques (project_link,
- * category_tag). Le draft_reply est traité à part au-dessus des sections.
+ * (task, project, contact, entity), puis les rattachements (project_link).
+ * Le draft_reply est traité à part au-dessus des sections.
  */
-const KIND_ORDER: EmailKind[] = [
-  "task",
-  "project",
-  "contact",
-  "entity",
-  "project_link",
-  "category_tag",
-];
+const KIND_ORDER: EmailKind[] = ["task", "project", "contact", "entity", "project_link"];
 
-type ProposalWithMatches = EmailProposal & {
+type ProposalWithMatches = Omit<EmailProposal, "kind"> & {
+  kind: EmailKind;
   matchedProjectName: string | null;
   matchedContactName: string | null;
   matchedEntityName: string | null;
-  matchedTagLabel: string | null;
 };
 
 type Props = {
@@ -1207,10 +1203,9 @@ function AlreadyInDbRow({
   const viewHref = matchedViewHref(proposal);
 
   function apply() {
-    // Pour un pending matched, "valider" = appliquer le lien (posé le tag,
-    // ou lier le contact/entité/projet). Pour category_tag / project_link
-    // c'est l'action normale, pour contact/entity/project on utilise le
-    // record existant sans re-créer.
+    // Pour un pending matched, "valider" = poser le rattachement. Pour
+    // project_link c'est l'action normale ; pour contact/entity/project on
+    // utilise le record existant sans re-créer.
     startTransition(async () => {
       const res = await acceptEmailProposal({ proposalId: proposal.id });
       if (!res.ok) {
@@ -1256,7 +1251,7 @@ function AlreadyInDbRow({
           Voir
         </Link>
       ) : null}
-      {proposal.kind === "category_tag" || proposal.kind === "project_link" ? (
+      {proposal.kind === "project_link" ? (
         <>
           <button
             type="button"
@@ -1464,8 +1459,6 @@ function KindIcon({ kind }: { kind: EmailKind }) {
       return <User {...props} />;
     case "entity":
       return <Buildings {...props} />;
-    case "category_tag":
-      return <Tag {...props} />;
     case "draft_reply":
       return <Reply {...props} />;
   }
@@ -1679,8 +1672,7 @@ function groupByKind(
 
 const SUCCESS_MSG: Record<EmailKind, string> = {
   task: "Tâche créée.",
-  category_tag: "Tag appliqué.",
-  project_link: "Lien projet ajouté.",
+  project_link: "Thread rattaché au projet.",
   entity_link: "Entité rattachée.",
   project_contact_link: "Contact rattaché au projet.",
   contact: "Contact créé.",
@@ -1712,10 +1704,6 @@ function summaryFor(p: ProposalWithMatches, payload: Record<string, unknown>): s
       );
     case "entity":
       return String(payload.name ?? "Sans nom");
-    case "category_tag": {
-      const name = String(payload.name ?? "");
-      return p.matchedTagLabel ? (p.matchedTagLabel.split("/").pop() ?? name) : name;
-    }
     case "draft_reply":
       return String(payload.subject ?? "Re:");
   }
@@ -1739,8 +1727,6 @@ function matchedSubtitle(p: ProposalWithMatches, payload: Record<string, unknown
     }
     case "entity":
       return "entité existante";
-    case "category_tag":
-      return "catégorie existante";
     case "draft_reply":
       return "";
   }

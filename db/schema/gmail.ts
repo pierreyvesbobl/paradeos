@@ -22,12 +22,17 @@ export const gmailExtractionStatus = pgEnum("gmail_extraction_status", [
   "failed",
 ]);
 
-export const gmailTagKind = pgEnum("gmail_tag_kind", [
-  "project",
-  "contact",
-  "entity",
-  "category", // tag libre : "Compta", "Annexe", "Admin"…
-]);
+/**
+ * Dimensions de liaison d'un thread. Ce ne sont PAS des tags au sens
+ * d'une taxonomie utilisateur : chaque valeur est la projection d'un
+ * fait Paradeos.
+ *   - project / contact / entity : liaison CRM, née d'un signal auto ou
+ *     d'une décision validée sur une proposition.
+ *   - category : réservé aux libellés SYSTÈME (sens de facture), dérivés
+ *     de `invoice_filings`. Plus aucune taxonomie libre n'est créable —
+ *     les lignes `category` héritées d'avant sont inertes.
+ */
+export const gmailTagKind = pgEnum("gmail_tag_kind", ["project", "contact", "entity", "category"]);
 
 /**
  * Threads Gmail — agrégat dénormalisé pour l'UI (timeline contact /
@@ -109,10 +114,11 @@ export const gmailMessages = pgTable(
 );
 
 /**
- * Tags Gmail — miroir des labels Gmail. Inclut :
- *   - `project` / `contact` / `entity` : tags auto-créés à partir des
- *     records CRM. `targetId` pointe vers le record.
- *   - `category` : tag libre ("Compta", "Annexe"…). `targetId` est null.
+ * Libellés Paradeos — miroir des labels Gmail. Inclut :
+ *   - `project` / `contact` / `entity` : libellés dérivés des records
+ *     CRM. `targetId` pointe vers le record.
+ *   - `category` : libellés SYSTÈME uniquement (Facture achat / Facture
+ *     vente). `targetId` est null. Aucune création libre.
  *
  * `gmailLabelId` est rempli au premier sync ou au premier push. Si
  * null, c'est que le label n'a pas encore été créé côté Gmail.
@@ -144,14 +150,20 @@ export const gmailTags = pgTable(
 );
 
 /**
- * M2M thread × tag. `source` indique d'où vient l'association :
- *   - `auto` : Paradeos l'a posé (match contact email à la sync)
- *   - `gmail` : remonté du label Gmail (l'utilisateur l'a tagué dans Gmail)
- *   - `manual` : ajouté via UI Paradeos
+ * Liaison thread × dimension. `source` indique d'où vient l'association :
+ *   - `auto` : Paradeos l'a déduite (match contact/entité à la sync)
+ *   - `gmail` : remontée du label Gmail (l'utilisateur a rangé dans Gmail)
+ *   - `manual` : posée par une décision explicite dans Paradeos
  *
- * `manuallyOverridden=true` scelle le choix humain : l'auto-tagging ne
- * remplacera plus ce lien (utile pour corriger une erreur LLM sans que
- * la sync suivante rétablisse le mauvais lien).
+ * Le couple (`manuallyOverridden`, `dismissedAt`) porte la décision
+ * humaine, dans les deux sens :
+ *   - `manuallyOverridden=true, dismissedAt=null`  → « oui, c'est ce lien »
+ *   - `manuallyOverridden=true, dismissedAt=<date>` → « non, pas ce lien »
+ *
+ * Une ligne invalidée n'est pas supprimée : c'est elle qui scelle le
+ * refus. L'index unique (thread, tag) + les inserts `onConflictDoNothing`
+ * de l'auto-link empêchent alors de rétablir un lien que l'humain a
+ * retiré. Toute lecture de liaison doit filtrer `dismissedAt is null`.
  */
 export const gmailThreadTags = pgTable(
   "gmail_thread_tags",
@@ -165,6 +177,10 @@ export const gmailThreadTags = pgTable(
       .references(() => gmailTags.id, { onDelete: "cascade" }),
     source: text("source").notNull().default("gmail"),
     manuallyOverridden: boolean("manually_overridden").notNull().default(false),
+    /** Non-null = liaison invalidée par l'utilisateur (décision négative). */
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    /** Auteur de la dernière décision (validation ou invalidation). */
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
   },

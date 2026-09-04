@@ -1,8 +1,8 @@
 "use client";
 
 import { FkCombobox } from "@/components/inline/fk-combobox";
-import { retagThreadProject } from "@/lib/actions/gmail";
-import { Briefcase, Check, Sparkles, Tag, X } from "lucide-react";
+import { setThreadProject } from "@/lib/actions/gmail";
+import { Briefcase, Check, Hand, Mail, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -15,9 +15,9 @@ type Props = {
   currentProject: {
     id: string;
     name: string;
-    /** Source du rattachement pour la pastille visuelle. */
+    /** Origine du rattachement, pour la pastille visuelle. */
     source: "auto" | "manual" | "gmail" | string;
-    /** L'humain a validé/scellé ce lien. */
+    /** L'humain a tranché : ce rattachement ne bougera plus tout seul. */
     manuallyOverridden: boolean;
   } | null;
   projects: ProjectOption[];
@@ -43,8 +43,8 @@ function toneFor(source: string, manuallyOverridden: boolean): SourceTone {
   }
   if (source === "manual") {
     return {
-      label: "Ajouté manuellement",
-      Icon: Tag,
+      label: "Rattaché à la main",
+      Icon: Hand,
       bg: "var(--ds-tint-blue-bg)",
       text: "var(--ds-tint-blue-text)",
       dot: "var(--ds-tint-blue-dot)",
@@ -52,8 +52,8 @@ function toneFor(source: string, manuallyOverridden: boolean): SourceTone {
   }
   if (source === "gmail") {
     return {
-      label: "Depuis label Gmail",
-      Icon: Tag,
+      label: "Rangé depuis Gmail",
+      Icon: Mail,
       bg: "var(--ds-tint-gray-bg)",
       text: "var(--ds-tint-gray-text)",
       dot: "var(--ds-tint-gray-dot)",
@@ -75,7 +75,7 @@ export function ProjectLinkBadge({ threadId, currentProject, projects }: Props) 
 
   function pickProject(nextId: string | null) {
     startTransition(async () => {
-      const res = await retagThreadProject({ threadId, projectId: nextId });
+      const res = await setThreadProject({ threadId, projectId: nextId });
       if (!res.ok) {
         toast.error(res.message);
         return;
