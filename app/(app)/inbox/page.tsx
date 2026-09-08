@@ -4,15 +4,20 @@ import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { requireUser } from "@/lib/auth/server";
-import { getInboxItems } from "@/lib/db/queries/inbox";
+import { getInboxItems, getInboxTotalCount } from "@/lib/db/queries/inbox";
+import { getInboxHistory } from "@/lib/db/queries/inbox-history";
 import { db } from "@/lib/db/server";
 import { and, desc, eq, isNull, ne, or } from "drizzle-orm";
 import type { CoworkingInvoiceOption } from "../compta/reconciliation-actions";
+import { InboxHistoryView } from "./history-view";
+import { InboxTabs } from "./inbox-tabs";
 import { InboxView } from "./inbox-view";
 
 export const metadata = {
   title: "À traiter — Paradeos",
 };
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function fmtDate(d: Date | string | null | undefined): string | null {
   if (!d) return null;
@@ -23,16 +28,39 @@ function fmtDate(d: Date | string | null | undefined): string | null {
   return y && m && day ? `${day}/${m}/${y}` : d;
 }
 
-export default async function InboxPage() {
+export default async function InboxPage({ searchParams }: { searchParams: SearchParams }) {
   const user = await requireUser();
+  const params = await searchParams;
+  const tab = params.vue === "historique" ? "historique" : "a-traiter";
+
+  // L'historique n'a pas besoin des suggestions Dougs (appel réseau,
+  // cache 5 min) ni des factures coworking : on ne charge que lui.
+  if (tab === "historique") {
+    const [history, pendingCount] = await Promise.all([
+      getInboxHistory(user.id),
+      getInboxTotalCount(user.id),
+    ]);
+    return (
+      <div className="mx-auto flex max-w-[1024px] flex-col gap-6">
+        <PageHeader
+          title="À traiter"
+          description="Ce qui a déjà été validé, rejeté ou classé — pour corriger une décision après coup."
+        />
+        <InboxTabs current="historique" pendingCount={pendingCount} />
+        <InboxHistoryView initial={history} />
+      </div>
+    );
+  }
+
   const conn = await db();
 
   // Charge en parallèle : items inbox + factures coworking non liées (pour
   // le fallback manuel dans l'éditeur de rapprochement — sans ça, un user
   // ne peut rattacher qu'aux candidats auto-scorés, et les factures
   // coworking scorent souvent < 0.3 à cause du clientName manquant).
-  const [{ items, counts }, coworkingInvoiceRows] = await Promise.all([
+  const [{ items, counts }, pendingCount, coworkingInvoiceRows] = await Promise.all([
     getInboxItems(user.id),
+    getInboxTotalCount(user.id),
     conn
       .select({
         id: invoices.id,
@@ -90,6 +118,7 @@ export default async function InboxPage() {
             : `${counts.total} extraction${counts.total > 1 ? "s" : ""} IA en attente de validation.`
         }
       />
+      <InboxTabs current="a-traiter" pendingCount={pendingCount} />
       <InboxView items={items} coworkingInvoiceOptions={coworkingInvoiceOptions} />
     </div>
   );

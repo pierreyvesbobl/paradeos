@@ -403,6 +403,7 @@ export const updateAcceptedProposal = action(updateAcceptedProposalSchema, async
   revalidatePath("/projets");
   revalidatePath("/projets");
   revalidatePath("/taches");
+  revalidatePath("/inbox");
   return { ok: true as const };
 });
 
@@ -436,6 +437,7 @@ export const revertProposal = action(revertProposalSchema, async ({ input }) => 
     .where(eq(meetingProposals.id, proposal.id));
 
   revalidatePath(`/meetings/${proposal.meetingId}`);
+  revalidatePath("/inbox");
   return { ok: true as const };
 });
 

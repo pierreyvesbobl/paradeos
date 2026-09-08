@@ -17,19 +17,12 @@ import {
   CalendarBlank,
   Check,
   CheckCircle,
-  CheckSquare,
   Envelope,
-  EnvelopeOpen,
-  Link as LinkIcon,
   ListChecks,
-  Microphone,
   PencilSimple,
   type Icon as PhosphorIcon,
-  Receipt,
   Star,
-  Tag,
   User,
-  UserPlus,
   X,
 } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -37,194 +30,18 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import type { CoworkingInvoiceOption } from "../compta/reconciliation-actions";
+import {
+  KINDS,
+  KIND_BY_KEY,
+  MetaChip,
+  PRIORITY_STYLE,
+  SOURCE_ICON,
+  SOURCE_LABEL,
+  formatDueDate,
+  projectTint,
+} from "./kind-styles";
 
 type FilterKey = "all" | InboxExtractionKind;
-
-type KindDef = {
-  key: InboxExtractionKind;
-  label: string;
-  actionLabel: string;
-  icon: PhosphorIcon;
-  bg: string;
-  textColor: string;
-};
-
-const KINDS: KindDef[] = [
-  {
-    key: "task",
-    label: "Tâches",
-    actionLabel: "Nouvelle tâche",
-    icon: CheckSquare,
-    bg: "var(--ds-tint-blue-bg)",
-    textColor: "var(--ds-tint-blue-text)",
-  },
-  {
-    key: "contact",
-    label: "Contacts",
-    actionLabel: "Nouveau contact",
-    icon: UserPlus,
-    bg: "var(--ds-tint-mauve-bg)",
-    textColor: "var(--ds-tint-mauve-text)",
-  },
-  {
-    key: "entity",
-    label: "Entités",
-    actionLabel: "Nouvelle entité",
-    icon: Buildings,
-    bg: "var(--ds-tint-brown-bg)",
-    textColor: "var(--ds-tint-brown-text)",
-  },
-  {
-    key: "project",
-    label: "Projets",
-    actionLabel: "Nouveau projet",
-    icon: Star,
-    bg: "var(--ds-tint-green-bg)",
-    textColor: "var(--ds-tint-green-text)",
-  },
-  {
-    key: "opportunity",
-    label: "Opportunités",
-    actionLabel: "Nouvelle opportunité",
-    icon: Star,
-    bg: "var(--ds-tint-green-bg)",
-    textColor: "var(--ds-tint-green-text)",
-  },
-  {
-    key: "project_link",
-    label: "Rattachements projet",
-    actionLabel: "Rattacher au projet",
-    icon: LinkIcon,
-    bg: "var(--ds-tint-mauve-bg)",
-    textColor: "var(--ds-tint-mauve-text)",
-  },
-  {
-    key: "entity_link",
-    label: "Rattachements entité",
-    actionLabel: "Rattacher à l'entité",
-    icon: LinkIcon,
-    bg: "var(--ds-tint-mauve-bg)",
-    textColor: "var(--ds-tint-mauve-text)",
-  },
-  {
-    key: "project_contact_link",
-    label: "Contacts projet",
-    actionLabel: "Ajouter comme contact projet",
-    icon: LinkIcon,
-    bg: "var(--ds-tint-mauve-bg)",
-    textColor: "var(--ds-tint-mauve-text)",
-  },
-  {
-    key: "category_tag",
-    label: "Tags email",
-    actionLabel: "Appliquer le tag",
-    icon: Tag,
-    bg: "var(--ds-tint-pink-bg)",
-    textColor: "var(--ds-tint-pink-text)",
-  },
-  {
-    key: "invoice_filing",
-    label: "Factures fournisseurs",
-    actionLabel: "Relancer le classement",
-    icon: Receipt,
-    bg: "var(--ds-tint-yellow-bg)",
-    textColor: "var(--ds-tint-yellow-text)",
-  },
-  {
-    key: "quote_reconciliation",
-    label: "Devis à rapprocher",
-    actionLabel: "Rattacher au projet",
-    icon: Receipt,
-    bg: "var(--ds-tint-yellow-bg)",
-    textColor: "var(--ds-tint-yellow-text)",
-  },
-  {
-    key: "invoice_reconciliation",
-    label: "Factures clients à rapprocher",
-    actionLabel: "Rattacher / créer jalon",
-    icon: Receipt,
-    bg: "var(--ds-tint-yellow-bg)",
-    textColor: "var(--ds-tint-yellow-text)",
-  },
-];
-
-const KIND_BY_KEY: Record<InboxExtractionKind, KindDef> = KINDS.reduce(
-  (acc, k) => {
-    acc[k.key] = k;
-    return acc;
-  },
-  {} as Record<InboxExtractionKind, KindDef>,
-);
-
-const SOURCE_ICON: Record<InboxSource, PhosphorIcon> = {
-  email: EnvelopeOpen,
-  meeting: Microphone,
-  filing: Receipt,
-  reconciliation: Receipt,
-};
-
-const SOURCE_LABEL: Record<InboxSource, string> = {
-  email: "Email",
-  meeting: "Meeting",
-  filing: "Facture fournisseur",
-  reconciliation: "Dougs",
-};
-
-const PRIORITY_STYLE: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-  urgent: {
-    label: "Urgent",
-    bg: "var(--ds-tint-red-bg)",
-    text: "var(--ds-tint-red-text)",
-    dot: "var(--ds-tint-red-dot)",
-  },
-  high: {
-    label: "Haute",
-    bg: "var(--ds-tint-orange-bg)",
-    text: "var(--ds-tint-orange-text)",
-    dot: "var(--ds-tint-orange-dot)",
-  },
-  haute: {
-    label: "Haute",
-    bg: "var(--ds-tint-orange-bg)",
-    text: "var(--ds-tint-orange-text)",
-    dot: "var(--ds-tint-orange-dot)",
-  },
-  normal: {
-    label: "Normale",
-    bg: "var(--ds-tint-gray-bg)",
-    text: "var(--ds-tint-gray-text)",
-    dot: "var(--ds-tint-gray-dot)",
-  },
-  low: {
-    label: "Basse",
-    bg: "var(--ds-tint-gray-bg)",
-    text: "var(--ds-tint-gray-text)",
-    dot: "var(--ds-tint-gray-dot)",
-  },
-};
-
-function formatDueDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
-}
-
-const PROJECT_TINTS: string[] = [
-  "var(--ds-tint-orange-dot)",
-  "var(--ds-tint-blue-dot)",
-  "var(--ds-tint-green-dot)",
-  "var(--ds-tint-mauve-dot)",
-  "var(--ds-tint-pink-dot)",
-  "var(--ds-tint-yellow-dot)",
-  "var(--ds-tint-brown-dot)",
-  "var(--ds-tint-red-dot)",
-];
-function projectTint(id: string, color: string | null | undefined): string {
-  if (color && /^#[0-9a-fA-F]{6}$/.test(color)) return color;
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return PROJECT_TINTS[h % PROJECT_TINTS.length] ?? "var(--ds-tint-blue-dot)";
-}
 
 export function InboxView({
   items,
@@ -471,7 +288,6 @@ const EDITABLE_KINDS = new Set<InboxExtractionKind>([
   "contact",
   "entity",
   "project",
-  "category_tag",
   "quote_reconciliation",
   "invoice_reconciliation",
 ]);
@@ -744,15 +560,6 @@ function InboxRow({
   );
 }
 
-function MetaChip({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-ds-surface px-1.5 py-0 text-[10px] text-ds-text-muted">
-      {icon}
-      <span className="truncate">{label}</span>
-    </span>
-  );
-}
-
 /**
  * Drawer latéral droit qui affiche le contexte source (email, meeting,
  * facture) sans quitter /inbox. Fetch à la demande à chaque changement
@@ -946,9 +753,6 @@ function RowEditor({
       if ((entityName || null) !== (item.meta.entityName ?? null))
         override.entityName = entityName || null;
     }
-    if (item.kind === "category_tag") {
-      if (title.trim() !== initialTitle) override.name = title.trim();
-    }
 
     // Rapprochement : si le user a changé de candidat, on override la
     // reconciliation avec le candidat sélectionné. Le manuel coworking
@@ -978,7 +782,6 @@ function RowEditor({
   const isOpportunity = item.kind === "opportunity";
   const isContact = item.kind === "contact";
   const isEntityOrProject = item.kind === "entity" || item.kind === "project";
-  const isCategoryTag = item.kind === "category_tag";
   const isReconciliation =
     item.kind === "quote_reconciliation" || item.kind === "invoice_reconciliation";
   const candidates = item.reconciliationCandidates ?? [];
@@ -1077,16 +880,6 @@ function RowEditor({
               />
             </Field>
           </>
-        )}
-        {isCategoryTag && (
-          <Field label="Nom du tag" full>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="editor-input"
-            />
-          </Field>
         )}
         {isReconciliation && item.kind === "invoice_reconciliation" && (
           <Field label="Ou rattacher à une facture coworking existante" full>
@@ -1191,7 +984,7 @@ function RowEditor({
           className="inline-flex items-center gap-1.5 rounded-md border border-tint-green-dot bg-tint-green-bg px-2.5 py-1 font-medium text-[12px] text-tint-green-text transition-colors hover:bg-tint-green-dot hover:text-white disabled:opacity-40"
         >
           <Check weight="bold" className="size-3" />
-          {isReconciliation ? "Rattacher" : isCategoryTag ? "Appliquer" : "Enregistrer et créer"}
+          {isReconciliation ? "Rattacher" : "Enregistrer et créer"}
         </button>
       </div>
 

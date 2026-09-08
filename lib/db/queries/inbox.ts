@@ -1,13 +1,14 @@
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
-import { emailProposals, gmailMessages, gmailTags } from "@/db/schema/gmail";
+import { emailProposals, gmailMessages } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
 import { DougsAuthError } from "@/lib/dougs/client";
 import { getInvoiceSuggestions, getQuoteSuggestions } from "@/lib/dougs/reconciliation";
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { formatPersonName } from "@/lib/format";
 /**
@@ -25,7 +26,6 @@ export type InboxExtractionKind =
   | "entity"
   | "project"
   // Extractions email uniquement
-  | "category_tag"
   | "project_link"
   | "entity_link"
   | "project_contact_link"
@@ -164,6 +164,11 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
           // Les brouillons de réponse se valident depuis le thread mail
           // — pas depuis l'inbox où on ne peut pas lire le corps.
           ne(emailProposals.kind, "draft_reply"),
+          // `category_tag` : kind mort depuis la suppression de la
+          // taxonomie libre (migration 0015). Aucune extraction n'en
+          // produit plus, et `acceptEmailProposal` n'a pas de branche
+          // pour lui — le montrer offrirait un bouton sans effet.
+          ne(emailProposals.kind, "category_tag"),
         ),
       )
       .orderBy(desc(emailProposals.createdAt)),
@@ -235,7 +240,6 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
   const emailProjectIds = new Set<string>();
   const emailContactIds = new Set<string>();
   const emailEntityIds = new Set<string>();
-  const emailTagIds = new Set<string>();
   for (const r of emailRows) {
     // Ajoute aussi `payload.projectId` pour task/opportunity/project_contact_link :
     // c'est là que le LLM stocke le projet rattaché de la tâche, sans passer par matchedId.
@@ -247,7 +251,6 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
     else if (r.kind === "contact" || r.kind === "project_contact_link")
       emailContactIds.add(r.matchedId);
     else if (r.kind === "entity" || r.kind === "entity_link") emailEntityIds.add(r.matchedId);
-    else if (r.kind === "category_tag") emailTagIds.add(r.matchedId);
   }
   for (const r of meetingRows) {
     const payload = (r.payload ?? {}) as Record<string, unknown>;
@@ -255,7 +258,7 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
     if (payloadProjectId) emailProjectIds.add(payloadProjectId);
   }
 
-  const [projectNames, contactNames, entityNames, tagNames] = await Promise.all([
+  const [projectNames, contactNames, entityNames] = await Promise.all([
     emailProjectIds.size > 0
       ? conn
           .select({ id: projects.id, name: projects.name, color: projects.color })
@@ -278,12 +281,6 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
           .from(entities)
           .where(inArray(entities.id, [...emailEntityIds]))
       : Promise.resolve([] as { id: string; name: string }[]),
-    emailTagIds.size > 0
-      ? conn
-          .select({ id: gmailTags.id, labelName: gmailTags.labelName })
-          .from(gmailTags)
-          .where(inArray(gmailTags.id, [...emailTagIds]))
-      : Promise.resolve([] as { id: string; labelName: string }[]),
   ]);
 
   const projectMap = new Map(projectNames.map((p) => [p.id, p]));
@@ -291,7 +288,6 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
     contactNames.map((c) => [c.id, formatPersonName(c.firstName, c.lastName)]),
   );
   const entityMap = new Map(entityNames.map((e) => [e.id, e.name]));
-  const tagMap = new Map(tagNames.map((t) => [t.id, t.labelName]));
 
   // Dedup cross-sources : plusieurs messages d'un même thread ou plusieurs
   // meetings peuvent générer la même proposition (ex. "rattacher contact X
@@ -366,9 +362,6 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
       title = contactName ?? String(payload.contactName ?? "Contact");
       detail = "Ajout comme contact projet";
       meta.projectName = linkedProject?.name ?? (payload.projectName as string) ?? null;
-    } else if (r.kind === "category_tag") {
-      title = (r.matchedId && tagMap.get(r.matchedId)) ?? String(payload.name ?? "Tag");
-      detail = "Catégorisation du thread";
     } else if (r.kind === "draft_reply") {
       title = String(payload.subject ?? "Re: (sans objet)");
       const preview = typeof payload.body === "string" ? payload.body.slice(0, 80) : null;
@@ -400,8 +393,6 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
       dedupKey = `project_contact_link:${r.matchedId ?? norm(payload.contactName)}:${
         payloadProjectId ?? ""
       }`;
-    } else if (r.kind === "category_tag") {
-      dedupKey = `category_tag:${r.matchedId ?? norm(payload.name)}:${r.threadId}`;
     } else if (r.kind === "draft_reply") {
       dedupKey = `draft_reply:${r.threadId}`;
     }
@@ -746,9 +737,20 @@ function toIso(value: Date | string | null | undefined): string {
 /**
  * Compteur unread léger pour le badge sidebar. Somme des 3 sources
  * (pending) : chaque proposition et chaque filing compte pour 1.
+ *
+ * Applique les mêmes exclusions que `getInboxItems` — brouillons de
+ * réponse, et extractions déjà auto-matchées sur un record existant
+ * (cf. AUTO_MATCH_KINDS) qui n'appellent aucune décision. Sans ça le
+ * badge annonçait des items que la page ne montre jamais. La dédup,
+ * elle, n'est pas rejouée ici : elle ne peut que faire baisser le
+ * compte, et elle coûte la lecture des payloads.
  */
 export async function getInboxTotalCount(userId: string): Promise<number> {
   const conn = await db();
+
+  /** `contact`/`entity`/`project` déjà matchés → masqués côté page. */
+  const notAutoMatched = (kindCol: AnyPgColumn, matchedCol: AnyPgColumn) =>
+    or(isNull(matchedCol), notInArray(kindCol, ["contact", "entity", "project"]));
 
   const [emailRow, meetingRow, filingRow] = await Promise.all([
     conn
@@ -760,12 +762,19 @@ export async function getInboxTotalCount(userId: string): Promise<number> {
           eq(gmailMessages.userId, userId),
           eq(emailProposals.status, "pending"),
           ne(emailProposals.kind, "draft_reply"),
+          ne(emailProposals.kind, "category_tag"),
+          notAutoMatched(emailProposals.kind, emailProposals.matchedId),
         ),
       ),
     conn
       .select({ count: sql<number>`count(*)::int` })
       .from(meetingProposals)
-      .where(eq(meetingProposals.status, "pending")),
+      .where(
+        and(
+          eq(meetingProposals.status, "pending"),
+          notAutoMatched(meetingProposals.kind, meetingProposals.matchedId),
+        ),
+      ),
     conn
       .select({ count: sql<number>`count(*)::int` })
       .from(invoiceFilings)

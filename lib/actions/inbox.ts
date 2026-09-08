@@ -1,14 +1,26 @@
 "use server";
 
-import { acceptEmailProposal, rejectEmailProposal } from "@/lib/actions/email-proposals";
+import {
+  acceptEmailProposal,
+  rejectEmailProposal,
+  revertEmailProposal,
+  updateAcceptedEmailProposal,
+} from "@/lib/actions/email-proposals";
 import { rejectInvoiceFiling, retryInvoiceFiling } from "@/lib/actions/invoice-filings";
 import {
   linkInvoiceToDougs,
   linkProjectAsNewMilestone,
   linkProjectQuoteToDougs,
 } from "@/lib/actions/invoices";
-import { decideProposal } from "@/lib/actions/meetings";
+import { decideProposal, revertProposal, updateAcceptedProposal } from "@/lib/actions/meetings";
+import { getUser } from "@/lib/auth/server";
 import type { InboxReconciliation } from "@/lib/db/queries/inbox";
+import {
+  type InboxHistoryData,
+  type InboxHistoryFilters,
+  type InboxHistorySource,
+  getInboxHistory,
+} from "@/lib/db/queries/inbox-history";
 import { type InboxPreview, getInboxPreview } from "@/lib/db/queries/inbox-preview";
 
 /**
@@ -109,4 +121,74 @@ export async function loadInboxPreview(input: {
   sourceId: string;
 }): Promise<InboxPreview | null> {
   return getInboxPreview(input.source, input.sourceId);
+}
+
+/**
+ * Historique de l'inbox — chargement paginé côté client (filtres +
+ * « afficher plus » sans navigation).
+ */
+export async function loadInboxHistory(
+  filters: InboxHistoryFilters,
+): Promise<InboxHistoryData | null> {
+  const user = await getUser();
+  if (!user) return null;
+  return getInboxHistory(user.id, filters);
+}
+
+/**
+ * Remet une décision en attente : l'item repart dans « À traiter ».
+ *
+ * Sémantique par source :
+ *   - email   → revertEmailProposal. Pour un rattachement, la décision
+ *               EST la liaison : la remettre en attente efface la
+ *               liaison et son label Gmail, dans un sens comme dans
+ *               l'autre. Les records créés (tâche, contact…) ne sont
+ *               pas supprimés.
+ *   - meeting → revertProposal, même principe.
+ *   - filing  → retryInvoiceFiling : un classement ne se « dé-décide »
+ *               pas, il se relance (repasse pending puis reclasse).
+ */
+export async function revertInboxItem(input: {
+  source: InboxHistorySource;
+  id: string;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (input.source === "email") {
+    const res = await revertEmailProposal({ proposalId: input.id });
+    if (!res.ok) return { ok: false, message: res.message };
+    return { ok: true };
+  }
+  if (input.source === "meeting") {
+    const res = await revertProposal({ proposalId: input.id });
+    if (!res.ok) return { ok: false, message: res.message };
+    return { ok: true };
+  }
+  const res = await retryInvoiceFiling({ filingId: input.id });
+  if (!res.ok) return { ok: false, message: res.message };
+  return { ok: true };
+}
+
+/**
+ * Corrige le record créé par une proposition déjà acceptée (mauvais
+ * titre, mauvaise entité…) sans revert + re-accept, qui créerait un
+ * doublon. Les classements de facture n'ont pas de payload éditable.
+ */
+export async function updateInboxHistoryItem(input: {
+  source: InboxHistorySource;
+  id: string;
+  payload: Record<string, unknown>;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (input.source === "email") {
+    const res = await updateAcceptedEmailProposal({
+      proposalId: input.id,
+      payload: input.payload,
+    });
+    if (!res.ok) return { ok: false, message: res.message };
+    return { ok: true };
+  }
+  if (input.source === "meeting") {
+    const res = await updateAcceptedProposal({ proposalId: input.id, payload: input.payload });
+    if (!res.ok) return { ok: false, message: res.message };
+    return { ok: true };
+  }
+  return { ok: false, message: "Un classement de facture ne s'édite pas — relance-le." };
 }
