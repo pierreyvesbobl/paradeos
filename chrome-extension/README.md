@@ -76,6 +76,21 @@ relevés sans raison :
   suspendue jusqu'au lendemain — insister est précisément ce qui
   transforme un ralentissement en restriction
 
+## État de la synchro LinkedIn au 08/09/2026 : hors service
+
+Relevé sur une vraie session : l'endpoint REST des conversations répond
+500 (la messagerie est passée en GraphQL avec un `queryId` haché qui
+change à chaque déploiement LinkedIn), et les relations ont quitté
+Voyager pour du server-driven UI — leur réponse décrit des composants
+React, plus des données.
+
+La synchro Dougs, elle, n'est pas concernée et continue de fonctionner.
+
+Le détail du constat et les pistes de remplacement (CSV de l'export
+officiel, ou fournisseur type Unipile) sont dans l'en-tête de
+`voyager.js`. Côté Paradeos, toute la chaîne d'ingestion est testée et
+indépendante de la source : elle attend du JSON normalisé.
+
 ## Quand LinkedIn casse quelque chose
 
 Voyager n'est pas une API publique : les chemins et les formes de

@@ -16,6 +16,33 @@
  * utiliser le bouton « Diagnostic » de la popup : il dit quel endpoint
  * a répondu quoi. La méthode de mise à jour : ouvrir linkedin.com,
  * onglet Réseau des devtools, relever la requête réelle, la transcrire.
+ *
+ * ⚠️ ÉTAT AU 08/09/2026 : LES DEUX ENDPOINTS CI-DESSOUS SONT HORS
+ * SERVICE. Relevé sur une vraie session, onglet Réseau.
+ *
+ *  1. `/voyager/api/messaging/conversations?keyVersion=LEGACY_INBOX`
+ *     répond 500. La messagerie est passée en GraphQL :
+ *       /voyager/api/voyagerMessagingGraphQL/graphql
+ *         ?queryId=<nom>.<hash>&variables=(...)
+ *     Le hash change à CHAQUE déploiement front de LinkedIn. Le figer
+ *     ici condamne à réparer toutes les deux ou trois semaines ; la
+ *     seule voie tenable serait de l'extraire des bundles JS au runtime.
+ *
+ *  2. Les relations ont quitté Voyager. La liste passe par du
+ *     server-driven UI :
+ *       POST /flagship-web/rsc-action/actions/pagination
+ *         ?sduiid=com.linkedin.sdui.pagers.mynetwork.connectionsList
+ *     La réponse décrit des composants React, pas des données : il n'y
+ *     a plus d'API JSON pour les relations. Ces appels renvoient par
+ *     ailleurs régulièrement 503.
+ *
+ * Ne pas repartir d'ici sans avoir tranché la source. Le reste de la
+ * chaîne (POST /api/linkedin/ingest, dédup, file de rapprochement,
+ * inbox, historique) est testé et INDÉPENDANT de la source : il attend
+ * du JSON normalisé, d'où qu'il vienne. Deux pistes réalistes — le CSV
+ * de l'export officiel LinkedIn (stable, gratuit, et il contient les
+ * emails que l'API ne donnait pas), ou un fournisseur type Unipile qui
+ * maintient l'extraction des queryId à notre place.
  */
 
 const BASE = "https://www.linkedin.com";
