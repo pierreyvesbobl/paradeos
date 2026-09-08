@@ -6,6 +6,7 @@ import {
   CheckSquare,
   EnvelopeOpen,
   Link as LinkIcon,
+  LinkedinLogo,
   Microphone,
   type Icon as PhosphorIcon,
   Receipt,
@@ -47,6 +48,15 @@ export const KINDS: KindDef[] = [
     icon: UserPlus,
     bg: "var(--ds-tint-mauve-bg)",
     textColor: "var(--ds-tint-mauve-text)",
+  },
+  {
+    key: "contact_match",
+    label: "Rapprochements",
+    actionLabel: "Rapprocher la relation",
+    doneLabel: "Relation rapprochée",
+    icon: UserPlus,
+    bg: "var(--ds-tint-pink-bg)",
+    textColor: "var(--ds-tint-pink-text)",
   },
   {
     key: "entity",
@@ -144,12 +154,14 @@ export const SOURCE_ICON: Record<InboxSource, PhosphorIcon> = {
   meeting: Microphone,
   filing: Receipt,
   reconciliation: Receipt,
+  linkedin: LinkedinLogo,
 };
 
 export const SOURCE_LABEL: Record<InboxSource, string> = {
   email: "Email",
   meeting: "Meeting",
   filing: "Facture fournisseur",
+  linkedin: "LinkedIn",
   reconciliation: "Dougs",
 };
 

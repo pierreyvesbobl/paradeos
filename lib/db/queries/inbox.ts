@@ -2,6 +2,7 @@ import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
+import { linkedinConnections } from "@/db/schema/linkedin";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
@@ -17,7 +18,7 @@ import { formatPersonName } from "@/lib/format";
  * source est portée par chaque item pour qu'on puisse filtrer par type
  * d'extraction ET voir d'où ça vient.
  */
-export type InboxSource = "email" | "meeting" | "filing" | "reconciliation";
+export type InboxSource = "email" | "meeting" | "filing" | "reconciliation" | "linkedin";
 
 export type InboxExtractionKind =
   // Extractions email + meeting partagées
@@ -36,7 +37,9 @@ export type InboxExtractionKind =
   | "invoice_filing"
   // Rapprochements Dougs — factures clients
   | "invoice_reconciliation"
-  | "quote_reconciliation";
+  | "quote_reconciliation"
+  // Source LinkedIn — relation importée à rapprocher d'un contact
+  | "contact_match";
 
 export type InboxReconciliationAction =
   | "link_invoice_to_dougs"
@@ -123,6 +126,14 @@ export type InboxItemMeta = {
   contactEmail?: string | null;
   /** Nom d'entité pour contact/entity_link. */
   entityName?: string | null;
+  /** Contact CRM suggéré pour un rapprochement (kind `contact_match`). */
+  contactName?: string | null;
+  /**
+   * Id du contact suggéré. Indispensable : deux contacts homonymes
+   * rendraient une résolution par nom ambiguë, et c'est précisément le
+   * genre de fusion qu'on refuse de faire au hasard.
+   */
+  contactId?: string | null;
 };
 
 export type InboxCounts = {
@@ -139,7 +150,7 @@ export type InboxData = {
 export async function getInboxItems(userId: string): Promise<InboxData> {
   const conn = await db();
 
-  const [emailRows, meetingRows, filingRows] = await Promise.all([
+  const [emailRows, meetingRows, filingRows, linkedinRows] = await Promise.all([
     conn
       .select({
         id: emailProposals.id,
@@ -207,6 +218,29 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
       .from(invoiceFilings)
       .where(and(eq(invoiceFilings.userId, userId), eq(invoiceFilings.status, "pending")))
       .orderBy(desc(invoiceFilings.createdAt)),
+
+    // Relations LinkedIn que le rapprochement automatique n'a pas pu
+    // trancher (ni email connu, ni URL LinkedIn déjà sur une fiche).
+    // `matchedContactId` porte une *suggestion* issue du fuzzy nom, pas
+    // une décision — c'est tout l'objet de la file.
+    conn
+      .select({
+        id: linkedinConnections.id,
+        firstName: linkedinConnections.firstName,
+        lastName: linkedinConnections.lastName,
+        headline: linkedinConnections.headline,
+        company: linkedinConnections.company,
+        position: linkedinConnections.position,
+        profileUrl: linkedinConnections.profileUrl,
+        matchedContactId: linkedinConnections.matchedContactId,
+        matchConfidence: linkedinConnections.matchConfidence,
+        createdAt: linkedinConnections.createdAt,
+      })
+      .from(linkedinConnections)
+      .where(
+        and(eq(linkedinConnections.userId, userId), eq(linkedinConnections.matchStatus, "pending")),
+      )
+      .orderBy(desc(linkedinConnections.createdAt)),
   ]);
 
   // Rapprochement Dougs (best-effort — l'API Dougs peut être down ou
@@ -256,6 +290,11 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
     const payload = (r.payload ?? {}) as Record<string, unknown>;
     const payloadProjectId = typeof payload.projectId === "string" ? payload.projectId : null;
     if (payloadProjectId) emailProjectIds.add(payloadProjectId);
+  }
+  // Contact suggéré par le fuzzy sur une relation LinkedIn : résolu par
+  // le même batch que les propositions email.
+  for (const r of linkedinRows) {
+    if (r.matchedContactId) emailContactIds.add(r.matchedContactId);
   }
 
   const [projectNames, contactNames, entityNames] = await Promise.all([
@@ -684,6 +723,39 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
     );
   }
 
+  // ── Relations LinkedIn à rapprocher ───────────────────────────────
+  for (const r of linkedinRows) {
+    const name = formatPersonName(r.firstName, r.lastName) || "Relation sans nom";
+    const suggested = r.matchedContactId ? contactMap.get(r.matchedContactId) : undefined;
+    const role = r.position ?? r.headline ?? null;
+    const detail = suggested ? `Ressemble à ${suggested}${role ? ` · ${role}` : ""}` : role;
+
+    pushDedup(
+      {
+        id: `linkedin:${r.id}`,
+        sourceId: r.id,
+        source: "linkedin",
+        kind: "contact_match",
+        title: name,
+        detail,
+        sourceLabel: "Relation LinkedIn",
+        // Le profil LinkedIn est le seul « dossier » consultable pour
+        // lever un doute — plus utile qu'un lien interne vers rien.
+        href: r.profileUrl ?? "/inbox",
+        matchConfidence: r.matchConfidence ? Number(r.matchConfidence) : null,
+        dateSort: toIso(r.createdAt),
+        dateLabel: relativeAgoLabel(r.createdAt),
+        meta: {
+          entityName: r.company,
+          contactName: suggested ?? null,
+          contactId: r.matchedContactId,
+        },
+        duplicates: [],
+      },
+      `linkedin:connection:${r.id}`,
+    );
+  }
+
   // Collapse chaque groupe de duplicats en 1 item : garde le plus récent
   // comme représentant, remplit `duplicates` avec les autres. Comme ça
   // l'accept/reject côté UI peut traiter le groupe entier d'un coup.
@@ -699,7 +771,7 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
 
   const counts: InboxCounts = {
     total: items.length,
-    bySource: { email: 0, meeting: 0, filing: 0, reconciliation: 0 },
+    bySource: { email: 0, meeting: 0, filing: 0, reconciliation: 0, linkedin: 0 },
     byKind: {},
   };
   for (const it of items) {

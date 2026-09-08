@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth/server";
 import { getInboxItems, getInboxTotalCount } from "@/lib/db/queries/inbox";
 import { getInboxHistory } from "@/lib/db/queries/inbox-history";
 import { db } from "@/lib/db/server";
+import { formatPersonName } from "@/lib/format";
 import { and, desc, eq, isNull, ne, or } from "drizzle-orm";
 import type { CoworkingInvoiceOption } from "../compta/reconciliation-actions";
 import { InboxHistoryView } from "./history-view";
@@ -89,6 +90,28 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
       .orderBy(desc(invoices.invoicedAt), desc(invoices.periodStart)),
   ]);
 
+  // Options du combobox de rapprochement LinkedIn. Chargées seulement
+  // si la file contient au moins un item : inutile de payer la requête
+  // quand il n'y a rien à rapprocher.
+  const needsContactOptions = items.some((it) => it.kind === "contact_match");
+  const contactOptions = needsContactOptions
+    ? (
+        await conn
+          .select({
+            id: contacts.id,
+            firstName: contacts.firstName,
+            lastName: contacts.lastName,
+            email: contacts.email,
+          })
+          .from(contacts)
+          .orderBy(contacts.lastName, contacts.firstName)
+      ).map((c) => ({
+        id: c.id,
+        label: formatPersonName(c.firstName, c.lastName) || c.email || "(sans nom)",
+        email: c.email,
+      }))
+    : [];
+
   const coworkingInvoiceOptions: CoworkingInvoiceOption[] = coworkingInvoiceRows.map((c) => {
     const contactName = `${c.contactFirstName ?? ""} ${c.contactLastName ?? ""}`.trim() || null;
     const issued = fmtDate(c.invoicedAt);
@@ -119,7 +142,11 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
         }
       />
       <InboxTabs current="a-traiter" pendingCount={pendingCount} />
-      <InboxView items={items} coworkingInvoiceOptions={coworkingInvoiceOptions} />
+      <InboxView
+        items={items}
+        coworkingInvoiceOptions={coworkingInvoiceOptions}
+        contactOptions={contactOptions}
+      />
     </div>
   );
 }

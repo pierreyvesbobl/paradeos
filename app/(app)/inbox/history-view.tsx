@@ -73,6 +73,7 @@ const SOURCE_FILTERS: { key: SourceFilter; label: string }[] = [
   { key: "email", label: "Email" },
   { key: "meeting", label: "Meeting" },
   { key: "filing", label: "Factures" },
+  { key: "linkedin", label: "LinkedIn" },
 ];
 
 /**
@@ -371,6 +372,10 @@ function HistoryRow({
   const projectDot = item.projectId ? projectTint(item.projectId, item.projectColor) : null;
   const isLinkKind = item.kind === "project_link" || item.kind === "entity_link";
   const revertLabel = item.source === "filing" ? "Relancer le classement" : "Remettre en attente";
+  // Le contact créé ou enrichi n'est pas défait : seul le rapprochement
+  // repart en file. Le dire évite de laisser croire à une annulation.
+  const revertConfirmLinkedin =
+    "Remettre ce rapprochement en attente ? Le contact créé ou enrichi n'est pas supprimé.";
 
   function revert() {
     // Un rattachement, c'est la liaison elle-même : la remettre en
@@ -378,11 +383,13 @@ function HistoryRow({
     // repart chercher le Drive. Les deux méritent une confirmation ;
     // annuler un simple « créé », non.
     if (
-      (isLinkKind || item.source === "filing") &&
+      (isLinkKind || item.source === "filing" || item.source === "linkedin") &&
       !window.confirm(
         item.source === "filing"
           ? "Relancer le classement de cette facture ?"
-          : "Remettre ce rattachement en attente ? La liaison et son libellé Gmail seront retirés.",
+          : item.source === "linkedin"
+            ? revertConfirmLinkedin
+            : "Remettre ce rattachement en attente ? La liaison et son libellé Gmail seront retirés.",
       )
     )
       return;

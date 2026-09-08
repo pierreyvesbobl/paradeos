@@ -4,6 +4,11 @@ import { type NextRequest, NextResponse } from "next/server";
 // `/api/dougs/sync-cookie` est appelé par l'extension Chrome
 // "Paradeos Dougs Sync" depuis l'origine app.dougs.fr — pas de session
 // Supabase, auth via Bearer token (cf. resolveSyncToken).
+// `/api/linkedin/ingest` est appelé par la même extension depuis
+// l'origine linkedin.com : c'est elle qui interroge l'API Voyager dans
+// le navigateur de l'utilisateur (LinkedIn bloque les IP datacenter et
+// restreint les comptes dont la session change d'origine) puis pousse
+// le JSON normalisé — auth via Bearer token (cf. resolveLinkedinSyncToken).
 // `/api/mcp` est appelé par les clients MCP (Claude Desktop/Code, Cursor…)
 // en transport HTTP — pas de cookie de session, auth via
 // `Authorization: Bearer paradeos_pat_…` ou un access token OAuth
@@ -20,6 +25,7 @@ const PUBLIC_ROUTES = [
   "/auth/confirm",
   "/api/cron",
   "/api/dougs/sync-cookie",
+  "/api/linkedin/ingest",
   "/api/mcp",
   "/api/oauth",
   "/.well-known",

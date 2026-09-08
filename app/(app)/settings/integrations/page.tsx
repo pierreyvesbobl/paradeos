@@ -3,6 +3,7 @@ import { dougsSessions } from "@/db/schema/dougs";
 import { getAppUrl } from "@/lib/app-url";
 import { getCurrentUserRole } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/server";
+import { getLinkedinSettingsSummary } from "@/lib/db/queries/linkedin";
 import { db } from "@/lib/db/server";
 import { getSyncTokensForUser } from "@/lib/dougs/sync-tokens";
 import { SETTING_KEYS, getSetting, getSettingStatus } from "@/lib/settings";
@@ -15,6 +16,7 @@ import { GoogleCalendarSection } from "./google-calendar-section";
 import { GoogleDriveSection } from "./google-drive-section";
 import { IntegrationsTabs } from "./integrations-tabs";
 import { InvoiceFilingSection } from "./invoice-filing-section";
+import { LinkedinSection } from "./linkedin-section";
 import { LlmConfigForm } from "./llm-config-form";
 import { OauthCallbackToast } from "./oauth-callback-toast";
 import { OpenAiKeyForm } from "./openai-key-form";
@@ -36,7 +38,7 @@ export default async function IntegrationsSettingsPage({
     db(),
   ]);
 
-  const [[dougsSession], syncTokensRaw, appUrl] = await Promise.all([
+  const [[dougsSession], syncTokensRaw, appUrl, linkedin] = await Promise.all([
     conn
       .select({
         companyId: dougsSessions.companyId,
@@ -48,24 +50,36 @@ export default async function IntegrationsSettingsPage({
       .limit(1),
     getSyncTokensForUser(user.id),
     getAppUrl(),
+    getLinkedinSettingsSummary(user.id),
   ]);
 
   const comptaTab = (
-    <DougsSection
-      connected={Boolean(dougsSession)}
-      companyId={dougsSession?.companyId ?? null}
-      lastUsedAt={dougsSession?.lastUsedAt?.toISOString() ?? null}
-      expiresAt={dougsSession?.expiresAt?.toISOString() ?? null}
-      appUrl={appUrl}
-      syncTokens={syncTokensRaw
-        .filter((t) => !t.revokedAt)
-        .map((t) => ({
-          id: t.id,
-          label: t.label,
-          createdAt: t.createdAt.toISOString(),
-          lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
-        }))}
-    />
+    <>
+      <DougsSection
+        connected={Boolean(dougsSession)}
+        companyId={dougsSession?.companyId ?? null}
+        lastUsedAt={dougsSession?.lastUsedAt?.toISOString() ?? null}
+        expiresAt={dougsSession?.expiresAt?.toISOString() ?? null}
+        appUrl={appUrl}
+        syncTokens={syncTokensRaw
+          .filter((t) => !t.revokedAt)
+          .map((t) => ({
+            id: t.id,
+            label: t.label,
+            createdAt: t.createdAt.toISOString(),
+            lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
+          }))}
+      />
+      <LinkedinSection
+        appUrl={appUrl}
+        syncTokens={linkedin.syncTokens}
+        lastConversationsSyncAt={linkedin.lastConversationsSyncAt}
+        lastConnectionsSyncAt={linkedin.lastConnectionsSyncAt}
+        lastError={linkedin.lastError}
+        conversationCount={linkedin.conversationCount}
+        pendingMatchCount={linkedin.pendingMatchCount}
+      />
+    </>
   );
 
   const googleTab = (
