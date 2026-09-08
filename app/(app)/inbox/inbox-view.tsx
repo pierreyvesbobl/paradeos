@@ -43,12 +43,16 @@ import {
 
 type FilterKey = "all" | InboxExtractionKind;
 
+export type ContactOption = { id: string; label: string; email: string | null };
+
 export function InboxView({
   items,
   coworkingInvoiceOptions,
+  contactOptions,
 }: {
   items: InboxItem[];
   coworkingInvoiceOptions: CoworkingInvoiceOption[];
+  contactOptions: ContactOption[];
 }) {
   const router = useRouter();
   const [kindFilter, setKindFilter] = useState<FilterKey>("all");
@@ -87,10 +91,11 @@ export function InboxView({
     filing: items.filter((it) => it.source === "filing" && !dismissed.has(it.id)).length,
     reconciliation: items.filter((it) => it.source === "reconciliation" && !dismissed.has(it.id))
       .length,
+    linkedin: items.filter((it) => it.source === "linkedin" && !dismissed.has(it.id)).length,
   };
   const sourceTabs: { key: "all" | InboxSource; label: string; count: number }[] = [
     { key: "all", label: "Toutes sources", count: remainingTotal },
-    ...(["email", "meeting", "filing", "reconciliation"] as InboxSource[])
+    ...(["email", "meeting", "filing", "reconciliation", "linkedin"] as InboxSource[])
       .filter((s) => sourceCounts[s] > 0)
       .map((s) => ({ key: s, label: SOURCE_LABEL[s], count: sourceCounts[s] })),
   ];
@@ -267,6 +272,7 @@ export function InboxView({
               item={it}
               isLast={i === visible.length - 1}
               coworkingInvoiceOptions={coworkingInvoiceOptions}
+              contactOptions={contactOptions}
               onDismiss={(id) => {
                 dismissLocally(id);
                 if (previewItem?.id === id) setPreviewItem(null);
@@ -290,18 +296,21 @@ const EDITABLE_KINDS = new Set<InboxExtractionKind>([
   "project",
   "quote_reconciliation",
   "invoice_reconciliation",
+  "contact_match",
 ]);
 
 function InboxRow({
   item,
   isLast,
   coworkingInvoiceOptions,
+  contactOptions,
   onDismiss,
   onOpenPreview,
 }: {
   item: InboxItem;
   isLast: boolean;
   coworkingInvoiceOptions: CoworkingInvoiceOption[];
+  contactOptions: ContactOption[];
   onDismiss: (id: string) => void;
   onOpenPreview: () => void;
 }) {
@@ -549,6 +558,7 @@ function InboxRow({
           item={item}
           disabled={pending}
           coworkingInvoiceOptions={coworkingInvoiceOptions}
+          contactOptions={contactOptions}
           onCancel={() => setEditing(false)}
           onSave={(overrides) => {
             setEditing(false);
@@ -583,6 +593,25 @@ function PreviewSheet({ item, onClose }: { item: InboxItem | null; onClose: () =
         meta: [
           ...(item.meta.projectName ? [{ label: "Projet", value: item.meta.projectName }] : []),
           ...(item.meta.entityName ? [{ label: "Client", value: item.meta.entityName }] : []),
+        ],
+        bodyText: null,
+      });
+      setLoading(false);
+      return;
+    }
+    if (item.source === "linkedin") {
+      // Une relation LinkedIn n'a pas d'aperçu à charger : la ligne
+      // porte déjà tout ce que LinkedIn nous a donné.
+      setData({
+        source: "linkedin",
+        title: item.title,
+        subtitle: item.detail,
+        externalHref: item.href,
+        meta: [
+          ...(item.meta.entityName ? [{ label: "Société", value: item.meta.entityName }] : []),
+          ...(item.meta.contactName
+            ? [{ label: "Contact suggéré", value: item.meta.contactName }]
+            : []),
         ],
         bodyText: null,
       });
@@ -689,12 +718,14 @@ function RowEditor({
   item,
   disabled,
   coworkingInvoiceOptions,
+  contactOptions,
   onSave,
   onCancel,
 }: {
   item: InboxItem;
   disabled: boolean;
   coworkingInvoiceOptions: CoworkingInvoiceOption[];
+  contactOptions: ContactOption[];
   onSave: (overrides: {
     payloadOverride?: Record<string, unknown>;
     reconciliation?: InboxReconciliation | null;
@@ -728,6 +759,10 @@ function RowEditor({
   // les candidats auto-scorés (souvent < 0.3 à cause du clientName manquant
   // sur le contrat, ou d'un écart montant/date). Prioritaire sur recoTargetId.
   const [manualCoworkingId, setManualCoworkingId] = useState<string | null>(null);
+  // Rapprochement LinkedIn : contact retenu (défaut = la suggestion du
+  // fuzzy, que l'utilisateur peut remplacer), ou création d'un nouveau.
+  const [matchContactId, setMatchContactId] = useState<string | null>(item.meta.contactId ?? null);
+  const [createNewContact, setCreateNewContact] = useState(false);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -752,6 +787,11 @@ function RowEditor({
         override.email = contactEmail || null;
       if ((entityName || null) !== (item.meta.entityName ?? null))
         override.entityName = entityName || null;
+    }
+
+    if (item.kind === "contact_match") {
+      if (createNewContact) override.createContact = true;
+      else if (matchContactId) override.contactId = matchContactId;
     }
 
     // Rapprochement : si le user a changé de candidat, on override la
@@ -782,6 +822,7 @@ function RowEditor({
   const isOpportunity = item.kind === "opportunity";
   const isContact = item.kind === "contact";
   const isEntityOrProject = item.kind === "entity" || item.kind === "project";
+  const isContactMatch = item.kind === "contact_match";
   const isReconciliation =
     item.kind === "quote_reconciliation" || item.kind === "invoice_reconciliation";
   const candidates = item.reconciliationCandidates ?? [];
@@ -797,6 +838,47 @@ function RowEditor({
               onChange={(e) => setTitle(e.target.value)}
               className="editor-input"
             />
+          </Field>
+        )}
+        {isContactMatch && (
+          <Field label="Rattacher à" full>
+            {createNewContact ? (
+              <p className="text-ds-text-secondary text-xs">
+                Un nouveau contact sera créé à partir de la relation LinkedIn.{" "}
+                <button
+                  type="button"
+                  onClick={() => setCreateNewContact(false)}
+                  className="underline hover:no-underline"
+                >
+                  Choisir un contact existant
+                </button>
+              </p>
+            ) : (
+              <>
+                <FkCombobox
+                  value={matchContactId}
+                  onValueChange={setMatchContactId}
+                  options={contactOptions.map((c) => ({
+                    id: c.id,
+                    label: c.label,
+                    searchValue: `${c.label} ${c.email ?? ""}`,
+                  }))}
+                  searchPlaceholder="Rechercher un contact…"
+                  clearLabel={null}
+                  emptyLabel="Aucun contact trouvé."
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreateNewContact(true);
+                    setMatchContactId(null);
+                  }}
+                  className="mt-1.5 text-[11px] text-ds-text-tertiary underline hover:no-underline"
+                >
+                  Aucun ne correspond — créer un nouveau contact
+                </button>
+              </>
+            )}
           </Field>
         )}
         {isEntityOrProject && (
@@ -984,7 +1066,9 @@ function RowEditor({
           className="inline-flex items-center gap-1.5 rounded-md border border-tint-green-dot bg-tint-green-bg px-2.5 py-1 font-medium text-[12px] text-tint-green-text transition-colors hover:bg-tint-green-dot hover:text-white disabled:opacity-40"
         >
           <Check weight="bold" className="size-3" />
-          {isReconciliation ? "Rattacher" : "Enregistrer et créer"}
+          {isReconciliation || (isContactMatch && !createNewContact)
+            ? "Rattacher"
+            : "Enregistrer et créer"}
         </button>
       </div>
 

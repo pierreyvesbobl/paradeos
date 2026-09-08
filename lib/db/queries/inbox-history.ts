@@ -2,12 +2,13 @@ import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages, gmailTags } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
+import { linkedinConnections } from "@/db/schema/linkedin";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
 import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { formatPersonName } from "@/lib/format";
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import type { InboxExtractionKind, InboxItemMeta } from "./inbox";
 
 /**
@@ -19,7 +20,7 @@ import type { InboxExtractionKind, InboxItemMeta } from "./inbox";
  * lecture — une fois la ressource liée, la suggestion disparaît d'elle
  * -même. Leur historique, c'est le lien lui-même (cf. /compta).
  */
-export type InboxHistorySource = "email" | "meeting" | "filing";
+export type InboxHistorySource = "email" | "meeting" | "filing" | "linkedin";
 
 /**
  * Statut normalisé, tous sources confondues :
@@ -108,7 +109,7 @@ export async function getInboxHistory(
   const offset = filters.offset ?? 0;
   const wantSource = filters.source ?? "all";
 
-  const [emailRows, meetingRows, filingRows] = await Promise.all([
+  const [emailRows, meetingRows, filingRows, linkedinRows] = await Promise.all([
     wantSource === "all" || wantSource === "email"
       ? conn
           .select({
@@ -196,6 +197,38 @@ export async function getInboxHistory(
           .orderBy(desc(invoiceFilings.updatedAt))
           .limit(MAX_WINDOW)
       : Promise.resolve([]),
+
+    // Relations LinkedIn dont le rapprochement a été tranché. On ne
+    // garde que les décisions humaines (`decided_by` non nul) : les
+    // fusions automatiques sur email ou URL ne sont pas des choix qu'on
+    // « corrige », et les faire remonter noierait l'historique.
+    wantSource === "all" || wantSource === "linkedin"
+      ? conn
+          .select({
+            id: linkedinConnections.id,
+            firstName: linkedinConnections.firstName,
+            lastName: linkedinConnections.lastName,
+            headline: linkedinConnections.headline,
+            company: linkedinConnections.company,
+            profileUrl: linkedinConnections.profileUrl,
+            matchStatus: linkedinConnections.matchStatus,
+            matchedContactId: linkedinConnections.matchedContactId,
+            decidedAt: linkedinConnections.decidedAt,
+            decidedByName: users.fullName,
+            createdAt: linkedinConnections.createdAt,
+          })
+          .from(linkedinConnections)
+          .leftJoin(users, eq(users.id, linkedinConnections.decidedBy))
+          .where(
+            and(
+              eq(linkedinConnections.userId, userId),
+              ne(linkedinConnections.matchStatus, "pending"),
+              isNotNull(linkedinConnections.decidedBy),
+            ),
+          )
+          .orderBy(desc(linkedinConnections.decidedAt))
+          .limit(MAX_WINDOW)
+      : Promise.resolve([]),
   ]);
 
   // ── Résolution des noms des records créés/liés ────────────────────
@@ -207,6 +240,10 @@ export async function getInboxHistory(
   const contactIds = new Set<string>();
   const entityIds = new Set<string>();
   const tagIds = new Set<string>();
+
+  for (const r of linkedinRows) {
+    if (r.matchedContactId) contactIds.add(r.matchedContactId);
+  }
 
   function bucketCreated(kind: string, id: string | null) {
     if (!id) return;
@@ -475,6 +512,42 @@ export async function getInboxHistory(
     });
   }
 
+  // ── Relations LinkedIn rapprochées ────────────────────────────────
+  for (const r of linkedinRows) {
+    const name = formatPersonName(r.firstName, r.lastName) || "Relation sans nom";
+    const contactName = r.matchedContactId ? contactMap.get(r.matchedContactId) : undefined;
+    // `ignored` = « ce n'est aucun de mes contacts » : un refus, pas un
+    // rattachement. Les deux autres statuts ont produit un lien.
+    const status: InboxHistoryStatus = r.matchStatus === "ignored" ? "rejected" : "accepted";
+
+    items.push({
+      id: `linkedin:${r.id}`,
+      sourceId: r.id,
+      source: "linkedin",
+      kind: "contact_match",
+      status,
+      title: name,
+      detail:
+        status === "rejected"
+          ? "Écartée du CRM"
+          : r.matchStatus === "created"
+            ? `Nouveau contact créé${r.company ? ` · ${r.company}` : ""}`
+            : `Rattachée à ${contactName ?? "un contact"}`,
+      sourceLabel: "Relation LinkedIn",
+      sourceHref: r.profileUrl ?? "/inbox",
+      recordHref: r.matchedContactId ? `/contacts/${r.matchedContactId}` : null,
+      recordLabel: contactName ?? null,
+      decidedSort: toIso(r.decidedAt ?? r.createdAt),
+      decidedLabel: relativeAgoLabel(r.decidedAt ?? r.createdAt),
+      decidedByName: r.decidedByName ?? null,
+      meta: { entityName: r.company, contactName: contactName ?? null },
+      // Le rapprochement n'a pas de payload éditable : on le remet en
+      // attente pour le refaire, comme un classement de facture.
+      editable: false,
+      revertible: true,
+    });
+  }
+
   // ── Filtres + tri + pagination ────────────────────────────────────
   const bySourceFiltered = items.filter(
     (it) =>
@@ -495,7 +568,12 @@ export async function getInboxHistory(
   // Compteurs calculés AVANT les filtres statut/kind, pour que les
   // pastilles des onglets restent lisibles quand on en sélectionne un.
   const byStatus: Record<InboxHistoryStatus, number> = { accepted: 0, rejected: 0, error: 0 };
-  const bySource: Record<InboxHistorySource, number> = { email: 0, meeting: 0, filing: 0 };
+  const bySource: Record<InboxHistorySource, number> = {
+    email: 0,
+    meeting: 0,
+    filing: 0,
+    linkedin: 0,
+  };
   const byKind: Partial<Record<InboxExtractionKind, number>> = {};
   for (const it of searched) {
     byStatus[it.status]++;

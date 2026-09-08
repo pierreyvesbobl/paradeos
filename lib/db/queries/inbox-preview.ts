@@ -6,7 +6,7 @@ import { db } from "@/lib/db/server";
 import { eq } from "drizzle-orm";
 
 export type InboxPreview = {
-  source: "email" | "meeting" | "filing" | "reconciliation";
+  source: "email" | "meeting" | "filing" | "reconciliation" | "linkedin";
   title: string;
   subtitle: string | null;
   /** URL vers la page pleine (fallback "voir en entier"). */

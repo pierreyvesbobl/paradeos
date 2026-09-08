@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Sync Dougs → Paradeos</title>
+    <title>Paradeos Sync</title>
     <style>
       :root {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -75,38 +75,98 @@
         border-radius: 3px;
         font-size: 11px;
       }
+      /* Onglets de service */
+      .tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 14px;
+        border-bottom: 1px solid #e4e4e4;
+      }
+      .tabs button {
+        width: auto;
+        flex: 1;
+        background: transparent;
+        color: #666;
+        border: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        padding: 7px 4px;
+        font-size: 12px;
+      }
+      .tabs button[aria-selected="true"] {
+        color: #111;
+        border-bottom-color: #111;
+        font-weight: 600;
+      }
+      [hidden] { display: none !important; }
     </style>
   </head>
   <body>
-    <h1>⚡ Sync Dougs → Paradeos</h1>
+    <h1>Paradeos Sync</h1>
 
-    <label for="endpoint">Endpoint Paradeos</label>
-    <input
-      type="text"
-      id="endpoint"
-      placeholder="https://paradeos.app/api/dougs/sync-cookie"
-    />
-
-    <label for="token">Token de synchro</label>
-    <input
-      type="password"
-      id="token"
-      placeholder="paradeos_dougs_sync_…"
-    />
-
-    <p class="help">
-      Génère ces deux valeurs dans Paradeos → Réglages → Intégrations →
-      Dougs → bouton <strong>« Générer un token »</strong>. L'endpoint
-      est <code>{ton-domaine}/api/dougs/sync-cookie</code>.
-    </p>
-
-    <div class="row">
-      <button id="save" class="secondary">Enregistrer</button>
-      <button id="sync">Sync maintenant</button>
+    <div class="tabs" role="tablist">
+      <button id="tab-dougs" role="tab" aria-selected="true">Dougs</button>
+      <button id="tab-linkedin" role="tab" aria-selected="false">LinkedIn</button>
     </div>
 
-    <div id="status" class="status info" style="display: none"></div>
+    <!-- ---------------- Dougs ---------------- -->
+    <section id="panel-dougs">
+      <label for="dougs-endpoint">Endpoint Paradeos</label>
+      <input
+        type="text"
+        id="dougs-endpoint"
+        placeholder="https://paradeos.app/api/dougs/sync-cookie"
+      />
 
-    <script src="popup.js"></script>
+      <label for="dougs-token">Token de synchro</label>
+      <input type="password" id="dougs-token" placeholder="paradeos_dougs_sync_…" />
+
+      <p class="help">
+        Génère ces deux valeurs dans Paradeos → Réglages → Intégrations →
+        Dougs → <strong>« Générer un token »</strong>. L'endpoint est
+        <code>{ton-domaine}/api/dougs/sync-cookie</code>.
+      </p>
+
+      <div class="row">
+        <button id="dougs-save" class="secondary">Enregistrer</button>
+        <button id="dougs-sync">Sync maintenant</button>
+      </div>
+
+      <div id="dougs-status" class="status info" style="display: none"></div>
+    </section>
+
+    <!-- ---------------- LinkedIn ---------------- -->
+    <section id="panel-linkedin" hidden>
+      <label for="linkedin-endpoint">Endpoint Paradeos</label>
+      <input
+        type="text"
+        id="linkedin-endpoint"
+        placeholder="https://paradeos.app/api/linkedin/ingest"
+      />
+
+      <label for="linkedin-token">Token de synchro</label>
+      <input type="password" id="linkedin-token" placeholder="paradeos_linkedin_sync_…" />
+
+      <p class="help">
+        Réglages → Intégrations → LinkedIn. L'endpoint est
+        <code>{ton-domaine}/api/linkedin/ingest</code>.
+        <br /><br />
+        Les DM et relations sont lus depuis <strong>ton</strong> navigateur, sur
+        ta session : rien n'est envoyé à LinkedIn, et ton cookie ne quitte
+        jamais cette machine. Sois connecté sur linkedin.com.
+      </p>
+
+      <div class="row">
+        <button id="linkedin-save" class="secondary">Enregistrer</button>
+        <button id="linkedin-sync">Sync maintenant</button>
+      </div>
+      <div class="row" style="margin-top: 6px">
+        <button id="linkedin-diagnose" class="secondary">Diagnostic</button>
+      </div>
+
+      <div id="linkedin-status" class="status info" style="display: none"></div>
+    </section>
+
+    <script src="popup.js" type="module"></script>
   </body>
 </html>

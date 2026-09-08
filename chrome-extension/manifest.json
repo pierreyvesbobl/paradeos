@@ -1,18 +1,24 @@
 {
   "manifest_version": 3,
-  "name": "Paradeos — Sync Dougs",
-  "version": "1.0.0",
-  "description": "Synchronise le cookie de session Dougs (HttpOnly inclus) avec Paradeos en un clic.",
-  "permissions": ["cookies", "storage"],
+  "name": "Paradeos Sync",
+  "version": "2.0.0",
+  "description": "Synchronise Dougs (cookie de session) et LinkedIn (DM + relations) avec Paradeos.",
+  "permissions": ["cookies", "storage", "alarms"],
   "host_permissions": [
     "https://*.dougs.fr/*",
     "https://dougs.fr/*",
+    "https://*.linkedin.com/*",
     "https://*.paradeos.app/*",
     "https://*.vercel.app/*",
-    "http://localhost:3000/*"
+    "http://localhost:3000/*",
+    "http://localhost:3001/*"
   ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Sync Dougs → Paradeos"
+    "default_title": "Paradeos Sync"
   }
 }

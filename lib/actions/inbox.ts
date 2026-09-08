@@ -12,6 +12,7 @@ import {
   linkProjectAsNewMilestone,
   linkProjectQuoteToDougs,
 } from "@/lib/actions/invoices";
+import { decideLinkedinConnection, revertLinkedinConnection } from "@/lib/actions/linkedin";
 import { decideProposal, revertProposal, updateAcceptedProposal } from "@/lib/actions/meetings";
 import { getUser } from "@/lib/auth/server";
 import type { InboxReconciliation } from "@/lib/db/queries/inbox";
@@ -44,7 +45,7 @@ import { type InboxPreview, getInboxPreview } from "@/lib/db/queries/inbox-previ
  *   - reconciliation → no-op côté serveur (dismiss local uniquement)
  */
 export async function decideInboxItem(input: {
-  source: "email" | "meeting" | "filing" | "reconciliation";
+  source: "email" | "meeting" | "filing" | "reconciliation" | "linkedin";
   id: string;
   action: "accept" | "reject";
   payloadOverride?: Record<string, unknown> | null;
@@ -101,6 +102,30 @@ export async function decideInboxItem(input: {
       projectId: reco.targetId,
       dougsIdOrUrl: reco.dougsId,
       detectedPercent: reco.detectedPercent ?? null,
+    });
+    if (!res.ok) return { ok: false, message: res.message };
+    return { ok: true };
+  }
+  if (input.source === "linkedin") {
+    // Rapprochement d'une relation. `accept` sans contact explicite
+    // retient la suggestion du fuzzy ; l'éditeur inline en propose un
+    // autre via `payloadOverride.contactId`, et `createContact` fabrique
+    // un nouveau contact quand aucun ne convient.
+    if (input.action === "reject") {
+      const res = await decideLinkedinConnection({
+        connectionId: input.id,
+        decision: "ignore",
+      });
+      if (!res.ok) return { ok: false, message: res.message };
+      return { ok: true };
+    }
+    const override = input.payloadOverride ?? {};
+    const contactId = typeof override.contactId === "string" ? override.contactId : null;
+    const wantsCreate = override.createContact === true;
+    const res = await decideLinkedinConnection({
+      connectionId: input.id,
+      decision: wantsCreate ? "create" : "link",
+      contactId,
     });
     if (!res.ok) return { ok: false, message: res.message };
     return { ok: true };
@@ -162,6 +187,11 @@ export async function revertInboxItem(input: {
     if (!res.ok) return { ok: false, message: res.message };
     return { ok: true };
   }
+  if (input.source === "linkedin") {
+    const res = await revertLinkedinConnection({ connectionId: input.id });
+    if (!res.ok) return { ok: false, message: res.message };
+    return { ok: true };
+  }
   const res = await retryInvoiceFiling({ filingId: input.id });
   if (!res.ok) return { ok: false, message: res.message };
   return { ok: true };
@@ -189,6 +219,12 @@ export async function updateInboxHistoryItem(input: {
     const res = await updateAcceptedProposal({ proposalId: input.id, payload: input.payload });
     if (!res.ok) return { ok: false, message: res.message };
     return { ok: true };
+  }
+  if (input.source === "linkedin") {
+    return {
+      ok: false,
+      message: "Un rapprochement ne s'édite pas — remets-le en attente pour le refaire.",
+    };
   }
   return { ok: false, message: "Un classement de facture ne s'édite pas — relance-le." };
 }
