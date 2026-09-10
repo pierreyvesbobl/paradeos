@@ -23,7 +23,8 @@ const invoiceSchema = z.object({
    *   - `purchase_invoice` : facture d'ACHAT reçue d'un fournisseur.
    *   - `sales_invoice`    : facture de VENTE émise par Parade (reçue en
    *     copie : BCC compta, renvoi client, notification Dougs).
-   *   - `other`            : devis, RIB, reçu CB, contrat, relance seule…
+   *   - `other`            : devis, RIB, contrat, relance seule, reçu qui
+   *     double une facture jointe au même mail…
    */
   documentKind: z.enum(["purchase_invoice", "sales_invoice", "other"]),
   /** Date d'émission de la facture (YYYY-MM-DD). */
@@ -83,9 +84,16 @@ dès qu'il s'agit d'une facture, quel que soit le sens.
 
 ═══ CLASSIFICATION (documentKind) ═══
 
-CAS A — documentKind = "purchase_invoice" : facture d'ACHAT.
-  Émetteur = un tiers (fournisseur), Destinataire = Parade.
+CAS A — documentKind = "purchase_invoice" : pièce justificative d'ACHAT.
+  Émetteur = un tiers (fournisseur), Destinataire = Parade (ou son
+  dirigeant Pierre-Yves, à titre nominatif).
   C'est une dépense de Parade. → à classer dans Drive.
+  Compte comme pièce d'achat tout document qui justifie une dépense
+  auprès du comptable :
+  - une facture (même à 0 €) ;
+  - une quittance (assurance, loyer) ou un appel de cotisation ;
+  - un reçu / ticket / justificatif d'achat, quand c'est la seule pièce
+    de la dépense (achat en magasin, abonnement payé par carte).
 
 CAS B — documentKind = "sales_invoice" : facture de VENTE ⚠️.
   Émetteur = Parade (SAS Parade / Parade SAS / PARADE, avec son SIREN
@@ -105,7 +113,10 @@ CAS B — documentKind = "sales_invoice" : facture de VENTE ⚠️.
 
 CAS C — documentKind = "other" : pas une facture du tout.
   - un devis / une proposition commerciale
-  - un reçu de paiement carte / ticket restaurant
+  - un reçu de paiement qui DOUBLE une facture jointe au même email
+    (ex. Stripe envoie Invoice-XXXX.pdf + Receipt-XXXX.pdf : seule la
+    facture compte, le reçu est "other" pour ne pas classer deux fois
+    la même dépense — cf. « Autres PJ du même email »)
   - un RIB / IBAN seul
   - un contrat / CGV
   - un bon de commande
@@ -138,6 +149,8 @@ export async function extractInvoiceMetadata(args: {
   emailBody: string | null;
   pdfFilename: string;
   pdfText: string;
+  /** Noms des autres PJ du même email (facture + reçu Stripe…). */
+  otherAttachments: string[];
 }): Promise<InvoiceMetadata> {
   const apiKey = await getSetting(SETTING_KEYS.OPENROUTER_API_KEY);
   if (!apiKey) {
@@ -158,6 +171,7 @@ export async function extractInvoiceMetadata(args: {
     `Sujet email : ${args.emailSubject ?? "(sans objet)"}`,
     `De : ${args.emailFrom ?? "(inconnu)"}`,
     `Nom de la PJ : ${args.pdfFilename}`,
+    `Autres PJ du même email : ${args.otherAttachments.join(", ") || "(aucune)"}`,
     "",
     "Aperçu email (5 premières lignes) :",
     (args.emailBody ?? "").split("\n").slice(0, 5).join("\n").slice(0, 1_000),

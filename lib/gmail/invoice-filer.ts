@@ -7,7 +7,8 @@ import { getValidAccessToken } from "@/lib/google/account";
 import { findOrCreateFolder, findOrCreateSupplierFolder, uploadFile } from "@/lib/google/drive-api";
 import { type GmailAttachmentRef, getAttachment } from "@/lib/google/gmail-api";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
+import { pickInvoicePdfs } from "./invoice-detect";
 import {
   type InvoiceDirection,
   buildInvoiceFilename,
@@ -19,24 +20,6 @@ import { markThreadInvoiceDirection } from "./links";
 import { extractPdfText } from "./pdf";
 
 const PDF_MIME = "application/pdf";
-
-/** Limite pour ne pas tenter de classer des PJ énormes (>20 MB). */
-const MAX_PDF_BYTES = 20 * 1024 * 1024;
-
-/**
- * Filtre les PJ candidates au classement. Pour l'instant : PDF
- * uniquement, taille raisonnable. Ignore les pièces inline (filename
- * vide) et les attaches non-PDF (images, archives…).
- */
-export function pickInvoicePdfs(refs: GmailAttachmentRef[]): GmailAttachmentRef[] {
-  return refs.filter(
-    (a) =>
-      a.mimeType === PDF_MIME &&
-      a.filename.toLowerCase().endsWith(".pdf") &&
-      a.size > 0 &&
-      a.size <= MAX_PDF_BYTES,
-  );
-}
 
 /**
  * Enregistre les PJ candidates en base avec status='pending'. Idempotent
@@ -141,6 +124,13 @@ export async function processInvoiceFiling(filingId: string): Promise<{
     return { status: "rejected", errorMessage: "PDF sans texte" };
   }
 
+  // Les autres PJ du mail aident le LLM à ne pas classer deux fois la même
+  // dépense (Stripe joint Invoice-XXXX.pdf + Receipt-XXXX.pdf).
+  const siblings = await conn
+    .select({ filename: invoiceFilings.originalFilename })
+    .from(invoiceFilings)
+    .where(and(eq(invoiceFilings.messageId, filing.messageId), ne(invoiceFilings.id, filing.id)));
+
   // 3. LLM extraction
   let meta: Awaited<ReturnType<typeof extractInvoiceMetadata>>;
   try {
@@ -150,6 +140,7 @@ export async function processInvoiceFiling(filingId: string): Promise<{
       emailBody: msg.bodyText,
       pdfFilename: filing.originalFilename ?? "facture.pdf",
       pdfText,
+      otherAttachments: siblings.flatMap((s) => (s.filename ? [s.filename] : [])),
     });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);

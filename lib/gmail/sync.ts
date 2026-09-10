@@ -3,6 +3,7 @@ import "server-only";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { gmailMessages, gmailSyncState, gmailThreads } from "@/db/schema/gmail";
+import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import {
@@ -17,9 +18,10 @@ import {
   parseAddressList,
 } from "@/lib/google/gmail-api";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { GENERIC_EMAIL_DOMAINS, domainFromEmail, extractDomain } from "./domain";
 import { extractAndSaveEmailProposals } from "./extract-and-save";
+import { looksLikeInvoiceMessage } from "./invoice-detect";
 import { processInvoiceFiling, queueInvoiceCandidates } from "./invoice-filer";
 import {
   autoLinkThreadByParticipants,
@@ -46,15 +48,11 @@ const MAX_EXTRACTIONS_PER_RUN = 10;
 const MAX_INVOICE_FILINGS_PER_RUN = 5;
 
 /**
- * Un mail dont le sujet parle de facturation mérite qu'on télécharge son
- * contenu même sans match CRM : la plupart des factures d'achat viennent
- * de fournisseurs (EDF, OVH, SaaS…) qui ne sont pas des contacts du CRM,
- * et sans le `format=full` on n'a pas les références de PJ.
- *
- * Volontairement restrictif — le mot doit ressembler à du vocabulaire de
- * facturation, pas au "bien reçu" d'une conversation ordinaire.
+ * Rattrapage des factures passées entre les mailles : mails à PDF de la
+ * fenêtre du bootstrap, plafonnés par run (cf. `recoverMissedInvoices`).
  */
-const INVOICE_SUBJECT_RE = /(factur|invoice|billing|quittance|note de d[ée]bit)/i;
+const INVOICE_RECOVERY_QUERY = "newer_than:90d has:attachment filename:pdf -in:spam -in:trash";
+const MAX_INVOICE_RECOVERIES_PER_RUN = 15;
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -76,8 +74,10 @@ export type GmailSyncResult = {
   extractionsSkipped: number;
   /** Total des propositions créées (toutes extractions confondues). */
   proposalsCreated: number;
-  /** Messages ingérés pour leurs PJ sur le seul signal "sujet facturation". */
+  /** Messages ingérés pour leurs PJ sur le seul signal facture (sujet, expéditeur, libellé). */
   invoiceCandidatesIngested: number;
+  /** Mails à PDF repris par le rattrapage factures (cf. `recoverMissedInvoices`). */
+  invoicesRecovered: number;
   /** Factures PDF classées avec succès sur ce run. */
   invoicesFiled: number;
   /** Factures de VENTE détectées et taguées (non classées — cf. Dougs). */
@@ -138,9 +138,173 @@ function messageMatchesCrm(
   return false;
 }
 
-/** Sujet évocateur de facturation — cf. `INVOICE_SUBJECT_RE`. */
-function messageLooksLikeInvoice(message: GmailMessage): boolean {
-  return INVOICE_SUBJECT_RE.test(getHeader(message.payload, "Subject") ?? "");
+/**
+ * Signal facture sur un message metadata — cf. `looksLikeInvoiceMessage`.
+ * `labelNamesById` traduit les labelIds Gmail en noms (« factures »…).
+ */
+function messageLooksLikeInvoice(
+  message: GmailMessage,
+  labelNamesById: Map<string, string>,
+): boolean {
+  return looksLikeInvoiceMessage({
+    subject: getHeader(message.payload, "Subject"),
+    fromEmail: parseAddressList(getHeader(message.payload, "From"))[0]?.email ?? null,
+    labelNames: (message.labelIds ?? []).map((id) => labelNamesById.get(id) ?? ""),
+  });
+}
+
+/** État partagé par les étapes d'ingestion d'un run de sync. */
+type IngestContext = {
+  userId: string;
+  accessToken: string;
+  matchers: { emails: Set<string>; domains: Set<string> };
+  labelNamesById: Map<string, string>;
+  touchedThreads: Set<string>;
+  result: GmailSyncResult;
+};
+
+/**
+ * Ingère un message : metadata, puis `format=full` s'il matche le CRM ou
+ * porte un signal facture. Sans match CRM, le signal facture suffit à
+ * déclencher le full : c'est le seul moyen de voir les PJ, et donc de
+ * détecter les factures d'achat de fournisseurs inconnus du CRM. Ces
+ * messages ne passent PAS en `pending` pour autant — pas d'extraction LLM
+ * email, seulement le pipeline facture.
+ *
+ * Renvoie le message metadata, ou null s'il est ignoré (spam / trash).
+ */
+async function ingestMessage(
+  ctx: IngestContext,
+  gmailMessageId: string,
+): Promise<GmailMessage | null> {
+  const meta = await getMessage(ctx.accessToken, gmailMessageId, "metadata");
+  // Skip silencieux des spams / trash. En bootstrap on filtre déjà via la
+  // query Gmail, mais en incrémental (history.list) il n'y a pas de
+  // filtre — un message qui passe en spam après ingestion pourrait
+  // remonter ici, et un message ajouté directement en spam ne doit pas
+  // entrer.
+  if ((meta.labelIds ?? []).some((l) => SKIP_LABELS.has(l))) {
+    ctx.result.skippedSpam++;
+    return null;
+  }
+  const matched = messageMatchesCrm(meta, ctx.matchers);
+  const invoiceCandidate = !matched && messageLooksLikeInvoice(meta, ctx.labelNamesById);
+  if (matched || invoiceCandidate) {
+    await sleep(SLEEP_MS_BETWEEN_CALLS);
+    const full = await getMessage(ctx.accessToken, gmailMessageId, "full");
+    await ingestFullMessage(ctx, full, matched ? "pending" : "skipped");
+    if (invoiceCandidate) ctx.result.invoiceCandidatesIngested++;
+  } else {
+    const { threadIdLocal } = await upsertThreadAndMessage(ctx.userId, meta, null, "skipped");
+    ctx.touchedThreads.add(threadIdLocal);
+  }
+  ctx.result.inserted++;
+  return meta;
+}
+
+/** Upsert d'un message `format=full` + mise en file de ses PJ PDF (idempotent). */
+async function ingestFullMessage(
+  ctx: IngestContext,
+  full: GmailMessage,
+  extractionStatus: "skipped" | "pending",
+): Promise<void> {
+  ctx.result.bodiesFetched++;
+  // On utilise les headers du full (plus complets).
+  const { threadIdLocal, messageIdLocal } = await upsertThreadAndMessage(
+    ctx.userId,
+    full,
+    extractBodies(full.payload),
+    extractionStatus,
+  );
+  ctx.touchedThreads.add(threadIdLocal);
+  if (!messageIdLocal) return;
+  try {
+    const refs = collectAttachments(full.payload);
+    await queueInvoiceCandidates({ userId: ctx.userId, messageIdLocal, refs });
+  } catch (err) {
+    ctx.result.errors.push(
+      `queue invoice ${full.id}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+/**
+ * Filet de sécurité : reprend les mails à PDF récents qui n'ont produit
+ * aucune ligne `invoice_filings`.
+ *   - jamais ingérés (trou dans l'historique Gmail) → ingestion normale ;
+ *   - ingérés sans leurs PJ alors qu'ils portent un signal facture (règles
+ *     de détection plus récentes que leur ingestion, PDF en octet-stream…)
+ *     → on reprend le full.
+ * Un mail sans signal facture ne coûte rien après son premier passage : le
+ * signal se lit sur les colonnes déjà en base, sans appel Gmail.
+ */
+async function recoverMissedInvoices(ctx: IngestContext): Promise<void> {
+  const page = await listMessages(ctx.accessToken, {
+    q: INVOICE_RECOVERY_QUERY,
+    maxResults: 100,
+  });
+  const ids = (page.messages ?? []).map((m) => m.id);
+  if (ids.length === 0) return;
+
+  const conn = await db();
+  const known = await conn
+    .select({
+      id: gmailMessages.id,
+      gmailMessageId: gmailMessages.gmailMessageId,
+      subject: gmailMessages.subject,
+      fromEmail: gmailMessages.fromEmail,
+      labels: gmailMessages.labels,
+    })
+    .from(gmailMessages)
+    .where(and(eq(gmailMessages.userId, ctx.userId), inArray(gmailMessages.gmailMessageId, ids)));
+  const filed = known.length
+    ? await conn
+        .selectDistinct({ messageId: invoiceFilings.messageId })
+        .from(invoiceFilings)
+        .where(
+          inArray(
+            invoiceFilings.messageId,
+            known.map((k) => k.id),
+          ),
+        )
+    : [];
+  const withFiling = new Set(filed.map((f) => f.messageId));
+  const knownByGmailId = new Map(known.map((k) => [k.gmailMessageId, k]));
+
+  let recovered = 0;
+  for (const id of ids) {
+    if (recovered >= MAX_INVOICE_RECOVERIES_PER_RUN) break;
+    const row = knownByGmailId.get(id);
+    if (row && withFiling.has(row.id)) continue;
+    if (
+      row &&
+      !looksLikeInvoiceMessage({
+        subject: row.subject,
+        fromEmail: row.fromEmail,
+        labelNames: (row.labels ?? []).map((l) => ctx.labelNamesById.get(l) ?? ""),
+      })
+    ) {
+      continue;
+    }
+    try {
+      if (row) {
+        const full = await getMessage(ctx.accessToken, id, "full");
+        await ingestFullMessage(ctx, full, "skipped");
+      } else {
+        await ingestMessage(ctx, id);
+      }
+      recovered++;
+      ctx.result.invoicesRecovered++;
+      await sleep(SLEEP_MS_BETWEEN_CALLS);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("Gmail API 404")) {
+        ctx.result.skippedNotFound++;
+        continue;
+      }
+      ctx.result.errors.push(`recover ${id}: ${msg}`);
+    }
+  }
 }
 
 /**
@@ -308,6 +472,7 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
     extractionsSkipped: 0,
     proposalsCreated: 0,
     invoiceCandidatesIngested: 0,
+    invoicesRecovered: 0,
     invoicesFiled: 0,
     invoiceSalesDetected: 0,
     invoicesRejected: 0,
@@ -335,6 +500,18 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
 
   const matchers = await loadCrmMatchers();
 
+  // Cache labels.list partagé par le run (1 appel) : sert à lire les
+  // libellés Gmail de l'utilisateur (signal facture) puis à la sync des
+  // liaisons au step 4.
+  let labelCache: Awaited<ReturnType<typeof loadGmailLabelCache>>;
+  try {
+    labelCache = await loadGmailLabelCache(accessToken);
+  } catch (err) {
+    result.errors.push(`labels cache: ${err instanceof Error ? err.message : String(err)}`);
+    labelCache = new Map();
+  }
+  const labelNamesById = new Map([...labelCache].map(([name, id]) => [id, name]));
+
   // ─── 1. Récupère la liste d'IDs à traiter ─────────────────────────
   const messageIds: Array<{ id: string; threadId: string }> = [];
   let nextCursor: string | undefined;
@@ -360,23 +537,39 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
         return result;
       }
       try {
-        const page = await listHistory(accessToken, startHistoryId);
-        const added: Array<{ id: string; threadId: string }> = [];
-        for (const h of page.history ?? []) {
-          for (const a of h.messagesAdded ?? []) {
-            added.push({ id: a.message.id, threadId: a.message.threadId });
-          }
-        }
-        // Dédup (même message peut apparaître plusieurs fois si labels changent).
+        // On ne lit que les ajouts de messages (seul type exploité) et on
+        // pagine : avant, tout ce qui dépassait la 1re page ou le cap était
+        // perdu, le curseur sautant au `historyId` courant de la boîte. En
+        // cas de cap, le curseur s'arrête au dernier record consommé et le
+        // run suivant reprend là.
         const seen = new Set<string>();
-        for (const m of added) {
-          if (seen.has(m.id)) continue;
-          seen.add(m.id);
-          messageIds.push(m);
-          if (messageIds.length >= MAX_MESSAGES_PER_RUN) break;
-        }
-        if (page.historyId) touchedHistoryId = Number(page.historyId);
-        result.hasMore = added.length > MAX_MESSAGES_PER_RUN;
+        let pageToken: string | undefined;
+        let mailboxHistoryId: string | undefined;
+        let lastRecordId: string | undefined;
+        let capped = false;
+        do {
+          const page = await listHistory(accessToken, startHistoryId, {
+            pageToken,
+            historyTypes: ["messageAdded"],
+          });
+          mailboxHistoryId = page.historyId ?? mailboxHistoryId;
+          for (const h of page.history ?? []) {
+            for (const a of h.messagesAdded ?? []) {
+              if (seen.has(a.message.id)) continue;
+              seen.add(a.message.id);
+              messageIds.push({ id: a.message.id, threadId: a.message.threadId });
+            }
+            lastRecordId = h.id;
+            if (messageIds.length >= MAX_MESSAGES_PER_RUN) {
+              capped = true;
+              break;
+            }
+          }
+          pageToken = capped ? undefined : page.nextPageToken;
+        } while (pageToken);
+        const cursor = capped ? lastRecordId : mailboxHistoryId;
+        if (cursor) touchedHistoryId = Number(cursor);
+        result.hasMore = capped;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         // 404 = historyId trop ancien → reset bootstrap.
@@ -426,62 +619,22 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
 
   // ─── 3. Pour chaque nouveau message : metadata → match? → full ────
   const touchedThreads = new Set<string>();
+  const ctx: IngestContext = {
+    userId,
+    accessToken,
+    matchers,
+    labelNamesById,
+    touchedThreads,
+    result,
+  };
   for (const m of toFetch) {
     try {
-      const meta = await getMessage(accessToken, m.id, "metadata");
-      // Skip silencieux des spams / trash. En bootstrap on filtre déjà
-      // via la query Gmail, mais en incrémental (history.list) il n'y a
-      // pas de filtre — un message qui passe en spam après ingestion
-      // pourrait remonter ici, et un message ajouté directement en spam
-      // ne doit pas entrer.
-      const labels = meta.labelIds ?? [];
-      if (labels.some((l) => SKIP_LABELS.has(l))) {
-        result.skippedSpam++;
-        continue;
-      }
-      const matched = messageMatchesCrm(meta, matchers);
-      // Sans match CRM, un sujet de facturation suffit à déclencher le
-      // `format=full` : c'est le seul moyen de voir les PJ, et donc de
-      // détecter les factures d'achat de fournisseurs inconnus du CRM.
-      // On ne met PAS ces messages en `pending` pour autant — pas
-      // d'extraction LLM email, seulement le pipeline facture.
-      const invoiceCandidate = !matched && messageLooksLikeInvoice(meta);
-
-      let body: { text: string | null; html: string | null } | null = null;
-      let extractionStatus: "skipped" | "pending" = "skipped";
-      if (matched || invoiceCandidate) {
-        await sleep(SLEEP_MS_BETWEEN_CALLS);
-        const full = await getMessage(accessToken, m.id, "full");
-        body = extractBodies(full.payload);
-        extractionStatus = matched ? "pending" : "skipped";
-        result.bodiesFetched++;
-        if (invoiceCandidate) result.invoiceCandidatesIngested++;
-        // On utilise les headers du full (plus complets).
-        const { threadIdLocal, messageIdLocal } = await upsertThreadAndMessage(
-          userId,
-          full,
-          body,
-          extractionStatus,
-        );
-        touchedThreads.add(threadIdLocal);
-        // Queue les PJ PDF candidates au classement facture (idempotent).
-        if (messageIdLocal) {
-          try {
-            const refs = collectAttachments(full.payload);
-            await queueInvoiceCandidates({ userId, messageIdLocal, refs });
-          } catch (err) {
-            result.errors.push(
-              `queue invoice ${m.id}: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          }
-        }
-      } else {
-        const { threadIdLocal } = await upsertThreadAndMessage(userId, meta, null, "skipped");
-        touchedThreads.add(threadIdLocal);
-      }
-      result.inserted++;
-      // Track le historyId max vu (utilisé en bootstrap).
-      if (meta.historyId) {
+      const meta = await ingestMessage(ctx, m.id);
+      if (!meta) continue;
+      // Bootstrap uniquement : le curseur suit le historyId max vu. En
+      // incrémental il est fixé par history.list — le pousser au historyId
+      // d'un message sauterait des records pas encore lus.
+      if (isBootstrap && meta.historyId) {
         const h = Number(meta.historyId);
         if (!touchedHistoryId || h > touchedHistoryId) touchedHistoryId = h;
       }
@@ -490,13 +643,22 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
       const msg = err instanceof Error ? err.message : String(err);
       // 404 Gmail = message disparu entre listMessages et getMessage
       // (spam auto-purgé, suppression manuelle, archivage par filtre).
-      // Attendu en pratique → skip silencieusement, on l'a marqué
-      // "vu" via le track historyId du loop.
+      // Attendu en pratique → skip silencieusement.
       if (msg.includes("Gmail API 404")) {
         result.skippedNotFound++;
         continue;
       }
       result.errors.push(`message ${m.id}: ${msg}`);
+    }
+  }
+
+  // ─── 3bis. Rattrapage des factures passées entre les mailles ──────
+  // Hors bootstrap, qui balaie déjà toute la fenêtre.
+  if (!isBootstrap) {
+    try {
+      await recoverMissedInvoices(ctx);
+    } catch (err) {
+      result.errors.push(`recover invoices: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -506,22 +668,11 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
   //     rétablir une liaison que l'utilisateur a invalidée).
   // (b) Sync labels Gmail → liaisons : lit les labels Gmail du thread,
   //     insère une liaison pour chaque label Paradeos/ déjà connu.
-  let labelCache: Awaited<ReturnType<typeof loadGmailLabelCache>> | null = null;
   for (const tid of touchedThreads) {
     try {
       await autoLinkThreadByParticipants(tid);
     } catch (err) {
       result.errors.push(`autolink ${tid}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-    // Pour la sync labels Gmail, on a besoin du cache labels.list (1 call
-    // par run, partagé). On le construit lazy.
-    if (!labelCache) {
-      try {
-        labelCache = await loadGmailLabelCache(accessToken);
-      } catch (err) {
-        result.errors.push(`labels cache: ${err instanceof Error ? err.message : String(err)}`);
-        labelCache = new Map();
-      }
     }
     try {
       // Récupère tous les label_ids des messages du thread (déjà stockés
@@ -585,11 +736,20 @@ export async function syncIncremental(userId: string): Promise<GmailSyncResult> 
   // ─── 4ter. Classement automatique des factures (kill switch) ─────
   const filingEnabled = (await getSetting(SETTING_KEYS.INVOICE_FILING_ENABLED)) !== "false";
   if (filingEnabled) {
-    const { invoiceFilings } = await import("@/db/schema/invoice-filings");
+    // Les `pending` déjà passés au LLM (confiance faible) attendent une
+    // validation manuelle dans l'inbox : les reprendre ici les ferait
+    // repasser au LLM à chaque run et boucherait la file pour les autres.
     const pendingFilings = await conn
       .select({ id: invoiceFilings.id })
       .from(invoiceFilings)
-      .where(and(eq(invoiceFilings.userId, userId), eq(invoiceFilings.status, "pending")))
+      .where(
+        and(
+          eq(invoiceFilings.userId, userId),
+          eq(invoiceFilings.status, "pending"),
+          isNull(invoiceFilings.confidence),
+        ),
+      )
+      .orderBy(invoiceFilings.createdAt)
       .limit(MAX_INVOICE_FILINGS_PER_RUN);
     for (const pf of pendingFilings) {
       try {
