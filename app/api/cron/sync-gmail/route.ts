@@ -44,6 +44,11 @@ export async function GET(request: Request) {
       mode: string;
       inserted: number;
       bodiesFetched: number;
+      invoiceCandidatesIngested: number;
+      invoicesRecovered: number;
+      invoicesFiled: number;
+      invoicesRejected: number;
+      invoicesErrored: number;
       errors: string[];
       hasMore: boolean;
     }> = [];
@@ -55,6 +60,11 @@ export async function GET(request: Request) {
         mode: r.mode,
         inserted: r.inserted,
         bodiesFetched: r.bodiesFetched,
+        invoiceCandidatesIngested: r.invoiceCandidatesIngested,
+        invoicesRecovered: r.invoicesRecovered,
+        invoicesFiled: r.invoicesFiled,
+        invoicesRejected: r.invoicesRejected,
+        invoicesErrored: r.invoicesErrored,
         errors: r.errors,
         hasMore: r.hasMore,
       });

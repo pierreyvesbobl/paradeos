@@ -8,7 +8,7 @@ import { db } from "@/lib/db/server";
 import { processInvoiceFiling } from "@/lib/gmail/invoice-filer";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
 import { SETTING_KEYS, setSetting } from "@/lib/settings";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -90,7 +90,8 @@ export const processAllPendingFilings = action(z.object({}), async ({ user }) =>
   const pending = await conn
     .select({ id: invoiceFilings.id })
     .from(invoiceFilings)
-    .where(eq(invoiceFilings.userId, targetUserId))
+    .where(and(eq(invoiceFilings.userId, targetUserId), eq(invoiceFilings.status, "pending")))
+    .orderBy(invoiceFilings.createdAt)
     .limit(20);
   const stats = { filed: 0, rejected: 0, error: 0, sales: 0 };
   for (const p of pending) {
