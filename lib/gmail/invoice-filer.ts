@@ -249,6 +249,26 @@ export async function processInvoiceFiling(filingId: string): Promise<{
   const supplierSanitized = sanitizeForFilename(meta.supplierName);
   const year = String(invoiceDate.getFullYear());
 
+  // Garde-fou doublon : une autre PJ du même mail déjà classée sous le même
+  // nom est la même dépense (facture + reçu Stripe que le LLM n'a pas su
+  // départager). On garde la première.
+  const [twin] = await conn
+    .select({ id: invoiceFilings.id })
+    .from(invoiceFilings)
+    .where(
+      and(
+        eq(invoiceFilings.messageId, filing.messageId),
+        ne(invoiceFilings.id, filing.id),
+        eq(invoiceFilings.status, "filed"),
+        eq(invoiceFilings.generatedFilename, filename),
+      ),
+    )
+    .limit(1);
+  if (twin) {
+    await markRejected(filing.id, "doublon d'une autre PJ du même mail, déjà classée.");
+    return { status: "rejected", direction, errorMessage: "doublon" };
+  }
+
   // 5. Crée la hiérarchie ROOT / <year> / <supplier> dans Drive.
   let yearFolderId: string;
   let supplierFolderId: string;
