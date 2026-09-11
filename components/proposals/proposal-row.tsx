@@ -304,10 +304,11 @@ export function AlreadyInDbRow({ proposal, adapter, onChange }: Omit<RowProps, "
   }
 
   function detach() {
-    // Revert → redevient pending sans match. L'utilisateur peut alors
-    // ré-éditer / choisir un autre record dans « À valider ».
+    // Redevient pending sans match. L'utilisateur peut alors ré-éditer
+    // ou choisir un autre record dans « À valider ».
     startTransition(async () => {
-      const res = await adapter.actions.revert(proposal.id);
+      const detach = adapter.actions.detach ?? adapter.actions.revert;
+      const res = await detach(proposal.id);
       if (!res.ok) {
         toast.error(res.message);
         return;

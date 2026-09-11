@@ -75,6 +75,12 @@ export type ProposalSourceAdapter = {
     ) => Promise<ActionResult<unknown>>;
     reject: (proposalId: string) => Promise<ActionResult<unknown>>;
     revert: (proposalId: string) => Promise<ActionResult<unknown>>;
+    /**
+     * « Mauvaise fiche » : remet en attente ET efface le match auto.
+     * Optionnel — les sources sans `matchedRowAction: "detach"` n'en ont
+     * pas besoin ; à défaut, `revert` est utilisé.
+     */
+    detach?: (proposalId: string) => Promise<ActionResult<unknown>>;
     update: (
       proposalId: string,
       payload: Record<string, unknown>,

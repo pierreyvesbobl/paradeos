@@ -45,6 +45,8 @@ export const decideProposalSchema = z.object({
 
 export const revertProposalSchema = z.object({
   proposalId: z.string().uuid(),
+  /** « Mauvaise fiche » : efface aussi le match automatique. */
+  clearMatch: z.boolean().optional(),
 });
 
 export const updateAcceptedProposalSchema = z.object({
