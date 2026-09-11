@@ -15,8 +15,10 @@ test.describe("Auth gate", () => {
     await expect(page.getByLabel(/e-?mail/i)).toBeVisible();
     await expect(page.getByLabel(/mot de passe/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /se connecter/i })).toBeVisible();
-    // Toggle vers la création de compte.
-    await expect(page.getByRole("button", { name: /créer un compte/i })).toBeVisible();
+    // Pas d'inscription publique : les comptes sont créés par invitation
+    // admin. Le bouton « Créer un compte » ne doit jamais réapparaître.
+    await expect(page.getByRole("button", { name: /créer un compte/i })).toHaveCount(0);
+    await expect(page.getByText(/demande une invitation/i)).toBeVisible();
   });
 
   test("le middleware protège les routes applicatives", async ({ page }) => {
