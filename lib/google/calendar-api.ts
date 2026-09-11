@@ -1,6 +1,6 @@
 import "server-only";
 
-import { fetchWithTimeout } from "@/lib/net/fetch-with-timeout";
+import { fetchWithRetry } from "@/lib/net/fetch-with-retry";
 
 /**
  * Wrappers fins autour de Google Calendar v3. Fetch direct, sans SDK.
@@ -47,7 +47,7 @@ export type GoogleEvent = {
 };
 
 async function calFetch<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
-  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
+  const res = await fetchWithRetry(`${API_BASE}${path}`, {
     ...init,
     headers: { ...init?.headers, authorization: `Bearer ${accessToken}` },
     cache: "no-store",

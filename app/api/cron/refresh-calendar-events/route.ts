@@ -1,3 +1,4 @@
+import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { refreshAllUsersEvents } from "@/lib/google/calendar-sync";
 import { NextResponse } from "next/server";
 
@@ -11,14 +12,11 @@ import { NextResponse } from "next/server";
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const expected = process.env.CRON_SECRET;
-  if (!expected || auth !== `Bearer ${expected}`) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+  const unauthorized = cronUnauthorized(request);
+  if (unauthorized) return unauthorized;
   try {
     const result = await refreshAllUsersEvents();
-    return NextResponse.json({ ok: true, ...result });
+    return cronResponse(result);
   } catch (err) {
     console.error("[cron refresh-calendar-events]", err);
     return NextResponse.json(

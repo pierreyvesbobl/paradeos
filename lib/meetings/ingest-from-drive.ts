@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from "@/lib/net/fetch-with-timeout";
 import "server-only";
 
 import { googleAccounts } from "@/db/schema/google-accounts";
@@ -43,7 +44,7 @@ async function getIngestionUserId(): Promise<string | null> {
 async function downloadDriveText(file: DriveFile, accessToken: string): Promise<string | null> {
   const headers = { authorization: `Bearer ${accessToken}` };
   if (file.mimeType === GOOGLE_DOC_MIME) {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}/export?mimeType=text/plain`,
       { headers, cache: "no-store" },
     );
@@ -51,7 +52,7 @@ async function downloadDriveText(file: DriveFile, accessToken: string): Promise<
     return res.text();
   }
   if (TEXT_MIMES.has(file.mimeType) || file.mimeType.startsWith("text/")) {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}?alt=media`,
       { headers, cache: "no-store" },
     );

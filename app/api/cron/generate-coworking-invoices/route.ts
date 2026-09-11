@@ -1,8 +1,8 @@
 import { coworkingContracts } from "@/db/schema/coworking";
 import { generateNextInvoiceForContract } from "@/lib/coworking/generate-invoice";
+import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { db } from "@/lib/db/server";
 import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
 
 /**
  * Auto-génération mensuelle des factures coworking. Tourne le 1er de
@@ -17,11 +17,8 @@ import { NextResponse } from "next/server";
  * header automatiquement quand `CRON_SECRET` est défini.
  */
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const expected = process.env.CRON_SECRET;
-  if (!expected || auth !== `Bearer ${expected}`) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+  const unauthorized = cronUnauthorized(request);
+  if (unauthorized) return unauthorized;
 
   const conn = await db();
   const ongoing = await conn
@@ -51,12 +48,11 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({
+  return cronResponse({
     ranAt: today.toISOString(),
     contracts: ongoing.length,
-    createdCount: created.length,
-    skippedCount: skipped.length,
-    errorCount: errors.length,
+    succeeded: created.length + skipped.length,
+    failed: errors.length,
     created,
     skipped,
     errors,

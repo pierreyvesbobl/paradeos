@@ -206,6 +206,8 @@ export const gmailSyncState = pgTable("gmail_sync_state", {
   lastIncrementalAt: timestamp("last_incremental_at", { withTimezone: true }),
   bootstrapCursor: text("bootstrap_cursor"),
   lastError: text("last_error"),
+  /** Verrou applicatif : posé au début d'un sync, expire après 10 min. */
+  syncStartedAt: timestamp("sync_started_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 

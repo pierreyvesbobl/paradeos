@@ -352,8 +352,8 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
     .where(eq(meetingProposals.id, proposal.id));
 
   revalidatePath(`/meetings/${proposal.meetingId}`);
-  revalidatePath("/contacts");
-  revalidatePath("/entites");
+  revalidatePath("/crm/contacts");
+  revalidatePath("/crm/entites");
   revalidatePath("/projets");
   revalidatePath("/projets");
   revalidatePath("/taches");
@@ -398,8 +398,8 @@ export const updateAcceptedProposal = action(updateAcceptedProposalSchema, async
     .where(eq(meetingProposals.id, proposal.id));
 
   revalidatePath(`/meetings/${proposal.meetingId}`);
-  revalidatePath("/contacts");
-  revalidatePath("/entites");
+  revalidatePath("/crm/contacts");
+  revalidatePath("/crm/entites");
   revalidatePath("/projets");
   revalidatePath("/projets");
   revalidatePath("/taches");

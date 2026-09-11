@@ -49,6 +49,7 @@ export const createProject = action(createProjectSchema, async ({ input, user })
     .returning({ id: projects.id });
 
   revalidatePath("/projets");
+  revalidatePath("/");
   return { id: row?.id };
 });
 
@@ -82,6 +83,7 @@ export const updateProject = action(updateProjectSchema, async ({ input }) => {
     .where(eq(projects.id, input.id));
 
   revalidatePath("/projets");
+  revalidatePath("/");
   revalidatePath(`/projets/${input.id}`);
   return { id: input.id };
 });
@@ -113,6 +115,7 @@ export const quickCreateProject = action(quickCreateProjectSchema, async ({ inpu
     .returning({ id: projects.id, name: projects.name });
   if (!row) throw new Error("Création échouée.");
   revalidatePath("/projets");
+  revalidatePath("/");
   revalidatePath("/crm/pipeline");
   return { id: row.id, name: row.name };
 });
@@ -165,6 +168,7 @@ export const patchProject = action(patchProjectSchema, async ({ input }) => {
   await conn.update(projects).set(updates).where(eq(projects.id, input.id));
 
   revalidatePath("/projets");
+  revalidatePath("/");
   revalidatePath(`/projets/${input.id}`);
   return { id: input.id };
 });
@@ -173,6 +177,7 @@ export const deleteProject = action(deleteProjectSchema, async ({ input }) => {
   const conn = await db();
   await conn.delete(projects).where(eq(projects.id, input.id));
   revalidatePath("/projets");
+  revalidatePath("/");
   return { id: input.id };
 });
 

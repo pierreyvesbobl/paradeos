@@ -19,6 +19,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 function revalidateTaskPaths(projectId: string | null | undefined) {
+  revalidatePath("/"); // le dashboard liste mes tâches ouvertes
   revalidatePath("/taches");
   revalidatePath("/taches/gantt");
   if (projectId) revalidatePath(`/projets/${projectId}`);

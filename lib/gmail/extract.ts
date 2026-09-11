@@ -251,6 +251,7 @@ export async function extractEmail(input: EmailInput): Promise<EmailExtraction> 
   });
 
   const { object } = await generateObject({
+    abortSignal: AbortSignal.timeout(60_000),
     model: openrouter(modelId),
     schema: extractionSchema,
     system: buildSystemPrompt({ vocab }),

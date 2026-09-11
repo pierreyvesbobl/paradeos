@@ -50,15 +50,6 @@ export async function refreshUserEvents(userId: string): Promise<{ totalEvents: 
       continue;
     }
 
-    // Suppression simple des events existants dans la fenêtre, puis
-    // re-insert. Plus simple à raisonner que le diff, et le coût est
-    // borné par la fenêtre (pas l'historique entier).
-    await conn
-      .delete(calendarEvents)
-      .where(
-        and(eq(calendarEvents.googleCalendarId, cal.id), gte(calendarEvents.startAt, timeMin)),
-      );
-
     const rows = events
       .map((e) => {
         const range = googleEventToRow(e);
@@ -84,17 +75,27 @@ export async function refreshUserEvents(userId: string): Promise<{ totalEvents: 
       })
       .filter((r): r is NonNullable<typeof r> => r !== null);
 
-    if (rows.length > 0) {
-      // Batch insert. La contrainte UNIQUE(google_calendar_id, google_event_id)
-      // garantit l'idempotence si un event est listé plusieurs fois.
-      await conn.insert(calendarEvents).values(rows).onConflictDoNothing();
-      totalEvents += rows.length;
-    }
-
-    await conn
-      .update(googleCalendars)
-      .set({ lastSyncedAt: new Date() })
-      .where(eq(googleCalendars.id, cal.id));
+    // Suppression des events existants dans la fenêtre puis re-insert,
+    // dans une même transaction : si l'insert échoue ou si la fonction
+    // est tuée entre les deux, l'utilisateur ne se retrouve pas avec un
+    // planning vide jusqu'au run suivant.
+    await conn.transaction(async (tx) => {
+      await tx
+        .delete(calendarEvents)
+        .where(
+          and(eq(calendarEvents.googleCalendarId, cal.id), gte(calendarEvents.startAt, timeMin)),
+        );
+      if (rows.length > 0) {
+        // La contrainte UNIQUE(google_calendar_id, google_event_id)
+        // garantit l'idempotence si un event est listé plusieurs fois.
+        await tx.insert(calendarEvents).values(rows).onConflictDoNothing();
+      }
+      await tx
+        .update(googleCalendars)
+        .set({ lastSyncedAt: new Date() })
+        .where(eq(googleCalendars.id, cal.id));
+    });
+    totalEvents += rows.length;
   }
 
   return { totalEvents };
@@ -104,7 +105,13 @@ export async function refreshUserEvents(userId: string): Promise<{ totalEvents: 
  * Refresh événements pour TOUS les users avec au moins un calendrier
  * actif. Utilisé par le cron 15 min.
  */
-export async function refreshAllUsersEvents(): Promise<{ users: number; events: number }> {
+export async function refreshAllUsersEvents(): Promise<{
+  users: number;
+  succeeded: number;
+  failed: number;
+  events: number;
+  errors: string[];
+}> {
   const conn = await db();
   const rows = await conn
     .selectDistinct({ userId: googleAccounts.userId })
@@ -113,13 +120,17 @@ export async function refreshAllUsersEvents(): Promise<{ users: number; events: 
     .where(eq(googleCalendars.syncEnabled, true));
 
   let totalEvents = 0;
+  let succeeded = 0;
+  const errors: string[] = [];
   for (const r of rows) {
     try {
       const { totalEvents: n } = await refreshUserEvents(r.userId);
       totalEvents += n;
+      succeeded++;
     } catch (err) {
       console.warn("[calendar cron] user refresh failed", r.userId, err);
+      errors.push(`${r.userId}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
-  return { users: rows.length, events: totalEvents };
+  return { users: rows.length, succeeded, failed: errors.length, events: totalEvents, errors };
 }

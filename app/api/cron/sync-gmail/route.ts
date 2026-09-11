@@ -10,6 +10,7 @@
  */
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { users } from "@/db/schema/users";
+import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { db } from "@/lib/db/server";
 import { syncIncremental } from "@/lib/gmail/sync";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
@@ -20,11 +21,8 @@ export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const expected = process.env.CRON_SECRET;
-  if (!expected || auth !== `Bearer ${expected}`) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+  const unauthorized = cronUnauthorized(request);
+  if (unauthorized) return unauthorized;
 
   try {
     const conn = await db();
@@ -70,7 +68,13 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json({ ok: true, results });
+    const errors = results.flatMap((r) => r.errors.map((e) => `${r.userId}: ${e}`));
+    return cronResponse({
+      succeeded: results.filter((r) => r.errors.length === 0).length,
+      failed: results.filter((r) => r.errors.length > 0).length,
+      errors,
+      results,
+    });
   } catch (err) {
     console.error("[cron sync-gmail]", err);
     return NextResponse.json(
