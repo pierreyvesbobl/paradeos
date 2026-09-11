@@ -358,7 +358,7 @@ export const markInvoiceReminded = action(
 const seedSchema = z.object({
   projectId: z.string().uuid(),
   totalHt: z.number().nonnegative(),
-  acomptePercent: z.number().min(0).max(100).default(DEFAULT_ACOMPTE_PERCENT),
+  acomptePercent: z.number().int().min(0).max(100).default(DEFAULT_ACOMPTE_PERCENT),
 });
 
 /**
@@ -514,7 +514,7 @@ export const updateCoworkingInvoice = action(updateCoworkingSchema, async ({ inp
       const periodStart = input.periodStart ?? existing.periodStart ?? "";
       const periodEnd = input.periodEnd ?? existing.periodEnd ?? "";
       const months = periodStart && periodEnd ? monthsBetween(periodStart, periodEnd) : 1;
-      update.amountHt = toNumeric(desks * unit * months);
+      update.amountHt = toNumeric(coworkingInvoiceAmountHt(desks, unit, months));
     }
   }
 
@@ -585,8 +585,11 @@ export const linkInvoiceToDougs = action(
             dougsIssuedAt: toDate(pickDougsIssuedAt(inv2)),
             dougsPaidAt: toDate(pickDougsPaidAt(inv2)),
             dougsSyncedAt: new Date(),
-            // Si le Dougs est payé, on remonte le statut local.
-            status: pickDougsPaidAt(inv2) ? "paid" : "sent",
+            // Si le Dougs est payé (statut « paid » OU date de paiement),
+            // on remonte le statut local — même règle que le refresh.
+            status: isDougsInvoicePaid(pickDougsStatus(inv2), pickDougsPaidAt(inv2))
+              ? "paid"
+              : "sent",
             invoicedAt: toDate(pickDougsIssuedAt(inv2)) ?? new Date(),
             paidAt: toDate(pickDougsPaidAt(inv2)),
             updatedAt: new Date(),
@@ -987,11 +990,25 @@ export const linkProjectAsNewMilestone = action(
       throw new Error("Montant facture inconnu.");
     }
 
-    const pct = input.detectedPercent;
-    const { milestoneType: mType, label } = milestoneFromDetectedPercent(
-      pct,
-      invoice.reference ?? null,
-    );
+    // Un 50 % est un acompte si le projet n'en a pas encore, un solde sinon.
+    const [existingAcompte] = await conn
+      .select({ id: invoices.id })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.projectId, input.projectId),
+          eq(invoices.kind, "milestone"),
+          eq(invoices.milestoneType, "acompte"),
+        ),
+      )
+      .limit(1);
+    const {
+      milestoneType: mType,
+      label,
+      milestonePercent,
+    } = milestoneFromDetectedPercent(input.detectedPercent, invoice.reference ?? null, {
+      hasAcompte: existingAcompte !== undefined,
+    });
 
     const paid = pickDougsPaidAt(invoice);
     const [row] = await conn
@@ -1002,9 +1019,9 @@ export const linkProjectAsNewMilestone = action(
         label,
         amountHt: toNumeric(Math.round(dougsAmount * 100) / 100) ?? "0",
         vatRate: "0.2",
-        status: paid ? "paid" : "sent",
+        status: isDougsInvoicePaid(pickDougsStatus(invoice), paid) ? "paid" : "sent",
         milestoneType: mType,
-        milestonePercent: pct,
+        milestonePercent,
         invoicedAt: toDate(pickDougsIssuedAt(invoice)) ?? new Date(),
         paidAt: toDate(paid),
         dougsInvoiceId: dougsId,
@@ -1080,7 +1097,7 @@ export const linkCoworkingContractAsNewInvoice = action(
     } = coworkingPeriodFromDate(dougsDate, contract.billingFrequency);
 
     const paid = pickDougsPaidAt(invoice);
-    const amountHt = Number(contract.unitPriceHt) * contract.desks * months;
+    const amountHt = coworkingInvoiceAmountHt(contract.desks, Number(contract.unitPriceHt), months);
 
     const [row] = await conn
       .insert(invoices)
@@ -1090,7 +1107,7 @@ export const linkCoworkingContractAsNewInvoice = action(
         label: `${contract.name} — ${periodStartStr.slice(0, 7)}`,
         amountHt: toNumeric(amountHt) ?? "0",
         vatRate: "0.2",
-        status: paid ? "paid" : "sent",
+        status: isDougsInvoicePaid(pickDougsStatus(invoice), paid) ? "paid" : "sent",
         periodStart: periodStartStr,
         periodEnd: periodEndStr,
         desks: contract.desks,
@@ -1259,9 +1276,9 @@ export const moveInvoiceDougsLink = action(
         dougsIssuedAt: from.dougsIssuedAt,
         dougsPaidAt: from.dougsPaidAt,
         dougsSyncedAt: from.dougsSyncedAt,
-        // Si le lien Dougs est "payé", on remonte au moins à "sent".
-        // Le statut local de la cible peut rester paid si déjà à paid.
-        status: from.dougsPaidAt ? "paid" : "sent",
+        // Si le lien Dougs est payé (statut ou date), la cible passe à
+        // "paid", sinon au moins à "sent".
+        status: isDougsInvoicePaid(from.dougsStatus, from.dougsPaidAt) ? "paid" : "sent",
         invoicedAt: from.dougsIssuedAt ?? new Date(),
         paidAt: from.dougsPaidAt,
         updatedAt: new Date(),

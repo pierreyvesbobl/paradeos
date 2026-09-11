@@ -60,6 +60,7 @@ const meetingSource: ProposalSourceAdapter = {
       decideProposal({ proposalId, action: "accept", payloadOverride }),
     reject: (proposalId) => decideProposal({ proposalId, action: "reject" }),
     revert: (proposalId) => revertProposal({ proposalId }),
+    detach: (proposalId) => revertProposal({ proposalId, clearMatch: true }),
     update: (proposalId, payload) => updateAcceptedProposal({ proposalId, payload }),
   },
   // `decideProposal` ne lit que les colonnes mono legacy pour les tâches.

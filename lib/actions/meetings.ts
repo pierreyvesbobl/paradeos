@@ -422,7 +422,8 @@ export const revertProposal = action(revertProposalSchema, async ({ input }) => 
     .where(eq(meetingProposals.id, input.proposalId))
     .limit(1);
   if (!proposal) throw new Error("Proposition introuvable.");
-  if (proposal.status === "pending") return { ok: true as const };
+  const clearMatch = input.clearMatch === true && proposal.matchedId !== null;
+  if (proposal.status === "pending" && !clearMatch) return { ok: true as const };
 
   await conn
     .update(meetingProposals)
@@ -433,6 +434,10 @@ export const revertProposal = action(revertProposalSchema, async ({ input }) => 
       // On garde createdEntityId pour traçabilité, mais on ne ré-utilise
       // pas le lien à la prochaine acceptation (un nouvel accept créera
       // ou matchera à nouveau).
+      // « Mauvaise fiche » : sans effacer matchedId, decideProposal
+      // retomberait sur le même match auto et la ligne reviendrait dans
+      // « Déjà en base » au rafraîchissement.
+      ...(clearMatch ? { matchedId: null, matchConfidence: null } : {}),
     })
     .where(eq(meetingProposals.id, proposal.id));
 

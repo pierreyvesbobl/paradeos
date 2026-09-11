@@ -185,7 +185,8 @@ export function projectReferenceAmount(p: {
   valueAmount: string | number | null;
   budgetAmount: string | number | null;
 }): number | null {
-  return Number(p.valueAmount ?? p.budgetAmount ?? 0) || null;
+  // Un montant à 0 vaut « non renseigné » : on retombe sur le budget.
+  return Number(p.valueAmount) || Number(p.budgetAmount) || null;
 }
 
 /**

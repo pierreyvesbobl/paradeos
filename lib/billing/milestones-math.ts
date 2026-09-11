@@ -31,22 +31,41 @@ export function splitMilestoneAmounts(
   };
 }
 
+export type DetectedMilestone = {
+  milestoneType: MilestoneType;
+  label: string;
+  /** Pourcentage à stocker — cohérent avec le libellé. */
+  milestonePercent: number | null;
+};
+
 /**
- * Type + libellé d'un jalon créé à la volée depuis une facture Dougs,
- * d'après le pourcentage détecté par le rapprochement :
+ * Type, libellé et pourcentage d'un jalon créé à la volée depuis une
+ * facture Dougs, d'après le pourcentage détecté par le rapprochement :
  *   - < 50 → acompte ;
- *   - ≥ 95 → solde 100 % (facture unique) ;
+ *   - ≥ 95 → facture unique : solde 100 % (le % stocké est 100, pas la
+ *     valeur détectée, pour que libellé et donnée concordent) ;
  *   - > 50 → solde ;
- *   - sinon (50 pile ou inconnu) → intermédiaire, libellé sur la référence.
+ *   - 50 pile → acompte si le projet n'en a pas encore, sinon solde
+ *     (un split 50/50 est composé d'un acompte puis d'un solde) ;
+ *   - inconnu → intermédiaire, libellé sur la référence.
  */
 export function milestoneFromDetectedPercent(
   pct: number | null,
   reference: string | null,
-): { milestoneType: MilestoneType; label: string } {
-  if (pct != null && pct < 50) return { milestoneType: "acompte", label: `Acompte ${pct} %` };
-  if (pct != null && pct >= 95) return { milestoneType: "solde", label: "Solde 100 %" };
-  if (pct != null && pct > 50) return { milestoneType: "solde", label: `Solde ${pct} %` };
-  return { milestoneType: "intermediaire", label: reference ? `Facture ${reference}` : "Facture" };
+  context: { hasAcompte?: boolean } = {},
+): DetectedMilestone {
+  if (pct == null) {
+    return {
+      milestoneType: "intermediaire",
+      label: reference ? `Facture ${reference}` : "Facture",
+      milestonePercent: null,
+    };
+  }
+  if (pct >= 95) return { milestoneType: "solde", label: "Solde 100 %", milestonePercent: 100 };
+  const isAcompte = pct < 50 || (pct === 50 && !context.hasAcompte);
+  return isAcompte
+    ? { milestoneType: "acompte", label: `Acompte ${pct} %`, milestonePercent: pct }
+    : { milestoneType: "solde", label: `Solde ${pct} %`, milestonePercent: pct };
 }
 
 /**
