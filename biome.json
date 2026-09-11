@@ -14,7 +14,7 @@
       "db/migrations",
       "supabase/migrations",
       "types/database.ts",
-      "design_handoff_*/**"
+      "docs/design/**"
     ]
   },
   "formatter": {
