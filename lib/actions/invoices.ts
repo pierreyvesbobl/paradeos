@@ -4,6 +4,22 @@ import { coworkingContracts } from "@/db/schema/coworking";
 import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
+import {
+  extractDougsUuid,
+  isDougsInvoicePaid,
+  mapDougsQuoteStatus,
+  resolveStatusTransition,
+  resolveUpsertDueDate,
+  toDate,
+  toNumeric,
+} from "@/lib/billing/invoice-lifecycle";
+import {
+  DEFAULT_ACOMPTE_PERCENT,
+  coworkingInvoiceAmountHt,
+  coworkingPeriodFromDate,
+  milestoneFromDetectedPercent,
+  splitMilestoneAmounts,
+} from "@/lib/billing/milestones-math";
 import { db } from "@/lib/db/server";
 import {
   DougsApiError,
@@ -22,15 +38,6 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 
-/** Renvoie YYYY-MM-DD = base + days (UTC, suffisant pour une date). */
-function addDaysISO(base: Date, days: number): string {
-  const d = new Date(base.getTime() + days * 86_400_000);
-  return d.toISOString().slice(0, 10);
-}
-
-/** Délai par défaut (30j) appliqué quand une facture passe à 'sent' sans due_date. */
-const DEFAULT_DUE_DAYS = 30;
-
 /** Récupère l'owner du projet pour préremplir `assigned_to`. Null si pas
  *  de projet ou owner non défini. */
 async function resolveProjectOwner(
@@ -44,49 +51,6 @@ async function resolveProjectOwner(
     .where(eq(projects.id, projectId))
     .limit(1);
   return row?.ownerId ?? null;
-}
-
-function toNumeric(n: number | null | undefined): string | null {
-  return typeof n === "number" && Number.isFinite(n) ? n.toFixed(2) : null;
-}
-
-function toDate(iso: string | null | undefined): Date | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-/**
- * Mapping Dougs status → invoice_status local pour les devis. Doit
- * rester cohérent avec le cron sync-dougs-status.
- */
-function mapDougsQuoteStatus(dougs: string | null): "draft" | "sent" | "accepted" | "refused" {
-  switch ((dougs ?? "").toUpperCase()) {
-    case "ACCEPTED":
-      return "accepted";
-    case "REFUSED":
-      return "refused";
-    case "DRAFT":
-      return "draft";
-    default:
-      return "sent"; // PENDING ou inconnu
-  }
-}
-
-const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-
-/**
- * Accepte un UUID brut OU une URL Dougs et renvoie l'UUID extrait.
- * Couvre les patterns d'URL Dougs (sales-invoice / quote / drafts).
- */
-function extractDougsUuid(input: string): string {
-  const match = input.trim().match(UUID_RE);
-  if (!match) {
-    throw new Error(
-      "ID Dougs introuvable. Colle un UUID ou une URL Dougs (.../sales-invoice... ou .../quote...).",
-    );
-  }
-  return match[0];
 }
 
 // =====================================================================
@@ -160,12 +124,12 @@ export const upsertInvoice = action(upsertInvoiceSchema, async ({ input, user })
   // Calcul due_date : si l'appelant en fournit une, elle l'emporte
   // (y compris null explicite). Sinon, on garde l'existante. Sinon, on
   // génère une valeur uniquement quand status='sent' (point d'émission).
-  const explicitDue = input.dueDate !== undefined;
-  const fallbackBase = existing?.invoicedAt ?? new Date();
-  const nextDueDate = explicitDue
-    ? input.dueDate
-    : (existing?.dueDate ??
-      (input.status === "sent" ? addDaysISO(fallbackBase, DEFAULT_DUE_DAYS) : null));
+  const nextDueDate = resolveUpsertDueDate({
+    inputDueDate: input.dueDate,
+    status: input.status,
+    existing,
+    now: new Date(),
+  });
 
   const baseValues = {
     kind: input.kind,
@@ -250,37 +214,25 @@ export const setInvoiceStatus = action(
       .limit(1);
     if (!existing) throw new Error("Facture introuvable.");
 
-    const nextInvoicedAt = input.status === "draft" ? null : (existing.invoicedAt ?? now);
-    const nextPaidAt =
-      input.status === "paid"
-        ? (existing.paidAt ?? now)
-        : input.status === "draft"
-          ? null
-          : existing.paidAt;
-    // Au passage à 'sent' sans due_date, on initialise à invoiced_at + 30j
-    // (cohérent avec upsertInvoice). On ne touche pas la due_date si déjà
-    // posée, ni si on retombe à draft (la date reste, ce qui évite de la
-    // ressaisir si on toggle).
-    const nextDueDate =
-      input.status === "sent" && !existing.dueDate && nextInvoicedAt
-        ? addDaysISO(nextInvoicedAt, DEFAULT_DUE_DAYS)
-        : existing.dueDate;
-    // Idem assignee : pose le lead projet à 'sent' s'il n'y a personne.
+    // Dates dérivées du nouveau statut (cf. resolveStatusTransition) :
+    // au passage à 'sent' sans due_date, on initialise à invoiced_at + 30j
+    // (cohérent avec upsertInvoice).
+    const transition = resolveStatusTransition({ status: input.status, existing, now });
+    // Assignee : pose le lead projet à 'sent' s'il n'y a personne.
     // Ça couvre le cas d'une facture créée avant l'arrivée du champ
     // (backfill OK pour celles liées à un projet) ou d'un upsert qui
     // aurait passé null explicite.
-    const nextAssignedTo =
-      input.status === "sent" && !existing.assignedTo
-        ? await resolveProjectOwner(conn, existing.projectId)
-        : existing.assignedTo;
+    const nextAssignedTo = transition.needsAssigneeFromProject
+      ? await resolveProjectOwner(conn, existing.projectId)
+      : existing.assignedTo;
 
     await conn
       .update(invoices)
       .set({
         status: input.status,
-        invoicedAt: nextInvoicedAt,
-        paidAt: nextPaidAt,
-        dueDate: nextDueDate,
+        invoicedAt: transition.invoicedAt,
+        paidAt: transition.paidAt,
+        dueDate: transition.dueDate,
         assignedTo: nextAssignedTo,
         updatedAt: now,
       })
@@ -406,7 +358,7 @@ export const markInvoiceReminded = action(
 const seedSchema = z.object({
   projectId: z.string().uuid(),
   totalHt: z.number().nonnegative(),
-  acomptePercent: z.number().min(0).max(100).default(40),
+  acomptePercent: z.number().min(0).max(100).default(DEFAULT_ACOMPTE_PERCENT),
 });
 
 /**
@@ -422,34 +374,31 @@ export const seedProjectMilestones = action(seedSchema, async ({ input, user }) 
     .where(and(eq(invoices.projectId, input.projectId), eq(invoices.kind, "milestone")));
   if (existing.length > 0) return { ok: true as const, created: 0 };
 
-  const acomptePct = input.acomptePercent;
-  const acompteHt = Math.round(((input.totalHt * acomptePct) / 100) * 100) / 100;
-  const soldeHt = Math.round((input.totalHt - acompteHt) * 100) / 100;
-  const soldePct = 100 - acomptePct;
+  const split = splitMilestoneAmounts(input.totalHt, input.acomptePercent);
   const ownerId = await resolveProjectOwner(conn, input.projectId);
 
   await conn.insert(invoices).values([
     {
       kind: "milestone",
       projectId: input.projectId,
-      label: `Acompte ${acomptePct} %`,
-      amountHt: toNumeric(acompteHt) ?? "0",
+      label: split.acompte.label,
+      amountHt: toNumeric(split.acompte.amountHt) ?? "0",
       vatRate: "0.2",
       status: "draft",
       milestoneType: "acompte",
-      milestonePercent: acomptePct,
+      milestonePercent: split.acompte.percent,
       assignedTo: ownerId,
       createdBy: user.id,
     },
     {
       kind: "milestone",
       projectId: input.projectId,
-      label: `Solde ${soldePct} %`,
-      amountHt: toNumeric(soldeHt) ?? "0",
+      label: split.solde.label,
+      amountHt: toNumeric(split.solde.amountHt) ?? "0",
       vatRate: "0.2",
       status: "draft",
       milestoneType: "solde",
-      milestonePercent: soldePct,
+      milestonePercent: split.solde.percent,
       assignedTo: ownerId,
       createdBy: user.id,
     },
@@ -484,7 +433,7 @@ export const createCoworkingInvoice = action(createCoworkingSchema, async ({ inp
   // Sans le facteur "mois", une facture trimestrielle stockait le tiers
   // du vrai montant.
   const months = monthsBetween(input.periodStart, input.periodEnd);
-  const amountHt = Math.round(input.desks * input.unitPriceHt * months * 100) / 100;
+  const amountHt = coworkingInvoiceAmountHt(input.desks, input.unitPriceHt, months);
   const [row] = await conn
     .insert(invoices)
     .values({
@@ -738,7 +687,7 @@ export const refreshInvoiceDougs = action(
         const i = await getDougsSalesInvoice(user.id, inv.dougsInvoiceId);
         const paid = pickDougsPaidAt(i);
         const dougsStatus = pickDougsStatus(i);
-        const isPaidDougs = (dougsStatus ?? "").toLowerCase() === "paid" || paid !== null;
+        const isPaidDougs = isDougsInvoicePaid(dougsStatus, paid);
         await conn
           .update(invoices)
           .set({
@@ -808,7 +757,7 @@ export const refreshAllDougsLinks = action(z.object({}), async ({ user }) => {
       const inv = await getDougsSalesInvoice(user.id, r.dougsInvoiceId);
       const paid = pickDougsPaidAt(inv);
       const dougsStatus = pickDougsStatus(inv);
-      const isPaidDougs = (dougsStatus ?? "").toLowerCase() === "paid" || paid !== null;
+      const isPaidDougs = isDougsInvoicePaid(dougsStatus, paid);
       await conn
         .update(invoices)
         .set({
@@ -1039,21 +988,10 @@ export const linkProjectAsNewMilestone = action(
     }
 
     const pct = input.detectedPercent;
-    let label: string;
-    let mType: "acompte" | "intermediaire" | "solde";
-    if (pct != null && pct < 50) {
-      mType = "acompte";
-      label = `Acompte ${pct} %`;
-    } else if (pct != null && pct >= 95) {
-      mType = "solde";
-      label = "Solde 100 %";
-    } else if (pct != null && pct > 50) {
-      mType = "solde";
-      label = `Solde ${pct} %`;
-    } else {
-      mType = "intermediaire";
-      label = invoice.reference ? `Facture ${invoice.reference}` : "Facture";
-    }
+    const { milestoneType: mType, label } = milestoneFromDetectedPercent(
+      pct,
+      invoice.reference ?? null,
+    );
 
     const paid = pickDougsPaidAt(invoice);
     const [row] = await conn
@@ -1135,19 +1073,13 @@ export const linkCoworkingContractAsNewInvoice = action(
     if (Number.isNaN(dougsDate.getTime())) {
       throw new Error("Date Dougs invalide.");
     }
-    const periodStart = new Date(dougsDate.getFullYear(), dougsDate.getMonth(), 1);
-    const periodEnd = new Date(
-      dougsDate.getFullYear(),
-      dougsDate.getMonth() + (contract.billingFrequency === "quarterly" ? 3 : 1),
-      0,
-    );
-    const toISO = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const periodStartStr = toISO(periodStart);
-    const periodEndStr = toISO(periodEnd);
+    const {
+      periodStart: periodStartStr,
+      periodEnd: periodEndStr,
+      months,
+    } = coworkingPeriodFromDate(dougsDate, contract.billingFrequency);
 
     const paid = pickDougsPaidAt(invoice);
-    const months = contract.billingFrequency === "quarterly" ? 3 : 1;
     const amountHt = Number(contract.unitPriceHt) * contract.desks * months;
 
     const [row] = await conn
