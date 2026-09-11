@@ -70,10 +70,11 @@ describe("splitMilestoneAmounts", () => {
 });
 
 describe("milestoneFromDetectedPercent", () => {
-  it("< 50 → acompte", () => {
+  it("< 50 → acompte, % stocké = % détecté", () => {
     expect(milestoneFromDetectedPercent(40, "F-1")).toEqual({
       milestoneType: "acompte",
       label: "Acompte 40 %",
+      milestonePercent: 40,
     });
     expect(milestoneFromDetectedPercent(30, null).label).toBe("Acompte 30 %");
   });
@@ -82,24 +83,51 @@ describe("milestoneFromDetectedPercent", () => {
     expect(milestoneFromDetectedPercent(60, null)).toEqual({
       milestoneType: "solde",
       label: "Solde 60 %",
+      milestonePercent: 60,
     });
     expect(milestoneFromDetectedPercent(70, null).label).toBe("Solde 70 %");
   });
 
-  it("≥ 95 → facture unique « Solde 100 % » même si le % détecté est 95", () => {
+  it("≥ 95 → facture unique : libellé ET % stocké à 100", () => {
     expect(milestoneFromDetectedPercent(100, null).label).toBe("Solde 100 %");
     expect(milestoneFromDetectedPercent(95, null)).toEqual({
       milestoneType: "solde",
       label: "Solde 100 %",
+      milestonePercent: 100,
     });
   });
 
-  it("50 pile ou inconnu → intermédiaire, libellé sur la référence Dougs", () => {
+  it("50 pile → acompte si le projet n'en a pas, solde sinon", () => {
     expect(milestoneFromDetectedPercent(50, "F-2026-0042")).toEqual({
+      milestoneType: "acompte",
+      label: "Acompte 50 %",
+      milestonePercent: 50,
+    });
+    expect(milestoneFromDetectedPercent(50, null, { hasAcompte: false }).milestoneType).toBe(
+      "acompte",
+    );
+    expect(milestoneFromDetectedPercent(50, null, { hasAcompte: true })).toEqual({
+      milestoneType: "solde",
+      label: "Solde 50 %",
+      milestonePercent: 50,
+    });
+  });
+
+  it("hasAcompte n'influence que le cas 50 pile", () => {
+    expect(milestoneFromDetectedPercent(40, null, { hasAcompte: true }).milestoneType).toBe(
+      "acompte",
+    );
+    expect(milestoneFromDetectedPercent(60, null, { hasAcompte: false }).milestoneType).toBe(
+      "solde",
+    );
+  });
+
+  it("inconnu → intermédiaire, libellé sur la référence Dougs, % null", () => {
+    expect(milestoneFromDetectedPercent(null, "F-2026-0042")).toEqual({
       milestoneType: "intermediaire",
       label: "Facture F-2026-0042",
+      milestonePercent: null,
     });
-    expect(milestoneFromDetectedPercent(null, "F-2026-0042").label).toBe("Facture F-2026-0042");
     expect(milestoneFromDetectedPercent(null, null).label).toBe("Facture");
   });
 });

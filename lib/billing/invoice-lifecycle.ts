@@ -49,7 +49,10 @@ export function mapDougsQuoteStatus(dougs: string | null): QuoteLocalStatus {
  * Une facture Dougs est payée si son statut le dit OU si une date de
  * paiement existe (rapprochement bancaire sans statut « paid »).
  */
-export function isDougsInvoicePaid(dougsStatus: string | null, paidAt: string | null): boolean {
+export function isDougsInvoicePaid(
+  dougsStatus: string | null,
+  paidAt: string | Date | null,
+): boolean {
   return (dougsStatus ?? "").toLowerCase() === "paid" || paidAt !== null;
 }
 

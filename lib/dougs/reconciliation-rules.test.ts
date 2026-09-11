@@ -312,10 +312,9 @@ describe("projectReferenceAmount", () => {
     expect(projectReferenceAmount({ valueAmount: "0.00", budgetAmount: null })).toBeNull();
   });
 
-  it("une valeur à 0 masque le budget (?? ne bascule que sur null)", () => {
-    // Comportement actuel documenté : "0.00" n'est pas null, donc le
-    // budget n'est jamais lu et le projet n'a pas de montant.
-    expect(projectReferenceAmount({ valueAmount: "0.00", budgetAmount: "9000" })).toBeNull();
+  it("une valeur à 0 vaut « non renseigné » et laisse passer le budget", () => {
+    expect(projectReferenceAmount({ valueAmount: "0.00", budgetAmount: "9000" })).toBe(9000);
+    expect(projectReferenceAmount({ valueAmount: "0", budgetAmount: "0" })).toBeNull();
   });
 });
 
