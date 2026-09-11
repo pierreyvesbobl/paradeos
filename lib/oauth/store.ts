@@ -36,6 +36,7 @@ export type RegisterClientInput = {
   grantTypes: string[];
   tokenEndpointAuthMethod: string;
   scope: string;
+  registeredIp?: string | null;
 };
 
 export async function registerClient(input: RegisterClientInput) {
@@ -53,6 +54,7 @@ export async function registerClient(input: RegisterClientInput) {
       redirectUris: input.redirectUris,
       grantTypes: input.grantTypes,
       tokenEndpointAuthMethod: input.tokenEndpointAuthMethod,
+      registeredIp: input.registeredIp ?? null,
       scope: input.scope,
     })
     .returning({ id: oauthClients.id, createdAt: oauthClients.createdAt });
@@ -75,13 +77,27 @@ export async function getClient(clientId: string) {
  * un endpoint public non authentifié : au-delà de 60 créations par heure
  * (tous clients confondus), on refuse. Un usage normal en crée une poignée.
  */
-export async function recentClientRegistrations(): Promise<number> {
+/**
+ * Enregistrements de la dernière heure, au total et pour une IP donnée.
+ * Le plafond global évite le remplissage de table ; le plafond par IP
+ * évite qu'une seule source bloque l'enregistrement des clients MCP
+ * légitimes (déni de service sur le compteur global).
+ */
+export async function recentClientRegistrations(
+  ip: string | null,
+): Promise<{ total: number; fromIp: number }> {
   const conn = await db();
+  const since = new Date(Date.now() - 60 * 60 * 1000);
   const [row] = await conn
-    .select({ count: sql<number>`count(*)::int` })
+    .select({
+      total: sql<number>`count(*)::int`,
+      fromIp: ip
+        ? sql<number>`count(*) filter (where ${oauthClients.registeredIp} = ${ip})::int`
+        : sql<number>`0`,
+    })
     .from(oauthClients)
-    .where(gt(oauthClients.createdAt, new Date(Date.now() - 60 * 60 * 1000)));
-  return row?.count ?? 0;
+    .where(gt(oauthClients.createdAt, since));
+  return { total: row?.total ?? 0, fromIp: row?.fromIp ?? 0 };
 }
 
 /** Vérifie le secret d'un client confidentiel. Public client → toujours ok. */

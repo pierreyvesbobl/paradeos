@@ -2,6 +2,7 @@
 
 import { projectSecrets } from "@/db/schema/project-secrets";
 import { action } from "@/lib/actions/action";
+import { requireProjectSensitiveAccess } from "@/lib/auth/project-access";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/secrets";
 import { db } from "@/lib/db/server";
 import {
@@ -10,7 +11,7 @@ import {
   revealProjectSecretSchema,
   updateProjectSecretSchema,
 } from "@/lib/schemas/project-secrets";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 function encryptOptional(v: string | undefined): string | null {
@@ -19,7 +20,24 @@ function encryptOptional(v: string | undefined): string | null {
   return encryptSecret(v);
 }
 
+/**
+ * Contrôle d'accès commun : admin ou membre déclaré du projet
+ * (`project_members`), jamais un viewer. Cf. `lib/auth/project-access.ts`.
+ */
+async function requireAccessToSecret(secretId: string, userId: string): Promise<string> {
+  const conn = await db();
+  const [row] = await conn
+    .select({ projectId: projectSecrets.projectId })
+    .from(projectSecrets)
+    .where(eq(projectSecrets.id, secretId))
+    .limit(1);
+  if (!row) throw new Error("Secret introuvable.");
+  await requireProjectSensitiveAccess(userId, row.projectId);
+  return row.projectId;
+}
+
 export const createProjectSecret = action(createProjectSecretSchema, async ({ input, user }) => {
+  await requireProjectSensitiveAccess(user.id, input.projectId);
   const conn = await db();
   const [row] = await conn
     .insert(projectSecrets)
@@ -43,14 +61,9 @@ export const createProjectSecret = action(createProjectSecretSchema, async ({ in
  * Chaîne vide → champ effacé (mis à NULL).
  * Pour `value` (NOT NULL en base), chaîne vide est traitée comme inchangée.
  */
-export const updateProjectSecret = action(updateProjectSecretSchema, async ({ input }) => {
+export const updateProjectSecret = action(updateProjectSecretSchema, async ({ input, user }) => {
+  const projectId = await requireAccessToSecret(input.id, user.id);
   const conn = await db();
-  const [existing] = await conn
-    .select({ projectId: projectSecrets.projectId })
-    .from(projectSecrets)
-    .where(eq(projectSecrets.id, input.id))
-    .limit(1);
-  if (!existing) throw new Error("Secret introuvable.");
 
   const patch: Record<string, unknown> = {
     label: input.label,
@@ -69,29 +82,34 @@ export const updateProjectSecret = action(updateProjectSecretSchema, async ({ in
 
   await conn.update(projectSecrets).set(patch).where(eq(projectSecrets.id, input.id));
 
-  revalidatePath(`/projets/${existing.projectId}`);
+  revalidatePath(`/projets/${projectId}`);
   return { id: input.id };
 });
 
-export const deleteProjectSecret = action(deleteProjectSecretSchema, async ({ input }) => {
+export const deleteProjectSecret = action(deleteProjectSecretSchema, async ({ input, user }) => {
+  const projectId = await requireAccessToSecret(input.id, user.id);
   const conn = await db();
-  const [row] = await conn
-    .select({ projectId: projectSecrets.projectId })
-    .from(projectSecrets)
-    .where(eq(projectSecrets.id, input.id))
-    .limit(1);
-
   await conn.delete(projectSecrets).where(eq(projectSecrets.id, input.id));
-  if (row?.projectId) revalidatePath(`/projets/${row.projectId}`);
+  revalidatePath(`/projets/${projectId}`);
   return { id: input.id };
 });
 
 /**
- * Déchiffre et renvoie la valeur en clair. Auth garantie par `action()`.
- * Aucun ciphertext n'est envoyé au client : c'est le seul chemin.
+ * Déchiffre et renvoie la valeur en clair. Réservé aux admins et aux
+ * membres du projet ; chaque consultation est tracée sur la ligne
+ * (compteur + dernier lecteur). Aucun ciphertext n'est envoyé au client.
  */
-export const revealProjectSecret = action(revealProjectSecretSchema, async ({ input }) => {
+export const revealProjectSecret = action(revealProjectSecretSchema, async ({ input, user }) => {
+  await requireAccessToSecret(input.id, user.id);
   const conn = await db();
+  await conn
+    .update(projectSecrets)
+    .set({
+      revealCount: sql`${projectSecrets.revealCount} + 1`,
+      lastRevealedAt: new Date(),
+      lastRevealedBy: user.id,
+    })
+    .where(eq(projectSecrets.id, input.id));
   const [row] = await conn
     .select({
       valueEnc: projectSecrets.valueEnc,

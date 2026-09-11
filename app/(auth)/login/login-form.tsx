@@ -3,15 +3,19 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signInWithPassword, signUpWithPassword } from "@/lib/actions/auth";
+import { signInWithPassword } from "@/lib/actions/auth";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-type Mode = "signin" | "signup";
-
+/**
+ * Connexion par e-mail + mot de passe uniquement. Il n'y a pas
+ * d'inscription publique : les comptes sont créés par un administrateur
+ * depuis Réglages > Utilisateurs (invitation par e-mail). Outil interne,
+ * toute personne connectée voit l'intégralité des données.
+ */
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -20,7 +24,6 @@ export function LoginForm() {
   // origine — "//autre-site" serait une redirection ouverte.
   const rawNext = searchParams.get("next");
   const next = rawNext?.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
-  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, startTransition] = useTransition();
@@ -28,16 +31,12 @@ export function LoginForm() {
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     startTransition(async () => {
-      const result =
-        mode === "signin"
-          ? await signInWithPassword({ email, password })
-          : await signUpWithPassword({ email, password });
-
+      const result = await signInWithPassword({ email, password });
       if (!result.ok) {
         toast.error(result.message);
         return;
       }
-      toast.success(mode === "signin" ? "Connecté." : "Compte créé.");
+      toast.success("Connecté.");
       router.push(next as Route);
       router.refresh();
     });
@@ -62,47 +61,31 @@ export function LoginForm() {
       <div className="space-y-2">
         <div className="flex items-baseline justify-between">
           <Label htmlFor="password">Mot de passe</Label>
-          {mode === "signin" ? (
-            <Link
-              href="/login/forgot"
-              className="text-muted-foreground text-xs underline-offset-4 hover:underline"
-            >
-              Oublié ?
-            </Link>
-          ) : null}
+          <Link
+            href="/login/forgot"
+            className="text-muted-foreground text-xs underline-offset-4 hover:underline"
+          >
+            Oublié ?
+          </Link>
         </div>
         <Input
           id="password"
           type="password"
-          autoComplete={mode === "signin" ? "current-password" : "new-password"}
+          autoComplete="current-password"
           required
-          minLength={mode === "signup" ? 8 : 1}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={pending}
         />
-        {mode === "signup" ? (
-          <p className="text-muted-foreground text-xs">8 caractères minimum.</p>
-        ) : null}
       </div>
 
       <Button type="submit" className="w-full" disabled={pending || !email || !password}>
-        {pending
-          ? mode === "signin"
-            ? "Connexion…"
-            : "Création…"
-          : mode === "signin"
-            ? "Se connecter"
-            : "Créer mon compte"}
+        {pending ? "Connexion…" : "Se connecter"}
       </Button>
 
-      <button
-        type="button"
-        onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-        className="block w-full text-center text-muted-foreground text-xs underline-offset-4 hover:underline"
-      >
-        {mode === "signin" ? "Créer un compte" : "J'ai déjà un compte — me connecter"}
-      </button>
+      <p className="text-center text-muted-foreground text-xs">
+        Pas de compte ? Demande une invitation à un administrateur.
+      </p>
     </form>
   );
 }

@@ -114,43 +114,47 @@ export const deleteEntity = action(deleteEntitySchema, async ({ input }) => {
  * rattachés (3 max pour rester compact). Charge à la demande à l'ouverture
  * du modal.
  */
-export const getEntityPreview = action(z.object({ id: z.string().uuid() }), async ({ input }) => {
-  const conn = await db();
-  const [entity] = await conn
-    .select({
-      id: entities.id,
-      name: entities.name,
-      kind: entities.kind,
-      website: entities.website,
-      siren: entities.siren,
-      vatNumber: entities.vatNumber,
-      address: entities.address,
-      notes: entities.notes,
-    })
-    .from(entities)
-    .where(eq(entities.id, input.id))
-    .limit(1);
-  if (!entity) throw new Error("Entité introuvable.");
+export const getEntityPreview = action(
+  z.object({ id: z.string().uuid() }),
+  async ({ input }) => {
+    const conn = await db();
+    const [entity] = await conn
+      .select({
+        id: entities.id,
+        name: entities.name,
+        kind: entities.kind,
+        website: entities.website,
+        siren: entities.siren,
+        vatNumber: entities.vatNumber,
+        address: entities.address,
+        notes: entities.notes,
+      })
+      .from(entities)
+      .where(eq(entities.id, input.id))
+      .limit(1);
+    if (!entity) throw new Error("Entité introuvable.");
 
-  const [{ count: contactsCount } = { count: 0 }] = await conn
-    .select({ count: sql<number>`count(*)::int` })
-    .from(contacts)
-    .where(eq(contacts.entityId, input.id));
+    const [{ count: contactsCount } = { count: 0 }] = await conn
+      .select({ count: sql<number>`count(*)::int` })
+      .from(contacts)
+      .where(eq(contacts.entityId, input.id));
 
-  const previewContacts = await conn
-    .select({
-      id: contacts.id,
-      firstName: contacts.firstName,
-      lastName: contacts.lastName,
-      jobTitle: contacts.jobTitle,
-    })
-    .from(contacts)
-    .where(eq(contacts.entityId, input.id))
-    .orderBy(asc(contacts.lastName), asc(contacts.firstName))
-    .limit(5);
+    const previewContacts = await conn
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        jobTitle: contacts.jobTitle,
+      })
+      .from(contacts)
+      .where(eq(contacts.entityId, input.id))
+      .orderBy(asc(contacts.lastName), asc(contacts.firstName))
+      .limit(5);
 
-  return { entity, contactsCount, previewContacts };
-});
+    return { entity, contactsCount, previewContacts };
+  },
+  { allowViewer: true },
+);
 
 export async function deleteEntityAndRedirect(formData: FormData) {
   const id = formData.get("id");

@@ -23,6 +23,8 @@ export const oauthClients = pgTable(
     grantTypes: jsonb("grant_types").$type<string[]>().notNull(),
     tokenEndpointAuthMethod: text("token_endpoint_auth_method").notNull(),
     scope: text("scope").notNull(),
+    /** IP d'enregistrement (x-forwarded-for) — sert au plafond par IP. */
+    registeredIp: text("registered_ip"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => ({

@@ -21,7 +21,3 @@ export const attachToNoteSchema = z.object({
 export const deleteAttachmentSchema = z.object({
   id: z.string().uuid(),
 });
-
-export const getDownloadUrlSchema = z.object({
-  storagePath: z.string().min(1).max(500),
-});

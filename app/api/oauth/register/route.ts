@@ -17,7 +17,15 @@ import { z } from "zod";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_REGISTRATIONS_PER_HOUR = 60;
+const MAX_REGISTRATIONS_PER_HOUR = 200;
+const MAX_REGISTRATIONS_PER_IP_PER_HOUR = 10;
+
+/** Première IP de `x-forwarded-for` (posée par Vercel), sinon null. */
+function clientIp(request: NextRequest): string | null {
+  const xff = request.headers.get("x-forwarded-for");
+  const first = xff?.split(",")[0]?.trim();
+  return first && first.length <= 64 ? first : null;
+}
 
 /**
  * OAuth 2.1 impose des redirect URIs soit HTTPS, soit en loopback.
@@ -73,7 +81,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if ((await recentClientRegistrations()) >= MAX_REGISTRATIONS_PER_HOUR) {
+  const ip = clientIp(req);
+  const recent = await recentClientRegistrations(ip);
+  if (
+    recent.total >= MAX_REGISTRATIONS_PER_HOUR ||
+    (ip !== null && recent.fromIp >= MAX_REGISTRATIONS_PER_IP_PER_HOUR)
+  ) {
     return oauthError(
       "temporarily_unavailable",
       "Trop d'enregistrements récents, réessaie dans quelques minutes.",
@@ -92,6 +105,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { clientId, clientSecret, createdAt } = await registerClient({
+    registeredIp: ip,
     clientName: meta.client_name ?? "Client MCP",
     redirectUris: meta.redirect_uris,
     grantTypes,

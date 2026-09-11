@@ -64,7 +64,10 @@ const SANITIZE_OPTS: sanitizeHtml.IOptions = {
     a: ["href", "name", "target", "rel"],
     img: ["src", "alt", "title", "width", "height"],
   },
-  allowedSchemes: ["http", "https", "mailto", "tel", "data"],
+  allowedSchemes: ["http", "https", "mailto", "tel"],
+  // `data:` uniquement pour les images inline (cid remplacés) — jamais
+  // sur `<a href>`, où un `data:text/html` serait une page arbitraire.
+  allowedSchemesByTag: { img: ["http", "https", "data"] },
   allowProtocolRelative: false,
 };
 
