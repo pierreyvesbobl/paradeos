@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/format";
 import { listThreadsForSubject } from "@/lib/gmail/queries";
-import { Mail } from "lucide-react";
+import { Envelope } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
 type Props = {
@@ -60,7 +60,7 @@ export async function EmailsTab({ linkKind, linkId, limit = 20 }: Props) {
                   <p
                     className={`min-w-0 flex-1 truncate text-sm ${t.hasUnread ? "font-semibold" : "font-medium"}`}
                   >
-                    <Mail className="-mt-0.5 mr-1 inline size-3.5 text-muted-foreground" />
+                    <Envelope className="-mt-0.5 mr-1 inline size-3.5 text-muted-foreground" />
                     {t.subject || "(sans objet)"}
                   </p>
                   <div className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">

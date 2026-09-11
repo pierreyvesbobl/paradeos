@@ -7,7 +7,7 @@ import {
   setInvoiceFilingEnabled,
   setInvoiceFilingRootFolder,
 } from "@/lib/actions/invoice-filings";
-import { Play, Power, Save } from "lucide-react";
+import { FloppyDisk, Play, Power } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -102,7 +102,7 @@ export function InvoiceFilingSettings({ currentFolderId, enabled }: Props) {
             disabled={pending || !folderInput.trim()}
             className="gap-1.5"
           >
-            <Save className="size-3.5" />
+            <FloppyDisk className="size-3.5" />
             Enregistrer
           </Button>
         </div>

@@ -23,18 +23,18 @@ import {
 import type { ProjectSecretListItem } from "@/lib/db/queries/project-secrets";
 import { cn } from "@/lib/utils";
 import {
+  ArrowSquareOut,
   Check,
   Copy,
-  ExternalLink,
   Eye,
-  EyeOff,
-  KeyRound,
-  Pencil,
+  EyeSlash,
+  Key,
+  Note,
+  PencilSimple,
   Plus,
-  StickyNote,
-  Trash2,
+  Trash,
   User,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -89,7 +89,7 @@ export function ProjectSecretsSection({ projectId, secrets }: Props) {
 
       {secrets.length === 0 ? (
         <EmptyState
-          icon={KeyRound}
+          icon={Key}
           title="Aucun secret enregistré."
           description="Stocke ici les mdp, clés API et tokens liés au projet. Tout est chiffré côté serveur."
         />
@@ -192,7 +192,7 @@ function SecretRow({
   return (
     <li className="flex flex-col gap-2 px-3 py-2.5 hover:bg-muted/40">
       <div className="flex items-center gap-3">
-        <KeyRound className="shrink-0 text-muted-foreground" size={14} aria-hidden="true" />
+        <Key className="shrink-0 text-muted-foreground" size={14} aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium text-sm">{secret.label}</span>
@@ -200,7 +200,7 @@ function SecretRow({
               <User className="text-muted-foreground" size={12} aria-label="Username défini" />
             ) : null}
             {secret.hasNotes ? (
-              <StickyNote className="text-muted-foreground" size={12} aria-label="Notes définies" />
+              <Note className="text-muted-foreground" size={12} aria-label="Notes définies" />
             ) : null}
           </div>
           {secret.url ? (
@@ -211,7 +211,7 @@ function SecretRow({
               className="inline-flex items-center gap-1 text-muted-foreground text-xs hover:underline"
             >
               <span className="truncate">{secret.url}</span>
-              <ExternalLink className="shrink-0" size={10} aria-hidden="true" />
+              <ArrowSquareOut className="shrink-0" size={10} aria-hidden="true" />
             </a>
           ) : null}
         </div>
@@ -224,7 +224,7 @@ function SecretRow({
             disabled={pending}
             aria-label={revealed ? "Masquer" : "Révéler"}
           >
-            {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
+            {revealed ? <EyeSlash size={14} /> : <Eye size={14} />}
           </Button>
           <Button
             variant="ghost"
@@ -243,7 +243,7 @@ function SecretRow({
             onClick={onEdit}
             aria-label="Modifier"
           >
-            <Pencil size={14} />
+            <PencilSimple size={14} />
           </Button>
           <Button
             variant="ghost"
@@ -252,7 +252,7 @@ function SecretRow({
             onClick={onDelete}
             aria-label="Supprimer"
           >
-            <Trash2 size={14} />
+            <Trash size={14} />
           </Button>
         </div>
       </div>
@@ -475,7 +475,7 @@ function SecretDialog({ open, onOpenChange, projectId, initial }: DialogProps) {
                 aria-label={showValue ? "Masquer" : "Afficher"}
                 tabIndex={-1}
               >
-                {showValue ? <EyeOff size={14} /> : <Eye size={14} />}
+                {showValue ? <EyeSlash size={14} /> : <Eye size={14} />}
               </button>
             </div>
             <FieldError messages={errors.value} />

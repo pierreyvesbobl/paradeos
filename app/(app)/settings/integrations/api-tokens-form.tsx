@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createApiToken, revokeApiToken } from "@/lib/actions/api-tokens";
 import { formatDate } from "@/lib/format";
-import { Check, Copy, KeyRound, Trash2 } from "lucide-react";
+import { Check, Copy, Key, Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -115,7 +115,7 @@ export function ApiTokensForm({ tokens }: { tokens: Token[] }) {
           maxLength={80}
         />
         <Button type="submit" size="sm" disabled={pending || !label.trim()} className="gap-1.5">
-          <KeyRound className="size-3.5" />
+          <Key className="size-3.5" />
           {pending ? "…" : "Générer"}
         </Button>
       </form>
@@ -143,7 +143,7 @@ export function ApiTokensForm({ tokens }: { tokens: Token[] }) {
                 title="Révoquer"
                 aria-label={`Révoquer le token ${t.label}`}
               >
-                <Trash2 className="size-3.5" />
+                <Trash className="size-3.5" />
               </Button>
             </li>
           ))}

@@ -11,7 +11,13 @@ import {
 import type { NoteSortField } from "@/lib/db/queries/notes";
 import { NOTE_SORT_GROUPS, NOTE_SORT_OPTIONS } from "@/lib/notes/sort-options";
 import { cn } from "@/lib/utils";
-import { ArrowDownAZ, ArrowDownUp, ArrowUpAZ, Check, ChevronDown } from "lucide-react";
+import {
+  ArrowsDownUp,
+  CaretDown,
+  Check,
+  SortAscending,
+  SortDescending,
+} from "@phosphor-icons/react";
 import Link from "next/link";
 
 type Props = {
@@ -33,10 +39,10 @@ export function NoteSortMenu({ current, hrefs }: Props) {
           className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm hover:bg-muted"
           title="Tri"
         >
-          <ArrowDownUp className="size-3.5 text-muted-foreground" />
+          <ArrowsDownUp className="size-3.5 text-muted-foreground" />
           <span>Trier : </span>
           <span className="font-medium">{active?.label ?? "Plus récent"}</span>
-          <ChevronDown className="size-3.5 opacity-50" />
+          <CaretDown className="size-3.5 opacity-50" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
@@ -48,7 +54,7 @@ export function NoteSortMenu({ current, hrefs }: Props) {
             </DropdownMenuLabel>
             {group.items.map((opt) => {
               const isActive = opt.field === current.field && opt.dir === current.dir;
-              const Icon = opt.dir === "asc" ? ArrowUpAZ : ArrowDownAZ;
+              const Icon = opt.dir === "asc" ? SortAscending : SortDescending;
               const href = hrefs[`${opt.field}:${opt.dir}`] ?? "/notes";
               return (
                 <DropdownMenuItem key={`${opt.field}-${opt.dir}`} asChild>

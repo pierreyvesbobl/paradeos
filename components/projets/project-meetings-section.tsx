@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { getMeetingsForProject } from "@/lib/db/queries/meetings";
 import { formatDate } from "@/lib/format";
-import { ExternalLink, FileText } from "lucide-react";
+import { ArrowSquareOut, FileText } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -91,7 +91,7 @@ export async function ProjectMeetingsSection({ projectId }: { projectId: string 
                       title="Ouvrir le transcript dans Drive"
                       aria-label="Ouvrir le transcript dans Drive"
                     >
-                      <ExternalLink className="size-3.5" />
+                      <ArrowSquareOut className="size-3.5" />
                     </a>
                   ) : null}
                 </div>

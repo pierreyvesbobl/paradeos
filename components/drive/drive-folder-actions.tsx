@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { unlinkDriveFolder } from "@/lib/actions/drive-folders";
 import type { DriveFileSubjectType } from "@/lib/schemas/drive-files";
-import { ExternalLink, FolderOpen, HelpCircle, Link2Off } from "lucide-react";
+import { ArrowSquareOut, FolderOpen, LinkSimpleBreak, Question } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -84,7 +84,7 @@ export function DriveFolderActions({
       {folderUrl ? (
         <Button asChild type="button" size="sm" variant="outline" className="gap-1.5">
           <a href={folderUrl} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="size-3.5" />
+            <ArrowSquareOut className="size-3.5" />
             Ouvrir dans Drive
           </a>
         </Button>
@@ -110,7 +110,7 @@ export function DriveFolderActions({
             title="Configurer l'ouverture 1-clic"
             aria-label="Aide configuration"
           >
-            <HelpCircle className="size-3.5" />
+            <Question className="size-3.5" />
           </Button>
           <DriveLocalOpenSetupDialog
             open={setupOpen}
@@ -128,7 +128,7 @@ export function DriveFolderActions({
         title="Délier le dossier"
         aria-label="Délier le dossier"
       >
-        <Link2Off className="size-3.5" />
+        <LinkSimpleBreak className="size-3.5" />
       </Button>
     </div>
   );

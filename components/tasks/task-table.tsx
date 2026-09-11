@@ -12,7 +12,7 @@ import type {
 } from "@/components/tasks/task-types";
 import { bulkDeleteTasks, bulkPatchTasks } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowsDownUp, CaretDown, CaretRight } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useTransition } from "react";
@@ -187,7 +187,7 @@ export function TaskTable({
           onClick={() => setShowDone((v) => !v)}
           className="flex items-center gap-2 self-start px-2 py-1 text-ds-text-muted text-sm transition-colors hover:text-ds-text"
         >
-          {showDone ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+          {showDone ? <CaretDown className="size-3" /> : <CaretRight className="size-3" />}
           <span className="font-medium">Terminées</span>
           <span
             className={cn(
@@ -266,7 +266,7 @@ function HeaderLabel({
 
   const isActive = sort?.field === field;
   const icon = !isActive ? (
-    <ArrowUpDown className="size-3 opacity-50" />
+    <ArrowsDownUp className="size-3 opacity-50" />
   ) : sort?.dir === "asc" ? (
     <ArrowUp className="size-3" />
   ) : (

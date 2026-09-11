@@ -20,8 +20,8 @@ import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply"
 import { collectF } from "@/lib/filters/url-helpers";
 import { type TaskStatus, taskStatusEnum } from "@/lib/schemas/tasks";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
+import { CheckSquare, Plus } from "@phosphor-icons/react/dist/ssr";
 import { type SQL, and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
-import { CheckSquare, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { formatPersonName } from "@/lib/format";

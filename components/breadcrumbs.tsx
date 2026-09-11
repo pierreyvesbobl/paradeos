@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { ChevronRight } from "lucide-react";
+import { CaretRight } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
 export type BreadcrumbItem = {
@@ -37,7 +37,7 @@ export function Breadcrumbs({ items, className }: Props) {
             ) : (
               <span className={isLast ? "text-foreground" : undefined}>{item.label}</span>
             )}
-            {!isLast ? <ChevronRight className="size-3 opacity-50" aria-hidden="true" /> : null}
+            {!isLast ? <CaretRight className="size-3 opacity-50" aria-hidden="true" /> : null}
           </span>
         );
       })}

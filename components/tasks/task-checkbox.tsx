@@ -2,7 +2,7 @@
 
 import { toggleTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils";
-import { Check } from "lucide-react";
+import { Check } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";

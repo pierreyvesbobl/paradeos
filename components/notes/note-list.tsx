@@ -2,7 +2,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import type { AttachmentRow } from "@/lib/db/queries/notes";
 import type { NoteKind, NoteSubjectType } from "@/lib/schemas/notes";
-import { StickyNote } from "lucide-react";
+import { Note as NoteIcon } from "@phosphor-icons/react/dist/ssr";
 import { NoteCard } from "./note-card";
 import { NoteDialog } from "./note-dialog";
 
@@ -42,7 +42,7 @@ export function NoteList({ subjectType, subjectId, notes, attachmentsByNote }: P
       {notes.length === 0 ? (
         <EmptyState
           compact
-          icon={StickyNote}
+          icon={NoteIcon}
           title="Aucune note pour l'instant."
           description="Garde une trace des échanges, décisions ou observations utiles. Mention @prénom pour notifier, #project:nom pour lier une ressource."
         />

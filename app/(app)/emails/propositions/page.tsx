@@ -8,8 +8,8 @@ import { emailProposals, gmailMessages, gmailThreads } from "@/db/schema/gmail";
 import { projects } from "@/db/schema/projects";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
+import { Tray } from "@phosphor-icons/react/dist/ssr";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
-import { Inbox } from "lucide-react";
 
 import { formatPersonName } from "@/lib/format";
 export default async function EmailPropositionsPage() {
@@ -115,7 +115,7 @@ export default async function EmailPropositionsPage() {
 
       {rows.length === 0 ? (
         <EmptyState
-          icon={Inbox}
+          icon={Tray}
           title="Aucune proposition en attente"
           description="Les emails matchant un contact CRM sont analysés au prochain sync (cron quotidien ou bouton 'Sync now')."
         />

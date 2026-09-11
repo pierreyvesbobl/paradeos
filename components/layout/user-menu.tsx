@@ -10,8 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/lib/actions/auth";
+import { Eye, Gear, Plug, SignOut, Users as UsersIcon } from "@phosphor-icons/react";
 import type { User } from "@supabase/supabase-js";
-import { Eye, LogOut, Plug, Settings, Users as UsersIcon } from "lucide-react";
 import Link from "next/link";
 
 function initialsFromEmail(email: string | undefined): string {
@@ -47,7 +47,7 @@ export function UserMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link href="/settings/profile" className="flex items-center gap-2">
-            <Settings className="size-4" />
+            <Gear className="size-4" />
             Profil
           </Link>
         </DropdownMenuItem>
@@ -77,7 +77,7 @@ export function UserMenu({
         <DropdownMenuItem asChild>
           <form action={signOut}>
             <button type="submit" className="flex w-full items-center gap-2 text-left">
-              <LogOut className="size-4" />
+              <SignOut className="size-4" />
               Se déconnecter
             </button>
           </form>

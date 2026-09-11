@@ -7,7 +7,7 @@ import {
   revokeLinkedinSyncToken,
 } from "@/lib/actions/linkedin-sync-tokens";
 import { formatDate } from "@/lib/format";
-import { Check, Copy, KeyRound, Linkedin, Trash2 } from "lucide-react";
+import { Check, Copy, Key, LinkedinLogo, Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -100,7 +100,7 @@ export function LinkedinSection({
       <header className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h2 className="flex items-center gap-2 font-medium text-sm">
-            <Linkedin className="size-4" />
+            <LinkedinLogo className="size-4" />
             LinkedIn
           </h2>
           <p className="mt-1 text-muted-foreground text-xs">
@@ -213,7 +213,7 @@ export function LinkedinSection({
             disabled={pending || !tokenLabel.trim()}
             className="gap-1.5"
           >
-            <KeyRound className="size-3.5" />
+            <Key className="size-3.5" />
             {pending ? "…" : "Générer un token"}
           </Button>
         </form>
@@ -241,7 +241,7 @@ export function LinkedinSection({
                   title="Révoquer"
                   aria-label={`Révoquer ${t.label}`}
                 >
-                  <Trash2 className="size-3.5" />
+                  <Trash className="size-3.5" />
                 </Button>
               </li>
             ))}

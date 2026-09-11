@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { deleteNote } from "@/lib/actions/notes";
-import { Trash2 } from "lucide-react";
+import { Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -41,7 +41,7 @@ export function DeleteNoteButton({ noteId, label }: { noteId: string; label?: st
         disabled={pending}
         onClick={() => setOpen(true)}
       >
-        <Trash2 className="size-3.5" />
+        <Trash className="size-3.5" />
       </Button>
       <ConfirmDialog
         open={open}

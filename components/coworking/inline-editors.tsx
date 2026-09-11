@@ -20,7 +20,7 @@ import {
   coworkingInvoiceStatusLabels,
 } from "@/lib/schemas/coworking";
 import { cn } from "@/lib/utils";
-import { Check } from "lucide-react";
+import { Check } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";

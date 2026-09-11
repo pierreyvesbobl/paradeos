@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import { deleteUser, updateUser } from "@/lib/actions/users";
 import { type UserRoleValue, userRoleEnum, userRoleLabels } from "@/lib/schemas/users";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { DotsThree, PencilSimple, Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -88,7 +88,7 @@ export function UserRowActions({ user, isSelf }: { user: UserRow; isSelf: boolea
             className="size-7 text-muted-foreground hover:text-foreground"
             aria-label="Actions sur l'utilisateur"
           >
-            <MoreHorizontal className="size-4" />
+            <DotsThree className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
@@ -99,7 +99,7 @@ export function UserRowActions({ user, isSelf }: { user: UserRow; isSelf: boolea
               setEditOpen(true);
             }}
           >
-            <Pencil className="size-4" />
+            <PencilSimple className="size-4" />
             Modifier…
           </DropdownMenuItem>
           {!isSelf ? (
@@ -112,7 +112,7 @@ export function UserRowActions({ user, isSelf }: { user: UserRow; isSelf: boolea
                 }}
                 className="text-destructive focus:text-destructive"
               >
-                <Trash2 className="size-4" />
+                <Trash className="size-4" />
                 Supprimer…
               </DropdownMenuItem>
             </>

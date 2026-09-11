@@ -12,7 +12,7 @@ const config: NextConfig = {
   // Tree-shake les imports nommés des libs lourdes (lucide-react =
   // ~600 icônes, sans ça tout le pack est inclus dans chaque chunk).
   experimental: {
-    optimizePackageImports: ["lucide-react", "@phosphor-icons/react"],
+    optimizePackageImports: ["@phosphor-icons/react"],
   },
   /**
    * Métadonnées de découverte OAuth (RFC 9728 / RFC 8414). Les clients MCP

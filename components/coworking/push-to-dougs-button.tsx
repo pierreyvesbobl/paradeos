@@ -5,7 +5,13 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { pushCoworkingInvoiceToDougs } from "@/lib/actions/coworking";
 import { linkInvoiceToDougs, refreshInvoiceDougs } from "@/lib/actions/invoices";
-import { CloudDownload, ExternalLink, Link2, RefreshCw, Send } from "lucide-react";
+import {
+  ArrowSquareOut,
+  ArrowsClockwise,
+  CloudArrowDown,
+  LinkSimple,
+  PaperPlaneTilt,
+} from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -77,7 +83,7 @@ export function PushToDougsButton({ invoiceId, dougsInvoiceId, dougsUrl }: Props
           rel="noreferrer"
           className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-muted-foreground text-sm hover:bg-muted"
         >
-          <ExternalLink className="size-3.5" />
+          <ArrowSquareOut className="size-3.5" />
           Voir sur Dougs
         </a>
         <Button
@@ -88,7 +94,7 @@ export function PushToDougsButton({ invoiceId, dougsInvoiceId, dougsUrl }: Props
           disabled={pending}
           title="Tirer le statut et les montants finaux depuis Dougs"
         >
-          <CloudDownload className="mr-1 size-4" />
+          <CloudArrowDown className="mr-1 size-4" />
           Rafraîchir
         </Button>
         <Button
@@ -98,7 +104,7 @@ export function PushToDougsButton({ invoiceId, dougsInvoiceId, dougsUrl }: Props
           onClick={() => setConfirmRepush(true)}
           disabled={pending}
         >
-          <RefreshCw className="mr-1 size-4" />
+          <ArrowsClockwise className="mr-1 size-4" />
           {pending ? "Re-push…" : "Re-pousser"}
         </Button>
         <ConfirmDialog
@@ -117,7 +123,7 @@ export function PushToDougsButton({ invoiceId, dougsInvoiceId, dougsUrl }: Props
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button type="button" size="sm" variant="outline" onClick={push} disabled={pending}>
-        <Send className="mr-1 size-4" />
+        <PaperPlaneTilt className="mr-1 size-4" />
         {pending ? "Push…" : "Pousser sur Dougs"}
       </Button>
       {!showLink ? (
@@ -129,7 +135,7 @@ export function PushToDougsButton({ invoiceId, dougsInvoiceId, dougsUrl }: Props
           disabled={pending}
           title="Lier une facture Dougs déjà existante"
         >
-          <Link2 className="mr-1 size-3.5" />
+          <LinkSimple className="mr-1 size-3.5" />
           Lier existant
         </Button>
       ) : (

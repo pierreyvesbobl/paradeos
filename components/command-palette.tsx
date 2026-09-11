@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/command";
 import { type SearchResults, globalSearch } from "@/lib/actions/global-search";
 import { ContactName, DemoBlur, EntityName, ProjectName } from "@/lib/demo/components";
-import { ArrowRight, Building2, CheckSquare, FolderKanban, Plus, User } from "lucide-react";
+import { ArrowRight, Buildings, CheckSquare, Kanban, Plus, User } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -158,7 +158,7 @@ export function CommandPalette() {
                     value={`prj-${p.id}`}
                     onSelect={() => go(`/projets/${p.id}`)}
                   >
-                    <FolderKanban className="size-4" />
+                    <Kanban className="size-4" />
                     <ProjectName project={p} />
                   </CommandItem>
                 ))}
@@ -172,7 +172,7 @@ export function CommandPalette() {
                     value={`ent-${e.id}`}
                     onSelect={() => go(`/entites/${e.id}`)}
                   >
-                    <Building2 className="size-4" />
+                    <Buildings className="size-4" />
                     <EntityName entity={e} />
                   </CommandItem>
                 ))}

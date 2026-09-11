@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { syncDriveTranscriptsNow, updateMeetingsDriveFolder } from "@/lib/actions/drive-ingest";
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { ArrowSquareOut, ArrowsClockwise } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -93,7 +93,7 @@ export function DriveTranscriptsForm({ currentFolderId }: { currentFolderId: str
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground hover:underline"
           >
-            <ExternalLink className="size-3" />
+            <ArrowSquareOut className="size-3" />
             Ouvrir le dossier dans Drive
           </a>
         ) : null}
@@ -116,7 +116,7 @@ export function DriveTranscriptsForm({ currentFolderId }: { currentFolderId: str
             disabled={syncing}
             className="gap-1.5"
           >
-            <RefreshCw className={`size-3.5 ${syncing ? "animate-spin" : ""}`} />
+            <ArrowsClockwise className={`size-3.5 ${syncing ? "animate-spin" : ""}`} />
             {syncing ? "Sync…" : "Sync now"}
           </Button>
         </div>

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { type DiagnosticStep, checkMcpSetup } from "@/lib/actions/mcp-setup";
-import { Check, Copy, ExternalLink, Loader2, X } from "lucide-react";
+import { ArrowSquareOut, Check, CircleNotch, Copy, X } from "@phosphor-icons/react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -74,7 +74,7 @@ export function McpSetupGuide({ userId }: { userId: string }) {
           <div className="mt-3">
             <Button variant="outline" size="sm" className="gap-1.5" asChild>
               <a href={cursorDeeplink(url)}>
-                <ExternalLink className="size-3.5" />
+                <ArrowSquareOut className="size-3.5" />
                 Installer dans Cursor
               </a>
             </Button>
@@ -204,7 +204,7 @@ function SetupCheck() {
           </p>
         </div>
         <Button type="button" size="sm" variant="outline" disabled={pending} onClick={run}>
-          {pending ? <Loader2 className="size-3.5 animate-spin" /> : "Tester"}
+          {pending ? <CircleNotch className="size-3.5 animate-spin" /> : "Tester"}
         </Button>
       </div>
       {steps ? (

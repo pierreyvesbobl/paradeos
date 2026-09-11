@@ -1,22 +1,22 @@
 "use client";
 
+import {
+  Code,
+  Image as ImageIcon,
+  ListBullets,
+  ListNumbers,
+  Quotes,
+  TextB,
+  TextHOne,
+  TextHThree,
+  TextHTwo,
+  TextItalic,
+} from "@phosphor-icons/react";
 import { Image as TiptapImage } from "@tiptap/extension-image";
 import { Link } from "@tiptap/extension-link";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
-import {
-  Bold,
-  Code,
-  Heading1,
-  Heading2,
-  Heading3,
-  ImagePlus,
-  Italic,
-  List,
-  ListOrdered,
-  Quote,
-} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -236,21 +236,21 @@ export function TiptapNoteEditor({ note }: Props) {
           active={editor.isActive("heading", { level: 1 })}
           title="Titre 1"
         >
-          <Heading1 className="size-4" />
+          <TextHOne className="size-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
           active={editor.isActive("heading", { level: 2 })}
           title="Titre 2"
         >
-          <Heading2 className="size-4" />
+          <TextHTwo className="size-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
           active={editor.isActive("heading", { level: 3 })}
           title="Titre 3"
         >
-          <Heading3 className="size-4" />
+          <TextHThree className="size-4" />
         </ToolbarButton>
         <Divider />
         <ToolbarButton
@@ -258,14 +258,14 @@ export function TiptapNoteEditor({ note }: Props) {
           active={editor.isActive("bold")}
           title="Gras (Cmd+B)"
         >
-          <Bold className="size-4" />
+          <TextB className="size-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
           active={editor.isActive("italic")}
           title="Italique (Cmd+I)"
         >
-          <Italic className="size-4" />
+          <TextItalic className="size-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleCode().run()}
@@ -280,21 +280,21 @@ export function TiptapNoteEditor({ note }: Props) {
           active={editor.isActive("bulletList")}
           title="Liste à puces"
         >
-          <List className="size-4" />
+          <ListBullets className="size-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
           active={editor.isActive("orderedList")}
           title="Liste numérotée"
         >
-          <ListOrdered className="size-4" />
+          <ListNumbers className="size-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
           active={editor.isActive("blockquote")}
           title="Citation"
         >
-          <Quote className="size-4" />
+          <Quotes className="size-4" />
         </ToolbarButton>
         <Divider />
         <label className="inline-flex h-7 cursor-pointer items-center justify-center rounded-md px-2 text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -308,7 +308,7 @@ export function TiptapNoteEditor({ note }: Props) {
               e.currentTarget.value = "";
             }}
           />
-          <ImagePlus className="size-4" />
+          <ImageIcon className="size-4" />
         </label>
         <span className="ml-auto text-muted-foreground text-xs">
           {uploading

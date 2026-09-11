@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { revokeMcpGrant } from "@/lib/actions/mcp-setup";
 import { formatDate } from "@/lib/format";
-import { Plug, Trash2 } from "lucide-react";
+import { Plug, Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
@@ -69,7 +69,7 @@ export function McpConnections({ connections }: { connections: Connection[] }) {
             title="Déconnecter"
             aria-label={`Déconnecter ${c.clientName}`}
           >
-            <Trash2 className="size-3.5" />
+            <Trash className="size-3.5" />
           </Button>
         </li>
       ))}

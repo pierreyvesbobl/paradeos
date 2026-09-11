@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter, Search, X } from "lucide-react";
+import { Funnel, MagnifyingGlass, X } from "@phosphor-icons/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -219,14 +219,14 @@ function AddFilterButton({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm">
-          <Filter className="size-3.5" />
+          <Funnel className="size-3.5" />
           Filtrer
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-0">
         <div className="border-b p-2">
           <div className="flex items-center gap-2 rounded-md border bg-background px-2">
-            <Search className="size-3.5 text-muted-foreground" />
+            <MagnifyingGlass className="size-3.5 text-muted-foreground" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}

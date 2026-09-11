@@ -9,8 +9,8 @@ import { deleteContactAndRedirect } from "@/lib/actions/contacts";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { db } from "@/lib/db/server";
 import { formatPersonName } from "@/lib/format";
+import { ArrowSquareOut, Envelope, MapPin, Phone } from "@phosphor-icons/react/dist/ssr";
 import { asc, eq } from "drizzle-orm";
-import { ExternalLink, Mail, MapPin, Phone } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -110,7 +110,7 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
             <div>
               <dt className="text-muted-foreground text-xs uppercase tracking-wide">
                 <span className="inline-flex items-center gap-1">
-                  <Mail className="size-3" /> E-mail
+                  <Envelope className="size-3" /> E-mail
                 </span>
               </dt>
               <dd className="mt-1 text-sm">
@@ -130,7 +130,7 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
             <div className="sm:col-span-2">
               <dt className="text-muted-foreground text-xs uppercase tracking-wide">
                 <span className="inline-flex items-center gap-1">
-                  <ExternalLink className="size-3" /> LinkedIn
+                  <ArrowSquareOut className="size-3" /> LinkedIn
                 </span>
               </dt>
               <dd className="mt-1 text-sm">
@@ -168,7 +168,7 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
               href={`/entites/${entity.id}`}
               className="inline-flex items-center gap-1 text-muted-foreground text-xs hover:underline"
             >
-              Voir la fiche <ExternalLink className="size-3" />
+              Voir la fiche <ArrowSquareOut className="size-3" />
             </Link>
           ) : null}
         </section>

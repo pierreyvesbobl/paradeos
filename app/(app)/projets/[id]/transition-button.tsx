@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { patchProject } from "@/lib/actions/projects";
 import { COMMERCIAL_STATUSES, type ProjectStatus } from "@/lib/schemas/projects";
-import { ArrowLeft, ArrowRight, Trophy, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Trophy, X } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";

@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { MagnifyingGlass } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 
 /**
@@ -27,7 +27,7 @@ export function CommandPalette() {
       onClick={() => setOpen(true)}
       className="flex h-9 w-full max-w-sm items-center gap-2 rounded-md border bg-muted/40 px-3 text-muted-foreground text-sm transition-colors hover:bg-muted"
     >
-      <Search className="size-4" />
+      <MagnifyingGlass className="size-4" />
       <span>Rechercher…</span>
       <kbd className="ml-auto rounded border bg-background px-1.5 py-0.5 font-mono text-[10px]">
         ⌘K

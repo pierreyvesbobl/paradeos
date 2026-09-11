@@ -6,7 +6,7 @@ import { formatDateTime } from "@/lib/format";
 import type { NoteKind, NoteSubjectType } from "@/lib/schemas/notes";
 import { noteKindLabels } from "@/lib/schemas/notes";
 import { cn } from "@/lib/utils";
-import { MessageCircle, Paperclip, Phone, StickyNote, Users } from "lucide-react";
+import { ChatCircle, Note as NoteIcon, Paperclip, Phone, Users } from "@phosphor-icons/react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { DeleteNoteButton } from "./delete-note-button";
@@ -29,10 +29,10 @@ const TiptapNoteEditor = dynamic(
 );
 
 const KIND_ICON: Record<NoteKind, React.ComponentType<{ className?: string }>> = {
-  memo: StickyNote,
+  memo: NoteIcon,
   call: Phone,
   meeting: Users,
-  message: MessageCircle,
+  message: ChatCircle,
 };
 
 const KIND_COLOR: Record<NoteKind, string> = {

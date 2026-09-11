@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { markAllMyMentionsRead } from "@/lib/actions/notes";
-import { Bell } from "lucide-react";
+import { Bell } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
