@@ -1,4 +1,4 @@
-import { refreshAllUsersEvents } from "@/lib/actions/calendar";
+import { refreshAllUsersEvents } from "@/lib/google/calendar-sync";
 import { NextResponse } from "next/server";
 
 /**

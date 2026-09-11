@@ -4,7 +4,7 @@
  * upsert dans google_calendars (active tout), puis refresh les events
  * de la fenêtre J-7 / J+30.
  *
- * Doublure de refreshCalendarList + refreshUserEvents — à n'utiliser
+ * Doublure de refreshCalendarList + refreshUserEvents (lib/google/calendar-sync.ts) — à n'utiliser
  * qu'en debug ou pour seeder un compte initial.
  */
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
