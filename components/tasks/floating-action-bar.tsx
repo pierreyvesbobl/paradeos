@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, CheckCircle2, Trash2, UserPlus, X } from "lucide-react";
+import { CalendarBlank, CheckCircle, Trash, UserPlus, X } from "@phosphor-icons/react";
 
 type Props = {
   count: number;
@@ -43,7 +43,7 @@ export function FloatingActionBar({
       </span>
       <span className="mx-1 h-[18px] w-px bg-white/20" />
       <BarButton onClick={onComplete} disabled={pending}>
-        <CheckCircle2 className="size-[15px]" />
+        <CheckCircle className="size-[15px]" />
         Terminer
       </BarButton>
       <BarButton onClick={onAssign} disabled={!onAssign || pending}>
@@ -51,11 +51,11 @@ export function FloatingActionBar({
         Assigner
       </BarButton>
       <BarButton onClick={onSetDueDate} disabled={!onSetDueDate || pending}>
-        <Calendar className="size-[15px]" />
+        <CalendarBlank className="size-[15px]" />
         Échéance
       </BarButton>
       <BarButton onClick={onDelete} disabled={pending} tone="danger">
-        <Trash2 className="size-[15px]" />
+        <Trash className="size-[15px]" />
         Supprimer
       </BarButton>
       <span className="mx-1 h-[18px] w-px bg-white/20" />

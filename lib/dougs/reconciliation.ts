@@ -14,74 +14,36 @@ import {
 } from "@/lib/dougs/cache";
 import { type DougsQuote, type DougsSalesInvoice, pickDougsClientName } from "@/lib/dougs/client";
 import {
-  type MatchScore,
-  NAME_MATCH_FLOOR,
-  scoreMatch,
-  scoreMatchBest,
-  similarityAmountPartial,
-  similarityDate,
-  similarityName,
-} from "@/lib/dougs/match";
+  type CreditNoteLink,
+  type ExistingInvoiceCandidate,
+  INVOICE_CANDIDATES_LIMIT,
+  type InvoiceCandidate,
+  type LinkedDougsEntries,
+  type QuoteCandidate,
+  classifyLinkedInvoiceRows,
+  dougsName,
+  dougsSideOf,
+  isDougsCreditNote,
+  isMatchableInvoiceCandidate,
+  negate,
+  pMap,
+  pickHt,
+  pickTtc,
+  rankCandidates,
+  resolveCreditNoteLink,
+  scoreExistingInvoiceCandidate,
+  scoreNewProjectMilestoneCandidate,
+  scoreQuoteProjectCandidates,
+  sortByBestCandidate,
+  sortByCreatedAtDesc,
+} from "@/lib/dougs/reconciliation-rules";
 import { personNameOrNull } from "@/lib/format";
 import { monthsBetween } from "@/lib/schemas/coworking";
 import { and, eq, isNull } from "drizzle-orm";
 
-/**
- * Map async avec concurrency cap. Évite de saturer Dougs (Cloudflare
- * rate-limit) avec un Promise.all de 50 GET d'un coup.
- */
-async function pMap<T, R>(
-  items: T[],
-  fn: (item: T, index: number) => Promise<R>,
-  concurrency = 5,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  async function worker() {
-    while (next < items.length) {
-      const i = next++;
-      const item = items[i];
-      if (item === undefined) continue;
-      results[i] = await fn(item, i);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
-  return results;
-}
-
-function dougsName(
-  c:
-    | {
-        legalName?: string | null;
-        name?: string | null;
-        firstName?: string | null;
-        lastName?: string | null;
-      }
-    | null
-    | undefined,
-  fallback?: string | null,
-): string {
-  const fromObj = c?.legalName ?? c?.name ?? `${c?.firstName ?? ""} ${c?.lastName ?? ""}`.trim();
-  const v = fromObj || fallback || "";
-  return v || "—";
-}
-
-function pickHt(o: { totalNetAmount?: number | null; netAmount?: unknown }): number | null {
-  if (typeof o.totalNetAmount === "number") return o.totalNetAmount;
-  if (typeof o.netAmount === "number") return o.netAmount;
-  return null;
-}
-
-function pickTtc(o: { totalAmountWithVat?: number | null; amount?: unknown }): number | null {
-  if (typeof o.totalAmountWithVat === "number") return o.totalAmountWithVat;
-  if (typeof o.amount === "number") return o.amount;
-  return null;
-}
-
-function negate(n: number | null): number | null {
-  if (n === null) return null;
-  return n === 0 ? 0 : -Math.abs(n);
-}
+// Les types de résultat vivent dans reconciliation-rules.ts (module pur) ;
+// on les ré-exporte pour les callers (vue rapprochement, inbox).
+export type { InvoiceCandidate, LinkedDougsEntries };
 
 // =====================================================================
 // Devis
@@ -97,13 +59,7 @@ export type QuoteSuggestion = {
     clientName: string;
     createdAt: string | null;
   };
-  candidates: {
-    projectId: string;
-    projectName: string;
-    entityName: string | null;
-    valueAmount: number | null;
-    score: MatchScore;
-  }[];
+  candidates: QuoteCandidate[];
 };
 
 export async function getQuoteSuggestions(userId: string): Promise<QuoteSuggestion[]> {
@@ -161,36 +117,7 @@ export async function getQuoteSuggestions(userId: string): Promise<QuoteSuggesti
 
   const out: QuoteSuggestion[] = [];
   for (const q of enrichedQuotes) {
-    const dougsAmount = pickHt(q) ?? pickTtc(q);
-    const dougsClientName = pickDougsClientName(q);
-    const scored = candidates
-      .map((c) => {
-        const paradeosAmount = Number(c.valueAmount ?? c.budgetAmount ?? 0) || null;
-        const score = scoreMatch(
-          {
-            legalName: dougsClientName,
-            firstName: q.clientData?.firstName ?? null,
-            lastName: q.clientData?.lastName ?? null,
-            amount: dougsAmount,
-            createdAt: q.createdAt ?? null,
-          },
-          {
-            clientName: c.entityName,
-            amount: paradeosAmount,
-            date: c.startDate ?? c.createdAt,
-          },
-        );
-        return {
-          projectId: c.id,
-          projectName: c.name,
-          entityName: c.entityName,
-          valueAmount: paradeosAmount,
-          score,
-        };
-      })
-      .filter((x) => x.score.total >= 0.3)
-      .sort((a, b) => b.score.total - a.score.total)
-      .slice(0, 3);
+    const scored = scoreQuoteProjectCandidates(dougsSideOf(q), candidates);
 
     out.push({
       dougs: {
@@ -206,38 +133,12 @@ export async function getQuoteSuggestions(userId: string): Promise<QuoteSuggesti
     });
   }
 
-  out.sort((a, b) => (b.candidates[0]?.score.total ?? 0) - (a.candidates[0]?.score.total ?? 0));
-  return out;
+  return sortByBestCandidate(out);
 }
 
 // =====================================================================
 // Factures (sales-invoice) + avoirs
 // =====================================================================
-
-export type InvoiceCandidate =
-  | {
-      kind: "invoice";
-      /** Invoice Paradeos id (peut être un jalon, coworking, one_off). */
-      invoiceId: string;
-      label: string;
-      projectName: string | null;
-      contractName: string | null;
-      entityName: string | null;
-      amountHt: number;
-      score: MatchScore;
-    }
-  | {
-      // Pas d'invoice existante → propose d'en créer une à la volée
-      // pour un projet client (acompte/intermediaire/solde détecté).
-      kind: "new_project_milestone";
-      projectId: string;
-      projectName: string;
-      entityName: string | null;
-      projectValueHt: number;
-      detectedPercent: number | null;
-      amountHt: number;
-      score: MatchScore;
-    };
 
 export type InvoiceSuggestion = {
   dougs: {
@@ -272,10 +173,7 @@ export type CreditNoteEntry = {
     clientName: string;
     createdAt: string | null;
   };
-  link: {
-    cancelsDougsInvoiceId: string;
-    invoice: { reference: string | null; clientName: string; totalHt: number | null } | null;
-  } | null;
+  link: CreditNoteLink;
 };
 
 export type InvoiceSuggestionsResult = {
@@ -335,11 +233,7 @@ export async function getInvoiceSuggestions(
   // Filtre côté JS pour kind ∈ {milestone, coworking, one_off}. Exclut
   // aussi les factures coworking facturées par G&O (billedBy='g_and_o')
   // qui ne doivent ni remonter dans le matching ni dans les KPIs.
-  const candidatesData = unlinkedInvoiceCandidates.filter((c) => {
-    if (c.kind !== "milestone" && c.kind !== "coworking" && c.kind !== "one_off") return false;
-    if (c.kind === "coworking" && c.billedBy === "g_and_o") return false;
-    return true;
-  });
+  const candidatesData = unlinkedInvoiceCandidates.filter(isMatchableInvoiceCandidate);
 
   // Pour les coworking, on collecte toutes les identités possibles du
   // "client" (billToEntity, entité rattachée au contact, contact lui-même,
@@ -401,13 +295,7 @@ export async function getInvoiceSuggestions(
   const dougsInvoicesNormal: typeof dougsInvoicesAll = [];
   const dougsCreditNotes: typeof dougsInvoicesAll = [];
   for (const i of dougsInvoicesAll) {
-    const ht = pickHt(i);
-    const ttc = pickTtc(i);
-    const isCredit =
-      i.isRefund === true ||
-      (typeof ht === "number" && ht < 0) ||
-      (typeof ttc === "number" && ttc < 0);
-    if (isCredit) dougsCreditNotes.push(i);
+    if (isDougsCreditNote(i)) dougsCreditNotes.push(i);
     else dougsInvoicesNormal.push(i);
   }
 
@@ -471,8 +359,7 @@ export async function getInvoiceSuggestions(
   // 4. Pour chaque facture Dougs non liée, score contre les candidats.
   const out: InvoiceSuggestion[] = [];
   for (const inv of unlinkedDougsInvoices) {
-    const dougsAmount = pickHt(inv) ?? pickTtc(inv);
-    const dougsClientName = pickDougsClientName(inv);
+    const dougsSide = dougsSideOf(inv);
 
     // 5a. Candidats : invoices Paradeos existantes (kind ∈
     //     {milestone, coworking, one_off}) sans lien Dougs.
@@ -483,9 +370,8 @@ export async function getInvoiceSuggestions(
     // Ça règle le cas classique où Dougs facture "Alice Martin" mais le
     // contrat coworking a billToEntity="Acme SAS" (ou l'inverse) → sans
     // ça, similarityName renvoie 0 et le candidat est écarté.
-    const existingScored: Array<Extract<InvoiceCandidate, { kind: "invoice" }>> = [];
+    const existingScored: ExistingInvoiceCandidate[] = [];
     for (const c of candidatesData) {
-      const amountHt = Number(c.amountHt) || 0;
       const clientNames: string[] =
         c.kind === "coworking"
           ? (cwCandidatesMap.get(c.coworkingContractId ?? "") ?? [])
@@ -494,39 +380,14 @@ export async function getInvoiceSuggestions(
         c.kind === "coworking"
           ? (cwPrimaryNameMap.get(c.coworkingContractId ?? "") ?? null)
           : (c.projectEntityName ?? null);
-      const label =
-        c.kind === "milestone"
-          ? `${c.projectName ?? "?"} — ${c.label}`
-          : c.kind === "coworking"
-            ? `${c.contractName ?? "?"} — ${c.label}`
-            : c.label;
-      const dougsSide = {
-        legalName: dougsClientName,
-        firstName: inv.clientData?.firstName ?? null,
-        lastName: inv.clientData?.lastName ?? null,
-        amount: dougsAmount,
-        createdAt: inv.createdAt ?? null,
-      };
-      const bestScore = scoreMatchBest(dougsSide, clientNames, {
-        amount: amountHt,
-        date: c.periodStart ?? c.createdAt,
-      });
-      if (bestScore.total < 0.3) continue;
-      existingScored.push({
-        kind: "invoice",
-        invoiceId: c.id,
-        label,
-        projectName: c.projectName ?? null,
-        contractName: c.contractName ?? null,
-        entityName: primaryName,
-        amountHt,
-        score: bestScore,
-      });
+      const candidate = scoreExistingInvoiceCandidate(dougsSide, c, clientNames, primaryName);
+      if (candidate) existingScored.push(candidate);
     }
 
     // 5b. "Nouveau jalon projet" : projet client avec un % standard
     //     (acompte/solde) matchant l'amount Dougs.
     const newProjectScored: InvoiceCandidate[] = [];
+    const dougsAmount = dougsSide.amount;
     if (typeof dougsAmount === "number" && dougsAmount > 0) {
       // Skip projets qui ont déjà un candidat invoice existante.
       const projectIdsWithCandidate = new Set(
@@ -539,38 +400,15 @@ export async function getInvoiceSuggestions(
       );
       for (const p of allClientProjects) {
         if (projectIdsWithCandidate.has(p.id)) continue;
-        const projectValueHt = Number(p.valueAmount ?? p.budgetAmount ?? 0);
-        if (projectValueHt <= 0) continue;
-        // Dougs facture tantôt au nom de l'entité, tantôt au nom du
-        // projet — on retient la meilleure des deux lectures.
-        const nameSim = Math.max(
-          similarityName(dougsClientName, p.entityName),
-          similarityName(dougsClientName, p.name),
+        const candidate = scoreNewProjectMilestoneCandidate(
+          { clientName: dougsSide.legalName, amount: dougsAmount, createdAt: dougsSide.createdAt },
+          p,
         );
-        // Même plancher que scoreMatch : un montant qui tombe pile sur
-        // un pourcentage standard n'est pas une preuve d'identité.
-        if (nameSim < NAME_MATCH_FLOOR) continue;
-        const partial = similarityAmountPartial(dougsAmount, projectValueHt);
-        const dateSim = similarityDate(inv.createdAt ?? null, p.startDate ?? p.createdAt);
-        const total =
-          Math.round((nameSim * 0.5 + partial.score * 0.3 + dateSim * 0.2) * 1000) / 1000;
-        if (total < 0.3) continue;
-        newProjectScored.push({
-          kind: "new_project_milestone",
-          projectId: p.id,
-          projectName: p.name,
-          entityName: p.entityName,
-          projectValueHt,
-          detectedPercent: partial.percent,
-          amountHt: dougsAmount,
-          score: { total, name: nameSim, amount: partial.score, date: dateSim },
-        });
+        if (candidate) newProjectScored.push(candidate);
       }
     }
 
-    const all = [...existingScored, ...newProjectScored]
-      .sort((a, b) => b.score.total - a.score.total)
-      .slice(0, 4);
+    const all = rankCandidates([...existingScored, ...newProjectScored], INVOICE_CANDIDATES_LIMIT);
 
     out.push({
       dougs: {
@@ -588,7 +426,7 @@ export async function getInvoiceSuggestions(
     });
   }
 
-  out.sort((a, b) => (b.candidates[0]?.score.total ?? 0) - (a.candidates[0]?.score.total ?? 0));
+  const sortedOut = sortByBestCandidate(out);
 
   // 6. Avoirs : enrichissement + résolution du lien Paradeos.
   // L'avoir est une invoice kind='credit_note' avec dougs_invoice_id=
@@ -673,85 +511,28 @@ export async function getInvoiceSuggestions(
         clientName: pickDougsClientName(cn) ?? "—",
         createdAt: cn.createdAt ?? null,
       },
-      link: row?.cancelsDougsInvoiceId
-        ? {
-            cancelsDougsInvoiceId: row.cancelsDougsInvoiceId,
-            invoice: cancelledLocal
-              ? {
-                  reference: cancelledLocal.dougsReference ?? null,
-                  clientName: cancelledLocal.label,
-                  totalHt: Number(cancelledLocal.amountHt) || null,
-                }
-              : dougsCancelled
-                ? {
-                    reference: dougsCancelled.reference ?? null,
-                    clientName: pickDougsClientName(dougsCancelled) ?? "—",
-                    totalHt: pickHt(dougsCancelled),
-                  }
-                : null,
-          }
-        : null,
+      link: resolveCreditNoteLink(row, cancelledLocal, dougsCancelled),
     };
   });
 
-  const invoiceOptions: DougsInvoiceOption[] = dougsInvoicesNormal
-    .filter((i) => !cancelledDougsIds.has(i.id))
-    .map((i) => ({
-      id: i.id,
-      reference: i.reference ?? null,
-      clientName: pickDougsClientName(i) ?? "—",
-      totalHt: pickHt(i),
-      createdAt: i.createdAt ?? null,
-    }))
-    .sort((a, b) => {
-      const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return db - da;
-    });
+  const invoiceOptions: DougsInvoiceOption[] = sortByCreatedAtDesc(
+    dougsInvoicesNormal
+      .filter((i) => !cancelledDougsIds.has(i.id))
+      .map((i) => ({
+        id: i.id,
+        reference: i.reference ?? null,
+        clientName: pickDougsClientName(i) ?? "—",
+        totalHt: pickHt(i),
+        createdAt: i.createdAt ?? null,
+      })),
+  );
 
-  return { invoices: out, creditNotes, invoiceOptions };
+  return { invoices: sortedOut, creditNotes, invoiceOptions };
 }
 
 // =====================================================================
 // Liens déjà actifs (pour la section "Déjà rattachés")
 // =====================================================================
-
-export type LinkedDougsEntries = {
-  quotes: {
-    invoiceId: string;
-    dougsId: string;
-    reference: string | null;
-    status: string | null;
-    projectId: string;
-    projectName: string;
-    entityName: string | null;
-  }[];
-  invoices: {
-    invoiceId: string;
-    dougsId: string;
-    reference: string | null;
-    kind: "milestone" | "coworking" | "one_off";
-    label: string;
-    amountHt: number;
-    status: "draft" | "sent" | "accepted" | "refused" | "paid";
-    projectId: string | null;
-    projectName: string | null;
-    coworkingContractId: string | null;
-    contractName: string | null;
-    entityName: string | null;
-  }[];
-  /** Invoices disponibles comme cible de relink (sans dougs_invoice_id /
-   *  dougs_quote_id selon le kind). */
-  freeInvoices: {
-    id: string;
-    kind: "milestone" | "coworking" | "one_off";
-    label: string;
-    amountHt: number;
-    projectName: string | null;
-    contractName: string | null;
-  }[];
-  freeQuoteProjects: { id: string; name: string; entityName: string | null }[];
-};
 
 export async function getLinkedDougsEntries(): Promise<LinkedDougsEntries> {
   const conn = await db();
@@ -779,53 +560,7 @@ export async function getLinkedDougsEntries(): Promise<LinkedDougsEntries> {
     .leftJoin(entities, eq(entities.id, projects.entityId))
     .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId));
 
-  const quotes: LinkedDougsEntries["quotes"] = [];
-  const linkedInvoices: LinkedDougsEntries["invoices"] = [];
-  const freeInvoices: LinkedDougsEntries["freeInvoices"] = [];
-
-  for (const r of rows) {
-    // Exclut les factures coworking facturées par G&O.
-    if (r.kind === "coworking" && r.billedBy === "g_and_o") continue;
-    if (r.kind === "quote") {
-      if (r.dougsQuoteId && r.projectId) {
-        quotes.push({
-          invoiceId: r.id,
-          dougsId: r.dougsQuoteId,
-          reference: r.dougsReference,
-          status: r.dougsStatus,
-          projectId: r.projectId,
-          projectName: r.projectName ?? "?",
-          entityName: r.projectEntityName,
-        });
-      }
-    } else if (r.kind === "milestone" || r.kind === "coworking" || r.kind === "one_off") {
-      if (r.dougsInvoiceId) {
-        linkedInvoices.push({
-          invoiceId: r.id,
-          dougsId: r.dougsInvoiceId,
-          reference: r.dougsReference,
-          kind: r.kind,
-          label: r.label,
-          amountHt: Number(r.amountHt) || 0,
-          status: r.status as "draft" | "sent" | "accepted" | "refused" | "paid",
-          projectId: r.projectId,
-          projectName: r.projectName,
-          coworkingContractId: r.coworkingContractId,
-          contractName: r.contractName,
-          entityName: r.projectEntityName,
-        });
-      } else {
-        freeInvoices.push({
-          id: r.id,
-          kind: r.kind,
-          label: r.label,
-          amountHt: Number(r.amountHt) || 0,
-          projectName: r.projectName,
-          contractName: r.contractName,
-        });
-      }
-    }
-  }
+  const { quotes, invoices: linkedInvoices, freeInvoices } = classifyLinkedInvoiceRows(rows);
 
   // Projets clients sans quote invoice (pour relink quote).
   const projectsWithQuote = new Set(quotes.map((q) => q.projectId).filter((x): x is string => !!x));

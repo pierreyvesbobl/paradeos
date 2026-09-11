@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { attributeCalendarEvent } from "@/lib/actions/calendar";
-import { ExternalLink, Search } from "lucide-react";
+import { ArrowSquareOut, MagnifyingGlass } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -75,7 +75,7 @@ export function CalendarEventAttributionDialog({
         <div className="space-y-3">
           <p className="font-medium text-foreground text-sm">Attribuer à un projet</p>
           <div className="relative">
-            <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-3.5 text-muted-foreground" />
+            <MagnifyingGlass className="-translate-y-1/2 absolute top-1/2 left-2 size-3.5 text-muted-foreground" />
             <input
               type="text"
               value={query}
@@ -118,7 +118,7 @@ export function CalendarEventAttributionDialog({
                 rel="noopener noreferrer"
                 className="gap-1.5"
               >
-                <ExternalLink className="size-3.5" />
+                <ArrowSquareOut className="size-3.5" />
                 Voir dans Calendar
               </a>
             </Button>

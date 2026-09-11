@@ -29,8 +29,8 @@ import {
   invoiceTotalTtc,
   monthsBetween,
 } from "@/lib/schemas/coworking";
+import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
 import { asc } from "drizzle-orm";
-import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 

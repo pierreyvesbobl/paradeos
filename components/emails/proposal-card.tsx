@@ -6,16 +6,16 @@ import { acceptEmailProposal, rejectEmailProposal } from "@/lib/actions/email-pr
 import { DemoBlur } from "@/lib/demo/components";
 import { formatDate, formatPersonName } from "@/lib/format";
 import {
+  ArrowBendUpLeft,
+  ArrowSquareOut,
   Briefcase,
-  Building2,
+  Buildings,
   Check,
-  ExternalLink,
-  ListTodo,
-  Mail,
-  Reply,
+  Envelope,
+  ListChecks,
   UserPlus,
   X,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
@@ -54,15 +54,15 @@ type Props = {
   proposals: Proposal[];
 };
 
-const KIND_ICON: Record<ProposalKind, typeof ListTodo> = {
-  task: ListTodo,
+const KIND_ICON: Record<ProposalKind, typeof ListChecks> = {
+  task: ListChecks,
   project_link: Briefcase,
-  entity_link: Building2,
+  entity_link: Buildings,
   project_contact_link: UserPlus,
   contact: UserPlus,
-  entity: Building2,
+  entity: Buildings,
   project: Briefcase,
-  draft_reply: Reply,
+  draft_reply: ArrowBendUpLeft,
 };
 
 const KIND_LABEL: Record<ProposalKind, string> = {
@@ -85,7 +85,7 @@ export function ProposalCard({ message, proposals }: Props) {
             href={`/emails/${message.threadId}`}
             className="block min-w-0 truncate font-medium text-sm hover:underline"
           >
-            <Mail className="-mt-0.5 mr-1 inline size-3.5 text-muted-foreground" />
+            <Envelope className="-mt-0.5 mr-1 inline size-3.5 text-muted-foreground" />
             <DemoBlur>{message.subject || "(sans objet)"}</DemoBlur>
           </Link>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -104,7 +104,7 @@ export function ProposalCard({ message, proposals }: Props) {
           aria-label="Ouvrir dans Gmail"
           title="Ouvrir dans Gmail"
         >
-          <ExternalLink className="size-3.5" />
+          <ArrowSquareOut className="size-3.5" />
         </a>
       </header>
 

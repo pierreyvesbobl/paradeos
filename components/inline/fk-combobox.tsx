@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown, Plus, X } from "lucide-react";
+import { CaretDown, Check, Plus, X } from "@phosphor-icons/react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
@@ -122,7 +122,7 @@ export function FkCombobox({
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
           )}
-          <ChevronDown className="ml-2 size-4 shrink-0 opacity-50" />
+          <CaretDown className="ml-2 size-4 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[--radix-popover-trigger-width] min-w-72 p-0">

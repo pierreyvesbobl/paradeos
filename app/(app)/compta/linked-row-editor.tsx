@@ -12,7 +12,7 @@ import {
   upsertInvoice,
 } from "@/lib/actions/invoices";
 import { cn } from "@/lib/utils";
-import { ExternalLink, Pencil, X } from "lucide-react";
+import { ArrowSquareOut, PencilSimple, X } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -119,7 +119,7 @@ export function LinkedQuoteRow({
           className="text-muted-foreground hover:text-foreground"
           aria-label="Ouvrir sur Dougs"
         >
-          <ExternalLink className="size-3.5" />
+          <ArrowSquareOut className="size-3.5" />
         </a>
         <EditToggle editing={editing} onToggle={() => setEditing((v) => !v)} />
       </div>
@@ -331,7 +331,7 @@ export function LinkedInvoiceRow({
           className="text-muted-foreground hover:text-foreground"
           aria-label="Ouvrir sur Dougs"
         >
-          <ExternalLink className="size-3.5" />
+          <ArrowSquareOut className="size-3.5" />
         </a>
         <EditToggle editing={editing} onToggle={() => setEditing((v) => !v)} />
       </div>
@@ -427,7 +427,7 @@ function EditToggle({ editing, onToggle }: { editing: boolean; onToggle: () => v
       aria-label={editing ? "Fermer l'éditeur" : "Modifier"}
       title={editing ? "Fermer" : "Modifier"}
     >
-      {editing ? <X className="size-3.5" /> : <Pencil className="size-3.5" />}
+      {editing ? <X className="size-3.5" /> : <PencilSimple className="size-3.5" />}
     </button>
   );
 }

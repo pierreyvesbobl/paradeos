@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { rejectInvoiceFiling, retryInvoiceFiling } from "@/lib/actions/invoice-filings";
-import { RefreshCw, X } from "lucide-react";
+import { ArrowsClockwise, X } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
@@ -55,7 +55,7 @@ export function FilingActions({ filingId, status }: Props) {
         disabled={pending}
         className="h-7 gap-1 px-2 text-[11px]"
       >
-        <RefreshCw className={`size-3 ${pending ? "animate-spin" : ""}`} />
+        <ArrowsClockwise className={`size-3 ${pending ? "animate-spin" : ""}`} />
         Relancer
       </Button>
       {status !== "rejected" ? (

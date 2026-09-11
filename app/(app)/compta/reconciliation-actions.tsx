@@ -10,7 +10,7 @@ import {
   refreshAllDougsLinks,
   unlinkDougsCreditNote,
 } from "@/lib/actions/invoices";
-import { CloudDownload, Link2, Plus, X } from "lucide-react";
+import { CloudArrowDown, LinkSimple, Plus, X } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -39,7 +39,7 @@ export function RefreshAllButton() {
       }}
       className="gap-1.5"
     >
-      <CloudDownload className="size-3.5" />
+      <CloudArrowDown className="size-3.5" />
       {pending ? "Synchro…" : "Tout rafraîchir"}
     </Button>
   );
@@ -90,7 +90,7 @@ export function LinkInvoiceButton({ invoiceId, dougsId }: { invoiceId: string; d
       }}
       className="gap-1.5"
     >
-      <Link2 className="size-3.5" />
+      <LinkSimple className="size-3.5" />
       {pending ? "Lié…" : "Lier"}
     </Button>
   );
@@ -118,7 +118,7 @@ export function LinkQuoteButton({ projectId, dougsId }: { projectId: string; dou
       }}
       className="gap-1.5"
     >
-      <Link2 className="size-3.5" />
+      <LinkSimple className="size-3.5" />
       {pending ? "Lié…" : "Lier"}
     </Button>
   );
@@ -237,7 +237,7 @@ export function ManualLinkQuote({
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:underline"
       >
-        <Link2 className="size-3" />
+        <LinkSimple className="size-3" />
         Lier manuellement à un projet…
       </button>
     );
@@ -305,7 +305,7 @@ export function ManualLinkInvoice({
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:underline"
       >
-        <Link2 className="size-3" />
+        <LinkSimple className="size-3" />
         Lier manuellement à un projet (nouveau jalon)…
       </button>
     );
@@ -369,7 +369,7 @@ export function ManualLinkCoworkingInvoice({
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:underline"
       >
-        <Link2 className="size-3" />
+        <LinkSimple className="size-3" />
         Lier manuellement à une facture coworking existante…
       </button>
     );
@@ -471,7 +471,7 @@ export function LinkCreditNotePicker({
         className="flex-1"
       />
       <Button type="button" size="sm" onClick={submit} disabled={pending || !selected}>
-        <Link2 className="size-3.5" />
+        <LinkSimple className="size-3.5" />
         {pending ? "Lié…" : "Lier"}
       </Button>
     </div>

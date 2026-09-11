@@ -22,7 +22,7 @@ import { quickCreateTask } from "@/lib/actions/tasks";
 import { formatDate } from "@/lib/format";
 import { type TaskPriority, taskPriorityEnum, taskPriorityLabels } from "@/lib/schemas/tasks";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, Check, ChevronDown, Plus, X } from "lucide-react";
+import { CalendarBlank, CaretDown, Check, Plus, X } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -218,7 +218,7 @@ function PriorityPicker({
           aria-label="Priorité"
         >
           <PriorityPill value={value} />
-          <ChevronDown className="size-[9px] text-ds-text-tertiary opacity-60" />
+          <CaretDown className="size-[9px] text-ds-text-tertiary opacity-60" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-40 p-1">
@@ -430,7 +430,7 @@ function DueDateTrigger({
           aria-label="Échéance"
           className="inline-flex items-center gap-1 rounded-sm px-1 py-0.5 text-ds-text-tertiary text-xs outline-none hover:bg-ds-hover focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <CalendarIcon className="size-[14px]" />
+          <CalendarBlank className="size-[14px]" />
           {value ? formatDate(value) : "Échéance"}
         </button>
       }

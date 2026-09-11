@@ -2,7 +2,7 @@
 
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Receipt, Users } from "lucide-react";
+import { FileText, Receipt, Users } from "@phosphor-icons/react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
@@ -69,12 +69,7 @@ export function CoworkingTabs({
                 value={t.value}
                 className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
               >
-                <Icon
-                  className="-ms-0.5 me-1.5 opacity-60"
-                  size={16}
-                  strokeWidth={2}
-                  aria-hidden="true"
-                />
+                <Icon className="-ms-0.5 me-1.5 opacity-60" size={16} aria-hidden="true" />
                 {t.label}
                 <span className="ml-1.5 text-[11px] opacity-60">{counts[t.value]}</span>
               </TabsTrigger>

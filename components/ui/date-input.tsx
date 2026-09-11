@@ -15,7 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { CalendarBlank, CaretLeft, CaretRight, X } from "@phosphor-icons/react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 const FMT_MONTH_YEAR = new Intl.DateTimeFormat("fr-FR", {
@@ -96,7 +96,7 @@ export function DateInput({
             className={cn("h-9 w-full justify-start gap-2 px-3 font-normal", className)}
             aria-expanded={open}
           >
-            <CalendarIcon className="size-3.5 shrink-0" />
+            <CalendarBlank className="size-3.5 shrink-0" />
             <span className={cn("truncate", !selected && "text-muted-foreground")}>
               {selected ? formatDate(selected) : placeholder}
             </span>
@@ -150,7 +150,7 @@ export function DateInput({
                 className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label="Mois précédent"
               >
-                <ChevronLeft className="size-4" />
+                <CaretLeft className="size-4" />
               </button>
               <button
                 type="button"
@@ -158,7 +158,7 @@ export function DateInput({
                 className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label="Mois suivant"
               >
-                <ChevronRight className="size-4" />
+                <CaretRight className="size-4" />
               </button>
             </div>
           </header>

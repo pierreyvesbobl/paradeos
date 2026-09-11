@@ -11,8 +11,8 @@ import {
   getLinkedDougsEntries,
   getQuoteSuggestions,
 } from "@/lib/dougs/reconciliation";
+import { ArrowSquareOut, FileText, Receipt } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
-import { ExternalLink, FileText, Receipt } from "lucide-react";
 import Link from "next/link";
 import { LinkedInvoiceRow, LinkedQuoteRow } from "./linked-row-editor";
 import {
@@ -200,7 +200,7 @@ export async function RapprochementView({ debug }: { debug?: string }) {
                         className="inline-flex items-center gap-1 font-mono text-xs hover:underline"
                       >
                         {s.dougs.reference ?? "—"}
-                        <ExternalLink className="size-3" />
+                        <ArrowSquareOut className="size-3" />
                       </a>
                       <span className="rounded-full border bg-muted/50 px-1.5 py-0.5 text-xs">
                         {s.dougs.status ?? "—"}
@@ -282,7 +282,7 @@ export async function RapprochementView({ debug }: { debug?: string }) {
                         className="inline-flex items-center gap-1 font-mono text-xs hover:underline"
                       >
                         {s.dougs.reference ?? "—"}
-                        <ExternalLink className="size-3" />
+                        <ArrowSquareOut className="size-3" />
                       </a>
                       <span className="rounded-full border bg-muted/50 px-1.5 py-0.5 text-xs">
                         {s.dougs.status ?? "—"}
@@ -429,7 +429,7 @@ export async function RapprochementView({ debug }: { debug?: string }) {
                         className="inline-flex items-center gap-1 font-mono text-xs hover:underline"
                       >
                         {cn.dougs.reference ?? "—"}
-                        <ExternalLink className="size-3" />
+                        <ArrowSquareOut className="size-3" />
                       </a>
                       <span className="rounded-full border border-rose-300 bg-rose-100 px-1.5 py-0.5 font-medium text-[10px] text-rose-700 uppercase tracking-wide dark:border-rose-700 dark:bg-rose-900/40 dark:text-rose-200">
                         Avoir

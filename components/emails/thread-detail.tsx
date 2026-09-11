@@ -222,10 +222,12 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
         extractionStatus={lastMessage?.extractionStatus ?? "skipped"}
         linkedProjectStatus={linkedProjectStatus}
         linkedProjectName={linkedProjectName}
-        projects={projectOptions}
-        usersList={userOptions}
-        entities={entityOptions}
-        contacts={contactOptionsFmt}
+        options={{
+          projects: projectOptions,
+          users: userOptions,
+          entities: entityOptions,
+          contacts: contactOptionsFmt,
+        }}
       />
 
       <section className="space-y-3">

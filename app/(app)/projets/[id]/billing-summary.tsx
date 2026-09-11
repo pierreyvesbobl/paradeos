@@ -1,5 +1,11 @@
 import type { Invoice } from "@/db/schema/invoices";
-import { CheckCircle2, ExternalLink, FileText, Hourglass, Wallet } from "lucide-react";
+import {
+  ArrowSquareOut,
+  CheckCircle,
+  FileText,
+  Hourglass,
+  Wallet,
+} from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
 type Props = {
@@ -60,7 +66,7 @@ export function BillingSummary({
           >
             <FileText className="size-3" />
             Source : Dougs {dougsQuoteReference ?? ""}
-            <ExternalLink className="size-2.5" />
+            <ArrowSquareOut className="size-2.5" />
           </Link>
         ) : (
           <span className="rounded-full border bg-muted/50 px-2 py-0.5 text-[10px] text-muted-foreground">
@@ -84,7 +90,7 @@ export function BillingSummary({
           tone={invoiced > 0 ? "amber" : "muted"}
         />
         <Stat
-          icon={<CheckCircle2 className="size-4" />}
+          icon={<CheckCircle className="size-4" />}
           label="Payé"
           value={formatEur(paid)}
           sub={total > 0 ? `${pctPaid} %` : null}

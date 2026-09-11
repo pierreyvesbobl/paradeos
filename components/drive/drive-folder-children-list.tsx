@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDate } from "@/lib/format";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { CaretDown, CaretUp } from "@phosphor-icons/react";
 import Image from "next/image";
 import { useState } from "react";
 
@@ -87,12 +87,12 @@ export function DriveFolderChildrenList({ files }: { files: DriveFolderChild[] }
         >
           {showAll ? (
             <>
-              <ChevronUp className="size-3" />
+              <CaretUp className="size-3" />
               Réduire
             </>
           ) : (
             <>
-              <ChevronDown className="size-3" />
+              <CaretDown className="size-3" />
               Voir {hidden} de plus
             </>
           )}

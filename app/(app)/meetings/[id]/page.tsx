@@ -1,5 +1,6 @@
 import { DeleteButton } from "@/components/delete-button";
 import { PageHeader } from "@/components/page-header";
+import { ProposalsPanel } from "@/components/proposals/proposals-panel";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
@@ -15,7 +16,6 @@ import { notFound } from "next/navigation";
 import { AudioSection } from "./audio-section";
 import { CopyTranscriptButton } from "./copy-transcript-button";
 import { MeetingSubjectEditor } from "./meeting-subject-editor";
-import { ProposalsPanel } from "./proposals-panel";
 import { ReExtractButton } from "./re-extract-button";
 import { SummaryEditor } from "./summary-editor";
 
@@ -124,16 +124,19 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
           </section>
 
           <ProposalsPanel
+            source="meeting"
             proposals={proposals}
-            projects={projectOptions}
-            users={userOptions}
-            entities={entityOptions}
-            contacts={contactOptions.map((c) => ({
-              id: c.id,
-              fullName: formatPersonName(c.firstName, c.lastName),
-              entityName: c.entityName ?? null,
-            }))}
-            existingTasks={taskOptions}
+            options={{
+              projects: projectOptions,
+              users: userOptions,
+              entities: entityOptions,
+              contacts: contactOptions.map((c) => ({
+                id: c.id,
+                fullName: formatPersonName(c.firstName, c.lastName),
+                entityName: c.entityName ?? null,
+              })),
+              existingTasks: taskOptions,
+            }}
           />
 
           <AudioSection

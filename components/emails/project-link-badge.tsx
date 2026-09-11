@@ -2,7 +2,7 @@
 
 import { FkCombobox } from "@/components/inline/fk-combobox";
 import { setThreadProject } from "@/lib/actions/gmail";
-import { Briefcase, Check, Hand, Mail, Sparkles, X } from "lucide-react";
+import { Briefcase, Check, Envelope, Hand, Sparkle, X } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -25,7 +25,7 @@ type Props = {
 
 type SourceTone = {
   label: string;
-  Icon: typeof Sparkles;
+  Icon: typeof Sparkle;
   bg: string;
   text: string;
   dot: string;
@@ -53,7 +53,7 @@ function toneFor(source: string, manuallyOverridden: boolean): SourceTone {
   if (source === "gmail") {
     return {
       label: "Rangé depuis Gmail",
-      Icon: Mail,
+      Icon: Envelope,
       bg: "var(--ds-tint-gray-bg)",
       text: "var(--ds-tint-gray-text)",
       dot: "var(--ds-tint-gray-dot)",
@@ -61,7 +61,7 @@ function toneFor(source: string, manuallyOverridden: boolean): SourceTone {
   }
   return {
     label: "Détecté automatiquement",
-    Icon: Sparkles,
+    Icon: Sparkle,
     bg: "var(--ds-tint-mauve-bg)",
     text: "var(--ds-tint-mauve-text)",
     dot: "var(--ds-tint-mauve-dot)",

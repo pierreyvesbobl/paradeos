@@ -2,14 +2,14 @@
 
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Banknote, Cloud, KeyRound } from "lucide-react";
+import { Cloud, Key, Money } from "@phosphor-icons/react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
 const TABS = [
-  { value: "compta", label: "Compta", icon: Banknote },
+  { value: "compta", label: "Compta", icon: Money },
   { value: "google", label: "Google", icon: Cloud },
-  { value: "api", label: "API & LLM", icon: KeyRound },
+  { value: "api", label: "API & LLM", icon: Key },
 ] as const;
 type TabValue = (typeof TABS)[number]["value"];
 
@@ -57,12 +57,7 @@ export function IntegrationsTabs({ compta, google, api }: Props) {
                 value={t.value}
                 className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
               >
-                <Icon
-                  className="-ms-0.5 me-1.5 opacity-60"
-                  size={16}
-                  strokeWidth={2}
-                  aria-hidden="true"
-                />
+                <Icon className="-ms-0.5 me-1.5 opacity-60" size={16} aria-hidden="true" />
                 {t.label}
               </TabsTrigger>
             );

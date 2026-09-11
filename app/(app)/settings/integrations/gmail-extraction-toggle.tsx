@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { setGmailExtractionEnabled } from "@/lib/actions/gmail";
-import { Power } from "lucide-react";
+import { Power } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";

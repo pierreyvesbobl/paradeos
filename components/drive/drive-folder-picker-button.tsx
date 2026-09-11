@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { linkDriveFolder } from "@/lib/actions/drive-folders";
 import type { DriveFileSubjectType } from "@/lib/schemas/drive-files";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { useCallback, useState } from "react";

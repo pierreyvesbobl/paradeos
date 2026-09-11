@@ -15,7 +15,7 @@ import { getGlobalTimeStats } from "@/lib/db/queries/time-stats";
 import { formatDate, formatDays, formatDuration, formatEuro } from "@/lib/format";
 import { computeDaysWorked, computeEffectiveDailyRate } from "@/lib/profitability-math";
 import { projectKindLabels } from "@/lib/schemas/projects";
-import { Clock } from "lucide-react";
+import { Clock } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
 export type Range = "week" | "month" | "all";

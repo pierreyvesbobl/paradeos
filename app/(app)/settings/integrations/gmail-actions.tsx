@@ -9,7 +9,7 @@ import {
   rebuildAutoLinks,
   triggerGmailSync,
 } from "@/lib/actions/gmail";
-import { Filter, RefreshCw, Tags, Trash2, Wand2 } from "lucide-react";
+import { ArrowsClockwise, Funnel, MagicWand, Tag, Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -116,7 +116,7 @@ export function GmailActions() {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button type="button" size="sm" onClick={syncNow} disabled={pending} className="gap-1.5">
-        <RefreshCw className={`size-3.5 ${pending ? "animate-spin" : ""}`} />
+        <ArrowsClockwise className={`size-3.5 ${pending ? "animate-spin" : ""}`} />
         Sync now
       </Button>
       <Button
@@ -128,7 +128,7 @@ export function GmailActions() {
         className="gap-1.5"
         title="Rejoue les liaisons auto contact/projet/entité — sans rétablir celles que tu as retirées"
       >
-        <Wand2 className="size-3.5" />
+        <MagicWand className="size-3.5" />
         Recalculer les liens
       </Button>
       <Button
@@ -140,7 +140,7 @@ export function GmailActions() {
         className="gap-1.5"
         title="Récupère les mails que tu as rangés à la main dans Gmail sous un label Paradeos/Projets ou Paradeos/Entités — y compris les vieux fils que le sync ne voit pas"
       >
-        <Tags className="size-3.5" />
+        <Tag className="size-3.5" />
         Importer les labels Gmail
       </Button>
       <Button
@@ -152,7 +152,7 @@ export function GmailActions() {
         className="gap-1.5"
         title="Supprime les threads dont tous les messages sont SPAM ou TRASH"
       >
-        <Filter className="size-3.5" />
+        <Funnel className="size-3.5" />
         Nettoyer les spams
       </Button>
       <Button
@@ -163,7 +163,7 @@ export function GmailActions() {
         disabled={pending}
         className="gap-1.5 text-muted-foreground hover:text-destructive"
       >
-        <Trash2 className="size-3.5" />
+        <Trash className="size-3.5" />
         Purger
       </Button>
       <ConfirmDialog

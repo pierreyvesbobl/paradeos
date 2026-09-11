@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ContactAvatar } from "@/components/user/contact-avatar";
 import { UserAvatar } from "@/components/user/user-avatar";
 import { cn } from "@/lib/utils";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Plus, X } from "@phosphor-icons/react";
 import { type ReactNode, useMemo, useState } from "react";
 
 export type AssigneeRef =

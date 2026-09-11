@@ -13,7 +13,7 @@
  */
 import { config as loadEnv } from "dotenv";
 import postgres from "postgres";
-import { GENERIC_EMAIL_DOMAINS, domainFromEmail } from "../lib/gmail/domain";
+import { GENERIC_EMAIL_DOMAINS, domainFromEmail } from "../../lib/gmail/domain";
 
 loadEnv({ path: ".env.local" });
 

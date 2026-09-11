@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { connectDougsSession, disconnectDougsSession } from "@/lib/actions/dougs";
 import { createDougsSyncToken, revokeDougsSyncToken } from "@/lib/actions/dougs-sync-tokens";
 import { formatDate } from "@/lib/format";
-import { Banknote, Check, Copy, ExternalLink, KeyRound, Trash2, Zap } from "lucide-react";
+import { ArrowSquareOut, Check, Copy, Key, Lightning, Money, Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -120,7 +120,7 @@ export function DougsSection({
     <section className="rounded-lg border bg-card p-6">
       <header className="mb-4 flex items-start justify-between gap-4">
         <div className="flex gap-3">
-          <Banknote className="size-5 text-muted-foreground" />
+          <Money className="size-5 text-muted-foreground" />
           <div>
             <h2 className="font-medium text-sm">Dougs (compta)</h2>
             <p className="text-muted-foreground text-xs">
@@ -180,7 +180,7 @@ export function DougsSection({
       {/* Extension Chrome — auto-sync HttpOnly */}
       <div className="mt-5 rounded-md border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
         <div className="mb-2 flex items-center gap-2">
-          <Zap className="size-4 text-emerald-700 dark:text-emerald-400" />
+          <Lightning className="size-4 text-emerald-700 dark:text-emerald-400" />
           <h3 className="font-medium text-sm">Auto-sync via extension Chrome (recommandé)</h3>
         </div>
         <p className="mb-3 text-muted-foreground text-xs">
@@ -254,7 +254,7 @@ export function DougsSection({
             disabled={pending || !tokenLabel.trim()}
             className="gap-1.5"
           >
-            <KeyRound className="size-3.5" />
+            <Key className="size-3.5" />
             {pending ? "…" : "Générer un token"}
           </Button>
         </form>
@@ -282,7 +282,7 @@ export function DougsSection({
                   title="Révoquer"
                   aria-label={`Révoquer ${t.label}`}
                 >
-                  <Trash2 className="size-3.5" />
+                  <Trash className="size-3.5" />
                 </Button>
               </li>
             ))}
@@ -367,7 +367,7 @@ export function DougsSection({
                 disabled={pending}
                 className="text-destructive hover:text-destructive"
               >
-                <Trash2 className="mr-1 size-3.5" />
+                <Trash className="mr-1 size-3.5" />
                 Déconnecter
               </Button>
             ) : null}
@@ -386,7 +386,7 @@ export function DougsSection({
           rel="noreferrer"
           className="mt-3 inline-flex items-center gap-1 text-muted-foreground text-xs hover:underline"
         >
-          Ouvrir Dougs <ExternalLink className="size-3" />
+          Ouvrir Dougs <ArrowSquareOut className="size-3" />
         </a>
       ) : null}
 

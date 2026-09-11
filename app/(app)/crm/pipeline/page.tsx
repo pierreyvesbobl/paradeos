@@ -8,8 +8,8 @@ import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { COMMERCIAL_STATUSES } from "@/lib/schemas/projects";
+import { Plus, Sparkle } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { CrmTabs } from "../crm-tabs";
 
@@ -77,7 +77,7 @@ export default async function CrmPipelinePage() {
 
       {items.length === 0 ? (
         <EmptyState
-          icon={Sparkles}
+          icon={Sparkle}
           title="Aucun deal en cours."
           description="Crée un projet client en phase commerciale pour démarrer le pipeline."
           action={

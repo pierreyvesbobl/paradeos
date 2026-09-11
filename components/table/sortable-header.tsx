@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowsDownUp } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
 export type SortDir = "asc" | "desc";
@@ -52,7 +52,7 @@ export function SortableHeader({ label, field, current, buildHref, align = "left
     >
       <span>{label}</span>
       {!isActive ? (
-        <ArrowUpDown className="size-3 opacity-50" />
+        <ArrowsDownUp className="size-3 opacity-50" />
       ) : current?.dir === "asc" ? (
         <ArrowUp className="size-3" />
       ) : (

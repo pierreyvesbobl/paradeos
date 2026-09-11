@@ -21,8 +21,8 @@ import {
   noteSubjectTypeLabels,
 } from "@/lib/schemas/notes";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
+import { Note } from "@phosphor-icons/react/dist/ssr";
 import { asc } from "drizzle-orm";
-import { StickyNote } from "lucide-react";
 import Link from "next/link";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -153,7 +153,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
           const hasFilter = Boolean(query) || filters.length > 0;
           return (
             <EmptyState
-              icon={StickyNote}
+              icon={Note}
               title={hasFilter ? "Aucune note pour ce filtre." : "Pas encore de note."}
               description={
                 hasFilter

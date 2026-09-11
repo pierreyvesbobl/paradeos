@@ -9,7 +9,22 @@ import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import { createLabel, listLabels, modifyThreadLabels, updateLabel } from "@/lib/google/gmail-api";
 import { and, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
-import { GENERIC_EMAIL_DOMAINS, domainFromEmail, extractDomain } from "./domain";
+import {
+  INVOICE_DIRECTION_LABEL,
+  type InvoiceDirection,
+  LABEL_PREFIX,
+  type LinkKind,
+  buildLabelName,
+  collectInvolvedDomains,
+  collectInvolvedEmails,
+  invoiceDirectionLabelName,
+  matchEntityIdsByDomain,
+} from "./link-rules";
+
+// Les règles de nommage vivent dans link-rules.ts (module pur, testé) ;
+// on les ré-exporte pour les callers historiques.
+export { INVOICE_DIRECTION_LABEL, buildLabelName, invoiceDirectionLabelName };
+export type { InvoiceDirection, LinkKind };
 
 /**
  * Liaisons d'un thread email — et leur projection en labels Gmail.
@@ -26,41 +41,6 @@ import { GENERIC_EMAIL_DOMAINS, domainFromEmail, extractDomain } from "./domain"
  * liaison naît, retiré quand elle est invalidée. Il n'existe aucune
  * taxonomie libre — rien ne se crée « à la main ».
  */
-
-/**
- * Préfixe sous lequel Paradeos crée ses labels dans Gmail, pour
- * cohabiter avec les labels existants de l'utilisateur sans les polluer.
- *   Paradeos/Projets/Avenir Focus
- *   Paradeos/Contacts/Jean Dupont
- *   Paradeos/Entités/Acme Corp
- *   Paradeos/Facture achat       (libellé système, niveau 2)
- */
-const LABEL_PREFIX = "Paradeos";
-
-const KIND_LABEL_SEGMENT: Record<"project" | "contact" | "entity", string> = {
-  project: "Projets",
-  contact: "Contacts",
-  entity: "Entités",
-};
-
-export type LinkKind = "project" | "contact" | "entity";
-
-/**
- * Sanitize un nom pour qu'il soit valide en composant de label Gmail :
- *   - pas de `/` (séparateur de hiérarchie)
- *   - trim
- *   - tronqué à 80 chars (pour rester sous la limite Gmail de 225 chars
- *     sur le label complet)
- */
-function sanitizeLabelSegment(name: string): string {
-  return name.trim().replace(/\//g, " ").replace(/\s+/g, " ").slice(0, 80);
-}
-
-export function buildLabelName(kind: LinkKind | "category", name: string): string {
-  const safe = sanitizeLabelSegment(name);
-  if (kind === "category") return `${LABEL_PREFIX}/${safe}`;
-  return `${LABEL_PREFIX}/${KIND_LABEL_SEGMENT[kind]}/${safe}`;
-}
 
 // ─── Cache labels.list par run ─────────────────────────────────────────
 
@@ -168,23 +148,11 @@ export async function ensureCrmLabel(args: {
 
 // ─── Libellés système : sens des factures ──────────────────────────────
 
-/**
- * Libellés posés par le détecteur de factures pour distinguer les achats
- * des ventes. Ce sont les SEULS libellés qui ne pointent pas vers un
- * record CRM : ils projettent un fait vérifiable (`invoice_filings`), pas
- * une catégorie choisie par quelqu'un. Aucune taxonomie libre n'existe
- * plus à côté.
- */
-export const INVOICE_DIRECTION_LABEL = {
-  purchase: "Facture achat",
-  sale: "Facture vente",
-} as const;
-
-export type InvoiceDirection = keyof typeof INVOICE_DIRECTION_LABEL;
-
-export function invoiceDirectionLabelName(direction: InvoiceDirection): string {
-  return buildLabelName("category", INVOICE_DIRECTION_LABEL[direction]);
-}
+// Les libellés eux-mêmes (INVOICE_DIRECTION_LABEL) vivent dans
+// link-rules.ts : ce sont les SEULS libellés qui ne pointent pas vers un
+// record CRM — ils projettent un fait vérifiable (`invoice_filings`), pas
+// une catégorie choisie par quelqu'un. Aucune taxonomie libre n'existe
+// plus à côté.
 
 /** Get-or-create d'un libellé système. Idempotent par `label_name`. */
 async function ensureSystemLabel(args: {
@@ -364,13 +332,7 @@ export async function computeThreadLinkSignals(
     .from(gmailMessages)
     .where(eq(gmailMessages.threadId, threadIdLocal));
 
-  const involved = new Set<string>();
-  for (const m of msgs) {
-    if (m.fromEmail) involved.add(m.fromEmail.toLowerCase());
-    for (const e of m.toEmails ?? []) involved.add(e.toLowerCase());
-    for (const e of m.ccEmails ?? []) involved.add(e.toLowerCase());
-  }
-  const involvedEmails = [...involved];
+  const involvedEmails = collectInvolvedEmails(msgs);
 
   const matchedContacts =
     involvedEmails.length === 0
@@ -416,11 +378,7 @@ export async function computeThreadLinkSignals(
     for (const p of projRows) candidateProjectIds.add(p.id);
   }
 
-  const involvedDomains = new Set<string>();
-  for (const e of involved) {
-    const d = domainFromEmail(e);
-    if (d && !GENERIC_EMAIL_DOMAINS.has(d)) involvedDomains.add(d);
-  }
+  const involvedDomains = collectInvolvedDomains(involvedEmails);
   const matchedEntityIds = new Set<string>();
   for (const id of contactDerivedEntityIds) matchedEntityIds.add(id);
   if (involvedDomains.size > 0) {
@@ -428,10 +386,7 @@ export async function computeThreadLinkSignals(
       .select({ id: entities.id, website: entities.website })
       .from(entities)
       .where(isNotNull(entities.website));
-    for (const e of entityRows) {
-      const d = extractDomain(e.website);
-      if (d && involvedDomains.has(d)) matchedEntityIds.add(e.id);
-    }
+    for (const id of matchEntityIdsByDomain(entityRows, involvedDomains)) matchedEntityIds.add(id);
   }
 
   if (matchedEntityIds.size > 0) {

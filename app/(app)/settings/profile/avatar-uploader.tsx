@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { removeAvatar, uploadAvatar } from "@/lib/actions/avatar";
-import { Camera, Trash2 } from "lucide-react";
+import { Camera, Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -91,7 +91,7 @@ export function AvatarUploader({ avatarUrl, initials }: Props) {
               disabled={pending}
               className="text-destructive hover:text-destructive"
             >
-              <Trash2 className="size-3.5" />
+              <Trash className="size-3.5" />
               Retirer
             </Button>
           ) : null}

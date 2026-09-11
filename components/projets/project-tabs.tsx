@@ -3,29 +3,29 @@
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  BarChart3,
+  ChartBar,
+  Envelope,
   FolderOpen,
   Info,
-  KeyRound,
-  ListTodo,
-  Mail,
+  Key,
+  ListChecks,
+  Note,
   Receipt,
-  StickyNote,
-  Video,
-} from "lucide-react";
+  VideoCamera,
+} from "@phosphor-icons/react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
 const ALL_TABS = [
   { value: "overview", label: "Vue d'ensemble", icon: Info },
-  { value: "tasks", label: "Tâches", icon: ListTodo },
-  { value: "notes", label: "Notes", icon: StickyNote },
-  { value: "meetings", label: "Meetings", icon: Video },
-  { value: "emails", label: "Emails", icon: Mail },
+  { value: "tasks", label: "Tâches", icon: ListChecks },
+  { value: "notes", label: "Notes", icon: Note },
+  { value: "meetings", label: "Meetings", icon: VideoCamera },
+  { value: "emails", label: "Emails", icon: Envelope },
   { value: "files", label: "Fichiers", icon: FolderOpen },
   { value: "billing", label: "Facturation", icon: Receipt },
-  { value: "secrets", label: "Secrets", icon: KeyRound },
-  { value: "time", label: "Temps & marge", icon: BarChart3 },
+  { value: "secrets", label: "Secrets", icon: Key },
+  { value: "time", label: "Temps & marge", icon: ChartBar },
 ] as const;
 
 type TabValue = (typeof ALL_TABS)[number]["value"];
@@ -115,12 +115,7 @@ export function ProjectTabs({
                 value={t.value}
                 className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
               >
-                <Icon
-                  className="-ms-0.5 me-1.5 opacity-60"
-                  size={16}
-                  strokeWidth={2}
-                  aria-hidden="true"
-                />
+                <Icon className="-ms-0.5 me-1.5 opacity-60" size={16} aria-hidden="true" />
                 {t.label}
               </TabsTrigger>
             );

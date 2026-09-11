@@ -8,7 +8,14 @@ import {
   refreshInvoiceDougs,
   setInvoiceStatus,
 } from "@/lib/actions/invoices";
-import { CheckCircle2, ExternalLink, FileText, Link2, RefreshCw, Trash2 } from "lucide-react";
+import {
+  ArrowSquareOut,
+  ArrowsClockwise,
+  CheckCircle,
+  FileText,
+  LinkSimple,
+  Trash,
+} from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -132,7 +139,7 @@ export function DougsQuoteSection({
                 title="Ouvrir sur Dougs"
               >
                 {dougsQuoteReference ?? "—"}
-                <ExternalLink className="size-3" />
+                <ArrowSquareOut className="size-3" />
               </a>
               <span className="rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-indigo-700 text-xs dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
                 {DOUGS_STATUS_LABEL[dougsQuoteStatus ?? "DRAFT"] ?? dougsQuoteStatus ?? "—"}
@@ -171,7 +178,7 @@ export function DougsQuoteSection({
                 className="h-7 gap-1 px-2 text-[11px]"
                 title="Forcer le statut accepté (override local, indépendant de Dougs)"
               >
-                <CheckCircle2 className="size-3" />
+                <CheckCircle className="size-3" />
                 Marquer signé
               </Button>
             ) : null}
@@ -184,7 +191,7 @@ export function DougsQuoteSection({
               className="h-7 gap-1 px-2 text-xs"
               title="Rafraîchir depuis Dougs"
             >
-              <RefreshCw className="size-3" />
+              <ArrowsClockwise className="size-3" />
             </Button>
             <Button
               type="button"
@@ -195,7 +202,7 @@ export function DougsQuoteSection({
               className="h-7 px-2 text-muted-foreground hover:text-destructive"
               title="Désynchroniser"
             >
-              <Trash2 className="size-3.5" />
+              <Trash className="size-3.5" />
             </Button>
           </div>
         </div>
@@ -236,7 +243,7 @@ export function DougsQuoteSection({
           onClick={() => setShowLink(true)}
           className="inline-flex items-center gap-1.5 text-muted-foreground text-xs hover:text-foreground hover:underline"
         >
-          <Link2 className="size-3.5" />
+          <LinkSimple className="size-3.5" />
           Lier un devis Dougs existant (créé via agent MCP ou directement dans Dougs)
         </button>
       )}

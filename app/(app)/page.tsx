@@ -114,49 +114,216 @@ export default async function DashboardPage() {
   const authUser = await requireUser();
   const conn = await db();
 
-  const [profile] = await conn
-    .select({ fullName: users.fullName, avatarUrl: users.avatarUrl })
-    .from(users)
-    .where(eq(users.id, authUser.id))
-    .limit(1);
-
-  const firstName =
-    profile?.fullName?.trim().split(/\s+/)[0] ?? authUser.email?.split("@")[0] ?? "toi";
-  const todayLabel = capitalize(dayLabelFmt.format(new Date()));
-
   const today = todayIso();
   const weekEnd = isoDaysFromNow(7);
   const last7Start = isoDaysFromNow(-7);
   const dayStart = startOfDay();
   const dayEnd = endOfDay();
 
-  // ─── tâches ouvertes (multi-assignées au user) ────────────────────
-  const myOpenTasksRows = await conn
-    .select({
-      id: tasks.id,
-      title: tasks.title,
-      priority: tasks.priority,
-      dueDate: tasks.dueDate,
-      projectId: projects.id,
-      projectName: projects.name,
-      projectColor: projects.color,
-    })
-    .from(tasks)
-    .leftJoin(projects, eq(tasks.projectId, projects.id))
-    .where(
-      and(
-        sql`${tasks.status} not in ('done', 'cancelled')`,
-        sql`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${authUser.id})`,
+  // ─── vague 1 : requêtes indépendantes, en parallèle ─────────────
+  const [
+    [profile],
+    myOpenTasksRows,
+    [doneTodayRow],
+    activeProjects,
+    [activeProjectsTotalRow],
+    agendaRaw,
+    relances,
+    [relancesAggRow],
+    [trackedRow],
+    [trackedTotalRow],
+    [toCollectRow],
+    myRelances,
+  ] = await Promise.all([
+    // profil (prénom pour le greeting)
+    conn
+      .select({ fullName: users.fullName, avatarUrl: users.avatarUrl })
+      .from(users)
+      .where(eq(users.id, authUser.id))
+      .limit(1),
+    // tâches ouvertes (multi-assignées au user)
+    conn
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        priority: tasks.priority,
+        dueDate: tasks.dueDate,
+        projectId: projects.id,
+        projectName: projects.name,
+        projectColor: projects.color,
+      })
+      .from(tasks)
+      .leftJoin(projects, eq(tasks.projectId, projects.id))
+      .where(
+        and(
+          sql`${tasks.status} not in ('done', 'cancelled')`,
+          sql`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${authUser.id})`,
+        ),
+      )
+      .orderBy(asc(tasks.dueDate), asc(tasks.title)),
+    // tâches terminées aujourd'hui
+    conn
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tasks)
+      .where(
+        and(
+          sql`${tasks.status} = 'done'`,
+          sql`${tasks.completedAt} >= ${dayStart.toISOString()}`,
+          sql`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${authUser.id})`,
+        ),
       ),
-    )
-    .orderBy(asc(tasks.dueDate), asc(tasks.title));
+    // projets en cours (4 plus récents)
+    conn
+      .select({
+        id: projects.id,
+        name: projects.name,
+        color: projects.color,
+        status: projects.status,
+        entityId: entities.id,
+        entityName: entities.name,
+        updatedAt: projects.updatedAt,
+      })
+      .from(projects)
+      .leftJoin(entities, eq(projects.entityId, entities.id))
+      .where(inArray(projects.status, ["planning", "active", "to_follow_up", "awaiting_response"]))
+      .orderBy(desc(projects.updatedAt))
+      .limit(4),
+    // total projets en cours
+    conn
+      .select({ count: sql<number>`count(*)::int` })
+      .from(projects)
+      .where(inArray(projects.status, ["planning", "active", "to_follow_up", "awaiting_response"])),
+    // agenda du jour
+    getCalendarEventsForRange(authUser.id, dayStart, dayEnd),
+    // relances cette semaine (5 premières)
+    conn
+      .select({
+        id: projects.id,
+        title: projects.name,
+        followUpDate: projects.followUpDate,
+        status: projects.status,
+        entityId: entities.id,
+        entityName: entities.name,
+        color: projects.color,
+      })
+      .from(projects)
+      .leftJoin(entities, eq(projects.entityId, entities.id))
+      .where(
+        and(
+          isNotNull(projects.followUpDate),
+          gte(projects.followUpDate, today),
+          lte(projects.followUpDate, weekEnd),
+          ne(projects.status, "lost"),
+        ),
+      )
+      .orderBy(asc(projects.followUpDate))
+      .limit(5),
+    // relances cette semaine (agrégat)
+    conn
+      .select({
+        count: sql<number>`count(*)::int`,
+        total: sql<string>`coalesce(sum(${projects.valueAmount}), 0)`,
+      })
+      .from(projects)
+      .where(
+        and(
+          isNotNull(projects.followUpDate),
+          gte(projects.followUpDate, today),
+          lte(projects.followUpDate, weekEnd),
+          ne(projects.status, "lost"),
+        ),
+      ),
+    // temps tracké (7 derniers jours, mon temps réel)
+    conn
+      .select({
+        minutes: sql<number>`coalesce(sum(extract(epoch from (${timeEntries.endAt} - ${timeEntries.startAt})) / 60), 0)::int`,
+      })
+      .from(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.userId, authUser.id),
+          eq(timeEntries.kind, "actual"),
+          gte(timeEntries.startAt, new Date(`${last7Start}T00:00:00Z`)),
+        ),
+      ),
+    // temps tracké (total)
+    conn
+      .select({
+        minutes: sql<number>`coalesce(sum(extract(epoch from (${timeEntries.endAt} - ${timeEntries.startAt})) / 60), 0)::int`,
+      })
+      .from(timeEntries)
+      .where(and(eq(timeEntries.userId, authUser.id), eq(timeEntries.kind, "actual"))),
+    // factures à encaisser (sent, non payées) — filtré par utilisateur.
+    // `overdue` = due_date passée. Fallback sur l'heuristique 30j pour les
+    // factures historiques sans due_date renseignée (backfill 0058 a
+    // couvert l'existant mais une création hors UI pourrait ne pas en avoir).
+    // On ne montre que les factures dont la personne courante est responsable.
+    conn
+      .select({
+        total: sql<string>`coalesce(sum(${invoices.amountHt}), 0)`,
+        count: sql<number>`count(*)::int`,
+        overdue: sql<number>`count(*) filter (where
+        (${invoices.dueDate} is not null and ${invoices.dueDate} <= current_date)
+        or (${invoices.dueDate} is null and ${invoices.invoicedAt} < now() - interval '30 days')
+      )::int`,
+      })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.status, "sent"),
+          eq(invoices.assignedTo, authUser.id),
+          or(
+            eq(invoices.kind, "milestone"),
+            eq(invoices.kind, "coworking"),
+            eq(invoices.kind, "one_off"),
+          ),
+        ),
+      ),
+    // mes factures à relancer (top 5 plus en retard). Affichées dans la
+    // colonne droite, miroir visuel du widget « Relances cette semaine ».
+    conn
+      .select({
+        id: invoices.id,
+        label: invoices.label,
+        amountHt: invoices.amountHt,
+        dueDate: invoices.dueDate,
+        invoicedAt: invoices.invoicedAt,
+        reminderCount: invoices.reminderCount,
+        projectId: invoices.projectId,
+        projectName: projects.name,
+        projectColor: projects.color,
+        entityId: entities.id,
+        entityName: entities.name,
+        contractName: coworkingContracts.name,
+        kind: invoices.kind,
+      })
+      .from(invoices)
+      .leftJoin(projects, eq(projects.id, invoices.projectId))
+      .leftJoin(entities, eq(entities.id, projects.entityId))
+      .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
+      .where(
+        and(
+          eq(invoices.status, "sent"),
+          eq(invoices.assignedTo, authUser.id),
+          inArray(invoices.kind, ["milestone", "coworking", "one_off"]),
+          or(ne(invoices.billedBy, "g_and_o"), isNull(invoices.billedBy)),
+          sql`${invoices.dueDate} is not null and ${invoices.dueDate} <= current_date`,
+        ),
+      )
+      .orderBy(asc(invoices.dueDate))
+      .limit(5),
+  ]);
 
+  const firstName =
+    profile?.fullName?.trim().split(/\s+/)[0] ?? authUser.email?.split("@")[0] ?? "toi";
+  const todayLabel = capitalize(dayLabelFmt.format(new Date()));
+
+  // ─── vague 2 : dépend des ids de la vague 1 ───────────────────────
   const myTaskIds = myOpenTasksRows.map((t) => t.id);
-
-  // assignees pour chaque tâche (en 1 requête)
-  const taskAssigneesRows =
+  const projIds = activeProjects.map((p) => p.id);
+  const [taskAssigneesRows, projTaskCounts, nextStepCandidates, teamRows] = await Promise.all([
     myTaskIds.length > 0
-      ? await conn
+      ? conn
           .select({
             taskId: taskAssignees.taskId,
             kind: taskAssignees.kind,
@@ -173,8 +340,58 @@ export default async function DashboardPage() {
           .leftJoin(contacts, eq(taskAssignees.contactId, contacts.id))
           .leftJoin(entities, eq(contacts.entityId, entities.id))
           .where(inArray(taskAssignees.taskId, myTaskIds))
-      : [];
+      : [],
+    projIds.length > 0
+      ? conn
+          .select({
+            projectId: tasks.projectId,
+            total: sql<number>`count(*)::int`,
+            done: sql<number>`count(*) filter (where ${tasks.status} = 'done')::int`,
+            open: sql<number>`count(*) filter (where ${tasks.status} not in ('done', 'cancelled'))::int`,
+          })
+          .from(tasks)
+          .where(inArray(tasks.projectId, projIds))
+          .groupBy(tasks.projectId)
+      : [],
+    projIds.length > 0
+      ? conn
+          .select({
+            projectId: tasks.projectId,
+            title: tasks.title,
+            dueDate: tasks.dueDate,
+            createdAt: tasks.createdAt,
+          })
+          .from(tasks)
+          .where(
+            and(
+              inArray(tasks.projectId, projIds),
+              sql`${tasks.status} not in ('done', 'cancelled')`,
+            ),
+          )
+          .orderBy(asc(tasks.dueDate), asc(tasks.createdAt))
+      : [],
+    projIds.length > 0
+      ? conn
+          .select({
+            projectId: tasks.projectId,
+            userId: users.id,
+            userName: users.fullName,
+            userAvatarUrl: users.avatarUrl,
+          })
+          .from(taskAssignees)
+          .innerJoin(tasks, eq(taskAssignees.taskId, tasks.id))
+          .innerJoin(users, eq(taskAssignees.userId, users.id))
+          .where(
+            and(
+              inArray(tasks.projectId, projIds),
+              sql`${tasks.status} not in ('done', 'cancelled')`,
+              eq(taskAssignees.kind, "user"),
+            ),
+          )
+      : [],
+  ]);
 
+  // ─── tâches ouvertes (multi-assignées au user) ────────────────────
   const taskAssigneeMap = new Map<string, StackedAssignee[]>();
   for (const r of taskAssigneesRows) {
     const list = taskAssigneeMap.get(r.taskId) ?? [];
@@ -213,74 +430,16 @@ export default async function DashboardPage() {
 
   const overdueCount = dashTasks.filter((t) => t.bucket === "overdue").length;
 
-  const [doneTodayRow] = await conn
-    .select({ count: sql<number>`count(*)::int` })
-    .from(tasks)
-    .where(
-      and(
-        sql`${tasks.status} = 'done'`,
-        sql`${tasks.completedAt} >= ${dayStart.toISOString()}`,
-        sql`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${authUser.id})`,
-      ),
-    );
   const doneTodayCount = doneTodayRow?.count ?? 0;
 
   // ─── projets en cours ────────────────────────────────────────────
-  const activeProjects = await conn
-    .select({
-      id: projects.id,
-      name: projects.name,
-      color: projects.color,
-      status: projects.status,
-      entityId: entities.id,
-      entityName: entities.name,
-      updatedAt: projects.updatedAt,
-    })
-    .from(projects)
-    .leftJoin(entities, eq(projects.entityId, entities.id))
-    .where(inArray(projects.status, ["planning", "active", "to_follow_up", "awaiting_response"]))
-    .orderBy(desc(projects.updatedAt))
-    .limit(4);
-
-  const projIds = activeProjects.map((p) => p.id);
 
   // counts done/open par projet
-  const projTaskCounts =
-    projIds.length > 0
-      ? await conn
-          .select({
-            projectId: tasks.projectId,
-            total: sql<number>`count(*)::int`,
-            done: sql<number>`count(*) filter (where ${tasks.status} = 'done')::int`,
-            open: sql<number>`count(*) filter (where ${tasks.status} not in ('done', 'cancelled'))::int`,
-          })
-          .from(tasks)
-          .where(inArray(tasks.projectId, projIds))
-          .groupBy(tasks.projectId)
-      : [];
   const countsMap = new Map(
     projTaskCounts.filter((r) => r.projectId != null).map((r) => [r.projectId as string, r]),
   );
 
   // "next step" : prochaine tâche ouverte par projet (asc due_date, asc createdAt)
-  const nextStepCandidates =
-    projIds.length > 0
-      ? await conn
-          .select({
-            projectId: tasks.projectId,
-            title: tasks.title,
-            dueDate: tasks.dueDate,
-            createdAt: tasks.createdAt,
-          })
-          .from(tasks)
-          .where(
-            and(
-              inArray(tasks.projectId, projIds),
-              sql`${tasks.status} not in ('done', 'cancelled')`,
-            ),
-          )
-          .orderBy(asc(tasks.dueDate), asc(tasks.createdAt))
-      : [];
   const nextStepMap = new Map<string, { title: string; dueDate: string | null }>();
   for (const row of nextStepCandidates) {
     if (!row.projectId || nextStepMap.has(row.projectId)) continue;
@@ -288,26 +447,6 @@ export default async function DashboardPage() {
   }
 
   // team par projet : users distincts assignés à des tâches ouvertes du projet
-  const teamRows =
-    projIds.length > 0
-      ? await conn
-          .select({
-            projectId: tasks.projectId,
-            userId: users.id,
-            userName: users.fullName,
-            userAvatarUrl: users.avatarUrl,
-          })
-          .from(taskAssignees)
-          .innerJoin(tasks, eq(taskAssignees.taskId, tasks.id))
-          .innerJoin(users, eq(taskAssignees.userId, users.id))
-          .where(
-            and(
-              inArray(tasks.projectId, projIds),
-              sql`${tasks.status} not in ('done', 'cancelled')`,
-              eq(taskAssignees.kind, "user"),
-            ),
-          )
-      : [];
   const teamMap = new Map<string, StackedAssignee[]>();
   for (const r of teamRows) {
     if (!r.projectId) continue;
@@ -323,13 +462,7 @@ export default async function DashboardPage() {
     teamMap.set(r.projectId, list);
   }
 
-  const [activeProjectsTotalRow] = await conn
-    .select({ count: sql<number>`count(*)::int` })
-    .from(projects)
-    .where(inArray(projects.status, ["planning", "active", "to_follow_up", "awaiting_response"]));
-
   // ─── agenda du jour ──────────────────────────────────────────────
-  const agendaRaw = await getCalendarEventsForRange(authUser.id, dayStart, dayEnd);
   const agenda = agendaRaw
     .filter((e) => !e.allDay)
     .slice(0, 4)
@@ -349,135 +482,16 @@ export default async function DashboardPage() {
       };
     });
 
-  // ─── relances cette semaine ──────────────────────────────────────
-  const relances = await conn
-    .select({
-      id: projects.id,
-      title: projects.name,
-      followUpDate: projects.followUpDate,
-      status: projects.status,
-      entityId: entities.id,
-      entityName: entities.name,
-      color: projects.color,
-    })
-    .from(projects)
-    .leftJoin(entities, eq(projects.entityId, entities.id))
-    .where(
-      and(
-        isNotNull(projects.followUpDate),
-        gte(projects.followUpDate, today),
-        lte(projects.followUpDate, weekEnd),
-        ne(projects.status, "lost"),
-      ),
-    )
-    .orderBy(asc(projects.followUpDate))
-    .limit(5);
-
-  const [relancesAggRow] = await conn
-    .select({
-      count: sql<number>`count(*)::int`,
-      total: sql<string>`coalesce(sum(${projects.valueAmount}), 0)`,
-    })
-    .from(projects)
-    .where(
-      and(
-        isNotNull(projects.followUpDate),
-        gte(projects.followUpDate, today),
-        lte(projects.followUpDate, weekEnd),
-        ne(projects.status, "lost"),
-      ),
-    );
-
-  // ─── temps tracké (7 derniers jours, mon temps réel) ──────────────
-  const [trackedRow] = await conn
-    .select({
-      minutes: sql<number>`coalesce(sum(extract(epoch from (${timeEntries.endAt} - ${timeEntries.startAt})) / 60), 0)::int`,
-    })
-    .from(timeEntries)
-    .where(
-      and(
-        eq(timeEntries.userId, authUser.id),
-        eq(timeEntries.kind, "actual"),
-        gte(timeEntries.startAt, new Date(`${last7Start}T00:00:00Z`)),
-      ),
-    );
-  const [trackedTotalRow] = await conn
-    .select({
-      minutes: sql<number>`coalesce(sum(extract(epoch from (${timeEntries.endAt} - ${timeEntries.startAt})) / 60), 0)::int`,
-    })
-    .from(timeEntries)
-    .where(and(eq(timeEntries.userId, authUser.id), eq(timeEntries.kind, "actual")));
-
+  // ─── temps tracké ─────────────────────────────────────────────────
   const trackedHours = Math.round((trackedRow?.minutes ?? 0) / 60);
   const trackedTotalHours = Math.round((trackedTotalRow?.minutes ?? 0) / 60);
 
-  // ─── factures à encaisser (sent, non payées) — filtré par utilisateur ─
-  // `overdue` = due_date passée. Fallback sur l'heuristique 30j pour les
-  // factures historiques sans due_date renseignée (backfill 0058 a
-  // couvert l'existant mais une création hors UI pourrait ne pas en avoir).
-  // On ne montre que les factures dont la personne courante est responsable.
-  const [toCollectRow] = await conn
-    .select({
-      total: sql<string>`coalesce(sum(${invoices.amountHt}), 0)`,
-      count: sql<number>`count(*)::int`,
-      overdue: sql<number>`count(*) filter (where
-        (${invoices.dueDate} is not null and ${invoices.dueDate} <= current_date)
-        or (${invoices.dueDate} is null and ${invoices.invoicedAt} < now() - interval '30 days')
-      )::int`,
-    })
-    .from(invoices)
-    .where(
-      and(
-        eq(invoices.status, "sent"),
-        eq(invoices.assignedTo, authUser.id),
-        or(
-          eq(invoices.kind, "milestone"),
-          eq(invoices.kind, "coworking"),
-          eq(invoices.kind, "one_off"),
-        ),
-      ),
-    );
+  // ─── factures à encaisser ─────────────────────────────────────────
   const toCollect = Number(toCollectRow?.total ?? 0);
   const toCollectCount = toCollectRow?.count ?? 0;
   const toCollectOverdue = toCollectRow?.overdue ?? 0;
 
-  // ─── mes factures à relancer (top 5 plus en retard) ───────────────────
-  // Affichées dans la colonne droite, miroir visuel du widget "Relances
-  // cette semaine" : pastille projet · nom · sous-titre client/retard ·
-  // date d'échéance.
-  const myRelances = await conn
-    .select({
-      id: invoices.id,
-      label: invoices.label,
-      amountHt: invoices.amountHt,
-      dueDate: invoices.dueDate,
-      invoicedAt: invoices.invoicedAt,
-      reminderCount: invoices.reminderCount,
-      projectId: invoices.projectId,
-      projectName: projects.name,
-      projectColor: projects.color,
-      entityId: entities.id,
-      entityName: entities.name,
-      contractName: coworkingContracts.name,
-      kind: invoices.kind,
-    })
-    .from(invoices)
-    .leftJoin(projects, eq(projects.id, invoices.projectId))
-    .leftJoin(entities, eq(entities.id, projects.entityId))
-    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
-    .where(
-      and(
-        eq(invoices.status, "sent"),
-        eq(invoices.assignedTo, authUser.id),
-        inArray(invoices.kind, ["milestone", "coworking", "one_off"]),
-        or(ne(invoices.billedBy, "g_and_o"), isNull(invoices.billedBy)),
-        sql`${invoices.dueDate} is not null and ${invoices.dueDate} <= current_date`,
-      ),
-    )
-    .orderBy(asc(invoices.dueDate))
-    .limit(5);
-
-  // KPI strip
+  // ─── KPI strip ────────────────────────────────────────────────────
   const relancesCount = relancesAggRow?.count ?? 0;
   const relancesTotal = Number(relancesAggRow?.total ?? 0);
 

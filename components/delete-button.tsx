@@ -11,7 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { Trash2 } from "lucide-react";
+import { Trash } from "@phosphor-icons/react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -62,7 +62,7 @@ export function DeleteButton({
           size="sm"
           className={cn("text-destructive hover:text-destructive", className)}
         >
-          <Trash2 className="size-4" />
+          <Trash className="size-4" />
           {label}
         </Button>
       </DialogTrigger>

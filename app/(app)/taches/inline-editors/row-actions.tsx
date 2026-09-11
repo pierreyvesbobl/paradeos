@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { deleteTask } from "@/lib/actions/tasks";
-import { MoreHorizontal, Trash2 } from "lucide-react";
+import { DotsThree, Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -49,7 +49,7 @@ export function TaskRowActions({ id, title }: { id: string; title: string }) {
             className="size-7 text-muted-foreground hover:text-foreground"
             aria-label="Actions sur la tâche"
           >
-            <MoreHorizontal className="size-4" />
+            <DotsThree className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
@@ -60,7 +60,7 @@ export function TaskRowActions({ id, title }: { id: string; title: string }) {
             }}
             className="text-destructive focus:text-destructive"
           >
-            <Trash2 className="size-4" />
+            <Trash className="size-4" />
             Supprimer…
           </DropdownMenuItem>
         </DropdownMenuContent>

@@ -42,27 +42,52 @@ app/                      Next.js App Router
   (auth)/login/           magic link
   (app)/                  zone authentifiée (sidebar+topbar)
     page.tsx              dashboard
-    settings/profile/
-  auth/callback/          callback PKCE Supabase
+    error.tsx             error boundary de la zone (garde le layout)
+    not-found.tsx         404 (notFound() des pages détail)
+    projets/ contacts/ entites/ taches/ temps/ notes/ meetings/
+    inbox/ emails/ compta/ coworking/ settings/
+  api/
+    cron/                 jobs Vercel Cron (Bearer CRON_SECRET)
+    mcp/ oauth/           serveur MCP HTTP + OAuth (RFC 8414/9728)
+    google/ dougs/ linkedin/ meetings/ note-attachments/
+  global-error.tsx        dernier filet (erreur du root layout)
 components/
   ui/                     primitives shadcn
   layout/                 sidebar, topbar, command palette, user menu
+  emails/ coworking/ tasks/ notes/ projets/   composants par domaine
 db/
-  client.ts               connexion postgres-js partagée
+  client.ts               pool postgres-js partagé (globalThis en dev)
   schema/*.ts             un fichier par domaine (pas de barrel)
   migrations/             générées par drizzle-kit
 lib/
   actions/                Server Actions (helper action() + actions par domaine)
   auth/server.ts          getUser / requireUser
-  db/server.ts            client Drizzle authentifié (propage JWT pour RLS)
+  db/server.ts            client Drizzle (rôle postgres, sécurité côté app)
+  db/queries/             requêtes de lecture partagées
   schemas/                Zod par domaine
   supabase/               clients server / browser / middleware
+  gmail/ google/ dougs/ linkedin/ meetings/   intégrations
   format.ts               formats fr-FR (€, dates)
-  utils.ts                cn()
 middleware.ts             auth gate global
-scripts/seed.ts           pnpm seed
+mcp-server/               serveur MCP stdio (dev local)
+chrome-extension/         extension LinkedIn (Voyager, hors service)
+scripts/                  seed, magic-link, diagnostics
+scripts/archive/          scripts one-shot déjà joués (ne pas relancer)
 supabase/migrations/      RLS + triggers SQL
+docs/design/              handoffs Claude Design (.dc.html)
 ```
+
+### Sécurité des Server Actions
+
+`lib/db/server.ts` se connecte avec le rôle `postgres`, qui **bypass
+RLS**. Toute la sécurité repose donc sur le code applicatif :
+
+- Toute action passe par `action()` (`lib/actions/action.ts`) qui
+  valide le payload Zod et exige un user authentifié.
+- Un fichier `"use server"` expose **chaque export** comme endpoint
+  appelable. Les helpers qui prennent un `userId` explicite (sync
+  calendrier, crons) ne doivent jamais y vivre : les mettre dans
+  `lib/<domaine>/` (ex. `lib/google/calendar-sync.ts`).
 
 ## Conventions
 

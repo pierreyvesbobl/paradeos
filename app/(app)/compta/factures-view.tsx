@@ -7,8 +7,8 @@ import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
 import { DemoBlur } from "@/lib/demo/components";
 import { formatDate } from "@/lib/format";
+import { ArrowSquareOut, FileText } from "@phosphor-icons/react/dist/ssr";
 import { desc, eq } from "drizzle-orm";
-import { ExternalLink, FileText } from "lucide-react";
 import Link from "next/link";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -123,7 +123,7 @@ export async function FacturesView() {
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground hover:underline"
                 >
-                  Ouvrir sur Drive <ExternalLink className="size-3" />
+                  Ouvrir sur Drive <ArrowSquareOut className="size-3" />
                 </a>
               ) : null}
 

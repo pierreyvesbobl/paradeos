@@ -14,15 +14,15 @@ import {
   upsertInvoice,
 } from "@/lib/actions/invoices";
 import {
+  ArrowSquareOut,
+  ArrowsClockwise,
   Check,
-  ExternalLink,
-  Link2,
-  Pencil,
+  LinkSimple,
+  PencilSimple,
   Plus,
-  RefreshCw,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+  Sparkle,
+  Trash,
+} from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -290,7 +290,7 @@ export function BillingMilestonesSection({
               disabled={pending || projectValueHt <= 0}
               className="gap-1.5"
             >
-              <Sparkles className="size-3.5" />
+              <Sparkle className="size-3.5" />
               Init 40 % / 60 %
             </Button>
             <Button type="button" size="sm" onClick={openCreate} className="gap-1.5">
@@ -334,7 +334,7 @@ export function BillingMilestonesSection({
                           title="Ouvrir sur Dougs"
                         >
                           {m.dougsInvoiceReference}
-                          <ExternalLink className="size-2.5" />
+                          <ArrowSquareOut className="size-2.5" />
                         </a>
                       </>
                     ) : null}
@@ -354,7 +354,7 @@ export function BillingMilestonesSection({
                       className="h-7 gap-1 px-2 text-[11px]"
                       title="Lier une facture Dougs existante"
                     >
-                      <Link2 className="size-3" />
+                      <LinkSimple className="size-3" />
                       Lier
                     </Button>
                   ) : null}
@@ -382,7 +382,7 @@ export function BillingMilestonesSection({
                         className="h-7 px-2 text-[11px]"
                         title="Rafraîchir depuis Dougs"
                       >
-                        <RefreshCw className="size-3" />
+                        <ArrowsClockwise className="size-3" />
                       </Button>
                       <Button
                         asChild
@@ -396,7 +396,7 @@ export function BillingMilestonesSection({
                           target="_blank"
                           rel="noreferrer"
                         >
-                          <ExternalLink className="size-3" />
+                          <ArrowSquareOut className="size-3" />
                         </a>
                       </Button>
                     </>
@@ -410,7 +410,7 @@ export function BillingMilestonesSection({
                     className="h-7 px-2 text-muted-foreground"
                     title="Éditer"
                   >
-                    <Pencil className="size-3" />
+                    <PencilSimple className="size-3" />
                   </Button>
                   <Button
                     type="button"
@@ -421,7 +421,7 @@ export function BillingMilestonesSection({
                     className="h-7 px-2 text-muted-foreground hover:text-destructive"
                     title="Supprimer"
                   >
-                    <Trash2 className="size-3" />
+                    <Trash className="size-3" />
                   </Button>
                 </div>
               </div>

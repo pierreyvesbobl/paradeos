@@ -30,7 +30,16 @@ import { demoAmount, demoCompanyName } from "@/lib/demo/anonymize";
 import { isDemoMode } from "@/lib/demo/server";
 import { formatEuro, formatPersonName } from "@/lib/format";
 import { invoiceTotalHt, invoiceTotalTtc, monthsBetween } from "@/lib/schemas/coworking";
-import { ArrowRight, Banknote, Clock, FileText, Mail, Plus, TrendingUp, Users } from "lucide-react";
+import {
+  ArrowRight,
+  Clock,
+  Envelope,
+  FileText,
+  Money,
+  Plus,
+  TrendUp,
+  Users,
+} from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
 export default async function CoworkingPage() {
@@ -303,7 +312,7 @@ export default async function CoworkingPage() {
                         href={`mailto:${c.email}`}
                         className="inline-flex items-center gap-1 hover:underline"
                       >
-                        <Mail className="size-3" />
+                        <Envelope className="size-3" />
                         {c.email}
                       </a>
                     ) : (
@@ -339,7 +348,7 @@ export default async function CoworkingPage() {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <KpiCard
-          icon={<Banknote className="size-4 text-amber-600 dark:text-amber-400" />}
+          icon={<Money className="size-4 text-amber-600 dark:text-amber-400" />}
           label="À facturer ce mois"
           value={`${aFacturerThisMonth.length} facture${aFacturerThisMonth.length > 1 ? "s" : ""}`}
           sub={formatEuro(aFacturerHt)}
@@ -351,7 +360,7 @@ export default async function CoworkingPage() {
           sub={formatEuro(enAttenteHt)}
         />
         <KpiCard
-          icon={<TrendingUp className="size-4 text-emerald-600 dark:text-emerald-400" />}
+          icon={<TrendUp className="size-4 text-emerald-600 dark:text-emerald-400" />}
           label={`CA HT ${thisYear}`}
           value={formatEuro(caYtdHt)}
           sub="Factures payées cette année"

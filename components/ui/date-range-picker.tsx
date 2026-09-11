@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { CalendarBlank, CaretLeft, CaretRight, X } from "@phosphor-icons/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 // Formatters Intl FR (cohérent avec lib/format.ts).
@@ -263,7 +263,7 @@ export function DateRangePicker({
             disabled={disabled}
             className={cn("justify-start gap-2 font-normal", className)}
           >
-            <CalendarIcon className="size-3.5 shrink-0" />
+            <CalendarBlank className="size-3.5 shrink-0" />
             <span className={cn("truncate", !label && "text-muted-foreground")}>
               {label ?? placeholder}
             </span>
@@ -363,7 +363,7 @@ export function DateRangePicker({
                 className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label="Mois précédent"
               >
-                <ChevronLeft className="size-4" />
+                <CaretLeft className="size-4" />
               </button>
               <button
                 type="button"
@@ -371,7 +371,7 @@ export function DateRangePicker({
                 className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label="Mois suivant"
               >
-                <ChevronRight className="size-4" />
+                <CaretRight className="size-4" />
               </button>
             </div>
           </header>

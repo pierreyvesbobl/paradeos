@@ -5,6 +5,7 @@ import { entities as entitiesTable } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
+import { buildMilestoneDougsLine } from "@/lib/billing/milestones-math";
 import { db } from "@/lib/db/server";
 import {
   DougsApiError,
@@ -124,26 +125,14 @@ export const pushProjectMilestoneToDougs = action(
       throw err;
     }
 
-    const description =
-      invoice.milestonePercent != null
-        ? `${invoice.milestonePercent.toLocaleString("fr-FR")} % du projet "${project.name}".`
-        : `Facture liée au projet "${project.name}".`;
-
     const lines = [
-      {
-        title: invoice.label,
-        description,
-        unit: "forfait",
-        quantity: 1,
-        unitAmount: amountHt,
+      buildMilestoneDougsLine({
+        label: invoice.label,
+        milestonePercent: invoice.milestonePercent,
+        amountHt,
         vatRate: Number(invoice.vatRate),
-        discount: 0,
-        discountUnit: "%",
-        reference: null,
-        amount: amountHt,
-        discountInEuros: 0,
-        isPriceWithVat: false,
-      },
+        projectName: project.name,
+      }),
     ];
 
     let draft: Awaited<ReturnType<typeof createDougsSalesInvoiceDraft>>;

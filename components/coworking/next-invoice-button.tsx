@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { generateNextCoworkingInvoice } from "@/lib/actions/coworking";
-import { Sparkles } from "lucide-react";
+import { Sparkle } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
@@ -41,7 +41,7 @@ export function NextInvoiceButton({ contractId }: Props) {
       disabled={pending}
       title="Génère la facture suivante (période auto)"
     >
-      <Sparkles className="mr-1 size-4" />
+      <Sparkle className="mr-1 size-4" />
       {pending ? "Génération…" : "Facture suivante"}
     </Button>
   );

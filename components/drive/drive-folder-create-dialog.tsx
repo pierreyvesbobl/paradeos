@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createAndLinkDriveFolder } from "@/lib/actions/drive-folders";
 import type { DriveFileSubjectType } from "@/lib/schemas/drive-files";
-import { FolderPlus } from "lucide-react";
+import { FolderPlus } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";

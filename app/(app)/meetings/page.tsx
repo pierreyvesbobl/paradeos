@@ -20,8 +20,8 @@ import { DemoBlur, ProjectName } from "@/lib/demo/components";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
+import { Kanban, Microphone, Plus } from "@phosphor-icons/react/dist/ssr";
 import { type SQL, and, asc, desc, eq, ilike, sql } from "drizzle-orm";
-import { FolderKanban, Mic, Plus } from "lucide-react";
 import Link from "next/link";
 
 const STATUS_LABEL = {
@@ -172,7 +172,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
           const hasFilter = Boolean(query) || filters.length > 0;
           return (
             <EmptyState
-              icon={Mic}
+              icon={Microphone}
               title={hasFilter ? "Aucun meeting trouvé." : "Pas encore de meeting."}
               description={
                 hasFilter
@@ -269,7 +269,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
                         href={`/projets/${row.projectId}`}
                         className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted"
                       >
-                        <FolderKanban className="size-3.5 text-muted-foreground" />
+                        <Kanban className="size-3.5 text-muted-foreground" />
                         <ProjectName
                           project={{ id: row.projectId, name: row.projectName }}
                           className="truncate font-medium"

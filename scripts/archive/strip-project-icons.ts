@@ -9,7 +9,7 @@ import { config as loadEnv } from "dotenv";
 import { isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { projects } from "../db/schema/projects";
+import { projects } from "../../db/schema/projects";
 
 loadEnv({ path: ".env.local" });
 loadEnv({ path: ".env" });
