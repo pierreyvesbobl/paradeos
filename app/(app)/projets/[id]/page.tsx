@@ -70,61 +70,63 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   if (!row) notFound();
   const { project, entity, ownerId } = row;
 
-  // Requêtes en 2 vagues parallèles séquentielles. Un Promise.all de
-  // 12+ queries sur le pooler Supabase 6543 (transaction mode) déclenche
-  // des ETIMEDOUT côté Supavisor — au-delà de ~8 queries concurrentes,
-  // le pooler n'arrive plus à les router et la page hang en prod. En
-  // splittant on reste largement sous le seuil. La vague 1 contient
-  // toutes les data spécifiques au projet (rendu immédiat). La vague 2
-  // contient les listes globales (entities/users/contacts) utilisées
-  // par les dropdowns d'édition — peu critiques pour le first paint mais
-  // toujours awaited car les composants client en ont besoin synchrones.
+  // Requêtes en 2 vagues parallèles séquentielles. Le pool postgres-js
+  // fait 10 connexions (db/client.ts) et Supavisor en mode transaction
+  // n'aime pas les rafales : au-delà de ~8 requêtes concurrentes, ça
+  // file d'attente puis ETIMEDOUT en prod. Attention, les helpers
+  // fan-out en interne : getProjectTimeStats = 2 requêtes, notes = 1
+  // puis 1. Vague 1 (7 requêtes concurrentes) : données du projet pour
+  // le rendu immédiat. Vague 2 (7) : membres, contacts, secrets et
+  // listes globales pour les éditeurs.
   const notesPromise = getNotesForSubject("project", id).then(async (n) => ({
     list: n,
     attachments: await getAttachmentsForNotes(n.map((x) => x.id)),
   }));
 
+  const [quoteInvoiceRows, milestonesRows, timeStats, profitability, notesData, projectTasks] =
+    await Promise.all([
+      conn
+        .select()
+        .from(invoices)
+        .where(and(eq(invoices.projectId, id), eq(invoices.kind, "quote")))
+        .limit(1),
+      conn
+        .select()
+        .from(invoices)
+        .where(and(eq(invoices.projectId, id), eq(invoices.kind, "milestone")))
+        .orderBy(asc(invoices.createdAt)),
+      getProjectTimeStats(id),
+      getProjectProfitability(id, {
+        billingType: project.billingType,
+        budgetAmount: project.budgetAmount,
+        hourlyRate: project.hourlyRate,
+      }),
+      notesPromise,
+      conn
+        .select({
+          id: tasks.id,
+          title: tasks.title,
+          status: tasks.status,
+          priority: tasks.priority,
+          dueDate: tasks.dueDate,
+        })
+        .from(tasks)
+        .where(eq(tasks.projectId, id))
+        .orderBy(asc(tasks.dueDate), asc(tasks.title)),
+    ]);
+
   const [
-    quoteInvoiceRows,
-    milestonesRows,
-    timeStats,
-    profitability,
-    notesData,
-    projectTasks,
     projectMemberRows,
     projectContactRows,
     secretsList,
+    entityList,
+    userOptions,
+    contactOptions,
+    activityItems,
   ] = await Promise.all([
-    conn
-      .select()
-      .from(invoices)
-      .where(and(eq(invoices.projectId, id), eq(invoices.kind, "quote")))
-      .limit(1),
-    conn
-      .select()
-      .from(invoices)
-      .where(and(eq(invoices.projectId, id), eq(invoices.kind, "milestone")))
-      .orderBy(asc(invoices.createdAt)),
-    getProjectTimeStats(id),
-    getProjectProfitability(id),
-    notesPromise,
-    conn
-      .select({
-        id: tasks.id,
-        title: tasks.title,
-        status: tasks.status,
-        priority: tasks.priority,
-        dueDate: tasks.dueDate,
-      })
-      .from(tasks)
-      .where(eq(tasks.projectId, id))
-      .orderBy(asc(tasks.dueDate), asc(tasks.title)),
     getProjectMembers(id),
     getProjectContacts(id),
     getProjectSecretsList(id),
-  ]);
-
-  const [entityList, userOptions, contactOptions, activityItems] = await Promise.all([
     conn
       .select({ id: entities.id, name: entities.name })
       .from(entities)

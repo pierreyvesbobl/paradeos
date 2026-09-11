@@ -95,6 +95,8 @@ export const projects = pgTable(
   (table) => ({
     kindIdx: index("projects_kind_idx").on(table.kind),
     statusIdx: index("projects_status_idx").on(table.status),
+    /** Liste /projets triée par dernière modification. */
+    updatedAtIdx: index("projects_updated_at_idx").on(table.updatedAt),
     entityIdx: index("projects_entity_idx").on(table.entityId),
     contactIdx: index("projects_contact_idx").on(table.contactId),
     ownerIdx: index("projects_owner_idx").on(table.ownerId),

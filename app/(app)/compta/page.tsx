@@ -47,7 +47,6 @@ export default async function ComptaPage({ searchParams }: { searchParams: Searc
     segmentRaw && (VALID_SEGMENTS as string[]).includes(segmentRaw) ? segmentRaw : "conso"
   ) as ComptaSegment;
 
-  const overdueCount = await countOverdueInvoices();
   const assigneeFilter: "all" | "me" = params.assignee === "me" ? "me" : "all";
 
   return (
@@ -57,7 +56,9 @@ export default async function ComptaPage({ searchParams }: { searchParams: Searc
         title="Compta"
         description="Vue d'ensemble du signé, facturé, encaissé et rapprochement Dougs."
       />
-      <ComptaTabs current={tab} relancesCount={overdueCount} />
+      <Suspense fallback={<ComptaTabs current={tab} />}>
+        <ComptaTabsWithCount current={tab} />
+      </Suspense>
       {tab === "dashboard" ? (
         <DashboardView period={period} segment={segment} />
       ) : tab === "factures" ? (
@@ -138,4 +139,17 @@ function RapprochementSkeleton() {
       </div>
     </div>
   );
+}
+
+/**
+ * Le badge « relances en retard » demande une requête : on le charge
+ * sous Suspense pour que les onglets et la vue ne l'attendent pas.
+ */
+async function ComptaTabsWithCount({
+  current,
+}: {
+  current: "dashboard" | "rapprochement" | "factures" | "achats" | "relances";
+}) {
+  const overdueCount = await countOverdueInvoices();
+  return <ComptaTabs current={current} relancesCount={overdueCount} />;
 }

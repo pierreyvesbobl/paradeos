@@ -8,7 +8,7 @@ import { getCalendarEventsForRange } from "@/lib/db/queries/calendar";
 import { db } from "@/lib/db/server";
 import { formatDuration, formatPersonName } from "@/lib/format";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
-import { and, asc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, eq, gte, lt, notInArray } from "drizzle-orm";
 import Link from "next/link";
 import { WeekView } from "./week-view";
 
@@ -57,7 +57,12 @@ export async function PlanningView({ week }: { week?: string }) {
         ),
       )
       .orderBy(asc(timeEntries.startAt)),
-    conn.select({ id: tasks.id, title: tasks.title }).from(tasks).orderBy(asc(tasks.title)),
+    // Sélecteur d'attribution : seules les tâches ouvertes ont un sens.
+    conn
+      .select({ id: tasks.id, title: tasks.title })
+      .from(tasks)
+      .where(notInArray(tasks.status, ["done", "cancelled"]))
+      .orderBy(asc(tasks.title)),
     conn
       .select({ id: projects.id, name: projects.name })
       .from(projects)

@@ -118,16 +118,20 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
 
   // Notion filters (filtres riches additionnels) — récupère les options
   // dynamiques avant de parser/appliquer les filtres URL. En parallèle.
-  const [projectOptionsForFilter, userOptionsForFilter] = await Promise.all([
+  // Ces deux référentiels servent aussi aux éditeurs inline plus bas :
+  // on ne les requête qu'une fois.
+  const [projectOptions, userOptions] = await Promise.all([
     conn
       .select({ id: projects.id, name: projects.name })
       .from(projects)
       .orderBy(asc(projects.name)),
     conn
-      .select({ id: users.id, fullName: users.fullName })
+      .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
       .from(users)
       .orderBy(asc(users.fullName)),
   ]);
+  const projectOptionsForFilter = projectOptions;
+  const userOptionsForFilter = userOptions;
 
   const FILTER_DEFS = [
     {
@@ -198,7 +202,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
     conditions.push(positive ? clause : sql`NOT (${clause})`);
   }
 
-  const [rawTasks, projectOptions, userOptions, contactOptions] = await Promise.all([
+  const [rawTasks, contactOptions] = await Promise.all([
     conn
       .select({
         id: tasks.id,
@@ -212,15 +216,10 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
       .from(tasks)
       .leftJoin(projects, eq(tasks.projectId, projects.id))
       .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(...orderByFor(sortState)),
-    conn
-      .select({ id: projects.id, name: projects.name })
-      .from(projects)
-      .orderBy(asc(projects.name)),
-    conn
-      .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
-      .from(users)
-      .orderBy(asc(users.fullName)),
+      .orderBy(...orderByFor(sortState))
+      // Borne haute de sécurité : au-delà, la page devient inutilisable de
+      // toute façon (filtres et pagination restent à faire).
+      .limit(500),
     conn
       .select({
         id: contacts.id,

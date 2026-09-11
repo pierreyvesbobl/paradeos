@@ -44,21 +44,6 @@ export async function RelancesView({ assigneeFilter }: { assigneeFilter: "all" |
   const authUser = await requireUser();
   const today = toISODate(new Date());
 
-  // Liste des utilisateurs pour le picker assignee. ~10 personnes max
-  // attendu — pas de pagination.
-  const userOptions: UserOption[] = await conn
-    .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
-    .from(users)
-    .orderBy(asc(users.fullName));
-
-  // Signaux Dougs, en parallèle et sans jamais bloquer la page : les
-  // deux helpers avalent leurs erreurs et renvoient vide si Dougs est
-  // injoignable ou le cookie expiré.
-  const [paymentHints, aging] = await Promise.all([
-    getDougsPaymentHints(authUser.id),
-    getDougsAgingSummary(authUser.id),
-  ]);
-
   const baseWhere = and(
     eq(invoices.status, "sent"),
     inArray(invoices.kind, ["milestone", "coworking", "one_off"]),
@@ -66,34 +51,46 @@ export async function RelancesView({ assigneeFilter }: { assigneeFilter: "all" |
     assigneeFilter === "me" ? eq(invoices.assignedTo, authUser.id) : undefined,
   );
 
-  const rows = await conn
-    .select({
-      id: invoices.id,
-      kind: invoices.kind,
-      label: invoices.label,
-      amountHt: invoices.amountHt,
-      invoicedAt: invoices.invoicedAt,
-      dueDate: invoices.dueDate,
-      lastRemindedAt: invoices.lastRemindedAt,
-      reminderCount: invoices.reminderCount,
-      dougsInvoiceId: invoices.dougsInvoiceId,
-      assignedTo: invoices.assignedTo,
-      assignedFullName: users.fullName,
-      assignedAvatarUrl: users.avatarUrl,
-      projectId: invoices.projectId,
-      projectName: projects.name,
-      coworkingContractId: invoices.coworkingContractId,
-      contractName: coworkingContracts.name,
-      entityId: entities.id,
-      entityName: entities.name,
-    })
-    .from(invoices)
-    .leftJoin(projects, eq(projects.id, invoices.projectId))
-    .leftJoin(entities, eq(entities.id, projects.entityId))
-    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
-    .leftJoin(users, eq(users.id, invoices.assignedTo))
-    .where(baseWhere)
-    .orderBy(sql`${invoices.dueDate} asc nulls last, ${invoices.invoicedAt} asc`);
+  // Tout en une vague : la liste des users (~10 personnes, pas de
+  // pagination), les signaux Dougs (qui avalent leurs erreurs et
+  // renvoient vide si Dougs est injoignable) et les factures. Avant,
+  // les appels Dougs bloquaient la requête SQL principale.
+  const [userOptions, paymentHints, aging, rows] = await Promise.all([
+    conn
+      .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
+      .from(users)
+      .orderBy(asc(users.fullName)) as Promise<UserOption[]>,
+    getDougsPaymentHints(authUser.id),
+    getDougsAgingSummary(authUser.id),
+    conn
+      .select({
+        id: invoices.id,
+        kind: invoices.kind,
+        label: invoices.label,
+        amountHt: invoices.amountHt,
+        invoicedAt: invoices.invoicedAt,
+        dueDate: invoices.dueDate,
+        lastRemindedAt: invoices.lastRemindedAt,
+        reminderCount: invoices.reminderCount,
+        dougsInvoiceId: invoices.dougsInvoiceId,
+        assignedTo: invoices.assignedTo,
+        assignedFullName: users.fullName,
+        assignedAvatarUrl: users.avatarUrl,
+        projectId: invoices.projectId,
+        projectName: projects.name,
+        coworkingContractId: invoices.coworkingContractId,
+        contractName: coworkingContracts.name,
+        entityId: entities.id,
+        entityName: entities.name,
+      })
+      .from(invoices)
+      .leftJoin(projects, eq(projects.id, invoices.projectId))
+      .leftJoin(entities, eq(entities.id, projects.entityId))
+      .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
+      .leftJoin(users, eq(users.id, invoices.assignedTo))
+      .where(baseWhere)
+      .orderBy(sql`${invoices.dueDate} asc nulls last, ${invoices.invoicedAt} asc`),
+  ]);
 
   const overdue: RelanceItem[] = [];
   const soon: RelanceItem[] = [];

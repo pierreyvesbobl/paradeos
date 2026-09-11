@@ -46,6 +46,8 @@ export const timeEntries = pgTable(
   },
   (table) => ({
     userStartIdx: index("time_entries_user_start_idx").on(table.userId, table.startAt),
+    /** Agrégats globaux (rapport /temps) filtrent sur start_at seul. */
+    startIdx: index("time_entries_start_idx").on(table.startAt),
     kindIdx: index("time_entries_kind_idx").on(table.kind),
     taskIdx: index("time_entries_task_idx").on(table.taskId),
     projectIdx: index("time_entries_project_idx").on(table.projectId),

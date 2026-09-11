@@ -53,20 +53,35 @@ export type Profitability = {
   effectiveHourlyRate: number | null;
 };
 
-export async function getProjectProfitability(projectId: string): Promise<Profitability> {
+export type ProjectBillingFields = {
+  billingType: ProjectBillingType;
+  budgetAmount: string | number | null;
+  hourlyRate: string | number | null;
+};
+
+/**
+ * `known` : la page projet a déjà la ligne en main, inutile de la relire
+ * (une requête de moins dans la vague la plus chargée de l'app).
+ */
+export async function getProjectProfitability(
+  projectId: string,
+  known?: ProjectBillingFields,
+): Promise<Profitability> {
   const conn = await db();
 
-  // Project + agg en parallèle (avant : séquentiel, 2× le temps).
-  const [[project], [agg]] = await Promise.all([
-    conn
-      .select({
-        billingType: projects.billingType,
-        budgetAmount: projects.budgetAmount,
-        hourlyRate: projects.hourlyRate,
-      })
-      .from(projects)
-      .where(eq(projects.id, projectId))
-      .limit(1),
+  const [project, [agg]] = await Promise.all([
+    known
+      ? Promise.resolve(known)
+      : conn
+          .select({
+            billingType: projects.billingType,
+            budgetAmount: projects.budgetAmount,
+            hourlyRate: projects.hourlyRate,
+          })
+          .from(projects)
+          .where(eq(projects.id, projectId))
+          .limit(1)
+          .then((rows) => rows[0]),
     conn
       .select({
         actualMinutes: sumActualMinutes,
