@@ -18,7 +18,7 @@ import {
   parseAddressList,
 } from "@/lib/google/gmail-api";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { GENERIC_EMAIL_DOMAINS, domainFromEmail, extractDomain } from "./domain";
 import { extractAndSaveEmailProposals } from "./extract-and-save";
 import { looksLikeInvoiceMessage } from "./invoice-detect";
@@ -59,6 +59,8 @@ function sleep(ms: number) {
 }
 
 export type GmailSyncResult = {
+  /** Sync ignoré : une autre synchronisation tient déjà le verrou. */
+  skipped?: "already_running";
   mode: "bootstrap" | "incremental";
   inserted: number;
   updated: number;
@@ -460,7 +462,77 @@ export async function upsertThreadAndMessage(
  * mois paginés sur N runs cron. Sinon : `history.list` depuis le cursor.
  * Cap MAX_MESSAGES_PER_RUN par exécution.
  */
+const SYNC_LOCK_TTL_MS = 10 * 60_000;
+
+/**
+ * Verrou applicatif : une seule sync par utilisateur à la fois (bouton
+ * « Sync now » vs cron). Deux runs concurrents enverraient les mêmes
+ * messages au LLM (facturé deux fois) et se marcheraient dessus sur les
+ * propositions. Ligne `gmail_sync_state` créée si absente ; le verrou
+ * expire tout seul après 10 min si un run est tué par Vercel.
+ */
+async function acquireSyncLock(userId: string): Promise<boolean> {
+  const conn = await db();
+  await conn.insert(gmailSyncState).values({ userId }).onConflictDoNothing();
+  const rows = await conn
+    .update(gmailSyncState)
+    .set({ syncStartedAt: new Date() })
+    .where(
+      and(
+        eq(gmailSyncState.userId, userId),
+        or(
+          isNull(gmailSyncState.syncStartedAt),
+          lt(gmailSyncState.syncStartedAt, new Date(Date.now() - SYNC_LOCK_TTL_MS)),
+        ),
+      ),
+    )
+    .returning({ userId: gmailSyncState.userId });
+  return rows.length > 0;
+}
+
+async function releaseSyncLock(userId: string): Promise<void> {
+  const conn = await db();
+  await conn
+    .update(gmailSyncState)
+    .set({ syncStartedAt: null })
+    .where(eq(gmailSyncState.userId, userId));
+}
+
 export async function syncIncremental(userId: string): Promise<GmailSyncResult> {
+  if (!(await acquireSyncLock(userId))) {
+    return { ...emptySyncResult(), skipped: "already_running" };
+  }
+  try {
+    return await syncIncrementalUnlocked(userId);
+  } finally {
+    await releaseSyncLock(userId);
+  }
+}
+
+function emptySyncResult(): GmailSyncResult {
+  return {
+    mode: "incremental",
+    inserted: 0,
+    updated: 0,
+    bodiesFetched: 0,
+    skippedNotFound: 0,
+    skippedSpam: 0,
+    extractionsDone: 0,
+    extractionsSkipped: 0,
+    proposalsCreated: 0,
+    invoiceCandidatesIngested: 0,
+    invoicesRecovered: 0,
+    invoicesFiled: 0,
+    invoiceSalesDetected: 0,
+    invoicesRejected: 0,
+    invoicesErrored: 0,
+    errors: [],
+    newHistoryId: null,
+    hasMore: false,
+  };
+}
+
+async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult> {
   const result: GmailSyncResult = {
     mode: "incremental",
     inserted: 0,

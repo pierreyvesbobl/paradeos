@@ -183,6 +183,7 @@ export async function extractInvoiceMetadata(args: {
   ].join("\n");
 
   const { object } = await generateObject({
+    abortSignal: AbortSignal.timeout(60_000),
     model: openrouter(modelId),
     schema: invoiceSchema,
     system: SYSTEM_PROMPT,

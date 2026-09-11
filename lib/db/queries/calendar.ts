@@ -4,7 +4,7 @@ import { calendarEvents } from "@/db/schema/calendar-events";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { googleCalendars } from "@/db/schema/google-calendars";
 import { db } from "@/lib/db/server";
-import { and, asc, between, eq, inArray } from "drizzle-orm";
+import { and, asc, between, eq, getTableColumns } from "drizzle-orm";
 
 export async function getCalendarsForUser(userId: string) {
   const conn = await db();
@@ -35,36 +35,26 @@ export async function getCalendarsForUser(userId: string) {
  */
 export async function getCalendarEventsForRange(userId: string, from: Date, to: Date) {
   const conn = await db();
-  const calendarRows = await conn
+  // Une seule requête (join calendriers + comptes) et pas de colonne
+  // `attendees` (JSON brut, jamais affiché) : c'était la colonne la plus
+  // lourde de la table pour le planning et le dashboard.
+  const { attendees: _attendees, ...eventColumns } = getTableColumns(calendarEvents);
+  return conn
     .select({
-      id: googleCalendars.id,
-      summary: googleCalendars.summary,
-      backgroundColor: googleCalendars.backgroundColor,
-      foregroundColor: googleCalendars.foregroundColor,
+      ...eventColumns,
+      calendarSummary: googleCalendars.summary,
+      calendarBackgroundColor: googleCalendars.backgroundColor,
+      calendarForegroundColor: googleCalendars.foregroundColor,
     })
-    .from(googleCalendars)
-    .innerJoin(googleAccounts, eq(googleAccounts.id, googleCalendars.googleAccountId))
-    .where(and(eq(googleAccounts.userId, userId), eq(googleCalendars.syncEnabled, true)));
-
-  if (calendarRows.length === 0) return [];
-
-  const calIds = calendarRows.map((c) => c.id);
-  const events = await conn
-    .select()
     .from(calendarEvents)
+    .innerJoin(googleCalendars, eq(googleCalendars.id, calendarEvents.googleCalendarId))
+    .innerJoin(googleAccounts, eq(googleAccounts.id, googleCalendars.googleAccountId))
     .where(
       and(
-        inArray(calendarEvents.googleCalendarId, calIds),
+        eq(googleAccounts.userId, userId),
+        eq(googleCalendars.syncEnabled, true),
         between(calendarEvents.startAt, from, to),
       ),
     )
     .orderBy(asc(calendarEvents.startAt));
-
-  const calMeta = new Map(calendarRows.map((c) => [c.id, c]));
-  return events.map((e) => ({
-    ...e,
-    calendarSummary: calMeta.get(e.googleCalendarId)?.summary ?? null,
-    calendarBackgroundColor: calMeta.get(e.googleCalendarId)?.backgroundColor ?? null,
-    calendarForegroundColor: calMeta.get(e.googleCalendarId)?.foregroundColor ?? null,
-  }));
 }

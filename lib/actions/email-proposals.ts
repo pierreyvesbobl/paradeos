@@ -427,8 +427,8 @@ export const acceptEmailProposal = action(
     revalidatePath("/emails/propositions");
     revalidatePath(`/emails/${msg.threadId}`);
     revalidatePath("/taches");
-    revalidatePath("/contacts");
-    revalidatePath("/entites");
+    revalidatePath("/crm/contacts");
+    revalidatePath("/crm/entites");
     revalidatePath("/projets");
     revalidatePath("/inbox");
     return { ok: true as const, kind: proposal.kind, createdEntityId };
@@ -665,8 +665,8 @@ export const updateAcceptedEmailProposal = action(
     if (msg) revalidatePath(`/emails/${msg.threadId}`);
     revalidatePath("/emails/propositions");
     revalidatePath("/taches");
-    revalidatePath("/contacts");
-    revalidatePath("/entites");
+    revalidatePath("/crm/contacts");
+    revalidatePath("/crm/entites");
     revalidatePath("/projets");
     revalidatePath("/inbox");
     return { ok: true as const };

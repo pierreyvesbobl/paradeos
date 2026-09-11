@@ -1,3 +1,4 @@
+import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { ingestDriveTranscripts } from "@/lib/meetings/ingest-from-drive";
 import { NextResponse } from "next/server";
 
@@ -9,14 +10,11 @@ export const maxDuration = 300;
  * (cf. MAX_FILES_PER_RUN) pour rester sous le timeout Vercel.
  */
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const expected = process.env.CRON_SECRET;
-  if (!expected || auth !== `Bearer ${expected}`) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+  const unauthorized = cronUnauthorized(request);
+  if (unauthorized) return unauthorized;
   try {
     const result = await ingestDriveTranscripts();
-    return NextResponse.json({ ok: true, ...result });
+    return cronResponse({ ...result, failed: result.errors, errors: result.errorDetails });
   } catch (err) {
     console.error("[cron ingest-drive-transcripts]", err);
     return NextResponse.json(

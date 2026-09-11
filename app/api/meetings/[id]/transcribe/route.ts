@@ -1,6 +1,9 @@
+import { meetings } from "@/db/schema/meetings";
 import { requireUser } from "@/lib/auth/server";
+import { db } from "@/lib/db/server";
 import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import { transcribeMeetingAudio } from "@/lib/meetings/transcribe";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
@@ -18,8 +21,24 @@ export const dynamic = "force-dynamic";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
-  void user; // auth gating uniquement
+  void user; // auth gating uniquement — les meetings sont partagés
   const { id } = await params;
+
+  // Whisper + LLM coûtent cher : on refuse de relancer une transcription
+  // déjà en cours (double-clic, rejeu) au lieu de payer deux fois.
+  const conn = await db();
+  const [row] = await conn
+    .select({ status: meetings.transcriptionStatus, audio: meetings.audioStoragePath })
+    .from(meetings)
+    .where(eq(meetings.id, id))
+    .limit(1);
+  if (!row) return NextResponse.json({ ok: false, error: "Meeting introuvable." }, { status: 404 });
+  if (!row.audio) {
+    return NextResponse.json({ ok: false, error: "Aucun audio attaché." }, { status: 400 });
+  }
+  if (row.status === "running") {
+    return NextResponse.json({ ok: false, error: "Transcription déjà en cours." }, { status: 409 });
+  }
 
   try {
     const transcription = await transcribeMeetingAudio(id);

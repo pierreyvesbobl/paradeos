@@ -85,58 +85,61 @@ export async function DashboardView({
   const dProject = (id: string | null, name: string | null) =>
     demo && id ? demoProjectName(id) : name;
 
-  // Toutes les invoices facturables, filtrées par segment.
-  const rows = await conn
-    .select({
-      id: invoices.id,
-      kind: invoices.kind,
-      label: invoices.label,
-      amountHt: invoices.amountHt,
-      status: invoices.status,
-      invoicedAt: invoices.invoicedAt,
-      paidAt: invoices.paidAt,
-      projectId: invoices.projectId,
-      coworkingContractId: invoices.coworkingContractId,
-      projectName: projects.name,
-      projectEntityId: entities.id,
-      projectEntityName: entities.name,
-      contractName: coworkingContracts.name,
-    })
-    .from(invoices)
-    .leftJoin(projects, eq(projects.id, invoices.projectId))
-    .leftJoin(entities, eq(entities.id, projects.entityId))
-    .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
-    .where(
-      and(
-        inArray(invoices.kind, SEGMENT_KINDS[segment]),
-        // Exclut les factures coworking facturées par G&O des KPIs.
-        or(ne(invoices.billedBy, "g_and_o"), isNull(invoices.billedBy)),
+  // Les deux requêtes sont indépendantes : en parallèle. Le filtrage
+  // par période reste en JS car il porte sur deux dates différentes
+  // (émission pour le facturé, paiement pour l'encaissé).
+  const [rows, allSigned] = await Promise.all([
+    conn
+      .select({
+        id: invoices.id,
+        kind: invoices.kind,
+        label: invoices.label,
+        amountHt: invoices.amountHt,
+        status: invoices.status,
+        invoicedAt: invoices.invoicedAt,
+        paidAt: invoices.paidAt,
+        projectId: invoices.projectId,
+        coworkingContractId: invoices.coworkingContractId,
+        projectName: projects.name,
+        projectEntityId: entities.id,
+        projectEntityName: entities.name,
+        contractName: coworkingContracts.name,
+      })
+      .from(invoices)
+      .leftJoin(projects, eq(projects.id, invoices.projectId))
+      .leftJoin(entities, eq(entities.id, projects.entityId))
+      .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
+      .where(
+        and(
+          inArray(invoices.kind, SEGMENT_KINDS[segment]),
+          // Exclut les factures coworking facturées par G&O des KPIs.
+          or(ne(invoices.billedBy, "g_and_o"), isNull(invoices.billedBy)),
+        ),
       ),
-    );
-
-  // Devis signés (quote + accepted), pour total "Montant signé" et détail
-  // par projet. Filtrage par période = date d'émission de la quote.
-  // En mode Cowork, on n'a pas de devis : on saute la requête.
-  const allSigned = showSigned
-    ? await conn
-        .select({
-          invoiceId: invoices.id,
-          projectId: invoices.projectId,
-          projectName: projects.name,
-          entityId: entities.id,
-          entityName: entities.name,
-          amountHt: invoices.amountHt,
-          dougsTotalHt: invoices.dougsTotalHt,
-          reference: invoices.reference,
-          dougsReference: invoices.dougsReference,
-          issuedAt: invoices.invoicedAt,
-          dougsIssuedAt: invoices.dougsIssuedAt,
-        })
-        .from(invoices)
-        .leftJoin(projects, eq(projects.id, invoices.projectId))
-        .leftJoin(entities, eq(entities.id, projects.entityId))
-        .where(and(eq(invoices.kind, "quote"), eq(invoices.status, "accepted")))
-    : [];
+    // Devis signés (quote + accepted), pour total "Montant signé" et détail
+    // par projet. Filtrage par période = date d'émission de la quote.
+    // En mode Cowork, on n'a pas de devis : on saute la requête.
+    showSigned
+      ? conn
+          .select({
+            invoiceId: invoices.id,
+            projectId: invoices.projectId,
+            projectName: projects.name,
+            entityId: entities.id,
+            entityName: entities.name,
+            amountHt: invoices.amountHt,
+            dougsTotalHt: invoices.dougsTotalHt,
+            reference: invoices.reference,
+            dougsReference: invoices.dougsReference,
+            issuedAt: invoices.invoicedAt,
+            dougsIssuedAt: invoices.dougsIssuedAt,
+          })
+          .from(invoices)
+          .leftJoin(projects, eq(projects.id, invoices.projectId))
+          .leftJoin(entities, eq(entities.id, projects.entityId))
+          .where(and(eq(invoices.kind, "quote"), eq(invoices.status, "accepted")))
+      : Promise.resolve([]),
+  ]);
 
   const signedQuotes =
     win.start === null && win.end === null

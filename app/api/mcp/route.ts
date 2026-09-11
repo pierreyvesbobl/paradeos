@@ -14,6 +14,7 @@
  * permet à un client de se connecter en ne connaissant que l'URL.
  */
 import { getAppUrl } from "@/lib/app-url";
+import { getUserRole } from "@/lib/auth/admin";
 import { CORS_HEADERS, corsPreflight } from "@/lib/oauth/http";
 import {
   type McpAuth,
@@ -399,6 +400,13 @@ export async function POST(req: NextRequest) {
         if (tool.write) {
           const denied = requireScope(auth, "mcp:write");
           if (denied) return authErrorResponse(denied);
+          // Un compte `viewer` reste en lecture seule même avec un token
+          // porteur du scope write (même règle que les Server Actions).
+          if ((await getUserRole(auth.userId)) === "viewer") {
+            return rpcJson(
+              rpcError(body.id, -32000, "Compte en lecture seule : modification refusée."),
+            );
+          }
         }
         const parsed = tool.schema.parse(rawArgs ?? {});
         const result = await tool.handler(parsed, ctx);

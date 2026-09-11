@@ -127,28 +127,32 @@ export const deleteContact = action(deleteContactSchema, async ({ input }) => {
  * jointes. L'objectif est d'éviter d'embarquer le payload complet de la
  * fiche dans chaque chip de la page projet.
  */
-export const getContactPreview = action(z.object({ id: z.string().uuid() }), async ({ input }) => {
-  const conn = await db();
-  const [row] = await conn
-    .select({
-      id: contacts.id,
-      firstName: contacts.firstName,
-      lastName: contacts.lastName,
-      email: contacts.email,
-      phone: contacts.phone,
-      jobTitle: contacts.jobTitle,
-      linkedinUrl: contacts.linkedinUrl,
-      notes: contacts.notes,
-      entityId: entities.id,
-      entityName: entities.name,
-    })
-    .from(contacts)
-    .leftJoin(entities, eq(contacts.entityId, entities.id))
-    .where(eq(contacts.id, input.id))
-    .limit(1);
-  if (!row) throw new Error("Contact introuvable.");
-  return row;
-});
+export const getContactPreview = action(
+  z.object({ id: z.string().uuid() }),
+  async ({ input }) => {
+    const conn = await db();
+    const [row] = await conn
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        email: contacts.email,
+        phone: contacts.phone,
+        jobTitle: contacts.jobTitle,
+        linkedinUrl: contacts.linkedinUrl,
+        notes: contacts.notes,
+        entityId: entities.id,
+        entityName: entities.name,
+      })
+      .from(contacts)
+      .leftJoin(entities, eq(contacts.entityId, entities.id))
+      .where(eq(contacts.id, input.id))
+      .limit(1);
+    if (!row) throw new Error("Contact introuvable.");
+    return row;
+  },
+  { allowViewer: true },
+);
 
 export async function deleteContactAndRedirect(formData: FormData) {
   const id = formData.get("id");

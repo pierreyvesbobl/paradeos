@@ -3,12 +3,12 @@ import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { getAppUrl } from "@/lib/app-url";
+import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { db } from "@/lib/db/server";
 import { sendEmail } from "@/lib/email/client";
 import { renderDailyDigestEmail } from "@/lib/email/templates";
 import { getUserEmails } from "@/lib/email/users";
 import { and, asc, eq, gte, isNotNull, lt, ne, sql } from "drizzle-orm";
-import { NextResponse } from "next/server";
 
 /**
  * Digest quotidien — 1 e-mail par user contenant :
@@ -20,12 +20,11 @@ import { NextResponse } from "next/server";
  * automatiquement ce header si CRON_SECRET est défini en env. En dev,
  * tu peux l'invoquer à la main avec curl.
  */
+export const maxDuration = 60;
+
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const expected = process.env.CRON_SECRET;
-  if (!expected || auth !== `Bearer ${expected}`) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+  const unauthorized = cronUnauthorized(request);
+  if (unauthorized) return unauthorized;
 
   const appUrl = await getAppUrl();
   const conn = await db();
@@ -44,7 +43,7 @@ export async function GET(request: Request) {
     .where(ne(users.role, "viewer"));
 
   if (allUsers.length === 0) {
-    return NextResponse.json({ ok: true, sent: 0, skipped: 0 });
+    return cronResponse({ sent: 0, skipped: 0, failed: 0, errors: [] });
   }
 
   const emails = await getUserEmails(allUsers.map((u) => u.id));
@@ -52,6 +51,8 @@ export async function GET(request: Request) {
   // 2) Pour chaque user, agrège relances et tâches en retard.
   let sent = 0;
   let skipped = 0;
+  let failed = 0;
+  const errors: string[] = [];
 
   for (const user of allUsers) {
     const email = emails[user.id];
@@ -131,9 +132,13 @@ export async function GET(request: Request) {
       tags: [{ name: "type", value: "daily-digest" }],
     });
 
-    if (result.ok) sent++;
-    else skipped++;
+    if (result.ok) {
+      sent++;
+    } else {
+      failed++;
+      errors.push(`${user.id}: envoi échoué`);
+    }
   }
 
-  return NextResponse.json({ ok: true, sent, skipped });
+  return cronResponse({ sent, skipped, failed, errors });
 }

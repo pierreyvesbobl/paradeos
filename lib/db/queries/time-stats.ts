@@ -44,14 +44,9 @@ export async function getProjectTimeStats(projectId: string): Promise<{
 }> {
   const conn = await db();
 
-  const [totalsRows, byTask, byUser] = await Promise.all([
-    conn
-      .select({
-        actualMinutes: sumActualMin,
-        plannedMinutes: sumPlannedMin,
-      })
-      .from(timeEntries)
-      .where(eq(timeEntries.projectId, projectId)),
+  // Les totaux se déduisent du breakdown par user : deux requêtes au
+  // lieu de trois (la page projet est la plus chargée en concurrence).
+  const [byTask, byUser] = await Promise.all([
     conn
       .select({
         taskId: tasks.id,
@@ -78,11 +73,15 @@ export async function getProjectTimeStats(projectId: string): Promise<{
       .orderBy(desc(sumActualMin)),
   ]);
 
-  return {
-    totals: totalsRows[0] ?? { actualMinutes: 0, plannedMinutes: 0 },
-    byTask,
-    byUser,
-  };
+  const totals = byUser.reduce<TimeBreakdown>(
+    (acc, u) => {
+      acc.actualMinutes += u.actualMinutes;
+      acc.plannedMinutes += u.plannedMinutes;
+      return acc;
+    },
+    { actualMinutes: 0, plannedMinutes: 0 },
+  );
+  return { totals, byTask, byUser };
 }
 
 /** Stats pour une tâche : totaux + entries détaillées. */
@@ -100,14 +99,7 @@ export async function getTaskTimeStats(taskId: string): Promise<{
 }> {
   const conn = await db();
 
-  const [totalsRow] = await conn
-    .select({
-      actualMinutes: sumActualMin,
-      plannedMinutes: sumPlannedMin,
-    })
-    .from(timeEntries)
-    .where(eq(timeEntries.taskId, taskId));
-
+  // Le total se déduit des entrées : une seule requête.
   const entries = await conn
     .select({
       id: timeEntries.id,
@@ -123,54 +115,61 @@ export async function getTaskTimeStats(taskId: string): Promise<{
     .where(eq(timeEntries.taskId, taskId))
     .orderBy(desc(timeEntries.startAt));
 
-  return {
-    totals: totalsRow ?? { actualMinutes: 0, plannedMinutes: 0 },
-    entries,
-  };
+  const totals = entries.reduce<TimeBreakdown>(
+    (acc, e) => {
+      if (e.kind === "actual") acc.actualMinutes += e.minutes;
+      else acc.plannedMinutes += e.minutes;
+      return acc;
+    },
+    { actualMinutes: 0, plannedMinutes: 0 },
+  );
+  return { totals, entries };
 }
 
 /** Récap global : breakdown par projet sur une période donnée [start, end). */
 export async function getGlobalTimeStats(start: Date, end: Date) {
   const conn = await db();
+  const inRange = and(gte(timeEntries.startAt, start), lt(timeEntries.startAt, end));
 
-  const [totalsRow] = await conn
-    .select({
-      actualMinutes: sumActualMin,
-      plannedMinutes: sumPlannedMin,
-    })
-    .from(timeEntries)
-    .where(and(gte(timeEntries.startAt, start), lt(timeEntries.startAt, end)));
-
-  const byProject: ByProjectRow[] = await conn
-    .select({
-      projectId: projects.id,
-      projectName: projects.name,
-      projectKind: projects.kind,
-      actualMinutes: sumActualMin,
-      plannedMinutes: sumPlannedMin,
-    })
-    .from(timeEntries)
-    .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .where(and(gte(timeEntries.startAt, start), lt(timeEntries.startAt, end)))
-    .groupBy(projects.id, projects.name, projects.kind)
-    .orderBy(desc(sumActualMin));
-
-  const byUser: ByUserRow[] = await conn
-    .select({
-      userId: users.id,
-      userName: users.fullName,
-      actualMinutes: sumActualMin,
-      plannedMinutes: sumPlannedMin,
-    })
-    .from(timeEntries)
-    .innerJoin(users, eq(timeEntries.userId, users.id))
-    .where(and(gte(timeEntries.startAt, start), lt(timeEntries.startAt, end)))
-    .groupBy(users.id, users.fullName)
-    .orderBy(desc(sumActualMin));
+  // Trois agrégats indépendants sur la même fenêtre : en parallèle.
+  const [totalsRows, byProject, byUser] = await Promise.all([
+    conn
+      .select({
+        actualMinutes: sumActualMin,
+        plannedMinutes: sumPlannedMin,
+      })
+      .from(timeEntries)
+      .where(inRange),
+    conn
+      .select({
+        projectId: projects.id,
+        projectName: projects.name,
+        projectKind: projects.kind,
+        actualMinutes: sumActualMin,
+        plannedMinutes: sumPlannedMin,
+      })
+      .from(timeEntries)
+      .leftJoin(projects, eq(timeEntries.projectId, projects.id))
+      .where(inRange)
+      .groupBy(projects.id, projects.name, projects.kind)
+      .orderBy(desc(sumActualMin)),
+    conn
+      .select({
+        userId: users.id,
+        userName: users.fullName,
+        actualMinutes: sumActualMin,
+        plannedMinutes: sumPlannedMin,
+      })
+      .from(timeEntries)
+      .innerJoin(users, eq(timeEntries.userId, users.id))
+      .where(inRange)
+      .groupBy(users.id, users.fullName)
+      .orderBy(desc(sumActualMin)),
+  ]);
 
   return {
-    totals: totalsRow ?? { actualMinutes: 0, plannedMinutes: 0 },
-    byProject,
-    byUser,
+    totals: totalsRows[0] ?? { actualMinutes: 0, plannedMinutes: 0 },
+    byProject: byProject as ByProjectRow[],
+    byUser: byUser as ByUserRow[],
   };
 }

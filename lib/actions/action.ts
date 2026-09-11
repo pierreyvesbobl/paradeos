@@ -1,3 +1,4 @@
+import { requireWriter } from "@/lib/auth/admin";
 import { getUser } from "@/lib/auth/server";
 import type { User } from "@supabase/supabase-js";
 import type { z } from "zod";
@@ -21,6 +22,12 @@ type Handler<TInput, TOutput> = (args: { input: TInput; user: User }) => Promise
 type Options = {
   /** Si false, l'action est appelable sans user authentifié. */
   requireAuth?: boolean;
+  /**
+   * Par défaut, un `viewer` (lecture seule) est refusé : la quasi-totalité
+   * des actions sont des mutations. Mettre `true` pour les actions
+   * personnelles ou de lecture (profil, préférences, prévisualisations).
+   */
+  allowViewer?: boolean;
 };
 
 /**
@@ -37,6 +44,7 @@ export function action<TSchema extends z.ZodTypeAny, TOutput>(
   options: Options = {},
 ) {
   const requireAuth = options.requireAuth ?? true;
+  const allowViewer = options.allowViewer ?? false;
 
   return async (rawInput: unknown): Promise<ActionResult<TOutput>> => {
     const parsed = schema.safeParse(rawInput);
@@ -54,6 +62,14 @@ export function action<TSchema extends z.ZodTypeAny, TOutput>(
       user = await getUser();
       if (!user) {
         return { ok: false, code: "unauthorized", message: "Authentification requise." };
+      }
+      if (!allowViewer) {
+        try {
+          await requireWriter(user);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Modification refusée.";
+          return { ok: false, code: "unauthorized", message };
+        }
       }
     }
 

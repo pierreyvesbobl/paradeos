@@ -38,6 +38,9 @@ async function getGmailUserId(): Promise<string | null> {
 export const triggerGmailSync = action(z.object({}), async ({ user }) => {
   const targetUserId = (await getGmailUserId()) ?? user.id;
   const result = await syncIncremental(targetUserId);
+  if (result.skipped === "already_running") {
+    throw new Error("Une synchronisation est déjà en cours, réessaie dans quelques minutes.");
+  }
   revalidatePath("/emails");
   revalidatePath("/settings/integrations");
   return {
@@ -137,7 +140,7 @@ export const dismissThreadLink = action(
     });
     revalidatePath("/emails");
     revalidatePath(`/emails/${input.threadId}`);
-    revalidatePath("/entites");
+    revalidatePath("/crm/entites");
     return { ok: true as const };
   },
 );
@@ -153,7 +156,7 @@ export const pullGmailLabels = action(z.object({}), async ({ user }) => {
   const r = await pullLabeledThreadsFromGmail(targetUserId);
   revalidatePath("/emails");
   revalidatePath("/projets");
-  revalidatePath("/entites");
+  revalidatePath("/crm/entites");
   revalidatePath("/settings/integrations");
   return r;
 });

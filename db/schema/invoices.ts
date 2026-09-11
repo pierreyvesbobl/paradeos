@@ -8,6 +8,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { coworkingContracts } from "./coworking";
@@ -138,6 +139,10 @@ export const invoices = pgTable(
     cancelsIdx: index("invoices_cancels_idx").on(t.cancelsInvoiceId),
     dueDateIdx: index("invoices_due_date_idx").on(t.dueDate).where(sql`status = 'sent'`),
     assignedToIdx: index("invoices_assigned_to_idx").on(t.assignedTo).where(sql`status = 'sent'`),
+    /** Une facture coworking par contrat et par période (cron vs bouton). */
+    coworkingPeriodUidx: uniqueIndex("invoices_coworking_period_uidx")
+      .on(t.coworkingContractId, t.periodStart)
+      .where(sql`kind = 'coworking' and coworking_contract_id is not null`),
   }),
 );
 

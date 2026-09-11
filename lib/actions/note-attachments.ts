@@ -7,7 +7,6 @@ import { db } from "@/lib/db/server";
 import {
   attachToNoteSchema,
   deleteAttachmentSchema,
-  getDownloadUrlSchema,
   signedUrlSchema,
 } from "@/lib/schemas/note-attachments";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
@@ -42,6 +41,13 @@ export const attachToNote = action(attachToNoteSchema, async ({ input, user }) =
     .limit(1);
 
   if (!note) throw new Error("Note introuvable.");
+
+  // Le chemin doit être celui minté par `signedUploadUrl` pour CETTE note.
+  // Sans ce contrôle, on pourrait enregistrer un pointeur vers le fichier
+  // d'une autre note puis le lire « légitimement » via l'UI.
+  if (!isPathOfNote(input.storagePath, input.noteId)) {
+    throw new Error("Chemin de fichier invalide pour cette note.");
+  }
 
   await conn.insert(noteAttachments).values({
     noteId: input.noteId,
@@ -104,16 +110,12 @@ export const deleteAttachment = action(deleteAttachmentSchema, async ({ input })
   return { ok: true as const };
 });
 
-/**
- * URL signée pour download — valable 5 minutes. Appelée côté client
- * quand l'utilisateur clique sur un lien de pièce jointe.
- */
-export const getDownloadUrl = action(getDownloadUrlSchema, async ({ input }) => {
-  const sb = admin();
-  const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(input.storagePath, 300); // 5 min
-  if (error || !data) throw new Error(error?.message ?? "Échec génération URL.");
-  return { url: data.signedUrl };
-});
+/** `<note_id>/<uuid>-<fichier>` sans segment `..` ni chemin absolu. */
+function isPathOfNote(storagePath: string, noteId: string): boolean {
+  if (!storagePath.startsWith(`${noteId}/`)) return false;
+  const rest = storagePath.slice(noteId.length + 1);
+  return rest.length > 0 && !rest.includes("/") && !rest.includes("..");
+}
 
 function sanitizeFileName(name: string): string {
   return name

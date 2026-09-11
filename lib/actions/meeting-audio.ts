@@ -60,6 +60,16 @@ export const attachAudio = action(attachAudioSchema, async ({ input }) => {
     .limit(1);
   if (!meeting) throw new Error("Meeting introuvable.");
 
+  // Le chemin doit être celui minté par `signedAudioUploadUrl` pour CE
+  // meeting : sinon on pourrait faire transcrire (Whisper, payant) un
+  // fichier arbitraire du bucket, ou l'audio d'un autre meeting.
+  const rest = input.storagePath.startsWith(`${input.meetingId}/`)
+    ? input.storagePath.slice(input.meetingId.length + 1)
+    : "";
+  if (rest.length === 0 || rest.includes("/") || rest.includes("..")) {
+    throw new Error("Chemin de fichier invalide pour ce meeting.");
+  }
+
   // Si un audio précédent existait, on supprime le fichier en Storage
   // pour ne pas laisser d'orphelins. La row meeting elle-même est juste
   // mise à jour (pas supprimée).

@@ -131,7 +131,7 @@ export const decideLinkedinConnection = action(decideSchema, async ({ input, use
     .where(eq(linkedinConnections.id, row.id));
 
   revalidatePath("/inbox");
-  revalidatePath("/contacts");
+  revalidatePath("/crm/contacts");
   return { status: "created" as const, contactId: created.id };
 });
 

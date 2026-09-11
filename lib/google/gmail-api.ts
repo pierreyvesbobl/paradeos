@@ -1,6 +1,6 @@
 import "server-only";
 
-import { fetchWithTimeout } from "@/lib/net/fetch-with-timeout";
+import { fetchWithRetry } from "@/lib/net/fetch-with-retry";
 
 /**
  * Wrappers fins autour de Gmail API v1 — fetch direct, sans SDK
@@ -19,7 +19,7 @@ import { fetchWithTimeout } from "@/lib/net/fetch-with-timeout";
 const API_BASE = "https://gmail.googleapis.com/gmail/v1";
 
 async function gmailFetch<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
-  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
+  const res = await fetchWithRetry(`${API_BASE}${path}`, {
     ...init,
     headers: { ...init?.headers, authorization: `Bearer ${accessToken}` },
     cache: "no-store",

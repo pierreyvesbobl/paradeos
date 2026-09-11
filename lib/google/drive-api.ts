@@ -1,5 +1,6 @@
 import "server-only";
 
+import { fetchWithRetry } from "@/lib/net/fetch-with-retry";
 import { fetchWithTimeout } from "@/lib/net/fetch-with-timeout";
 
 /**
@@ -28,7 +29,7 @@ type DriveFile = {
 };
 
 async function driveFetch<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
-  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
+  const res = await fetchWithRetry(`${API_BASE}${path}`, {
     ...init,
     headers: {
       ...init?.headers,

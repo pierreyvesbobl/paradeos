@@ -31,6 +31,7 @@ export const createTimeEntry = action(createTimeEntrySchema, async ({ input, use
     .returning({ id: timeEntries.id });
 
   revalidatePath("/temps");
+  revalidatePath("/");
   if (input.projectId) revalidatePath(`/projets/${input.projectId}`);
   return { id: row?.id };
 });
@@ -53,6 +54,7 @@ export const updateTimeEntry = action(updateTimeEntrySchema, async ({ input, use
     .where(and(eq(timeEntries.id, input.id), eq(timeEntries.userId, user.id)));
 
   revalidatePath("/temps");
+  revalidatePath("/");
   if (input.projectId) revalidatePath(`/projets/${input.projectId}`);
   return { id: input.id };
 });
@@ -68,6 +70,7 @@ export const moveTimeEntry = action(moveTimeEntrySchema, async ({ input, user })
     })
     .where(and(eq(timeEntries.id, input.id), eq(timeEntries.userId, user.id)));
   revalidatePath("/temps");
+  revalidatePath("/");
   return { id: input.id };
 });
 
@@ -77,5 +80,6 @@ export const deleteTimeEntry = action(deleteTimeEntrySchema, async ({ input, use
     .delete(timeEntries)
     .where(and(eq(timeEntries.id, input.id), eq(timeEntries.userId, user.id)));
   revalidatePath("/temps");
+  revalidatePath("/");
   return { id: input.id };
 });

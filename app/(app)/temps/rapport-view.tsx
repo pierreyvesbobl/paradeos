@@ -60,8 +60,10 @@ export async function RapportView({ range, week }: { range?: Range; week?: strin
   const activeRange: Range = range && ["week", "month", "all"].includes(range) ? range : "week";
   const { start, end } = resolveRange(activeRange, week);
 
-  const stats = await getGlobalTimeStats(start, end);
-  const profitability = await getGlobalProfitability(start, end);
+  const [stats, profitability] = await Promise.all([
+    getGlobalTimeStats(start, end),
+    getGlobalProfitability(start, end),
+  ]);
   const totalRevenue = profitability.reduce((acc, p) => acc + p.revenueAmount, 0);
   const totalCost = profitability.reduce((acc, p) => acc + p.costAmount, 0);
   const totalMargin = totalRevenue - totalCost;

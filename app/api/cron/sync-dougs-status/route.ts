@@ -7,6 +7,7 @@
  */
 import { dougsSessions } from "@/db/schema/dougs";
 import { invoices } from "@/db/schema/invoices";
+import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { db } from "@/lib/db/server";
 import {
   DougsApiError,
@@ -20,10 +21,18 @@ import {
   pickDougsTtc,
   pickDougsVat,
 } from "@/lib/dougs/client";
-import { and, eq, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-export const maxDuration = 60;
+/**
+ * Traitement par lots : chaque run ne prend que les N devis et N
+ * factures les moins récemment synchronisés (`dougs_synced_at asc nulls
+ * first`), donc un run interrompu ne repart jamais de zéro et la queue
+ * finit toujours par être atteinte. 40 + 40 appels × (8 s timeout max
+ * + 150 ms) tiennent dans les 300 s même en cas de lenteur Dougs.
+ */
+const BATCH_SIZE = 40;
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 function toNumeric(n: number | null | undefined): string | null {
@@ -76,7 +85,15 @@ async function syncForUser(userId: string, stats: Stats): Promise<void> {
       dougsStatus: invoices.dougsStatus,
     })
     .from(invoices)
-    .where(and(eq(invoices.kind, "quote"), isNotNull(invoices.dougsQuoteId)));
+    .where(
+      and(
+        eq(invoices.kind, "quote"),
+        isNotNull(invoices.dougsQuoteId),
+        ne(invoices.dougsStatus, "REFUSED"),
+      ),
+    )
+    .orderBy(sql`${invoices.dougsSyncedAt} asc nulls first`)
+    .limit(BATCH_SIZE);
 
   for (const q of quotes) {
     if (!q.dougsQuoteId) continue;
@@ -120,7 +137,9 @@ async function syncForUser(userId: string, stats: Stats): Promise<void> {
       status: invoices.status,
     })
     .from(invoices)
-    .where(and(isNotNull(invoices.dougsInvoiceId), ne(invoices.status, "paid")));
+    .where(and(isNotNull(invoices.dougsInvoiceId), ne(invoices.status, "paid")))
+    .orderBy(sql`${invoices.dougsSyncedAt} asc nulls first`)
+    .limit(BATCH_SIZE);
 
   for (const r of inv) {
     if (!r.dougsInvoiceId) continue;
@@ -164,11 +183,8 @@ async function syncForUser(userId: string, stats: Stats): Promise<void> {
 }
 
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const expected = process.env.CRON_SECRET;
-  if (!expected || auth !== `Bearer ${expected}`) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+  const unauthorized = cronUnauthorized(request);
+  if (unauthorized) return unauthorized;
 
   const stats: Stats = {
     quotesChecked: 0,
@@ -180,11 +196,16 @@ export async function GET(request: Request) {
 
   try {
     const conn = await db();
-    const sessions = await conn.select({ userId: dougsSessions.userId }).from(dougsSessions);
-    for (const s of sessions) {
-      await syncForUser(s.userId, stats);
-    }
-    return NextResponse.json({ ok: true, ...stats });
+    // Les factures n'ont pas de propriétaire : une seule session Dougs
+    // (la plus récente) sert à tout synchroniser. Boucler sur toutes les
+    // sessions interrogerait N fois les mêmes factures.
+    const [session] = await conn
+      .select({ userId: dougsSessions.userId })
+      .from(dougsSessions)
+      .orderBy(desc(dougsSessions.updatedAt))
+      .limit(1);
+    if (session) await syncForUser(session.userId, stats);
+    return cronResponse({ ...stats, failed: stats.errors.length });
   } catch (err) {
     console.error("[cron sync-dougs-status]", err);
     return NextResponse.json(

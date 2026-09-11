@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { projects } from "./projects";
 import { users } from "./users";
 
@@ -22,6 +22,10 @@ export const projectSecrets = pgTable(
     valueEnc: text("value_enc").notNull(),
     notesEnc: text("notes_enc"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    /** Trace des consultations en clair : qui, quand, combien de fois. */
+    revealCount: integer("reveal_count").notNull().default(0),
+    lastRevealedAt: timestamp("last_revealed_at", { withTimezone: true }),
+    lastRevealedBy: uuid("last_revealed_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },

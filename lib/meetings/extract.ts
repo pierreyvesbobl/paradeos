@@ -10,6 +10,14 @@ import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
+
+/**
+ * Borne du transcript envoyé au LLM (~30k tokens). Un enregistrement de
+ * deux heures dépasse 150k caractères ; sans borne, le coût par
+ * extraction est illimité. Même logique que MAX_BODY_CHARS_FOR_LLM
+ * côté email.
+ */
+const MAX_TRANSCRIPT_CHARS_FOR_LLM = 120_000;
 import { asc, desc, sql } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -408,11 +416,16 @@ export async function extractMeeting(
     },
   });
 
+  const boundedTranscript =
+    transcript.length > MAX_TRANSCRIPT_CHARS_FOR_LLM
+      ? `${transcript.slice(0, MAX_TRANSCRIPT_CHARS_FOR_LLM)}\n\n[transcript tronqué]`
+      : transcript;
   const { object } = await generateObject({
+    abortSignal: AbortSignal.timeout(120_000),
     model: openrouter(modelId),
     schema: extractionSchema,
     system: systemPrompt,
-    prompt: `Transcript :\n\n${transcript}`,
+    prompt: `Transcript :\n\n${boundedTranscript}`,
     temperature: 0.2,
   });
 

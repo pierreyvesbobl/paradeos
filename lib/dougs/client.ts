@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { dougsSessions } from "../../db/schema/dougs";
 import { db } from "../db/server";
+import { fetchWithRetry } from "../net/fetch-with-retry";
 import { fetchWithTimeout } from "../net/fetch-with-timeout";
 import { decryptCookie } from "./crypto";
 
@@ -69,7 +70,7 @@ async function dougsFetch(
     );
   }
   const path = pathTemplate.replace("{companyId}", session.companyId);
-  const res = await fetchWithTimeout(`${BASE}${path}`, {
+  const res = await fetchWithRetry(`${BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",

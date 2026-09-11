@@ -141,11 +141,13 @@ export async function exchangeCode(code: string): Promise<TokenExchangeResponse>
     redirect_uri: redirectUri,
     grant_type: "authorization_code",
   });
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetchWithTimeout(TOKEN_URL, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body,
     cache: "no-store",
+    timeoutMs: 8000,
+    label: "Google OAuth exchangeCode",
   });
   if (!res.ok) {
     const text = await res.text();

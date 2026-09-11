@@ -16,7 +16,11 @@ const saveViewPrefSchema = z.object({
  * Persiste la querystring courante (filtres, tris, recherche) pour
  * l'utilisateur connecté. Appelée en debounce 500ms côté client.
  */
-export const saveViewPref = action(saveViewPrefSchema, async ({ input, user }) => {
-  await setViewPref(user.id, input.pageKey, input.params);
-  return { ok: true as const };
-});
+export const saveViewPref = action(
+  saveViewPrefSchema,
+  async ({ input, user }) => {
+    await setViewPref(user.id, input.pageKey, input.params);
+    return { ok: true as const };
+  },
+  { allowViewer: true },
+);

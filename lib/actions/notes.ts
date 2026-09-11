@@ -9,6 +9,7 @@ import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { action } from "@/lib/actions/action";
 import { getAppUrl } from "@/lib/app-url";
+import { getUserRole } from "@/lib/auth/admin";
 import { db } from "@/lib/db/server";
 import { sendEmail } from "@/lib/email/client";
 import { renderMentionEmail } from "@/lib/email/templates";
@@ -206,6 +207,7 @@ export const createNote = action(createNoteSchema, async ({ input, user }) => {
 
 export const updateNote = action(updateNoteSchema, async ({ input, user }) => {
   const conn = await db();
+  await requireNoteAuthorOrAdmin(conn, input.id, user);
   await conn
     .update(notes)
     .set({
@@ -230,20 +232,25 @@ export const updateNote = action(updateNoteSchema, async ({ input, user }) => {
   return { id: input.id };
 });
 
-export const markAllMyMentionsRead = action(markAllMyMentionsReadSchema, async ({ user }) => {
-  const conn = await db();
-  await conn
-    .update(mentions)
-    .set({ readAt: new Date() })
-    .where(
-      and(eq(mentions.userId, user.id), isNull(mentions.readAt), ne(mentions.authorId, user.id)),
-    );
-  revalidatePath("/notes");
-  return { ok: true as const };
-});
+export const markAllMyMentionsRead = action(
+  markAllMyMentionsReadSchema,
+  async ({ user }) => {
+    const conn = await db();
+    await conn
+      .update(mentions)
+      .set({ readAt: new Date() })
+      .where(
+        and(eq(mentions.userId, user.id), isNull(mentions.readAt), ne(mentions.authorId, user.id)),
+      );
+    revalidatePath("/notes");
+    return { ok: true as const };
+  },
+  { allowViewer: true },
+);
 
-export const deleteNote = action(deleteNoteSchema, async ({ input }) => {
+export const deleteNote = action(deleteNoteSchema, async ({ input, user }) => {
   const conn = await db();
+  await requireNoteAuthorOrAdmin(conn, input.id, user);
   const [row] = await conn
     .select({ subjectType: notes.subjectType, subjectId: notes.subjectId })
     .from(notes)
@@ -254,3 +261,24 @@ export const deleteNote = action(deleteNoteSchema, async ({ input }) => {
   revalidateForSubject(row?.subjectType, row?.subjectId);
   return { id: input.id };
 });
+
+/**
+ * Une note est signée par son auteur : seul lui (ou un admin) peut la
+ * réécrire ou la supprimer. Les autres membres la lisent et y répondent
+ * par mention.
+ */
+async function requireNoteAuthorOrAdmin(
+  conn: Awaited<ReturnType<typeof db>>,
+  noteId: string,
+  user: { id: string },
+): Promise<void> {
+  const [row] = await conn
+    .select({ authorId: notes.authorId })
+    .from(notes)
+    .where(eq(notes.id, noteId))
+    .limit(1);
+  if (!row) throw new Error("Note introuvable.");
+  if (row.authorId === user.id) return;
+  const role = await getUserRole(user.id);
+  if (role !== "admin") throw new Error("Seul l'auteur de la note peut la modifier.");
+}
