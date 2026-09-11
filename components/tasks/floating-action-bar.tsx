@@ -1,5 +1,6 @@
+"use client";
+
 import { CalendarBlank, CheckCircle, Trash, UserPlus, X } from "@phosphor-icons/react";
-("use client");
 
 type Props = {
   count: number;
