@@ -12,16 +12,23 @@ describe("looksLikeInvoiceMessage", () => {
     "Your receipt from OpenRouter, Inc #2064-7551",
     "Votre justificatif d'achat 0116926013888",
     "Quittance contrat d'assurance Stello",
+    // Paddle : le sujet ne nomme pas le document, la facture est en PJ.
+    "Payment confirmed",
+    "Paiement reçu",
+    "Confirmation de commande",
   ])("détecte le sujet « %s »", (subject) => {
     expect(looksLikeInvoiceMessage(message({ subject }))).toBe(true);
   });
 
-  it.each(["Re: bien reçu, merci", "Reçu 5 sur 5", "Point migration + quelques demandes"])(
-    "ignore le sujet « %s »",
-    (subject) => {
-      expect(looksLikeInvoiceMessage(message({ subject }))).toBe(false);
-    },
-  );
+  it.each([
+    "Re: bien reçu, merci",
+    "Reçu 5 sur 5",
+    "Point migration + quelques demandes",
+    "Mettre à jour votre payment method",
+    "Peux-tu confirmer le paiement de l'acompte ?",
+  ])("ignore le sujet « %s »", (subject) => {
+    expect(looksLikeInvoiceMessage(message({ subject }))).toBe(false);
+  });
 
   it.each(["invoice+statements@openrouter.ai", "facturation@promeom.fr", "billing@acme.io"])(
     "détecte l'expéditeur %s",

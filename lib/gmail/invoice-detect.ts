@@ -19,6 +19,18 @@ const INVOICE_SUBJECT_RE =
   /(factur|invoice|billing|receipt|quittance|justificatif|note de d[ée]bit|avis d'[ée]ch[ée]ance|re[çc]u de paiement|votre re[çc]u)/i;
 
 /**
+ * Confirmations de paiement dont le sujet ne nomme jamais le document :
+ * Paddle (« Payment confirmed »), les revendeurs SaaS… Le justificatif
+ * est bien là, en pièce jointe.
+ *
+ * Le verbe de paiement doit être au participe passé — « payment
+ * confirmed », pas « payment method » ni « confirmer le paiement » d'un
+ * échange en cours. Un faux positif ne coûte qu'un `format=full` de plus.
+ */
+const PAYMENT_SUBJECT_RE =
+  /(payment (confirmed|received|successful|succeeded|complete)|paiement (confirm[ée]|re[çc]u|accept[ée]|valid[ée])|confirmation de (paiement|commande))/i;
+
+/**
  * Boîtes d'envoi dédiées à la facturation : `invoice+statements@` (Stripe),
  * `billing@`, `facturation@`… Couvre les sujets qui ne disent rien
  * (« Your Acme payment », « Document disponible »).
@@ -39,7 +51,11 @@ export function looksLikeInvoiceMessage(args: {
   /** Noms des libellés Gmail du message (pas les ids). */
   labelNames: string[];
 }): boolean {
-  if (args.subject && INVOICE_SUBJECT_RE.test(args.subject)) return true;
+  if (
+    args.subject &&
+    (INVOICE_SUBJECT_RE.test(args.subject) || PAYMENT_SUBJECT_RE.test(args.subject))
+  )
+    return true;
   const localPart = args.fromEmail?.split("@")[0] ?? "";
   if (localPart && INVOICE_SENDER_RE.test(localPart)) return true;
   return args.labelNames.some((name) => INVOICE_LABEL_RE.test(name.split("/").pop()?.trim() ?? ""));

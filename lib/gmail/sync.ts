@@ -52,6 +52,16 @@ const MAX_INVOICE_FILINGS_PER_RUN = 5;
  * fenêtre du bootstrap, plafonnés par run (cf. `recoverMissedInvoices`).
  */
 const INVOICE_RECOVERY_QUERY = "newer_than:90d has:attachment filename:pdf -in:spam -in:trash";
+/**
+ * Seconde passe de rattrapage : les PJ dont le NOM dit facture, quel que
+ * soit le sujet du mail. Paddle envoie « Payment confirmed » avec
+ * `invoice_5475-94177_DataForSEO.pdf` en pièce jointe — le nom du fichier
+ * est le seul signal, et il ne se lit sur aucun message `format=metadata`.
+ * Ces mails court-circuitent donc `looksLikeInvoiceMessage`, que leur
+ * sujet muet ferait échouer.
+ */
+const INVOICE_FILENAME_QUERY =
+  "newer_than:90d -in:spam -in:trash {filename:invoice filename:facture filename:receipt filename:quittance}";
 const MAX_INVOICE_RECOVERIES_PER_RUN = 15;
 
 function sleep(ms: number) {
@@ -245,7 +255,18 @@ async function recoverMissedInvoices(ctx: IngestContext): Promise<void> {
     q: INVOICE_RECOVERY_QUERY,
     maxResults: 100,
   });
-  const ids = (page.messages ?? []).map((m) => m.id);
+  await sleep(SLEEP_MS_BETWEEN_CALLS);
+  const named = await listMessages(ctx.accessToken, {
+    q: INVOICE_FILENAME_QUERY,
+    maxResults: 100,
+  });
+  // Les PJ nommées « facture » passent devant : le plafond par run ne doit
+  // pas les faire attendre derrière le balayage large.
+  const trusted = new Set((named.messages ?? []).map((m) => m.id));
+  const ids = [
+    ...trusted,
+    ...(page.messages ?? []).map((m) => m.id).filter((id) => !trusted.has(id)),
+  ];
   if (ids.length === 0) return;
 
   const conn = await db();
@@ -280,6 +301,7 @@ async function recoverMissedInvoices(ctx: IngestContext): Promise<void> {
     if (row && withFiling.has(row.id)) continue;
     if (
       row &&
+      !trusted.has(id) &&
       !looksLikeInvoiceMessage({
         subject: row.subject,
         fromEmail: row.fromEmail,
