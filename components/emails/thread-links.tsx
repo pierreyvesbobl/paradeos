@@ -3,7 +3,6 @@
 import { dismissThreadLink } from "@/lib/actions/gmail";
 import { Buildings, Sparkle, User, X } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
@@ -40,7 +39,6 @@ function originLabel(source: string, manuallyOverridden: boolean): string {
  * naît d'un signal ou d'une proposition validée, jamais d'une saisie.
  */
 export function ThreadLinks({ threadId, links }: { threadId: string; links: ThreadLinkItem[] }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   if (links.length === 0) return null;
@@ -53,7 +51,6 @@ export function ThreadLinks({ threadId, links }: { threadId: string; links: Thre
         return;
       }
       toast.success(`${name} détaché de ce fil.`);
-      router.refresh();
     });
   }
 

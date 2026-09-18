@@ -10,7 +10,6 @@ import {
   X,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
@@ -34,7 +33,6 @@ type RowProps = {
 
 /** Ligne de la section « À valider » : pending, validée ou invalidée. */
 export function ProposalRow({ proposal, options, adapter, onChange }: RowProps) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const payload = proposal.payload as Record<string, unknown>;
 
@@ -79,7 +77,6 @@ export function ProposalRow({ proposal, options, adapter, onChange }: RowProps) 
       });
       setEditing(false);
       toast.success(action === "accept" ? adapter.labels.acceptToast(proposal.kind) : "Rejeté.");
-      router.refresh();
     });
   }
 
@@ -93,7 +90,6 @@ export function ProposalRow({ proposal, options, adapter, onChange }: RowProps) 
       onChange({ ...proposal, payload: { ...payload, ...next } });
       setEditing(false);
       toast.success("Mise à jour enregistrée.");
-      router.refresh();
     });
   }
 
@@ -106,7 +102,6 @@ export function ProposalRow({ proposal, options, adapter, onChange }: RowProps) 
       }
       onChange({ ...proposal, status: "pending", decidedAt: null, decidedBy: null });
       toast.success("Remis en attente.");
-      router.refresh();
     });
   }
 
@@ -270,7 +265,6 @@ export function ProposalRow({ proposal, options, adapter, onChange }: RowProps) 
  * dépend de la source.
  */
 export function AlreadyInDbRow({ proposal, adapter, onChange }: Omit<RowProps, "options">) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const payload = proposal.payload as Record<string, unknown>;
   const title = summaryFor(proposal, payload);
@@ -287,7 +281,6 @@ export function AlreadyInDbRow({ proposal, adapter, onChange }: Omit<RowProps, "
       }
       onChange({ ...proposal, status: "accepted", decidedAt: new Date() });
       toast.success(adapter.labels.acceptToast(proposal.kind));
-      router.refresh();
     });
   }
 
@@ -299,7 +292,6 @@ export function AlreadyInDbRow({ proposal, adapter, onChange }: Omit<RowProps, "
         return;
       }
       onChange({ ...proposal, status: "rejected", decidedAt: new Date() });
-      router.refresh();
     });
   }
 
@@ -322,7 +314,6 @@ export function AlreadyInDbRow({ proposal, adapter, onChange }: Omit<RowProps, "
         decidedBy: null,
       });
       toast.success("Match retiré. Remis dans 'À valider'.");
-      router.refresh();
     });
   }
 

@@ -18,7 +18,6 @@ import type { EmailProposal } from "@/db/schema/gmail";
 import { acceptEmailProposal, rejectEmailProposal } from "@/lib/actions/email-proposals";
 import type { ExtractionMeta } from "@/lib/gmail/queries";
 import { ArrowBendUpLeft, PaperPlaneTilt, Sparkle, X } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -181,7 +180,6 @@ function DraftReplySection({
   proposal: EmailProposalWithMatches;
   onDecided: () => void;
 }) {
-  const router = useRouter();
   const payload = proposal.payload as Record<string, unknown>;
   const [subject, setSubject] = useState(String(payload.subject ?? ""));
   const [body, setBody] = useState(String(payload.body ?? ""));
@@ -199,7 +197,6 @@ function DraftReplySection({
       }
       toast.success("Brouillon poussé dans Gmail.");
       onDecided();
-      router.refresh();
     });
   }
 
@@ -211,7 +208,6 @@ function DraftReplySection({
         return;
       }
       onDecided();
-      router.refresh();
     });
   }
 

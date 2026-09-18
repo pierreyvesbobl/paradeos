@@ -17,7 +17,6 @@ import {
   X,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
@@ -118,7 +117,6 @@ export function ProposalCard({ message, proposals }: Props) {
 }
 
 function ProposalRow({ proposal: p }: { proposal: Proposal }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const Icon = KIND_ICON[p.kind];
 
@@ -142,7 +140,6 @@ function ProposalRow({ proposal: p }: { proposal: Proposal }) {
                   ? "Brouillon Gmail créé."
                   : "Projet créé.",
       );
-      router.refresh();
     });
   }
 
@@ -153,7 +150,6 @@ function ProposalRow({ proposal: p }: { proposal: Proposal }) {
         toast.error(res.message);
         return;
       }
-      router.refresh();
     });
   }
 

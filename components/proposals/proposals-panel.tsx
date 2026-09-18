@@ -19,7 +19,6 @@
  */
 
 import { Check, CheckCircle, X } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { orderProposals } from "./helpers";
@@ -40,7 +39,7 @@ export function ProposalsPanel({
   const adapter = PROPOSAL_SOURCES[source];
 
   // État local miroir — met à jour l'UI immédiatement sur
-  // accept/reject/restore/edit sans attendre le router.refresh().
+  // accept/reject/restore/edit sans attendre le re-render serveur.
   const [proposals, setProposals] = useState<Proposal[]>(serverProposals);
 
   // Resync quand le serveur revient avec des données fraîches.
@@ -165,7 +164,6 @@ function BulkDecideButtons({
   adapter: ProposalSourceAdapter;
   onMarkAll: (status: "accepted" | "rejected") => void;
 }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   function bulk(action: "accept" | "reject") {
@@ -181,7 +179,6 @@ function BulkDecideButtons({
       onMarkAll(action === "accept" ? "accepted" : "rejected");
       if (ok > 0) toast.success(`${ok} ${action === "accept" ? "validés" : "rejetés"}.`);
       if (fail > 0) toast.error(`${fail} échec(s).`);
-      router.refresh();
     });
   }
 

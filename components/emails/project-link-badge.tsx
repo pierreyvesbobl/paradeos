@@ -4,7 +4,6 @@ import { FkCombobox } from "@/components/inline/fk-combobox";
 import { setThreadProject } from "@/lib/actions/gmail";
 import { Briefcase, Check, Envelope, Hand, Sparkle, X } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -69,7 +68,6 @@ function toneFor(source: string, manuallyOverridden: boolean): SourceTone {
 }
 
 export function ProjectLinkBadge({ threadId, currentProject, projects }: Props) {
-  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -82,7 +80,6 @@ export function ProjectLinkBadge({ threadId, currentProject, projects }: Props) 
       }
       toast.success(nextId ? "Projet mis à jour." : "Projet détaché.");
       setEditing(false);
-      router.refresh();
     });
   }
 
