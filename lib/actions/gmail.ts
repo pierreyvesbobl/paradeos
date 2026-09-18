@@ -22,21 +22,33 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-async function getGmailUserId(): Promise<string | null> {
+/**
+ * Boîte Gmail sur laquelle agir. C'est TOUJOURS celle de l'utilisateur
+ * courant dès qu'il a connecté Gmail : les threads, les liaisons et la
+ * liste /emails sont scopés par `user_id`, donc agir sur la boîte d'un
+ * autre admin ne produit rien de visible pour l'appelant.
+ *
+ * Le repli sur un autre admin ne sert qu'au cas où l'appelant n'a pas
+ * (encore) connecté Gmail — il est ordonné par `created_at` pour être
+ * déterministe : sans tri, Postgres rend les lignes dans l'ordre qu'il
+ * veut et le « Sync now » pouvait viser une boîte au hasard.
+ */
+async function getGmailUserId(preferredUserId: string): Promise<string | null> {
   const conn = await db();
   const rows = await conn
     .select({ id: users.id, scopes: googleAccounts.scopes })
     .from(users)
     .innerJoin(googleAccounts, eq(googleAccounts.userId, users.id))
-    .where(eq(users.role, "admin"));
-  for (const r of rows) {
-    if (hasRequiredGmailScopes(r.scopes)) return r.id;
-  }
-  return null;
+    .where(eq(users.role, "admin"))
+    .orderBy(users.createdAt);
+
+  const eligible = rows.filter((r) => hasRequiredGmailScopes(r.scopes));
+  const own = eligible.find((r) => r.id === preferredUserId);
+  return own?.id ?? eligible[0]?.id ?? null;
 }
 
 export const triggerGmailSync = action(z.object({}), async ({ user }) => {
-  const targetUserId = (await getGmailUserId()) ?? user.id;
+  const targetUserId = (await getGmailUserId(user.id)) ?? user.id;
   const result = await syncIncremental(targetUserId);
   if (result.skipped === "already_running") {
     throw new Error("Une synchronisation est déjà en cours, réessaie dans quelques minutes.");
@@ -75,7 +87,7 @@ export const setThreadProject = action(
   }),
   async ({ input, user }) => {
     const conn = await db();
-    const targetUserId = (await getGmailUserId()) ?? user.id;
+    const targetUserId = (await getGmailUserId(user.id)) ?? user.id;
 
     // Invalide les liaisons projet existantes (push Gmail best-effort).
     await dismissThreadLinksOfKind({
@@ -130,7 +142,7 @@ export const dismissThreadLink = action(
     labelId: z.string().uuid(),
   }),
   async ({ input, user }) => {
-    const targetUserId = (await getGmailUserId()) ?? user.id;
+    const targetUserId = (await getGmailUserId(user.id)) ?? user.id;
     await unlinkThread({
       userId: targetUserId,
       threadIdLocal: input.threadId,
@@ -152,7 +164,7 @@ export const dismissThreadLink = action(
  * threads ayant reçu un nouveau message.
  */
 export const pullGmailLabels = action(z.object({}), async ({ user }) => {
-  const targetUserId = (await getGmailUserId()) ?? user.id;
+  const targetUserId = (await getGmailUserId(user.id)) ?? user.id;
   const r = await pullLabeledThreadsFromGmail(targetUserId);
   revalidatePath("/emails");
   revalidatePath("/projets");
@@ -172,7 +184,7 @@ export const pullGmailLabels = action(z.object({}), async ({ user }) => {
  *      liaison que l'utilisateur a invalidée.
  */
 export const rebuildAutoLinks = action(z.object({}), async ({ user }) => {
-  const targetUserId = (await getGmailUserId()) ?? user.id;
+  const targetUserId = (await getGmailUserId(user.id)) ?? user.id;
   const backfill = await backfillCrmLabels(targetUserId);
   const conn = await db();
   const { gmailThreads } = await import("@/db/schema/gmail");
@@ -201,7 +213,7 @@ export const rebuildAutoLinks = action(z.object({}), async ({ user }) => {
  * ou TRASH (utile une fois après le déploiement du filtrage à l'ingestion).
  */
 export const cleanupSpamAction = action(z.object({}), async ({ user }) => {
-  const targetUserId = (await getGmailUserId()) ?? user.id;
+  const targetUserId = (await getGmailUserId(user.id)) ?? user.id;
   const r = await cleanupSpamThreads(targetUserId);
   revalidatePath("/emails");
   revalidatePath("/settings/integrations");
@@ -209,7 +221,7 @@ export const cleanupSpamAction = action(z.object({}), async ({ user }) => {
 });
 
 export const purgeLocalGmail = action(z.object({}), async ({ user }) => {
-  const targetUserId = (await getGmailUserId()) ?? user.id;
+  const targetUserId = (await getGmailUserId(user.id)) ?? user.id;
   await purgeGmailData(targetUserId);
   const conn = await db();
   await conn.delete(gmailSyncState).where(eq(gmailSyncState.userId, targetUserId));
