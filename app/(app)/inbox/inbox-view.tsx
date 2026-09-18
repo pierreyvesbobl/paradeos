@@ -45,14 +45,68 @@ type FilterKey = "all" | InboxExtractionKind;
 
 export type ContactOption = { id: string; label: string; email: string | null };
 
+export type LinkOption = { id: string; label: string };
+
+/**
+ * Référentiels proposés par « Lier à un existant ». Une extraction IA
+ * propose souvent un record déjà en base sous un autre libellé (« chaîne
+ * YouTube IA » pour un projet qui porte un autre nom) : sans ce picker,
+ * valider crée un doublon et la seule issue est de rejeter puis saisir
+ * à la main.
+ */
+export type LinkTargetOptions = {
+  projects: LinkOption[];
+  entities: LinkOption[];
+  contacts: LinkOption[];
+  tasks: LinkOption[];
+};
+
+/** Référentiel à proposer selon le kind. `null` = pas de liaison possible. */
+function linkTargetsFor(
+  kind: InboxExtractionKind,
+  options: LinkTargetOptions,
+): { label: string; searchPlaceholder: string; options: LinkOption[] } | null {
+  switch (kind) {
+    case "project":
+    case "opportunity":
+      return {
+        label: "Lier à un projet existant",
+        searchPlaceholder: "Rechercher un projet…",
+        options: options.projects,
+      };
+    case "entity":
+      return {
+        label: "Lier à une entité existante",
+        searchPlaceholder: "Rechercher une entité…",
+        options: options.entities,
+      };
+    case "contact":
+      return {
+        label: "Lier à un contact existant",
+        searchPlaceholder: "Rechercher un contact…",
+        options: options.contacts,
+      };
+    case "task":
+      return {
+        label: "Lier à une tâche existante",
+        searchPlaceholder: "Rechercher une tâche…",
+        options: options.tasks,
+      };
+    default:
+      return null;
+  }
+}
+
 export function InboxView({
   items,
   coworkingInvoiceOptions,
   contactOptions,
+  linkOptions,
 }: {
   items: InboxItem[];
   coworkingInvoiceOptions: CoworkingInvoiceOption[];
   contactOptions: ContactOption[];
+  linkOptions: LinkTargetOptions;
 }) {
   const router = useRouter();
   const [kindFilter, setKindFilter] = useState<FilterKey>("all");
@@ -273,6 +327,7 @@ export function InboxView({
               isLast={i === visible.length - 1}
               coworkingInvoiceOptions={coworkingInvoiceOptions}
               contactOptions={contactOptions}
+              linkOptions={linkOptions}
               onDismiss={(id) => {
                 dismissLocally(id);
                 if (previewItem?.id === id) setPreviewItem(null);
@@ -304,6 +359,7 @@ function InboxRow({
   isLast,
   coworkingInvoiceOptions,
   contactOptions,
+  linkOptions,
   onDismiss,
   onOpenPreview,
 }: {
@@ -311,6 +367,7 @@ function InboxRow({
   isLast: boolean;
   coworkingInvoiceOptions: CoworkingInvoiceOption[];
   contactOptions: ContactOption[];
+  linkOptions: LinkTargetOptions;
   onDismiss: (id: string) => void;
   onOpenPreview: () => void;
 }) {
@@ -559,6 +616,7 @@ function InboxRow({
           disabled={pending}
           coworkingInvoiceOptions={coworkingInvoiceOptions}
           contactOptions={contactOptions}
+          linkOptions={linkOptions}
           onCancel={() => setEditing(false)}
           onSave={(overrides) => {
             setEditing(false);
@@ -719,6 +777,7 @@ function RowEditor({
   disabled,
   coworkingInvoiceOptions,
   contactOptions,
+  linkOptions,
   onSave,
   onCancel,
 }: {
@@ -726,6 +785,7 @@ function RowEditor({
   disabled: boolean;
   coworkingInvoiceOptions: CoworkingInvoiceOption[];
   contactOptions: ContactOption[];
+  linkOptions: LinkTargetOptions;
   onSave: (overrides: {
     payloadOverride?: Record<string, unknown>;
     reconciliation?: InboxReconciliation | null;
@@ -763,10 +823,21 @@ function RowEditor({
   // fuzzy, que l'utilisateur peut remplacer), ou création d'un nouveau.
   const [matchContactId, setMatchContactId] = useState<string | null>(item.meta.contactId ?? null);
   const [createNewContact, setCreateNewContact] = useState(false);
+  // « Lier à un existant » : tant qu'un id est choisi, on ne crée rien —
+  // l'action serveur rattache la proposition au record retenu.
+  const linkTargets = linkTargetsFor(item.kind, linkOptions);
+  const [linkExistingId, setLinkExistingId] = useState<string | null>(null);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const override: Record<string, unknown> = {};
+
+    // Liaison à un existant : les champs de création n'ont plus de sens,
+    // on n'envoie que la cible.
+    if (linkExistingId) {
+      onSave({ payloadOverride: { _linkExistingId: linkExistingId } });
+      return;
+    }
 
     if (item.kind === "task" || item.kind === "opportunity") {
       if (title.trim() !== initialTitle) override.title = title.trim();
@@ -829,7 +900,27 @@ function RowEditor({
 
   return (
     <form onSubmit={submit} className="border-ds-border border-t bg-ds-surface px-4 py-3.5">
-      <div className="grid gap-2.5 sm:grid-cols-2">
+      {linkTargets && linkTargets.options.length > 0 ? (
+        <div className="mb-2.5 rounded-md border border-ds-border bg-ds-app p-2.5">
+          <Field label={linkTargets.label} full>
+            <FkCombobox
+              value={linkExistingId}
+              onValueChange={setLinkExistingId}
+              options={linkTargets.options}
+              placeholder="— Créer un nouveau —"
+              searchPlaceholder={linkTargets.searchPlaceholder}
+              clearLabel="Créer un nouveau"
+              emptyLabel="Aucun résultat."
+            />
+          </Field>
+          {linkExistingId ? (
+            <p className="mt-1.5 text-[11px] text-tint-green-text">
+              Rattaché à cet enregistrement. Aucun doublon ne sera créé.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      <div className={cn("grid gap-2.5 sm:grid-cols-2", linkExistingId && "hidden")}>
         {(isTask || isOpportunity) && (
           <Field label="Titre" full>
             <input
@@ -1066,7 +1157,7 @@ function RowEditor({
           className="inline-flex items-center gap-1.5 rounded-md border border-tint-green-dot bg-tint-green-bg px-2.5 py-1 font-medium text-[12px] text-tint-green-text transition-colors hover:bg-tint-green-dot hover:text-white disabled:opacity-40"
         >
           <Check weight="bold" className="size-3" />
-          {isReconciliation || (isContactMatch && !createNewContact)
+          {linkExistingId || isReconciliation || (isContactMatch && !createNewContact)
             ? "Rattacher"
             : "Enregistrer et créer"}
         </button>

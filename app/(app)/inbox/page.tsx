@@ -3,16 +3,18 @@ import { contacts } from "@/db/schema/contacts";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
+import { projects } from "@/db/schema/projects";
+import { tasks } from "@/db/schema/tasks";
 import { requireUser } from "@/lib/auth/server";
 import { getInboxItems, getInboxTotalCount } from "@/lib/db/queries/inbox";
 import { getInboxHistory } from "@/lib/db/queries/inbox-history";
 import { db } from "@/lib/db/server";
 import { formatPersonName } from "@/lib/format";
-import { and, desc, eq, isNull, ne, or } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import type { CoworkingInvoiceOption } from "../compta/reconciliation-actions";
 import { InboxHistoryView } from "./history-view";
 import { InboxTabs } from "./inbox-tabs";
-import { InboxView } from "./inbox-view";
+import { InboxView, type LinkTargetOptions } from "./inbox-view";
 
 export const metadata = {
   title: "À traiter — Paradeos",
@@ -90,13 +92,24 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
       .orderBy(desc(invoices.invoicedAt), desc(invoices.periodStart)),
   ]);
 
-  // Options du combobox de rapprochement LinkedIn. Chargées seulement
-  // si la file contient au moins un item : inutile de payer la requête
-  // quand il n'y a rien à rapprocher.
-  const needsContactOptions = items.some((it) => it.kind === "contact_match");
-  const contactOptions = needsContactOptions
-    ? (
-        await conn
+  // Référentiels pour « lier à un existant » : une extraction propose un
+  // nouveau record, mais il existe souvent déjà sous un autre nom (« chaîne
+  // YouTube IA » vs le vrai nom du projet). Chargés seulement quand la file
+  // contient un item du kind concerné — inutile de payer la requête sinon.
+  //
+  // Les contacts servent aussi au rapprochement LinkedIn (`contact_match`).
+  const needsContactOptions = items.some(
+    (it) => it.kind === "contact_match" || it.kind === "contact",
+  );
+  const needsProjectOptions = items.some(
+    (it) => it.kind === "project" || it.kind === "opportunity",
+  );
+  const needsEntityOptions = items.some((it) => it.kind === "entity");
+  const needsTaskOptions = items.some((it) => it.kind === "task");
+
+  const [contactRows, projectRows, entityRows, taskRows] = await Promise.all([
+    needsContactOptions
+      ? conn
           .select({
             id: contacts.id,
             firstName: contacts.firstName,
@@ -105,12 +118,36 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
           })
           .from(contacts)
           .orderBy(contacts.lastName, contacts.firstName)
-      ).map((c) => ({
-        id: c.id,
-        label: formatPersonName(c.firstName, c.lastName) || c.email || "(sans nom)",
-        email: c.email,
-      }))
-    : [];
+      : [],
+    needsProjectOptions
+      ? conn.select({ id: projects.id, name: projects.name }).from(projects).orderBy(projects.name)
+      : [],
+    needsEntityOptions
+      ? conn.select({ id: entities.id, name: entities.name }).from(entities).orderBy(entities.name)
+      : [],
+    // Une proposition de tâche ne se lie qu'à une tâche encore ouverte :
+    // rattacher à une tâche terminée ne veut rien dire.
+    needsTaskOptions
+      ? conn
+          .select({ id: tasks.id, title: tasks.title })
+          .from(tasks)
+          .where(sql`${tasks.status} not in ('done', 'cancelled')`)
+          .orderBy(tasks.title)
+      : [],
+  ]);
+
+  const contactOptions = contactRows.map((c) => ({
+    id: c.id,
+    label: formatPersonName(c.firstName, c.lastName) || c.email || "(sans nom)",
+    email: c.email,
+  }));
+
+  const linkOptions: LinkTargetOptions = {
+    projects: projectRows.map((p) => ({ id: p.id, label: p.name })),
+    entities: entityRows.map((e) => ({ id: e.id, label: e.name })),
+    contacts: contactOptions.map((c) => ({ id: c.id, label: c.label })),
+    tasks: taskRows.map((t) => ({ id: t.id, label: t.title })),
+  };
 
   const coworkingInvoiceOptions: CoworkingInvoiceOption[] = coworkingInvoiceRows.map((c) => {
     const contactName = `${c.contactFirstName ?? ""} ${c.contactLastName ?? ""}`.trim() || null;
@@ -146,6 +183,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
         items={items}
         coworkingInvoiceOptions={coworkingInvoiceOptions}
         contactOptions={contactOptions}
+        linkOptions={linkOptions}
       />
     </div>
   );
