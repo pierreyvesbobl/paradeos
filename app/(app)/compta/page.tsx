@@ -4,6 +4,7 @@ import { AchatsView } from "./achats-view";
 import { ComptaTabs } from "./compta-tabs";
 import { type ComptaSegment, DashboardView } from "./dashboard-view";
 import { FacturesView } from "./factures-view";
+import { JustificatifsSkeleton, JustificatifsView } from "./justificatifs-view";
 import type { ComptaPeriod } from "./period-selector";
 import { RapprochementView } from "./rapprochement-view";
 import { RelancesView, countOverdueInvoices } from "./relances-view";
@@ -27,16 +28,18 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default async function ComptaPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const tabRaw = params.tab;
-  const tab: "dashboard" | "rapprochement" | "factures" | "achats" | "relances" =
+  const tab: "dashboard" | "rapprochement" | "factures" | "achats" | "justificatifs" | "relances" =
     tabRaw === "rapprochement"
       ? "rapprochement"
       : tabRaw === "factures"
         ? "factures"
         : tabRaw === "achats"
           ? "achats"
-          : tabRaw === "relances"
-            ? "relances"
-            : "dashboard";
+          : tabRaw === "justificatifs"
+            ? "justificatifs"
+            : tabRaw === "relances"
+              ? "relances"
+              : "dashboard";
   const debug = typeof params.debug === "string" ? params.debug : undefined;
   const periodRaw = typeof params.period === "string" ? params.period : null;
   const period: ComptaPeriod = (
@@ -66,6 +69,10 @@ export default async function ComptaPage({ searchParams }: { searchParams: Searc
       ) : tab === "achats" ? (
         <Suspense fallback={<AchatsSkeleton />}>
           <AchatsView />
+        </Suspense>
+      ) : tab === "justificatifs" ? (
+        <Suspense fallback={<JustificatifsSkeleton />}>
+          <JustificatifsView />
         </Suspense>
       ) : tab === "relances" ? (
         <RelancesView assigneeFilter={assigneeFilter} />
@@ -148,7 +155,7 @@ function RapprochementSkeleton() {
 async function ComptaTabsWithCount({
   current,
 }: {
-  current: "dashboard" | "rapprochement" | "factures" | "achats" | "relances";
+  current: "dashboard" | "rapprochement" | "factures" | "achats" | "justificatifs" | "relances";
 }) {
   const overdueCount = await countOverdueInvoices();
   return <ComptaTabs current={current} relancesCount={overdueCount} />;

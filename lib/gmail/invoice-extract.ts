@@ -45,6 +45,20 @@ const invoiceSchema = z.object({
    * "AbonnementLogiciel", "PrestationConseilIA".
    */
   prestationType: z.string().nullable(),
+  /**
+   * Montant total TTC, en unité de la devise (pas en centimes). C'est le
+   * montant réellement débité, donc la clé de rapprochement avec une
+   * opération bancaire — de loin le champ le plus utile des trois.
+   */
+  totalTtc: z.number().nullable(),
+  /** Total hors taxes. */
+  totalHt: z.number().nullable(),
+  /** Montant de TVA. */
+  vatAmount: z.number().nullable(),
+  /** Devise ISO 4217 en majuscules : "EUR", "USD". */
+  currency: z.string().nullable(),
+  /** Numéro de facture tel qu'imprimé, ex. "F-2026-03-11", "INV-4821". */
+  invoiceNumber: z.string().nullable(),
   /** Confiance globale du LLM 0-1. */
   confidence: z.number(),
 });
@@ -141,7 +155,34 @@ pour un client → "sales_invoice".
   "LoyerBureau", "AbonnementSlack", "PrestationConseilIA",
   "MaterielInformatique", "FormationProduit".
 - confidence : 0-1. Mets < 0.6 si tu doutes (la classification ne sera
-  pas auto-faite, on demandera validation à l'utilisateur).`;
+  pas auto-faite, on demandera validation à l'utilisateur).
+
+═══ MONTANTS ═══
+
+Ces champs servent à rapprocher la facture d'une ligne de relevé bancaire.
+C'est le TTC qui sera comparé au débit : soigne-le en priorité.
+
+- totalTtc : le total à payer, toutes taxes comprises. C'est la ligne
+  "Total TTC", "Montant dû", "Total", "Amount due", "Total including tax".
+  En unité de devise avec les décimales (131.50), JAMAIS en centimes et
+  JAMAIS avec un séparateur de milliers ni un symbole.
+- totalHt : le total hors taxes ("Total HT", "Subtotal").
+- vatAmount : le montant de TVA ("TVA 20 %", "Tax", "VAT").
+- Si un seul montant figure et qu'aucune TVA n'apparaît (fournisseur hors
+  UE, autoliquidation, facture à 0 €), mets ce montant dans totalTtc ET
+  dans totalHt, et vatAmount à 0.
+- Sur un AVOIR, garde les montants POSITIFS : le sens est porté par la
+  nature du document, pas par le signe.
+- Si la facture porte plusieurs échéances, prends le total de la facture,
+  pas celui d'une échéance.
+- currency : code ISO 4217 en majuscules déduit du symbole ou du libellé
+  ("€" → "EUR", "$" → "USD", "£" → "GBP").
+- invoiceNumber : le numéro tel qu'imprimé, sans le mot "facture"
+  ("F-2026-03-11", "INV-4821", "2026-05-FAC21").
+
+Un montant que tu n'es pas capable de lire reste à null — ne devine
+jamais un montant, une erreur ici attacherait la mauvaise facture à la
+mauvaise dépense.`;
 
 export async function extractInvoiceMetadata(args: {
   emailSubject: string | null;

@@ -47,6 +47,13 @@ export const SETTING_KEYS = {
    */
   INVOICE_FILING_ENABLED: "INVOICE_FILING_ENABLED",
   /**
+   * Interrupteur de l'attachement automatique des justificatifs chez
+   * Dougs. Si absent ou "false", le rapprochement calcule et propose
+   * mais n'envoie rien : chaque pièce part sur un clic. À passer à
+   * "true" une fois le premier attachement vérifié à la main.
+   */
+  PURCHASE_AUTO_ATTACH_ENABLED: "PURCHASE_AUTO_ATTACH_ENABLED",
+  /**
    * Mode démo global : si "true", l'UI affiche des alias déterministes pour
    * les noms d'entreprises, contacts, projets, et applique un facteur (~×1)
    * aux montants. Les données en base restent intactes. Les exports

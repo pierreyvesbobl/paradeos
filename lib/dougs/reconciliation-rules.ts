@@ -32,25 +32,11 @@ export const INVOICE_CANDIDATES_LIMIT = 4;
 /**
  * Map async avec concurrency cap. Évite de saturer Dougs (Cloudflare
  * rate-limit) avec un Promise.all de 50 GET d'un coup.
+ *
+ * Ré-exporté depuis `lib/async/p-map` : l'utilitaire sert aussi au
+ * backfill Drive, qui n'a rien à voir avec Dougs.
  */
-export async function pMap<T, R>(
-  items: T[],
-  fn: (item: T, index: number) => Promise<R>,
-  concurrency = 5,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  async function worker() {
-    while (next < items.length) {
-      const i = next++;
-      const item = items[i];
-      if (item === undefined) continue;
-      results[i] = await fn(item, i);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
-  return results;
-}
+export { pMap } from "@/lib/async/p-map";
 
 export type DougsClientData = {
   legalName?: string | null;

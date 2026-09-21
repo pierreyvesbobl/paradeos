@@ -54,6 +54,13 @@ export const invoiceFilings = pgTable(
       .references(() => gmailMessages.id, { onDelete: "cascade" }),
     gmailAttachmentId: text("gmail_attachment_id").notNull(),
     originalFilename: text("original_filename"),
+    /**
+     * SHA-256 du PDF téléchargé. Sert de clé d'identité de la dépense :
+     * la même facture reçue dans deux boîtes Gmail (BCC, transfert) donne
+     * deux `gmail_attachment_id` différents mais le même hash — c'est le
+     * seul signal fiable pour ne pas la classer deux fois dans Drive.
+     */
+    pdfSha256: text("pdf_sha256"),
     /** Achat / vente / non classifié — cf. `invoiceFilingDirection`. */
     direction: invoiceFilingDirection("direction").notNull().default("unknown"),
     invoiceDate: date("invoice_date"),
@@ -62,6 +69,16 @@ export const invoiceFilings = pgTable(
     /** Destinataire de la facture — rempli côté vente (le client). */
     customerRaw: text("customer_raw"),
     prestationType: text("prestation_type"),
+    /**
+     * Montants lus sur la facture. Capturés par le même appel LLM que le
+     * reste — ils ne coûtent rien de plus et le TTC est le signal le plus
+     * discriminant pour rapprocher une facture d'un débit bancaire.
+     */
+    amountTtc: numeric("amount_ttc", { precision: 12, scale: 2 }),
+    amountHt: numeric("amount_ht", { precision: 12, scale: 2 }),
+    vatAmount: numeric("vat_amount", { precision: 12, scale: 2 }),
+    currency: text("currency"),
+    invoiceNumber: text("invoice_number"),
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
     generatedFilename: text("generated_filename"),
     driveYearFolderId: text("drive_year_folder_id"),
@@ -87,6 +104,7 @@ export const invoiceFilings = pgTable(
       table.direction,
       table.createdAt,
     ),
+    pdfSha256Idx: index("invoice_filings_pdf_sha256_idx").on(table.pdfSha256),
   }),
 );
 

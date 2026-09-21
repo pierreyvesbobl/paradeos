@@ -61,7 +61,16 @@ async function touchUsed(userId: string): Promise<void> {
 async function dougsFetch(
   userId: string,
   pathTemplate: string,
-  init?: RequestInit,
+  init?: RequestInit & {
+    /**
+     * Laisse `FormData` poser lui-même son `Content-Type` avec sa
+     * boundary. Sans ça, l'en-tête JSON forcé ci-dessous écrase la
+     * boundary et Dougs répond 400 sur l'upload de justificatif.
+     */
+    multipart?: boolean;
+    /** Surcharge du timeout : un upload de PDF ne tient pas en 8 s. */
+    timeoutMs?: number;
+  },
 ): Promise<Response> {
   const session = await loadSession(userId);
   if (!session) {
@@ -69,20 +78,21 @@ async function dougsFetch(
       "Aucune session Dougs connectée. Va dans /settings/integrations pour coller ton cookie.",
     );
   }
+  const { multipart, timeoutMs, ...rest } = init ?? {};
   const path = pathTemplate.replace("{companyId}", session.companyId);
   const res = await fetchWithRetry(`${BASE}${path}`, {
-    ...init,
+    ...rest,
     headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
+      ...(multipart ? {} : { "Content-Type": "application/json" }),
+      ...(rest.headers ?? {}),
       Cookie: session.cookie,
     },
     // Dougs derrière Cloudflare → si Cloudflare met du temps à répondre,
     // sans borne la page reste ouverte jusqu'à la limite Vercel. 8 s :
     // un peu plus que Drive parce que Dougs est régulièrement lent sur
     // les list endpoints, mais assez court pour ne pas bloquer l'UI.
-    timeoutMs: 8000,
-    label: `Dougs ${init?.method ?? "GET"} ${pathTemplate}`,
+    timeoutMs: timeoutMs ?? 8000,
+    label: `Dougs ${rest.method ?? "GET"} ${pathTemplate}`,
   });
   if (res.status === 401 || res.status === 403) {
     throw new DougsAuthError(
@@ -91,9 +101,9 @@ async function dougsFetch(
   }
   if (!res.ok) {
     const body = await res.text();
-    console.error(`[dougs] ${init?.method ?? "GET"} ${path} → ${res.status}`, body.slice(0, 500));
+    console.error(`[dougs] ${rest.method ?? "GET"} ${path} → ${res.status}`, body.slice(0, 500));
     throw new DougsApiError(
-      `Dougs ${res.status} ${res.statusText} (${init?.method ?? "GET"} ${path})`,
+      `Dougs ${res.status} ${res.statusText} (${rest.method ?? "GET"} ${path})`,
       res.status,
       body.slice(0, 500),
     );
@@ -788,6 +798,136 @@ export async function getDougsVendorInvoice(
 /** URL de la facture d'achat dans l'UI Dougs. */
 export function buildDougsVendorInvoiceUrl(companyId: string, invoiceId: string): string {
   return `${BASE}/app/c/${companyId}/invoicing/vendor-invoice?vendorInvoiceId=${invoiceId}`;
+}
+
+// ---------- Opérations bancaires & justificatifs ----------
+
+/**
+ * Pièce justificative attachée à une opération. Le champ qui compte est
+ * `id` : c'est lui qui permet de détacher une pièce posée par erreur.
+ */
+export type DougsSourceDocumentAttachment = {
+  id: number | string;
+  fileName?: string | null;
+  fileId?: number | string | null;
+  [key: string]: unknown;
+};
+
+/**
+ * Opération du relevé, telle que `/operations` la renvoie. Superset de
+ * `DougsOperationRef` : la liste porte en plus l'état de validation et
+ * les pièces déjà attachées, qui sont exactement ce qu'on vient chercher.
+ */
+export type DougsOperation = DougsOperationRef & {
+  validated?: boolean | null;
+  sourceDocumentAttachments?: DougsSourceDocumentAttachment[] | null;
+};
+
+/**
+ * Liste les opérations bancaires.
+ *
+ * `validated=false&needsAttention=false` donne les opérations « à valider »
+ * standard — celles dont on cherche les justificatifs manquants.
+ */
+export async function listDougsOperations(
+  userId: string,
+  opts: {
+    limit?: number;
+    offset?: number;
+    validated?: boolean;
+    needsAttention?: boolean;
+  } = {},
+): Promise<DougsOperation[]> {
+  const params = new URLSearchParams({
+    limit: String(opts.limit ?? 100),
+    offset: String(opts.offset ?? 0),
+  });
+  if (opts.validated !== undefined) params.set("validated", String(opts.validated));
+  if (opts.needsAttention !== undefined) {
+    params.set("needsAttention", String(opts.needsAttention));
+  }
+  const res = await dougsFetch(userId, `/companies/{companyId}/operations?${params}`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+/** Détail d'une opération — c'est ici qu'on relit `sourceDocumentAttachments`. */
+export async function getDougsOperation(
+  userId: string,
+  operationId: number | string,
+): Promise<DougsOperation> {
+  const res = await dougsFetch(
+    userId,
+    `/companies/{companyId}/operations/${encodeURIComponent(String(operationId))}`,
+  );
+  return res.json();
+}
+
+/**
+ * Attache un justificatif à une opération.
+ *
+ * Deux détails non négociables de l'API, découverts à la main : le
+ * suffixe `/actions/create-from-formdata` (sans lui, 400) et le champ
+ * FormData nommé exactement `file`.
+ *
+ * Cette fonction ne valide JAMAIS l'opération : après l'upload, elle
+ * reste « à valider » côté Dougs, et c'est à un humain de trancher. Toute
+ * évolution de ce module doit préserver ça.
+ */
+export async function uploadDougsOperationAttachment(
+  userId: string,
+  operationId: number | string,
+  file: { filename: string; bytes: Buffer; contentType?: string },
+): Promise<DougsSourceDocumentAttachment | null> {
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([new Uint8Array(file.bytes)], { type: file.contentType ?? "application/pdf" }),
+    file.filename,
+  );
+
+  const res = await dougsFetch(
+    userId,
+    `/companies/{companyId}/operations/${encodeURIComponent(
+      String(operationId),
+    )}/source-document-attachments/actions/create-from-formdata`,
+    { method: "POST", body: form, multipart: true, timeoutMs: 30_000 },
+  );
+
+  // Dougs renvoie tantôt l'attachement créé, tantôt l'opération entière.
+  // On récupère l'identifiant dans les deux cas — sans lui, « Détacher »
+  // ne serait plus possible.
+  try {
+    const data: unknown = await res.json();
+    if (!data || typeof data !== "object") return null;
+    const list = (data as { sourceDocumentAttachments?: unknown }).sourceDocumentAttachments;
+    if (Array.isArray(list)) {
+      return (list[list.length - 1] as DougsSourceDocumentAttachment) ?? null;
+    }
+    return data as DougsSourceDocumentAttachment;
+  } catch {
+    return null;
+  }
+}
+
+/** Retire une pièce attachée par erreur. */
+export async function deleteDougsOperationAttachment(
+  userId: string,
+  operationId: number | string,
+  attachmentId: number | string,
+): Promise<void> {
+  await dougsFetch(
+    userId,
+    `/companies/{companyId}/operations/${encodeURIComponent(
+      String(operationId),
+    )}/source-document-attachments/${encodeURIComponent(String(attachmentId))}`,
+    { method: "DELETE" },
+  );
+}
+
+/** URL de la liste des opérations dans l'UI Dougs. */
+export function buildDougsOperationsUrl(companyId: string): string {
+  return `${BASE}/app/c/${companyId}/accounting/operations/payments`;
 }
 
 // ---------- Téléchargement de justificatifs ----------

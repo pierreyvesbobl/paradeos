@@ -1,11 +1,13 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { gmailMessages } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import { findOrCreateFolder, findOrCreateSupplierFolder, uploadFile } from "@/lib/google/drive-api";
 import { type GmailAttachmentRef, getAttachment } from "@/lib/google/gmail-api";
+import { normalizeCurrency, normalizeInvoiceNumber, toAmountColumn } from "@/lib/purchase/amounts";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { and, eq, ne } from "drizzle-orm";
 import { pickInvoicePdfs } from "./invoice-detect";
@@ -108,6 +110,81 @@ export async function processInvoiceFiling(filingId: string): Promise<{
     return { status: "error", errorMessage: errMsg };
   }
 
+  // 1bis. Garde-fou doublon inter-boîtes : la même facture arrive souvent
+  // dans deux boîtes Gmail (fournisseur en copie, transfert entre
+  // associés). Les identifiants Gmail diffèrent, le PDF non — le hash du
+  // contenu est la seule identité stable de la dépense. On coupe ici,
+  // avant l'appel LLM : pas d'upload en double, et pas de second
+  // classement sous un autre nom si le LLM formule autrement la
+  // prestation.
+  const pdfSha256 = createHash("sha256").update(pdfBuffer).digest("hex");
+  await conn.update(invoiceFilings).set({ pdfSha256 }).where(eq(invoiceFilings.id, filing.id));
+
+  const [alreadyFiled] = await conn
+    .select({
+      id: invoiceFilings.id,
+      direction: invoiceFilings.direction,
+      invoiceDate: invoiceFilings.invoiceDate,
+      supplierRaw: invoiceFilings.supplierRaw,
+      supplierSanitized: invoiceFilings.supplierSanitized,
+      customerRaw: invoiceFilings.customerRaw,
+      prestationType: invoiceFilings.prestationType,
+      amountTtc: invoiceFilings.amountTtc,
+      amountHt: invoiceFilings.amountHt,
+      vatAmount: invoiceFilings.vatAmount,
+      currency: invoiceFilings.currency,
+      invoiceNumber: invoiceFilings.invoiceNumber,
+      generatedFilename: invoiceFilings.generatedFilename,
+      driveFileId: invoiceFilings.driveFileId,
+    })
+    .from(invoiceFilings)
+    .where(
+      and(
+        eq(invoiceFilings.pdfSha256, pdfSha256),
+        ne(invoiceFilings.id, filing.id),
+        eq(invoiceFilings.status, "filed"),
+      ),
+    )
+    .limit(1);
+  if (alreadyFiled) {
+    // On recopie la classification de l'original : la PJ reste lisible
+    // côté UI (« Achat » / « Vente ») sans repasser par le LLM.
+    await conn
+      .update(invoiceFilings)
+      .set({
+        direction: alreadyFiled.direction,
+        invoiceDate: alreadyFiled.invoiceDate,
+        supplierRaw: alreadyFiled.supplierRaw,
+        supplierSanitized: alreadyFiled.supplierSanitized,
+        customerRaw: alreadyFiled.customerRaw,
+        prestationType: alreadyFiled.prestationType,
+        amountTtc: alreadyFiled.amountTtc,
+        amountHt: alreadyFiled.amountHt,
+        vatAmount: alreadyFiled.vatAmount,
+        currency: alreadyFiled.currency,
+        invoiceNumber: alreadyFiled.invoiceNumber,
+        status: "rejected",
+        errorMessage: `doublon — déjà classé sous ${alreadyFiled.generatedFilename ?? "(sans nom)"}.`,
+      })
+      .where(eq(invoiceFilings.id, filing.id));
+    if (alreadyFiled.direction !== "unknown") {
+      try {
+        await markThreadInvoiceDirection({
+          userId: filing.userId,
+          threadIdLocal: msg.threadId,
+          direction: alreadyFiled.direction,
+        });
+      } catch (err) {
+        console.warn("[invoice filer] label direction failed", err);
+      }
+    }
+    return {
+      status: "rejected",
+      direction: alreadyFiled.direction,
+      errorMessage: "doublon (contenu déjà classé)",
+    };
+  }
+
   // 2. Parse PDF
   let pdfText = "";
   try {
@@ -171,6 +248,11 @@ export async function processInvoiceFiling(filingId: string): Promise<{
       supplierSanitized: meta.supplierName ? sanitizeForFilename(meta.supplierName) : null,
       customerRaw: meta.customerName,
       prestationType: meta.prestationType,
+      amountTtc: toAmountColumn(meta.totalTtc),
+      amountHt: toAmountColumn(meta.totalHt),
+      vatAmount: toAmountColumn(meta.vatAmount),
+      currency: normalizeCurrency(meta.currency),
+      invoiceNumber: normalizeInvoiceNumber(meta.invoiceNumber),
       confidence: meta.confidence.toFixed(3),
     })
     .where(eq(invoiceFilings.id, filing.id));

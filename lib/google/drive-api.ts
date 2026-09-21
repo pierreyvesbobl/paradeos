@@ -1,5 +1,6 @@
 import "server-only";
 
+import { normalizeSupplierKey } from "@/lib/gmail/supplier-key";
 import { fetchWithRetry } from "@/lib/net/fetch-with-retry";
 import { fetchWithTimeout } from "@/lib/net/fetch-with-timeout";
 
@@ -24,6 +25,9 @@ type DriveFile = {
   iconLink?: string;
   webViewLink?: string;
   modifiedTime?: string;
+  createdTime?: string;
+  /** Empreinte Drive du contenu binaire. Absente sur les Google Docs natifs. */
+  md5Checksum?: string;
   size?: string;
   parents?: string[];
 };
@@ -74,6 +78,87 @@ export async function listFolderChildren(
     accessToken,
   );
   return data.files ?? [];
+}
+
+/**
+ * Comme `listFolderChildren`, mais en suivant `nextPageToken` jusqu'au
+ * bout et en remontant `createdTime` / `md5Checksum`.
+ *
+ * `listFolderChildren` plafonne silencieusement à `pageSize` : sur un
+ * dossier de factures qui grossit d'une douzaine de PDF par mois, ça
+ * finit par masquer les plus anciens. Ici on veut l'inventaire complet,
+ * d'où la pagination. `maxPages` est un garde-fou : sans lui, une
+ * réponse Drive malformée (token qui se répète) boucle à l'infini
+ * dans une fonction serverless.
+ */
+export async function listFolderChildrenPaged(
+  folderId: string,
+  accessToken: string,
+  { pageSize = 200, maxPages = 50 }: { pageSize?: number; maxPages?: number } = {},
+): Promise<DriveFile[]> {
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
+  const fields = encodeURIComponent(
+    "nextPageToken,files(id,name,mimeType,size,md5Checksum,createdTime,modifiedTime,webViewLink,parents)",
+  );
+  const out: DriveFile[] = [];
+  let pageToken: string | undefined;
+
+  for (let page = 0; page < maxPages; page++) {
+    const tokenParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
+    const data = await driveFetch<{ files?: DriveFile[]; nextPageToken?: string }>(
+      `/files?q=${q}&fields=${fields}&orderBy=folder,name&pageSize=${pageSize}&${SHARED_DRIVE_PARAMS}&corpora=allDrives${tokenParam}`,
+      accessToken,
+    );
+    out.push(...(data.files ?? []));
+    if (!data.nextPageToken || data.nextPageToken === pageToken) break;
+    pageToken = data.nextPageToken;
+  }
+  return out;
+}
+
+/**
+ * Plafond de téléchargement. Le classement Gmail refuse déjà les PJ
+ * au-delà de 20 Mo (`MAX_PDF_BYTES`) ; on garde un peu de marge pour
+ * les fichiers déposés dans le Drive par d'autres chaînes.
+ */
+const MAX_DRIVE_DOWNLOAD_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Télécharge le contenu binaire d'un fichier Drive (`?alt=media`).
+ *
+ * Ne marche que sur les fichiers *stockés* : un Google Doc natif n'a pas
+ * de binaire et répond 403 (il faudrait `/export`). Pour nos PDF de
+ * factures, c'est le bon chemin.
+ */
+export async function downloadDriveFile(
+  fileId: string,
+  accessToken: string,
+  { timeoutMs = 20_000 }: { timeoutMs?: number } = {},
+): Promise<Buffer> {
+  const res = await fetchWithRetry(
+    `${API_BASE}/files/${encodeURIComponent(fileId)}?alt=media&${SHARED_DRIVE_PARAMS}`,
+    {
+      headers: { authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+      timeoutMs,
+      label: "Drive download",
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Drive download ${res.status} : ${text.slice(0, 300)}`);
+  }
+
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_DRIVE_DOWNLOAD_BYTES) {
+    throw new Error(`Fichier Drive trop lourd (${declared} octets)`);
+  }
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.byteLength > MAX_DRIVE_DOWNLOAD_BYTES) {
+    throw new Error(`Fichier Drive trop lourd (${buffer.byteLength} octets)`);
+  }
+  return buffer;
 }
 
 export async function createDriveFolder(
@@ -249,42 +334,6 @@ export async function findOrCreateFolder(
   const existing = await findFolderByName(parentId, name, accessToken);
   if (existing) return existing;
   return createFolder(parentId, name, accessToken);
-}
-
-/**
- * Normalisation "match fournisseur" : accents supprimés, alnum only,
- * lowercased, et on retire les suffixes/prefixes de forme juridique
- * FR courants (SAS, SASU, SARL, SARLU, SA, SCI, SNC, EURL, SELARL,
- * SCIC, SCOP). Objectif : "Orange", "Orange SA", "ORANGE" → même clé.
- */
-function normalizeSupplierKey(name: string): string {
-  const stripped = name
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-  const suffixes = [
-    "sasu",
-    "sarl",
-    "sarlu",
-    "selarl",
-    "scic",
-    "scop",
-    "eurl",
-    "sas",
-    "sci",
-    "snc",
-    "sa",
-  ];
-  for (const s of suffixes) {
-    if (stripped.endsWith(s) && stripped.length > s.length) {
-      return stripped.slice(0, -s.length);
-    }
-    if (stripped.startsWith(s) && stripped.length > s.length) {
-      return stripped.slice(s.length);
-    }
-  }
-  return stripped;
 }
 
 /**
