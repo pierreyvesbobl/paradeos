@@ -59,9 +59,44 @@ export const updateMeetingSummarySchema = z.object({
   summary: z.string().max(20_000).nullable(),
 });
 
+/**
+ * Ajout d'un participant : exactement une cible parmi `userId`,
+ * `contactId` et `displayName` — miroir de la contrainte SQL
+ * `meeting_participants_target_chk`.
+ */
+export const addMeetingParticipantSchema = z
+  .object({
+    meetingId: z.string().uuid(),
+    userId: z.string().uuid().optional(),
+    contactId: z.string().uuid().optional(),
+    displayName: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
+    role: z
+      .string()
+      .trim()
+      .max(120)
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
+  })
+  .refine(
+    (v) => [v.userId, v.contactId, v.displayName].filter(Boolean).length === 1,
+    "Un participant est soit un membre de l'équipe, soit un contact, soit un nom libre.",
+  );
+
+export const removeMeetingParticipantSchema = z.object({
+  meetingId: z.string().uuid(),
+  participantId: z.string().uuid(),
+});
+
 export const deleteMeetingSchema = z.object({ id: z.string().uuid() });
 
 export type CreateMeetingInput = z.infer<typeof createMeetingSchema>;
 export type ExtractMeetingInput = z.infer<typeof extractMeetingSchema>;
 export type DecideProposalInput = z.infer<typeof decideProposalSchema>;
 export type UpdateMeetingSubjectInput = z.infer<typeof updateMeetingSubjectSchema>;
+export type AddMeetingParticipantInput = z.infer<typeof addMeetingParticipantSchema>;

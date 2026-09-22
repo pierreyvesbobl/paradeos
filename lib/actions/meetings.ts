@@ -18,6 +18,7 @@ import {
   fuzzyMatchProject,
   fuzzyMatchUser,
 } from "@/lib/meetings/extract";
+import { getParticipantContext, syncParticipantsFromAttendees } from "@/lib/meetings/participants";
 import {
   createMeetingSchema,
   decideProposalSchema,
@@ -129,7 +130,12 @@ export const extractMeetingProposals = action(extractMeetingSchema, async ({ inp
   if (!meeting.transcript || meeting.transcript.trim().length === 0) {
     throw new Error("Transcript vide : importe un audio ou colle un texte avant d'extraire.");
   }
-  const result = await extractMeeting(meeting.transcript, { projectContext });
+  // Idem : qui était dans la pièce fait partie du contexte envoyé au LLM,
+  // et les personnes qu'il repère en retour viennent enrichir la liste.
+  const participants = await getParticipantContext(meeting.id);
+  const result = await extractMeeting(meeting.transcript, { projectContext, participants });
+
+  await syncParticipantsFromAttendees(meeting.id, result.attendees);
 
   await conn.delete(meetingProposals).where(eq(meetingProposals.meetingId, meeting.id));
 

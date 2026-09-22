@@ -10,6 +10,7 @@ import {
   fuzzyMatchTaskInProject,
   fuzzyMatchUser,
 } from "@/lib/meetings/extract";
+import { getParticipantContext, syncParticipantsFromAttendees } from "@/lib/meetings/participants";
 import { eq } from "drizzle-orm";
 
 import { formatPersonName, sanitizeNameInput } from "@/lib/format";
@@ -33,7 +34,13 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
   if (!meeting.transcript || meeting.transcript.trim().length === 0) {
     throw new Error("Transcript vide — pas d'extraction possible.");
   }
-  const result = await extractMeeting(meeting.transcript);
+  // Les participants déjà déclarés (à la main ou par une extraction
+  // précédente) partent dans le prompt : ils lèvent l'ambiguïté des
+  // prénoms seuls et des « je m'en occupe ».
+  const participants = await getParticipantContext(meeting.id);
+  const result = await extractMeeting(meeting.transcript, { participants });
+
+  await syncParticipantsFromAttendees(meeting.id, result.attendees);
 
   await conn.delete(meetingProposals).where(eq(meetingProposals.meetingId, meeting.id));
 

@@ -294,7 +294,23 @@ export type ProjectContext = {
   contacts: { fullName: string; jobTitle: string | null }[];
 };
 
-function buildSystemPrompt(vocab: Vocabulary, projectContext?: ProjectContext): string {
+/**
+ * Personnes déclarées présentes à la réunion (cf. `meeting_participants`).
+ * Le type vit ici pour éviter un cycle d'import avec
+ * `lib/meetings/participants.ts`, qui consomme les fuzzy matchers.
+ */
+export type ParticipantContext = {
+  name: string;
+  kind: "internal" | "external" | "unknown";
+  role: string | null;
+  entityName: string | null;
+};
+
+function buildSystemPrompt(
+  vocab: Vocabulary,
+  projectContext?: ProjectContext,
+  participants?: ParticipantContext[],
+): string {
   const baseRules = `Tu es un assistant qui dépouille un transcript de meeting professionnel
 et en extrait :
 - un résumé concis en français (markdown, 5 à 10 lignes max),
@@ -374,6 +390,32 @@ Règles :
     contextBlock = `\n\n---\n\n# Contexte projet\n\n${lines.join("\n")}`;
   }
 
+  if (participants && participants.length > 0) {
+    const line = (p: ParticipantContext) => {
+      const bits = [p.name];
+      if (p.role) bits.push(p.role);
+      if (p.kind === "internal") bits.push("équipe Paradeos");
+      else if (p.entityName) bits.push(p.entityName);
+      else if (p.kind === "external") bits.push("externe");
+      return `- ${bits.join(" — ")}`;
+    };
+    contextBlock += `\n\n---\n\n# Participants de la réunion
+
+Ces personnes étaient présentes (liste tenue à la main dans Parade OS,
+elle fait foi sur le transcript) :
+
+${participants.map(line).join("\n")}
+
+Règles :
+- Résous les prénoms seuls, surnoms et "je / tu / on m'a dit" vers ces
+  personnes en priorité, avec l'orthographe exacte ci-dessus.
+- "Je m'en occupe" dit par un membre de l'équipe → tâche assignée à ce
+  membre (assigneeKind="internal"). Dit par un externe → assigneeKind="external".
+- Dans \`attendees\`, reprends ces personnes si le transcript les fait
+  parler, et ajoute celles que la liste ne connaît pas encore. N'invente
+  personne.`;
+  }
+
   if (vocabBlock.length === 0) return baseRules + contextBlock;
 
   return `${baseRules}${contextBlock}
@@ -392,7 +434,7 @@ ${vocabBlock}`;
 
 export async function extractMeeting(
   transcript: string,
-  options?: { projectContext?: ProjectContext },
+  options?: { projectContext?: ProjectContext; participants?: ParticipantContext[] },
 ): Promise<MeetingExtraction> {
   const apiKey = await getSetting(SETTING_KEYS.OPENROUTER_API_KEY);
   if (!apiKey) {
@@ -401,7 +443,7 @@ export async function extractMeeting(
   const modelId = (await getSetting(SETTING_KEYS.LLM_MODEL)) ?? DEFAULT_LLM_MODEL;
 
   const vocab = await getKnownVocabulary();
-  const systemPrompt = buildSystemPrompt(vocab, options?.projectContext);
+  const systemPrompt = buildSystemPrompt(vocab, options?.projectContext, options?.participants);
 
   // OpenRouter expose une API OpenAI-compatible : on réutilise le
   // provider `@ai-sdk/openai` avec un baseURL custom. Les headers
