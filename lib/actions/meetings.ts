@@ -2,6 +2,7 @@
 
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
+import { meetingParticipants } from "@/db/schema/meeting-participants";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
@@ -50,6 +51,25 @@ export const createMeeting = action(createMeetingSchema, async ({ input, user })
       createdBy: user.id,
     })
     .returning({ id: meetings.id });
+
+  // Les participants partent en base avant tout : le formulaire de
+  // création enchaîne sur l'extraction, qui les lit pour son prompt.
+  if (row && input.participants && input.participants.length > 0) {
+    await conn
+      .insert(meetingParticipants)
+      .values(
+        input.participants.map((p) => ({
+          meetingId: row.id,
+          userId: "userId" in p ? p.userId : null,
+          contactId: "contactId" in p ? p.contactId : null,
+          displayName: "displayName" in p ? p.displayName : null,
+          source: "manual" as const,
+          addedBy: user.id,
+        })),
+      )
+      .onConflictDoNothing();
+  }
+
   revalidatePath("/meetings");
   return { id: row?.id };
 });
