@@ -1,6 +1,14 @@
 "use client";
 
 import { FkCombobox } from "@/components/inline/fk-combobox";
+import {
+  type ParticipantContactOption,
+  type ParticipantDraft,
+  type ParticipantLabel,
+  type ParticipantTarget,
+  type ParticipantUserOption,
+  ParticipantsPicker,
+} from "@/components/meetings/participants-picker";
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
@@ -14,14 +22,16 @@ import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 type Props = {
-  projects: { id: string; name: string }[];
+  projects: { id: string; name: string; entityId: string | null }[];
+  users: ParticipantUserOption[];
+  contacts: ParticipantContactOption[];
 };
 
 type Mode = "text" | "audio";
 
 const AUDIO_ACCEPT = "audio/*,.mp3,.m4a,.wav,.webm,.mp4,.mpeg,.mpga,.ogg,.oga,.flac";
 
-export function NewMeetingForm({ projects }: Props) {
+export function NewMeetingForm({ projects, users, contacts }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("text");
   const [title, setTitle] = useState("");
@@ -31,8 +41,66 @@ export function NewMeetingForm({ projects }: Props) {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [participants, setParticipants] = useState<ParticipantDraft[]>([]);
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<null | "uploading" | "transcribing">(null);
+
+  // L'entité du projet choisi : préremplit la fiche quand on crée un
+  // contact directement depuis la recherche de participants.
+  const projectEntityId = projects.find((p) => p.id === projectId)?.entityId ?? null;
+
+  function addParticipant(target: ParticipantTarget, label?: ParticipantLabel) {
+    setParticipants((prev) => {
+      if ("userId" in target) {
+        const u = users.find((x) => x.id === target.userId);
+        if (prev.some((p) => p.kind === "user" && p.refId === target.userId)) return prev;
+        return [
+          ...prev,
+          {
+            key: `user:${target.userId}`,
+            kind: "user",
+            refId: target.userId,
+            name: label?.name ?? u?.fullName ?? "(sans nom)",
+            subtitle: "Paradeos",
+            avatarUrl: u?.avatarUrl ?? null,
+          },
+        ];
+      }
+      if ("contactId" in target) {
+        if (prev.some((p) => p.kind === "contact" && p.refId === target.contactId)) return prev;
+        // Le libellé vient du choix : un contact tout juste créé depuis la
+        // recherche n'est pas encore dans les options rendues côté serveur.
+        const c = contacts.find((x) => x.id === target.contactId);
+        return [
+          ...prev,
+          {
+            key: `contact:${target.contactId}`,
+            kind: "contact",
+            refId: target.contactId,
+            name: label?.name ?? c?.fullName ?? "(sans nom)",
+            subtitle: label?.subtitle ?? c?.entityName ?? null,
+            avatarUrl: null,
+          },
+        ];
+      }
+      const name = target.displayName.trim();
+      if (prev.some((p) => p.name.toLowerCase() === name.toLowerCase())) return prev;
+      return [
+        ...prev,
+        { key: `name:${name}`, kind: "name", refId: null, name, subtitle: null, avatarUrl: null },
+      ];
+    });
+  }
+
+  function participantsPayload(): ParticipantTarget[] {
+    return participants.map((p) =>
+      p.kind === "user"
+        ? { userId: p.refId as string }
+        : p.kind === "contact"
+          ? { contactId: p.refId as string }
+          : { displayName: p.name },
+    );
+  }
 
   async function readFile(f: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -74,6 +142,7 @@ export function NewMeetingForm({ projects }: Props) {
         occurredAt: occurredAt || undefined,
         sourceLabel: sourceLabel.trim() || undefined,
         projectId: projectId ?? undefined,
+        participants: participantsPayload(),
       });
       if (!created.ok) {
         toast.error(created.message);
@@ -112,6 +181,7 @@ export function NewMeetingForm({ projects }: Props) {
         occurredAt: occurredAt || undefined,
         sourceLabel: sourceLabel.trim() || file.name,
         projectId: projectId ?? undefined,
+        participants: participantsPayload(),
       });
       if (!created.ok) {
         toast.error(created.message);
@@ -226,6 +296,22 @@ export function NewMeetingForm({ projects }: Props) {
             <p className="text-muted-foreground text-xs">
               Le projet couvre tout le cycle (deal commercial → delivery). Le rattachement aide à
               retrouver le transcript depuis la fiche correspondante.
+            </p>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="participants">Participants (optionnel)</Label>
+            <ParticipantsPicker
+              participants={participants}
+              users={users}
+              contacts={contacts}
+              defaultEntityId={projectEntityId}
+              disabled={formDisabled}
+              onAdd={addParticipant}
+              onRemove={(key) => setParticipants((prev) => prev.filter((p) => p.key !== key))}
+            />
+            <p className="text-muted-foreground text-xs">
+              Qui était là. L'extraction s'en sert pour résoudre les prénoms seuls et attribuer les
+              « je m'en occupe » à la bonne personne.
             </p>
           </div>
         </div>

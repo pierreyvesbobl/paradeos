@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+/**
+ * Une personne déclarée présente : membre de l'équipe, contact CRM, ou
+ * nom brut. Même contrat que la contrainte SQL `meeting_participants_target_chk`.
+ */
+export const meetingParticipantTargetSchema = z.union([
+  z.object({ userId: z.string().uuid() }),
+  z.object({ contactId: z.string().uuid() }),
+  z.object({ displayName: z.string().trim().min(1).max(120) }),
+]);
+
 export const createMeetingSchema = z.object({
   title: z.string().trim().min(1, "Titre requis.").max(200),
   /**
@@ -25,6 +35,11 @@ export const createMeetingSchema = z.object({
     .optional()
     .or(z.literal("").transform(() => undefined)),
   projectId: z.string().uuid().optional(),
+  /**
+   * Personnes présentes, déclarées dès la création : l'extraction est
+   * lancée dans la foulée, elles doivent être en base avant.
+   */
+  participants: z.array(meetingParticipantTargetSchema).max(50).optional(),
 });
 
 export const updateMeetingSubjectSchema = z.object({
