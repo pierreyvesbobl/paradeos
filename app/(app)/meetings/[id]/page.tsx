@@ -27,6 +27,12 @@ import { formatPersonName } from "@/lib/format";
 // donnée fraîche.
 export const dynamic = "force-dynamic";
 
+// « Ré-extraire » est une Server Action servie par cette route : elle
+// hérite donc du `maxDuration` de la page. Sans ça, la plateforme coupe
+// avant le budget LLM (cf. LLM_BUDGET_MS) et l'utilisateur ne reçoit
+// aucun message.
+export const maxDuration = 300;
+
 type Params = Promise<{ id: string }>;
 
 type MeetingStatus = "ingested" | "extracted" | "reviewed" | "archived";

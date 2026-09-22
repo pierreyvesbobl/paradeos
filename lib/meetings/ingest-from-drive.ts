@@ -17,6 +17,15 @@ const TEXT_MIMES = new Set(["text/plain", "text/markdown", "text/x-markdown"]);
 /** Limite par run pour ne pas exploser le timeout cron Vercel. */
 const MAX_FILES_PER_RUN = 5;
 
+/**
+ * Budget de temps du run. Une extraction lente (modèle de raisonnement
+ * sur un transcript d'une heure) peut manger la quasi-totalité du
+ * `maxDuration = 300` de la cron. On arrête donc d'entamer un fichier
+ * passé ce seuil : mieux vaut rendre un bilan partiel et reprendre au
+ * run suivant que se faire tuer en plein milieu.
+ */
+const RUN_BUDGET_MS = 200_000;
+
 export type DriveIngestResult = {
   ingested: number;
   skippedExisting: number;
@@ -112,10 +121,12 @@ export async function ingestDriveTranscripts(): Promise<DriveIngestResult> {
   }
 
   const conn = await db();
+  const startedAt = Date.now();
   let processed = 0;
 
   for (const file of files) {
     if (processed >= MAX_FILES_PER_RUN) break;
+    if (Date.now() - startedAt > RUN_BUDGET_MS) break;
 
     const isSupported =
       file.mimeType === GOOGLE_DOC_MIME ||

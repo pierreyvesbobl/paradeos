@@ -156,7 +156,10 @@ export function NewMeetingForm({ projects, users, contacts }: Props) {
       toast.success("Meeting enregistré, extraction en cours…");
       const extracted = await extractMeetingProposals({ meetingId: id });
       if (!extracted.ok) {
-        toast.error(`Extraction échouée : ${extracted.message}`);
+        // La réunion est déjà enregistrée : on le dit, sinon l'échec
+        // donne l'impression d'avoir tout perdu. La fiche porte le
+        // bouton « Ré-extraire ».
+        toast.error(`Réunion enregistrée, mais extraction échouée : ${extracted.message}`);
         router.push(`/meetings/${id}`);
         return;
       }
