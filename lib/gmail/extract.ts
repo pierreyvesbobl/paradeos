@@ -1,6 +1,7 @@
 import "server-only";
 
 import { parseEmailThread } from "@/lib/gmail/thread-parse";
+import { LLM_BUDGET_MS, withLlmTimeout } from "@/lib/llm/timeout";
 import { formatVocabulary, getKnownVocabulary } from "@/lib/meetings/extract";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
@@ -250,14 +251,18 @@ export async function extractEmail(input: EmailInput): Promise<EmailExtraction> 
     },
   });
 
-  const { object } = await generateObject({
-    abortSignal: AbortSignal.timeout(60_000),
-    model: openrouter(modelId),
-    schema: extractionSchema,
-    system: buildSystemPrompt({ vocab }),
-    prompt: buildUserPrompt(input),
-    temperature: 0.2,
-  });
+  const { object } = await withLlmTimeout(
+    { budgetMs: LLM_BUDGET_MS.emailExtraction, modelId, label: "l'extraction de l'email" },
+    (signal) =>
+      generateObject({
+        abortSignal: signal,
+        model: openrouter(modelId),
+        schema: extractionSchema,
+        system: buildSystemPrompt({ vocab }),
+        prompt: buildUserPrompt(input),
+        temperature: 0.2,
+      }),
+  );
 
   return object;
 }

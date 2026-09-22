@@ -8,6 +8,11 @@ import { formatPersonName } from "@/lib/format";
 import { asc, eq } from "drizzle-orm";
 import { NewMeetingForm } from "./new-meeting-form";
 
+// Le formulaire enchaîne création puis extraction LLM dans la même
+// transition : les deux Server Actions sont servies par cette route et
+// héritent de ce budget (cf. LLM_BUDGET_MS).
+export const maxDuration = 300;
+
 export default async function NewMeetingPage() {
   const conn = await db();
   const [projectList, userList, contactList] = await Promise.all([

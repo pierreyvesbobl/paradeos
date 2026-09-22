@@ -6,6 +6,7 @@ import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
+import { LLM_BUDGET_MS, withLlmTimeout } from "@/lib/llm/timeout";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { createOpenAI } from "@ai-sdk/openai";
@@ -462,14 +463,22 @@ export async function extractMeeting(
     transcript.length > MAX_TRANSCRIPT_CHARS_FOR_LLM
       ? `${transcript.slice(0, MAX_TRANSCRIPT_CHARS_FOR_LLM)}\n\n[transcript tronqué]`
       : transcript;
-  const { object } = await generateObject({
-    abortSignal: AbortSignal.timeout(120_000),
-    model: openrouter(modelId),
-    schema: extractionSchema,
-    system: systemPrompt,
-    prompt: `Transcript :\n\n${boundedTranscript}`,
-    temperature: 0.2,
-  });
+  const { object } = await withLlmTimeout(
+    {
+      budgetMs: LLM_BUDGET_MS.meetingExtraction,
+      modelId,
+      label: "l'extraction de la réunion",
+    },
+    (signal) =>
+      generateObject({
+        abortSignal: signal,
+        model: openrouter(modelId),
+        schema: extractionSchema,
+        system: systemPrompt,
+        prompt: `Transcript :\n\n${boundedTranscript}`,
+        temperature: 0.2,
+      }),
+  );
 
   return object;
 }

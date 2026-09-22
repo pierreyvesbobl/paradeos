@@ -1,5 +1,6 @@
 import "server-only";
 
+import { LLM_BUDGET_MS, withLlmTimeout } from "@/lib/llm/timeout";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { createOpenAI } from "@ai-sdk/openai";
@@ -223,14 +224,18 @@ export async function extractInvoiceMetadata(args: {
     args.pdfText,
   ].join("\n");
 
-  const { object } = await generateObject({
-    abortSignal: AbortSignal.timeout(60_000),
-    model: openrouter(modelId),
-    schema: invoiceSchema,
-    system: SYSTEM_PROMPT,
-    prompt: userPrompt,
-    temperature: 0.1,
-  });
+  const { object } = await withLlmTimeout(
+    { budgetMs: LLM_BUDGET_MS.invoiceExtraction, modelId, label: "la lecture de la facture" },
+    (signal) =>
+      generateObject({
+        abortSignal: signal,
+        model: openrouter(modelId),
+        schema: invoiceSchema,
+        system: SYSTEM_PROMPT,
+        prompt: userPrompt,
+        temperature: 0.1,
+      }),
+  );
 
   return object;
 }
