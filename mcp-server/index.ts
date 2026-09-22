@@ -177,7 +177,7 @@ server.tool(
 
 server.tool(
   "get_meeting",
-  "Détail d'un meeting : transcript intégral, résumé markdown, statut de transcription et propositions LLM. Pour ne récupérer que le transcript (sans les propositions), utiliser `get_meeting_transcript` — plus compact.",
+  "Détail d'un meeting : transcript intégral, résumé markdown, statut de transcription, participants et propositions LLM. Pour ne récupérer que le transcript (sans les propositions), utiliser `get_meeting_transcript` — plus compact.",
   getMeetingSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await getMeeting(args), null, 2) }],

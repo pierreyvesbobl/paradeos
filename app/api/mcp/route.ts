@@ -166,7 +166,7 @@ const TOOL_REGISTRY: Record<
   },
   get_meeting: {
     description:
-      "Détail complet d'un meeting : transcript intégral, résumé markdown, statut de transcription et propositions LLM. Pour ne récupérer que le transcript (sans propositions), préférer `get_meeting_transcript`.",
+      "Détail complet d'un meeting : transcript intégral, résumé markdown, statut de transcription, participants et propositions LLM. Pour ne récupérer que le transcript (sans propositions), préférer `get_meeting_transcript`.",
     schema: getMeetingSchema,
     handler: (a) => getMeeting(a as never),
   },

@@ -1,4 +1,5 @@
 import { DeleteButton } from "@/components/delete-button";
+import { MeetingParticipantsField } from "@/components/meetings/meeting-participants-field";
 import { PageHeader } from "@/components/page-header";
 import { ProposalsPanel } from "@/components/proposals/proposals-panel";
 import { contacts } from "@/db/schema/contacts";
@@ -8,6 +9,7 @@ import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { deleteMeetingAndRedirect } from "@/lib/actions/meetings";
+import { getMeetingParticipants } from "@/lib/db/queries/meeting-participants";
 import { db } from "@/lib/db/server";
 import { DemoBlur } from "@/lib/demo/components";
 import { FileText } from "@phosphor-icons/react/dist/ssr";
@@ -50,41 +52,59 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
   const [meeting] = await conn.select().from(meetings).where(eq(meetings.id, id)).limit(1);
   if (!meeting) notFound();
 
-  const [proposals, projectOptions, userOptions, entityOptions, contactOptions, taskOptions] =
-    await Promise.all([
-      conn
-        .select()
-        .from(meetingProposals)
-        .where(eq(meetingProposals.meetingId, id))
-        .orderBy(asc(meetingProposals.kind), asc(meetingProposals.createdAt)),
-      conn
-        .select({ id: projects.id, name: projects.name })
+  const [
+    proposals,
+    participants,
+    projectOptions,
+    userOptions,
+    entityOptions,
+    contactOptions,
+    taskOptions,
+  ] = await Promise.all([
+    conn
+      .select()
+      .from(meetingProposals)
+      .where(eq(meetingProposals.meetingId, id))
+      .orderBy(asc(meetingProposals.kind), asc(meetingProposals.createdAt)),
+    getMeetingParticipants(conn, id),
+    conn
+      .select({ id: projects.id, name: projects.name })
+      .from(projects)
+      .orderBy(asc(projects.name)),
+    conn
+      .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
+      .from(users)
+      .orderBy(asc(users.fullName)),
+    conn
+      .select({ id: entities.id, name: entities.name })
+      .from(entities)
+      .orderBy(asc(entities.name)),
+    conn
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        entityName: entities.name,
+      })
+      .from(contacts)
+      .leftJoin(entities, eq(entities.id, contacts.entityId))
+      .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
+    conn
+      .select({ id: tasks.id, title: tasks.title })
+      .from(tasks)
+      .where(and(sql`${tasks.status} not in ('done', 'cancelled')`))
+      .orderBy(asc(tasks.title)),
+  ]);
+
+  // Entité du projet rattaché : sert à préremplir la fiche quand on crée
+  // un contact directement depuis les participants.
+  const [projectEntity] = meeting.projectId
+    ? await conn
+        .select({ entityId: projects.entityId })
         .from(projects)
-        .orderBy(asc(projects.name)),
-      conn
-        .select({ id: users.id, fullName: users.fullName })
-        .from(users)
-        .orderBy(asc(users.fullName)),
-      conn
-        .select({ id: entities.id, name: entities.name })
-        .from(entities)
-        .orderBy(asc(entities.name)),
-      conn
-        .select({
-          id: contacts.id,
-          firstName: contacts.firstName,
-          lastName: contacts.lastName,
-          entityName: entities.name,
-        })
-        .from(contacts)
-        .leftJoin(entities, eq(entities.id, contacts.entityId))
-        .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
-      conn
-        .select({ id: tasks.id, title: tasks.title })
-        .from(tasks)
-        .where(and(sql`${tasks.status} not in ('done', 'cancelled')`))
-        .orderBy(asc(tasks.title)),
-    ]);
+        .where(eq(projects.id, meeting.projectId))
+        .limit(1)
+    : [];
 
   const pending = proposals.filter((p) => p.status === "pending");
   const accepted = proposals.filter((p) => p.status === "accepted");
@@ -176,6 +196,24 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
         </div>
 
         <aside className="flex w-full flex-col gap-4 lg:w-[300px] lg:flex-none">
+          <section className="rounded-xl border bg-[var(--ds-bg-surface)] p-4 sm:p-5">
+            <h2 className="font-semibold text-[14px] text-foreground">Participants</h2>
+            <p className="mt-0.5 mb-3 text-[12px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
+              Qui était là — repris dans l'extraction
+            </p>
+            <MeetingParticipantsField
+              meetingId={meeting.id}
+              participants={participants}
+              users={userOptions}
+              contacts={contactOptions.map((c) => ({
+                id: c.id,
+                fullName: formatPersonName(c.firstName, c.lastName),
+                entityName: c.entityName ?? null,
+              }))}
+              defaultEntityId={projectEntity?.entityId ?? null}
+            />
+          </section>
+
           <section className="rounded-xl border bg-[var(--ds-bg-surface)] p-4 sm:p-5">
             <h2 className="font-semibold text-[14px] text-foreground">Lié à</h2>
             <p className="mt-0.5 mb-3 text-[12px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">

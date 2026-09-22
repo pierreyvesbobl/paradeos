@@ -21,6 +21,7 @@ import { taskAssignees } from "../db/schema/task-assignees";
 import { tasks } from "../db/schema/tasks";
 import { timeEntries } from "../db/schema/time-entries";
 import { users } from "../db/schema/users";
+import { getMeetingParticipants } from "../lib/db/queries/meeting-participants";
 import { setTaskAssignees } from "../lib/db/queries/task-assignees";
 import type { UserContext } from "./context";
 import { db } from "./db";
@@ -498,13 +499,16 @@ export async function getMeeting(args: z.infer<typeof getMeetingSchema>) {
   const [meeting] = await conn.select().from(meetings).where(eq(meetings.id, args.id)).limit(1);
   if (!meeting) return null;
 
-  const proposals = await conn
-    .select()
-    .from(meetingProposals)
-    .where(eq(meetingProposals.meetingId, meeting.id))
-    .orderBy(asc(meetingProposals.createdAt));
+  const [proposals, participants] = await Promise.all([
+    conn
+      .select()
+      .from(meetingProposals)
+      .where(eq(meetingProposals.meetingId, meeting.id))
+      .orderBy(asc(meetingProposals.createdAt)),
+    getMeetingParticipants(conn, meeting.id),
+  ]);
 
-  return { meeting, proposals };
+  return { meeting, participants, proposals };
 }
 
 /**
