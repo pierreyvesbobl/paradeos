@@ -55,6 +55,10 @@ export const noteBaseSchema = z.object({
 export const createNoteSchema = noteBaseSchema;
 export const updateNoteSchema = noteBaseSchema.extend({ id: z.string().uuid() });
 export const deleteNoteSchema = z.object({ id: z.string().uuid() });
+/** Suppression groupée depuis la sélection d'une liste de notes. */
+export const bulkDeleteNotesSchema = z.object({
+  ids: z.string().uuid().array().min(1).max(200),
+});
 export const markAllMyMentionsReadSchema = z.object({});
 
 export type CreateNoteInput = z.infer<typeof createNoteSchema>;

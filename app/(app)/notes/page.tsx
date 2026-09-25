@@ -1,6 +1,6 @@
 import { EmptyState } from "@/components/empty-state";
-import { NoteCard } from "@/components/notes/note-card";
 import { NoteSortMenu } from "@/components/notes/note-sort-menu";
+import { NotesGrid } from "@/components/notes/notes-grid";
 import { SubjectPill } from "@/components/notes/subject-pill";
 import { PageHeader } from "@/components/page-header";
 import { NotionFilters } from "@/components/table/notion-filters";
@@ -9,6 +9,8 @@ import { SearchInputWithClear } from "@/components/ui/search-input";
 import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { notes as notesTable } from "@/db/schema/notes";
 import { users as usersTable } from "@/db/schema/users";
+import { getUserRole } from "@/lib/auth/admin";
+import { requireUser } from "@/lib/auth/server";
 import { type NoteSortField, getAttachmentsForNotes, getRecentNotes } from "@/lib/db/queries/notes";
 import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
@@ -46,6 +48,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
   const sortField = (sortState?.field as NoteSortField | undefined) ?? "occurredAt";
   const sortDir = sortState?.dir ?? "desc";
 
+  const user = await requireUser();
   const conn = await db();
   const authorsPromise = conn
     .select({ id: usersTable.id, fullName: usersTable.fullName })
@@ -64,7 +67,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
   ];
   const filterConditions = applyFilters(filters, filterColumns);
 
-  const [authors, notesList] = await Promise.all([
+  const [authors, notesList, role] = await Promise.all([
     authorsPromise,
     getRecentNotes({
       conditions: filterConditions,
@@ -73,7 +76,11 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
       sortField,
       sortDir,
     }),
+    getUserRole(user.id),
   ]);
+  // Une note est signée : seul son auteur (ou un admin) peut la supprimer,
+  // donc seule celle-là est sélectionnable.
+  const isAdmin = role === "admin";
 
   const FILTER_DEFS = [
     {
@@ -171,31 +178,27 @@ export default async function NotesPage({ searchParams }: { searchParams: Search
           );
         })()
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {notesList.map((note) => {
+        <NotesGrid
+          items={notesList.map((note) => {
             const subjectType =
               note.subjectType === "opportunity" ? null : (note.subjectType ?? null);
-            return (
-              <li key={note.id}>
-                <NoteCard
-                  note={note}
-                  attachments={attachmentsByNote[note.id] ?? []}
-                  subjectType={subjectType}
-                  subjectId={note.subjectId}
-                  subjectPill={
-                    note.subjectType && note.subjectId && note.subjectType !== "opportunity" ? (
-                      <SubjectPill
-                        type={note.subjectType}
-                        id={note.subjectId}
-                        label={note.subjectLabel}
-                      />
-                    ) : null
-                  }
-                />
-              </li>
-            );
+            return {
+              note,
+              attachments: attachmentsByNote[note.id] ?? [],
+              subjectType,
+              subjectId: note.subjectId,
+              subjectPill:
+                note.subjectType && note.subjectId && note.subjectType !== "opportunity" ? (
+                  <SubjectPill
+                    type={note.subjectType}
+                    id={note.subjectId}
+                    label={note.subjectLabel}
+                  />
+                ) : null,
+              canDelete: isAdmin || note.authorId === user.id,
+            };
           })}
-        </ul>
+        />
       )}
     </div>
   );

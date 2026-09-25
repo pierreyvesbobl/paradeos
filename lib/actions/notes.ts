@@ -19,14 +19,16 @@ import {
   extractUserMentionTokens,
   resolveMentionedUserIds,
 } from "@/lib/mentions";
+import { removeNoteAttachmentObjects } from "@/lib/notes/attachments-storage";
 import {
   type NoteSubjectType,
+  bulkDeleteNotesSchema,
   createNoteSchema,
   deleteNoteSchema,
   markAllMyMentionsReadSchema,
   updateNoteSchema,
 } from "@/lib/schemas/notes";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 async function fetchSubjectName(type: NoteSubjectType, id: string): Promise<string | null> {
@@ -257,9 +259,52 @@ export const deleteNote = action(deleteNoteSchema, async ({ input, user }) => {
     .where(eq(notes.id, input.id))
     .limit(1);
 
+  await removeNoteAttachmentObjects([input.id]);
   await conn.delete(notes).where(eq(notes.id, input.id));
   revalidateForSubject(row?.subjectType, row?.subjectId);
   return { id: input.id };
+});
+
+/**
+ * Suppression groupée depuis la sélection d'une liste. Même règle que
+ * l'unitaire — on ne supprime que ses propres notes, sauf admin — mais
+ * appliquée note par note : une sélection mixte supprime ce qui est
+ * permis et rend le nombre d'ignorées, plutôt que d'échouer en bloc.
+ */
+export const bulkDeleteNotes = action(bulkDeleteNotesSchema, async ({ input, user }) => {
+  const conn = await db();
+  const rows = await conn
+    .select({
+      id: notes.id,
+      authorId: notes.authorId,
+      subjectType: notes.subjectType,
+      subjectId: notes.subjectId,
+    })
+    .from(notes)
+    .where(inArray(notes.id, input.ids));
+  if (rows.length === 0) throw new Error("Notes introuvables.");
+
+  const role = await getUserRole(user.id);
+  const deletable = role === "admin" ? rows : rows.filter((r) => r.authorId === user.id);
+  if (deletable.length === 0) {
+    throw new Error("Seul l'auteur d'une note (ou un admin) peut la supprimer.");
+  }
+
+  const ids = deletable.map((r) => r.id);
+  await removeNoteAttachmentObjects(ids);
+  await conn.delete(notes).where(inArray(notes.id, ids));
+
+  // Un seul revalidate par sujet touché : la sélection porte souvent sur
+  // le même projet ou le même contact.
+  const seen = new Set<string>();
+  for (const r of deletable) {
+    const key = `${r.subjectType ?? ""}:${r.subjectId ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    revalidateForSubject(r.subjectType, r.subjectId);
+  }
+
+  return { deleted: ids.length, skipped: rows.length - ids.length };
 });
 
 /**
