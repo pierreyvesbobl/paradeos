@@ -15,6 +15,7 @@
  */
 import { getAppUrl } from "@/lib/app-url";
 import { getUserRole } from "@/lib/auth/admin";
+import { toMcpInputSchema } from "@/lib/mcp/json-schema";
 import { CORS_HEADERS, corsPreflight } from "@/lib/oauth/http";
 import {
   type McpAuth,
@@ -25,7 +26,6 @@ import {
 } from "@/lib/oauth/resource-server";
 import { type NextRequest, NextResponse } from "next/server";
 import { type ZodTypeAny, z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 
 import {
   pushCoworkingInvoiceMcp,
@@ -42,6 +42,8 @@ import {
   addNoteSchema,
   completeTask,
   completeTaskSchema,
+  createMeeting,
+  createMeetingSchema,
   createProject,
   createProjectSchema,
   createTask,
@@ -79,6 +81,8 @@ import {
   readResource,
   searchAll,
   searchAllSchema,
+  setMeetingTranscript,
+  setMeetingTranscriptSchema,
   updateContact,
   updateContactSchema,
   updateEntity,
@@ -86,9 +90,16 @@ import {
   updateProject,
   updateProjectSchema,
 } from "./_handlers";
+import { extractMeetingMcp, extractMeetingMcpSchema } from "./_meeting-handlers";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+/**
+ * L'extraction d'une réunion tient sous un budget LLM de 4 min
+ * (`LLM_BUDGET_MS.meetingExtraction`) : la route doit lui laisser la
+ * place, sinon la plateforme coupe avant qu'on rende un message lisible.
+ * Les autres tools restent très en-dessous — c'est un plafond, pas un coût.
+ */
+export const maxDuration = 300;
 
 /**
  * Versions du protocole MCP qu'on sait servir. L'ordre importe : la
@@ -175,6 +186,27 @@ const TOOL_REGISTRY: Record<
       "Transcript brut d'un meeting (texte intégral) + métadonnées de transcription (status, provider, audio). Réponse compacte sans les propositions LLM.",
     schema: getMeetingTranscriptSchema,
     handler: (a) => getMeetingTranscript(a as never),
+  },
+  create_meeting: {
+    write: true,
+    description:
+      "Crée une réunion depuis un transcript texte (équivalent de /meetings/nouveau → « Coller le texte »). Args : title, transcript (≥20 car.), occurredAt? (YYYY-MM-DD ou ISO), sourceLabel?, projectId?, participants? [{userId|contactId|displayName, role?}]. Ne génère ni résumé ni propositions : enchaîne avec `extract_meeting`.",
+    schema: createMeetingSchema,
+    handler: (a, ctx) => createMeeting(a as never, ctx as never),
+  },
+  set_meeting_transcript: {
+    write: true,
+    description:
+      "Pose ou complète le transcript d'une réunion existante. Args : id, transcript, mode? replace|append (défaut replace), confirmed? (obligatoire pour écraser un transcript non vide).",
+    schema: setMeetingTranscriptSchema,
+    handler: (a) => setMeetingTranscript(a as never),
+  },
+  extract_meeting: {
+    write: true,
+    description:
+      "Lance l'extraction LLM sur le transcript d'une réunion : résumé markdown + propositions (tâches, contacts, entités, projets) à valider dans Paradeos. Long (jusqu'à ~4 min). `confirmed: true` requis si la réunion a déjà été extraite — la ré-extraction efface les propositions déjà décidées.",
+    schema: extractMeetingMcpSchema,
+    handler: (a) => extractMeetingMcp(a as never),
   },
   list_my_time: {
     description: "Mon temps passé sur une période.",
@@ -291,29 +323,6 @@ const TOOL_REGISTRY: Record<
     handler: (a, ctx) => pushCoworkingInvoiceMcp(a as never, ctx as never),
   },
 };
-
-/**
- * Convertit un schéma Zod en JSON Schema MCP-compatible : top-level
- * `{ type: "object", properties, required }` sans `$ref` ni `$schema`.
- * Les MCP clients (Claude.ai, Cursor, etc.) s'appuient là-dessus pour
- * savoir quels arguments envoyer — un `{ type: "object" }` vide casse
- * l'appel car le client n'inclut alors aucun arg.
- */
-function toMcpInputSchema(schema: ZodTypeAny): Record<string, unknown> {
-  const raw = zodToJsonSchema(schema, { target: "openApi3", $refStrategy: "none" }) as Record<
-    string,
-    unknown
-  >;
-  // Drop legacy openApi metadata + force shape minimale attendue par MCP.
-  // biome-ignore lint/performance/noDelete: on veut vraiment supprimer la clé, pas juste undefined
-  delete raw.$schema;
-  // biome-ignore lint/performance/noDelete: idem
-  delete raw.definitions;
-  if (raw.type !== "object") {
-    return { type: "object" };
-  }
-  return raw;
-}
 
 /**
  * Réponse 401/403 normalisée. Le `WWW-Authenticate` est ce qui déclenche

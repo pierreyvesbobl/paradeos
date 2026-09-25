@@ -8,11 +8,13 @@ import { z } from "zod";
  * (préfixés `my_*`) filtrent par ctx.userId ; les tools "team"
  * exposent les données partagées.
  */
+import type { Database } from "../db/client";
 import { contacts } from "../db/schema/contacts";
 import { coworkingContracts } from "../db/schema/coworking";
 import { entities } from "../db/schema/entities";
 import { gmailMessages, gmailTags, gmailThreadTags, gmailThreads } from "../db/schema/gmail";
 import { invoices as invoicesTable } from "../db/schema/invoices";
+import { meetingParticipants } from "../db/schema/meeting-participants";
 import { meetingProposals, meetings } from "../db/schema/meetings";
 import { notes } from "../db/schema/notes";
 import { projectContacts } from "../db/schema/project-contacts";
@@ -537,6 +539,178 @@ export async function getMeetingTranscript(args: z.infer<typeof getMeetingTransc
     .where(eq(meetings.id, args.id))
     .limit(1);
   return row ?? null;
+}
+
+// ---------- WRITE : import d'un transcript ----------
+
+/**
+ * Une personne présente, dans l'une des trois formes acceptées par
+ * `meeting_participants` (cf. contrainte `meeting_participants_target_chk`).
+ * Objet à plat plutôt qu'une union : les clients MCP rendent mal un
+ * `anyOf` et finissent par n'envoyer aucun participant.
+ */
+const meetingParticipantInputSchema = z
+  .object({
+    userId: z.string().uuid().optional(),
+    contactId: z.string().uuid().optional(),
+    /** Nom brut, quand la personne n'a pas (encore) de fiche. */
+    displayName: z.string().min(1).max(120).optional(),
+    role: z.string().max(120).optional(),
+  })
+  .refine(
+    (p) => [p.userId, p.contactId, p.displayName].filter(Boolean).length === 1,
+    "Chaque participant porte exactement un de : userId, contactId, displayName.",
+  );
+
+/** Même plafond que le formulaire d'import côté UI. */
+const TRANSCRIPT_MAX = 500_000;
+
+export const createMeetingSchema = z.object({
+  title: z.string().min(1).max(200),
+  transcript: z.string().min(20).max(TRANSCRIPT_MAX),
+  /** Date (YYYY-MM-DD) ou datetime ISO 8601. À défaut : maintenant. */
+  occurredAt: z.string().optional(),
+  /** Provenance lisible du transcript. Défaut : "MCP". */
+  sourceLabel: z.string().max(200).optional(),
+  projectId: z.string().uuid().optional(),
+  participants: z.array(meetingParticipantInputSchema).max(50).optional(),
+});
+
+/**
+ * Crée une réunion à partir d'un transcript texte — l'équivalent MCP de
+ * l'onglet « Coller le texte » de /meetings/nouveau.
+ *
+ * L'extraction LLM n'est pas lancée ici : elle vit côté Next (SDK ai +
+ * réglages modèle), hors du périmètre de ce module, et coûte plusieurs
+ * dizaines de secondes. Le tool `extract_meeting` (transport HTTP) la
+ * déclenche dans un second appel.
+ */
+export async function createMeeting(args: z.infer<typeof createMeetingSchema>, ctx: UserContext) {
+  const occurredAt = parseOccurredAt(args.occurredAt);
+  const conn = db();
+
+  const row = await conn.transaction(async (tx) => {
+    const [m] = await tx
+      .insert(meetings)
+      .values({
+        title: args.title,
+        transcript: args.transcript,
+        occurredAt,
+        sourceLabel: args.sourceLabel ?? "MCP",
+        projectId: args.projectId ?? null,
+        createdBy: ctx.userId,
+      })
+      .returning({ id: meetings.id, title: meetings.title });
+    if (!m) return null;
+    // Les participants partent en base dans la foulée : l'extraction les
+    // lit pour lever l'ambiguïté des prénoms seuls dans le transcript.
+    await insertMeetingParticipants(tx, m.id, args.participants ?? [], ctx.userId);
+    return m;
+  });
+  if (!row) throw new Error("Création de la réunion échouée.");
+
+  return {
+    id: row.id,
+    title: row.title,
+    status: "ingested" as const,
+    transcriptLength: args.transcript.length,
+    participants: args.participants?.length ?? 0,
+    nextStep:
+      "Résumé et propositions ne sont pas encore générés : appelle `extract_meeting` avec cet id.",
+  };
+}
+
+export const setMeetingTranscriptSchema = z.object({
+  id: z.string().uuid(),
+  transcript: z.string().min(1).max(TRANSCRIPT_MAX),
+  /** `replace` (défaut) écrase, `append` ajoute à la suite. */
+  mode: z.enum(["replace", "append"]).optional(),
+  /**
+   * Requis pour écraser un transcript déjà rempli : c'est une perte de
+   * données, l'utilisateur doit l'avoir demandé explicitement.
+   */
+  confirmed: z.boolean().optional(),
+});
+
+/**
+ * Pose ou complète le transcript d'une réunion existante : fiche créée
+ * sans texte (import audio en échec, réunion ouverte à la main), ou
+ * seconde partie de réunion à ajouter.
+ */
+export async function setMeetingTranscript(args: z.infer<typeof setMeetingTranscriptSchema>) {
+  const conn = db();
+  const [meeting] = await conn
+    .select({ id: meetings.id, title: meetings.title, transcript: meetings.transcript })
+    .from(meetings)
+    .where(eq(meetings.id, args.id))
+    .limit(1);
+  if (!meeting) throw new Error("Meeting introuvable.");
+
+  const existing = meeting.transcript ?? "";
+  const mode = args.mode ?? "replace";
+  if (mode === "replace" && existing.trim().length > 0 && args.confirmed !== true) {
+    throw new Error(
+      `« ${meeting.title} » a déjà un transcript (${existing.length} caractères). L'écraser demande confirmed=true — demande à l'utilisateur, ou passe mode='append'.`,
+    );
+  }
+
+  const transcript =
+    mode === "append" && existing.length > 0
+      ? `${existing}\n\n${args.transcript}`
+      : args.transcript;
+  if (transcript.length > TRANSCRIPT_MAX) {
+    throw new Error(`Transcript trop long après ajout (${transcript.length} > ${TRANSCRIPT_MAX}).`);
+  }
+
+  await conn
+    .update(meetings)
+    .set({ transcript, updatedAt: new Date() })
+    .where(eq(meetings.id, args.id));
+
+  return {
+    id: args.id,
+    mode,
+    transcriptLength: transcript.length,
+    nextStep: "Appelle `extract_meeting` pour (re)générer résumé et propositions.",
+  };
+}
+
+/** Date de réunion : `YYYY-MM-DD`, datetime ISO, ou maintenant à défaut. */
+function parseOccurredAt(raw: string | undefined): Date {
+  if (!raw) return new Date();
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`occurredAt invalide : "${raw}". Attendu YYYY-MM-DD ou datetime ISO 8601.`);
+  }
+  return d;
+}
+
+/**
+ * Insère les participants déclarés. `onConflictDoNothing` couvre les
+ * index uniques partiels (un même user / contact / nom une seule fois par
+ * réunion) : un doublon dans l'appel ne fait pas échouer l'import.
+ */
+async function insertMeetingParticipants(
+  tx: Pick<Database, "insert">,
+  meetingId: string,
+  participants: z.infer<typeof meetingParticipantInputSchema>[],
+  addedBy: string,
+) {
+  if (participants.length === 0) return;
+  await tx
+    .insert(meetingParticipants)
+    .values(
+      participants.map((p) => ({
+        meetingId,
+        userId: p.userId ?? null,
+        contactId: p.contactId ?? null,
+        displayName: p.displayName ?? null,
+        role: p.role ?? null,
+        source: "manual" as const,
+        addedBy,
+      })),
+    )
+    .onConflictDoNothing();
 }
 
 export const listMyTimeSchema = z.object({

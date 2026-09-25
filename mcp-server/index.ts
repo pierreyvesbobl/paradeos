@@ -42,6 +42,8 @@ import {
   createCoworkingInvoiceSchema,
   createEntity,
   createEntitySchema,
+  createMeeting,
+  createMeetingSchema,
   createProject,
   createProjectSchema,
   createTask,
@@ -87,6 +89,8 @@ import {
   logTimeSchema,
   searchAll,
   searchAllSchema,
+  setMeetingTranscript,
+  setMeetingTranscriptSchema,
   updateContact,
   updateContactSchema,
   updateCoworkingContract,
@@ -190,6 +194,24 @@ server.tool(
   getMeetingTranscriptSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await getMeetingTranscript(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "create_meeting",
+  "Crée une réunion depuis un transcript texte. Args : title, transcript (≥20 car.), occurredAt? (YYYY-MM-DD ou ISO), sourceLabel?, projectId?, participants? [{userId|contactId|displayName, role?}]. Ne génère ni résumé ni propositions — l'extraction LLM n'existe que sur le transport HTTP (`extract_meeting`).",
+  createMeetingSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await createMeeting(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "set_meeting_transcript",
+  "Pose ou complète le transcript d'une réunion existante. Args : id, transcript, mode? replace|append (défaut replace), confirmed? (obligatoire pour écraser un transcript non vide).",
+  setMeetingTranscriptSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await setMeetingTranscript(args), null, 2) }],
   }),
 );
 

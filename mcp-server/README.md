@@ -144,6 +144,7 @@ servers. Tu peux maintenant demander à Claude :
 - `list_my_tasks` — mes tâches ouvertes
 - `list_meetings` (project, since)
 - `get_meeting` — détail + propositions LLM
+- `get_meeting_transcript` — transcript brut seul, sans les propositions
 - `list_my_time` (period, project) — total en minutes
 - `list_contacts` / `list_entities`
 - `list_notes` — filtres subjectType+subjectId, kind, authorId, mine, search, since/until
@@ -154,6 +155,12 @@ servers. Tu peux maintenant demander à Claude :
 - `complete_task` — bascule en `done`
 - `log_time` — créneau planned ou actual
 - `add_note` — polymorphique (project/contact/etc.)
+- `create_meeting` — réunion depuis un transcript collé (+ participants)
+- `set_meeting_transcript` — pose / complète le transcript d'une réunion
+  existante (`mode` replace|append ; écraser exige `confirmed`)
+- `extract_meeting` — **HTTP seulement** : lance l'extraction LLM (résumé
+  + propositions). Absente du transport stdio, qui ne peut pas charger le
+  pipeline Next (`server-only`, SDK ai). Compter jusqu'à ~4 min.
 
 ### Search
 - `search_all` — full-text sur projets, tâches, contacts, entités, meetings, **notes**
