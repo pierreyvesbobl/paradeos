@@ -37,10 +37,15 @@ export async function getParticipantContext(meetingId: string): Promise<Particip
  * Purement additif : une ré-extraction n'efface jamais un participant
  * ajouté à la main (ni un ajout d'une extraction précédente qui aurait
  * été corrigé depuis). Retirer quelqu'un reste une action humaine.
+ *
+ * `source` distingue ce que le modèle a déduit de ce qu'un humain a
+ * déclaré — une liste écrite en tête d'un mail de réunion, par exemple,
+ * vaut mieux qu'une déduction et doit le rester à l'affichage.
  */
 export async function syncParticipantsFromAttendees(
   meetingId: string,
   attendees: ExtractedAttendee[],
+  source: "manual" | "extraction" = "extraction",
 ): Promise<{ added: number }> {
   if (attendees.length === 0) return { added: 0 };
 
@@ -79,7 +84,7 @@ export async function syncParticipantsFromAttendees(
         contactId: target.kind === "contact" ? target.id : null,
         displayName: target.kind === "name" ? name : null,
         role,
-        source: "extraction",
+        source,
       })
       .onConflictDoNothing()
       .returning({ id: meetingParticipants.id });

@@ -6,7 +6,6 @@ import { getOrCreateGmailLabel, loadGmailLabelCache } from "@/lib/gmail/links";
 import { extractPdfText } from "@/lib/gmail/pdf";
 import { getValidAccessToken } from "@/lib/google/account";
 import {
-  type GmailMessage,
   collectAttachments,
   extractBodies,
   getAttachment,
@@ -28,8 +27,11 @@ import {
   sanitizeAudioFileName,
   titleFromSubject,
 } from "@/lib/meetings/email-attachments";
+import { parseEmailContext } from "@/lib/meetings/email-directives";
+import { fuzzyMatchProject } from "@/lib/meetings/extract";
 import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import { getIngestionUserIds } from "@/lib/meetings/ingestion-user";
+import { syncParticipantsFromAttendees } from "@/lib/meetings/participants";
 import { canStartAnotherItem } from "@/lib/meetings/run-budget";
 import { transcribeMeetingAudio } from "@/lib/meetings/transcribe";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
@@ -307,14 +309,24 @@ async function ingestOneMessage(args: IngestArgs): Promise<void> {
 
   const message = await getMessage(accessToken, messageRef.id, "full");
   const payload = message.payload;
-  const subject = getHeader(payload, "Subject");
   const fromHeader = getHeader(payload, "From");
   const fromEmail = parseAddressList(fromHeader)[0]?.email ?? null;
   const receivedAt = internalDateToDate(message.internalDate);
-  const title = titleFromSubject(
-    subject,
-    `Réunion reçue par mail du ${(receivedAt ?? new Date()).toLocaleDateString("fr-FR")}`,
-  );
+
+  // Le corps est lu même quand le transcript est en pièce jointe : c'est
+  // là que l'expéditeur écrit le projet, les participants, la date.
+  const bodies = extractBodies(payload);
+  const rawBody = bodies.text ?? (bodies.html ? htmlToPlainText(bodies.html) : "");
+  const context = parseEmailContext(getHeader(payload, "Subject"), rawBody ?? "");
+
+  const title =
+    context.title ??
+    titleFromSubject(
+      context.subject,
+      `Réunion reçue par mail du ${(receivedAt ?? new Date()).toLocaleDateString("fr-FR")}`,
+    );
+  const occurredAt = context.occurredAt ?? receivedAt;
+  const projectId = await resolveDeclaredProject(context.projectHint);
 
   const attachments = collectAttachments(payload);
   const source = pickTranscriptSource(
@@ -341,7 +353,10 @@ async function ingestOneMessage(args: IngestArgs): Promise<void> {
       messageId: messageRef.id,
       fromEmail,
       receivedAt,
+      occurredAt,
+      projectId,
     });
+    await saveDeclaredParticipants(meetingId, context.participants);
 
     const attachmentData = await getAttachment(accessToken, messageRef.id, ref.attachmentId);
     const storagePath = `${meetingId}/${crypto.randomUUID()}-${sanitizeAudioFileName(ref.filename)}`;
@@ -386,7 +401,7 @@ async function ingestOneMessage(args: IngestArgs): Promise<void> {
   }
 
   // ---- Texte / PDF / corps du mail : transcript disponible tout de suite.
-  const transcript = await readTextTranscript(args, message, attachments, source);
+  const transcript = await readTextTranscript(args, context.body, attachments, source);
   if (!transcript) {
     result.skippedUnsupported++;
     result.errorDetails.push(
@@ -403,7 +418,10 @@ async function ingestOneMessage(args: IngestArgs): Promise<void> {
     messageId: messageRef.id,
     fromEmail,
     receivedAt,
+    occurredAt,
+    projectId,
   });
+  await saveDeclaredParticipants(meetingId, context.participants);
   result.ingested++;
   await markProcessed(
     accessToken,
@@ -423,7 +441,7 @@ async function ingestOneMessage(args: IngestArgs): Promise<void> {
  */
 async function readTextTranscript(
   args: IngestArgs,
-  message: GmailMessage,
+  body: string,
   attachments: ReturnType<typeof collectAttachments>,
   source: ReturnType<typeof pickTranscriptSource>,
 ): Promise<string | null> {
@@ -439,11 +457,38 @@ async function readTextTranscript(
     }
   }
 
-  const bodies = extractBodies(message.payload);
-  const raw = bodies.text ?? (bodies.html ? htmlToPlainText(bodies.html) : null);
-  if (!raw) return null;
-  const cleaned = cleanEmailBodyForTranscript(raw);
+  if (body.trim().length === 0) return null;
+  const cleaned = cleanEmailBodyForTranscript(body);
   return cleaned.length >= MIN_BODY_CHARS ? cleaned : null;
+}
+
+/**
+ * Rapproche le projet déclaré de l'existant. Seuil bas : on écrit
+ * « GpasPlus » pour « GpasPlus - Automatisation des processus
+ * e-commerce ». Sans correspondance, on laisse la réunion sans projet —
+ * l'extraction le proposera, et le rattacher reste à un clic.
+ */
+async function resolveDeclaredProject(hint: string | null): Promise<string | null> {
+  if (!hint) return null;
+  const match = await fuzzyMatchProject(hint, { threshold: 0.3 });
+  return match?.id ?? null;
+}
+
+/**
+ * Enregistre les participants déclarés avant l'extraction : le prompt
+ * les lit (cf. `extract-and-save.ts`), ce qui lève l'ambiguïté des
+ * prénoms seuls au lieu de la laisser au modèle.
+ */
+async function saveDeclaredParticipants(
+  meetingId: string,
+  participants: Array<{ name: string; email: string | null }>,
+): Promise<void> {
+  if (participants.length === 0) return;
+  await syncParticipantsFromAttendees(
+    meetingId,
+    participants.map((p) => ({ name: p.name, email: p.email, role: null })),
+    "manual",
+  );
 }
 
 async function insertMeeting(
@@ -455,6 +500,8 @@ async function insertMeeting(
     messageId: string;
     fromEmail: string | null;
     receivedAt: Date | null;
+    occurredAt: Date | null;
+    projectId: string | null;
   },
 ): Promise<string> {
   const [row] = await conn
@@ -462,9 +509,11 @@ async function insertMeeting(
     .values({
       title: args.title,
       transcript: args.transcript,
-      // La date du mail n'est pas celle de la réunion, mais elle en est
-      // la meilleure approximation tant que l'extraction n'a rien dit.
-      occurredAt: args.receivedAt,
+      // Faute de date déclarée, celle du mail : ce n'est pas la date de
+      // la réunion, mais c'en est la meilleure approximation tant que
+      // l'extraction n'a rien dit.
+      occurredAt: args.occurredAt,
+      projectId: args.projectId,
       // Le label source s'affiche tel quel (fiche réunion, liste projet) :
       // on y met l'expéditeur, seule info qui dit d'où sort le transcript.
       sourceLabel: args.fromEmail ? `Email (auto) — ${args.fromEmail}` : "Email (auto)",

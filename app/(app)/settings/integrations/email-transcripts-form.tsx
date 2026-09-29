@@ -180,6 +180,26 @@ export function EmailTranscriptsForm({
               <span className="font-mono">{currentLabel}/Ignoré</span> plutôt que de bloquer la
               file.
             </p>
+            <p className="pt-1 font-medium text-foreground">Donner le contexte au passage</p>
+            <p>
+              En objet, entre crochets :{" "}
+              <span className="font-mono">Point hebdo [projet: GpasPlus] [avec: Marie, Éric]</span>.
+              Ou en tête du mail, une ligne par information, avant le transcript :
+            </p>
+            <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-2 font-mono text-[11px] leading-relaxed">
+              {
+                "Projet : GpasPlus - Automatisation\nParticipants : Marie Testard <marie@fictiva.fr>, Éric\nDate : 12/03/2026\nTitre : Cadrage V2"
+              }
+            </pre>
+            <p>
+              Clés acceptées : <span className="font-mono">projet</span>,{" "}
+              <span className="font-mono">participants</span> (ou{" "}
+              <span className="font-mono">avec</span>), <span className="font-mono">date</span>,{" "}
+              <span className="font-mono">titre</span>. Ces lignes ne partent pas dans le
+              transcript. Les participants déclarés sont lus par l'extraction, qui cesse de deviner
+              qui est « Marie ». Un projet qui ne correspond à rien est ignoré — la réunion arrive
+              sans projet, à rattacher en un clic.
+            </p>
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground text-xs">
