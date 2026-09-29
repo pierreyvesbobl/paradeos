@@ -18,12 +18,17 @@ import { fetchWithRetry } from "@/lib/net/fetch-with-retry";
 
 const API_BASE = "https://gmail.googleapis.com/gmail/v1";
 
-async function gmailFetch<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
+async function gmailFetch<T>(
+  path: string,
+  accessToken: string,
+  init?: RequestInit & { timeoutMs?: number },
+): Promise<T> {
+  const { timeoutMs, ...rest } = init ?? {};
   const res = await fetchWithRetry(`${API_BASE}${path}`, {
-    ...init,
-    headers: { ...init?.headers, authorization: `Bearer ${accessToken}` },
+    ...rest,
+    headers: { ...rest.headers, authorization: `Bearer ${accessToken}` },
     cache: "no-store",
-    timeoutMs: 6000,
+    timeoutMs: timeoutMs ?? 6000,
     label: `Gmail API ${path.split("?")[0]}`,
   });
   if (!res.ok) {
@@ -41,13 +46,19 @@ export type GmailListMessagesResponse = {
   resultSizeEstimate?: number;
 };
 
-/** Liste les ids de messages matchant la query Gmail (q='newer_than:90d'). */
+/**
+ * Liste les ids de messages matchant la query Gmail (`q='newer_than:90d'`)
+ * et/ou portant tous les labels de `labelIds` — c'est ce second mode que
+ * l'ingestion des transcripts par mail utilise, un label servant de file
+ * d'attente.
+ */
 export async function listMessages(
   accessToken: string,
-  opts: { q?: string; pageToken?: string; maxResults?: number } = {},
+  opts: { q?: string; labelIds?: string[]; pageToken?: string; maxResults?: number } = {},
 ): Promise<GmailListMessagesResponse> {
   const params = new URLSearchParams();
   if (opts.q) params.set("q", opts.q);
+  for (const labelId of opts.labelIds ?? []) params.append("labelIds", labelId);
   if (opts.pageToken) params.set("pageToken", opts.pageToken);
   params.set("maxResults", String(opts.maxResults ?? 100));
   return gmailFetch<GmailListMessagesResponse>(
@@ -303,10 +314,14 @@ export async function getAttachment(
   accessToken: string,
   messageId: string,
   attachmentId: string,
+  opts: { timeoutMs?: number } = {},
 ): Promise<{ data: Buffer; size: number }> {
   const res = await gmailFetch<{ data: string; size: number }>(
     `/users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
     accessToken,
+    // Gmail renvoie la PJ en base64 dans le JSON : 20 Mo d'audio = ~27 Mo
+    // à télécharger. Le défaut 6 s des appels metadata ne suffit pas.
+    { timeoutMs: opts.timeoutMs ?? 60_000 },
   );
   return {
     data: Buffer.from(res.data, "base64url"),

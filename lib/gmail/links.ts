@@ -61,7 +61,7 @@ export async function loadGmailLabelCache(accessToken: string): Promise<LabelCac
  * Idempotent : si le label existe déjà côté Gmail, retourne son id.
  * Sinon crée et retourne le nouvel id.
  */
-async function getOrCreateGmailLabel(
+export async function getOrCreateGmailLabel(
   accessToken: string,
   labelName: string,
   cache: LabelCache,

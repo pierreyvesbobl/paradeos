@@ -94,6 +94,18 @@ export async function ProjectMeetingsSection({ projectId }: { projectId: string 
                       <ArrowSquareOut className="size-3.5" />
                     </a>
                   ) : null}
+                  {m.sourceEmailMessageId ? (
+                    <a
+                      href={`https://mail.google.com/mail/u/0/#all/${m.sourceEmailMessageId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-foreground"
+                      title="Ouvrir le mail source dans Gmail"
+                      aria-label="Ouvrir le mail source dans Gmail"
+                    >
+                      <ArrowSquareOut className="size-3.5" />
+                    </a>
+                  ) : null}
                 </div>
               </div>
               {summaryPreview ? (
