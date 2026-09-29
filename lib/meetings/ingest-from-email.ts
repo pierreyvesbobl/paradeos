@@ -211,7 +211,10 @@ async function ingestForUser(args: {
   if (address) {
     try {
       const listed = await listMessages(accessToken, {
-        q: buildAddressQuery(address),
+        q: buildAddressQuery(address, [
+          `${labelName}/${PROCESSED_SEGMENT}`,
+          `${labelName}/${IGNORED_SEGMENT}`,
+        ]),
         maxResults: 25,
       });
       // La recherche a abouti : il y a bien un endroit où regarder,

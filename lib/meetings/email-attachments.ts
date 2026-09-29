@@ -212,8 +212,15 @@ export const ADDRESS_QUERY_WINDOW_DAYS = 30;
  * attrape ce qu'un alias ou un groupe a livré dans la boîte, là où
  * `to:` ne voit que l'entête — les deux sont nécessaires, un transfert
  * automatique ne réécrivant pas forcément les destinataires.
+ *
+ * `excludedLabels` écarte ce qui est déjà passé. La base le ferait
+ * aussi, mais elle oublie : une réunion supprimée à la main rendrait
+ * son mail à nouveau éligible, et il reviendrait au run suivant. Le
+ * label, lui, reste posé sur le fil — c'est la trace qui survit à la
+ * suppression.
  */
-export function buildAddressQuery(address: string): string {
+export function buildAddressQuery(address: string, excludedLabels: string[] = []): string {
   const safe = address.trim().toLowerCase();
-  return `{to:${safe} deliveredto:${safe} cc:${safe}} newer_than:${ADDRESS_QUERY_WINDOW_DAYS}d`;
+  const exclusions = excludedLabels.map((l) => ` -label:"${l.replace(/"/g, "")}"`).join("");
+  return `{to:${safe} deliveredto:${safe} cc:${safe}} newer_than:${ADDRESS_QUERY_WINDOW_DAYS}d${exclusions}`;
 }

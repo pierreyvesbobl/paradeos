@@ -160,4 +160,10 @@ describe("buildAddressQuery", () => {
       "{to:reunions@bobl.fr deliveredto:reunions@bobl.fr cc:reunions@bobl.fr} newer_than:30d",
     );
   });
+
+  it("écarte les libellés déjà traités, qui survivent à la suppression d'une réunion", () => {
+    expect(buildAddressQuery("reunions@bobl.fr", ["Paradeos/Réunions/Traité"])).toBe(
+      '{to:reunions@bobl.fr deliveredto:reunions@bobl.fr cc:reunions@bobl.fr} newer_than:30d -label:"Paradeos/Réunions/Traité"',
+    );
+  });
 });
