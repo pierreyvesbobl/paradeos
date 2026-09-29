@@ -52,9 +52,7 @@ export async function withLlmTimeout<T>(
     if (!isTimeoutError(err)) throw err;
     const spent = Math.round((Date.now() - startedAt) / 1000);
     throw new Error(
-      `Le modèle ${modelId} n'a pas rendu ${label} dans le temps imparti ` +
-        `(abandon après ${spent} s). Relance l'extraction, ou choisis un modèle ` +
-        "plus rapide dans Réglages → Intégrations.",
+      `Le modèle ${modelId} n'a pas rendu ${label} dans le temps imparti (abandon après ${spent} s). Relance l'extraction, ou choisis un modèle plus rapide dans Réglages → Intégrations.`,
     );
   }
 }
