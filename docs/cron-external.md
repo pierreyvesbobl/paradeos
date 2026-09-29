@@ -1,13 +1,15 @@
 # Crons externes (Vercel Hobby)
 
 Vercel Hobby limite les Cron Jobs à 1× par jour. Pour les jobs qui doivent
-tourner plus fréquemment (sync calendar 15 min, sync transcripts Drive 30 min),
-on les a sortis de `vercel.json` et on les déclenche depuis l'extérieur.
+tourner plus fréquemment (sync calendar 15 min, sync transcripts Drive et mail
+30 min), on les a sortis de `vercel.json` et on les déclenche depuis l'extérieur.
 
 Les endpoints restent en place :
 
 - `GET /api/cron/refresh-calendar-events` — sync events Google Calendar
 - `GET /api/cron/ingest-drive-transcripts` — ingestion auto des transcripts Drive
+- `GET /api/cron/ingest-email-transcripts` — ingestion des réunions envoyées par
+  mail (label Gmail configuré dans les réglages)
 
 Auth : header `Authorization: Bearer $CRON_SECRET`.
 
@@ -16,7 +18,8 @@ Auth : header `Authorization: Bearer $CRON_SECRET`.
 ### 1. Boutons UI (manuel)
 
 Pour Drive transcripts : `/settings/integrations` → section « Transcripts Drive »
-→ bouton **Sync now**. Pour Calendar : section « Google Calendar » → bouton
+→ bouton **Sync now**. Idem pour les mails : section « Transcripts par mail » →
+bouton **Sync now**. Pour Calendar : section « Google Calendar » → bouton
 **Resync events**. Suffit pour un usage ponctuel.
 
 ### 2. cron-job.org (gratuit, recommandé)
@@ -26,7 +29,8 @@ Pour Drive transcripts : `/settings/integrations` → section « Transcripts Dri
    - URL : `https://<ton-domaine>/api/cron/refresh-calendar-events`
    - Schedule : `*/15 * * * *`
    - Header : `Authorization: Bearer <CRON_SECRET>`
-3. Idem pour `/api/cron/ingest-drive-transcripts` avec `*/30 * * * *`
+3. Idem pour `/api/cron/ingest-drive-transcripts` et
+   `/api/cron/ingest-email-transcripts` avec `*/30 * * * *`
 
 Free tier suffit largement (jusqu'à 50 crons, exécution illimitée).
 
@@ -63,6 +67,10 @@ Re-mets les entrées dans `vercel.json` :
 },
 {
   "path": "/api/cron/ingest-drive-transcripts",
+  "schedule": "*/30 * * * *"
+},
+{
+  "path": "/api/cron/ingest-email-transcripts",
   "schedule": "*/30 * * * *"
 }
 ```

@@ -30,6 +30,23 @@ export const SETTING_KEYS = {
    */
   MEETINGS_DRIVE_FOLDER_ID: "MEETINGS_DRIVE_FOLDER_ID",
   /**
+   * Nom du label Gmail qui sert de file d'attente aux transcripts reçus
+   * par mail (défaut proposé : `Paradeos/Réunions`). Le cron (cf.
+   * /api/cron/ingest-email-transcripts) lit les messages portant ce
+   * label, crée la réunion depuis la PJ (texte, PDF, audio) ou le corps
+   * du mail, lance l'extraction LLM, puis retire le label. Sans cette
+   * valeur, l'ingestion par mail est désactivée.
+   */
+  MEETINGS_EMAIL_LABEL: "MEETINGS_EMAIL_LABEL",
+  /**
+   * Adresse dédiée aux réunions (alias ou groupe Google qui retombe
+   * dans la boîte du compte connecté, ex. `reunions@bobl.fr`). Quand
+   * elle est posée, le pipeline lit aussi les mails adressés là sans
+   * dépendre d'un filtre Gmail : le label n'est plus qu'une file de
+   * secours et la trace de ce qui a été traité.
+   */
+  MEETINGS_EMAIL_ADDRESS: "MEETINGS_EMAIL_ADDRESS",
+  /**
    * Kill switch coût : si "false", l'extraction LLM des emails est
    * désactivée (le sync continue mais ne traite pas les pending).
    * Default : enabled. À mettre à "false" si le coût LLM explose.

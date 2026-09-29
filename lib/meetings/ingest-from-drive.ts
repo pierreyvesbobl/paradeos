@@ -1,13 +1,12 @@
 import { fetchWithTimeout } from "@/lib/net/fetch-with-timeout";
 import "server-only";
 
-import { googleAccounts } from "@/db/schema/google-accounts";
 import { meetings } from "@/db/schema/meetings";
-import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import { type DriveFile, listFolderChildren } from "@/lib/google/drive-api";
 import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
+import { getIngestionUserId } from "@/lib/meetings/ingestion-user";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { eq } from "drizzle-orm";
 
@@ -33,22 +32,6 @@ export type DriveIngestResult = {
   errors: number;
   errorDetails: string[];
 };
-
-/**
- * Cherche un user admin avec un compte Google connecté pour exécuter
- * la sync sous son identité. La cron n'a pas de contexte user — on
- * impersonate un admin.
- */
-async function getIngestionUserId(): Promise<string | null> {
-  const conn = await db();
-  const [row] = await conn
-    .select({ id: users.id })
-    .from(users)
-    .innerJoin(googleAccounts, eq(googleAccounts.userId, users.id))
-    .where(eq(users.role, "admin"))
-    .limit(1);
-  return row?.id ?? null;
-}
 
 async function downloadDriveText(file: DriveFile, accessToken: string): Promise<string | null> {
   const headers = { authorization: `Bearer ${accessToken}` };

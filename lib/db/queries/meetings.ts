@@ -20,6 +20,7 @@ export async function getMeetingsForProject(projectId: string) {
       status: meetings.status,
       sourceLabel: meetings.sourceLabel,
       sourceDriveFileId: meetings.sourceDriveFileId,
+      sourceEmailMessageId: meetings.sourceEmailMessageId,
       createdAt: meetings.createdAt,
       pendingCount: sql<number>`(
         select count(*)::int from meeting_proposals

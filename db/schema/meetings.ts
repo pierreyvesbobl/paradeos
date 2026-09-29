@@ -86,6 +86,13 @@ export const meetings = pgTable(
      * Utilisé pour l'idempotence (cf. unique index partiel). */
     sourceDriveFileId: text("source_drive_file_id"),
     sourceDriveFileModifiedAt: timestamp("source_drive_file_modified_at", { withTimezone: true }),
+    /** Si ingéré depuis un mail labellisé dans Gmail, id du message source.
+     * Porte l'idempotence du pipeline (unique index partiel) : un message
+     * ne peut produire qu'une réunion, même re-labellisé. */
+    sourceEmailMessageId: text("source_email_message_id"),
+    /** Expéditeur du mail source, pour retrouver d'où vient le transcript. */
+    sourceEmailFrom: text("source_email_from"),
+    sourceEmailReceivedAt: timestamp("source_email_received_at", { withTimezone: true }),
     /** Lien optionnel vers un projet (couvre aussi les anciens deals/opps). */
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),

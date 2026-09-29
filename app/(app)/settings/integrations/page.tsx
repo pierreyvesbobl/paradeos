@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import { ApiTokensSection } from "./api-tokens-section";
 import { DougsSection } from "./dougs-section";
 import { DriveTranscriptsSection } from "./drive-transcripts-section";
+import { EmailTranscriptsSection } from "./email-transcripts-section";
 import { GmailSection } from "./gmail-section";
 import { GoogleCalendarSection } from "./google-calendar-section";
 import { GoogleDriveSection } from "./google-drive-section";
@@ -89,6 +90,7 @@ export default async function IntegrationsSettingsPage({
       <GmailSection userId={user.id} />
       <InvoiceFilingSection userId={user.id} />
       {isAdmin ? <DriveTranscriptsSection /> : null}
+      {isAdmin ? <EmailTranscriptsSection userId={user.id} /> : null}
     </>
   );
 
