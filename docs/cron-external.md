@@ -13,7 +13,31 @@ Les endpoints restent en place :
 
 Auth : header `Authorization: Bearer $CRON_SECRET`.
 
-## 3 options pour déclencher
+## En place aujourd'hui : GitHub Actions
+
+`.github/workflows/crons.yml` appelle les deux endpoints d'ingestion toutes
+les 30 minutes. Le dépôt étant public, les minutes Actions sont gratuites.
+
+Prérequis : le secret `CRON_SECRET` du dépôt doit valoir la variable
+d'environnement `CRON_SECRET` de Vercel (Production) —
+
+```sh
+gh secret set CRON_SECRET   # colle la valeur, elle n'est jamais affichée
+```
+
+Sans ce secret, le workflow échoue dès la première étape avec un message
+explicite plutôt qu'une salve de 401.
+
+Deux caveats assumés : la planification GitHub peut dériver de 5 à 10
+minutes, et un workflow planifié est désactivé après 60 jours sans activité
+sur le dépôt. Pour un job d'ingestion, les deux sont sans conséquence.
+
+Le `refresh-calendar-events` (15 min) n'y est pas : à ajouter dans le même
+fichier avec un second `schedule` si le besoin se confirme.
+
+## Les autres options
+
+
 
 ### 1. Boutons UI (manuel)
 

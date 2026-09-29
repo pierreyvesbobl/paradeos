@@ -1,0 +1,60 @@
+# Crons externes.
+#
+# Vercel Hobby ne descend pas sous un passage par jour, or l'ingestion des
+# transcripts (Drive et mail) n'a d'intérêt qu'à la demi-heure : un
+# compte-rendu envoyé le matin doit être exploitable dans la foulée, pas le
+# lendemain. Ces endpoints sont donc déclenchés d'ici (cf. docs/cron-external.md).
+#
+# Le dépôt est public : les minutes Actions sont gratuites. Deux caveats,
+# assumés pour des jobs non critiques — la planification GitHub peut dériver
+# de 5 à 10 minutes, et les workflows planifiés sont désactivés après 60
+# jours sans activité sur le dépôt.
+name: Crons externes
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  # Permet de déclencher à la main depuis l'onglet Actions.
+  workflow_dispatch:
+
+# Un run à la fois : deux ingestions simultanées ne casseraient rien
+# (l'idempotence tient) mais paieraient deux fois le même travail LLM.
+concurrency:
+  group: crons-externes
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    name: Ingestion transcripts (mail + Drive)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      BASE_URL: https://paradeos.vercel.app
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+    steps:
+      - name: Vérifier le secret
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Secret CRON_SECRET absent du dépôt. Pose-le avec la même valeur que la variable d'environnement Vercel : gh secret set CRON_SECRET"
+            exit 1
+          fi
+
+      # `--fail-with-body` : l'endpoint répond 500 dès qu'un élément a
+      # échoué (cf. lib/cron/auth.ts:cronResponse). On veut que le run
+      # GitHub rougisse dans ce cas, tout en gardant le corps lisible.
+      - name: Réunions envoyées par mail
+        run: |
+          curl -sS --fail-with-body --max-time 600 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$BASE_URL/api/cron/ingest-email-transcripts"
+          echo
+
+      - name: Transcripts déposés sur Drive
+        if: always()
+        run: |
+          curl -sS --fail-with-body --max-time 600 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$BASE_URL/api/cron/ingest-drive-transcripts"
+          echo
