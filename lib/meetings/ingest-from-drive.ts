@@ -7,6 +7,7 @@ import { getValidAccessToken } from "@/lib/google/account";
 import { type DriveFile, listFolderChildren } from "@/lib/google/drive-api";
 import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import { getIngestionUserId } from "@/lib/meetings/ingestion-user";
+import { canStartAnotherItem } from "@/lib/meetings/run-budget";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { eq } from "drizzle-orm";
 
@@ -15,15 +16,6 @@ const TEXT_MIMES = new Set(["text/plain", "text/markdown", "text/x-markdown"]);
 
 /** Limite par run pour ne pas exploser le timeout cron Vercel. */
 const MAX_FILES_PER_RUN = 5;
-
-/**
- * Budget de temps du run. Une extraction lente (modèle de raisonnement
- * sur un transcript d'une heure) peut manger la quasi-totalité du
- * `maxDuration = 300` de la cron. On arrête donc d'entamer un fichier
- * passé ce seuil : mieux vaut rendre un bilan partiel et reprendre au
- * run suivant que se faire tuer en plein milieu.
- */
-const RUN_BUDGET_MS = 200_000;
 
 export type DriveIngestResult = {
   ingested: number;
@@ -109,7 +101,9 @@ export async function ingestDriveTranscripts(): Promise<DriveIngestResult> {
 
   for (const file of files) {
     if (processed >= MAX_FILES_PER_RUN) break;
-    if (Date.now() - startedAt > RUN_BUDGET_MS) break;
+    // Mieux vaut un bilan partiel repris au run suivant qu'un 504 en
+    // plein milieu d'extraction (cf. `run-budget.ts`).
+    if (!canStartAnotherItem(startedAt, processed)) break;
 
     const isSupported =
       file.mimeType === GOOGLE_DOC_MIME ||

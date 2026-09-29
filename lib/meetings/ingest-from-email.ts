@@ -30,6 +30,7 @@ import {
 } from "@/lib/meetings/email-attachments";
 import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import { getIngestionUserIds } from "@/lib/meetings/ingestion-user";
+import { canStartAnotherItem } from "@/lib/meetings/run-budget";
 import { transcribeMeetingAudio } from "@/lib/meetings/transcribe";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
@@ -67,14 +68,6 @@ export const SUGGESTED_MEETINGS_EMAIL_LABEL = "Paradeos/Réunions";
 
 /** Limite par run : un audio d'une heure peut manger tout le budget. */
 const MAX_MESSAGES_PER_RUN = 3;
-
-/**
- * Budget de temps du run, aligné sur `maxDuration = 300` de la cron
- * (cf. `ingest-from-drive.ts`). Whisper puis l'extraction sur un
- * transcript d'une heure tiennent rarement sous 90 s : on n'entame pas
- * un message de plus passé ce seuil, quitte à reprendre au run suivant.
- */
-const RUN_BUDGET_MS = 200_000;
 
 const AUDIO_BUCKET = "meeting-audio";
 
@@ -123,7 +116,7 @@ export async function ingestEmailTranscripts(): Promise<EmailIngestResult> {
   // erreur — c'est celle de l'autre admin.
   for (const userId of userIds) {
     if (processed >= MAX_MESSAGES_PER_RUN) break;
-    if (Date.now() - startedAt > RUN_BUDGET_MS) break;
+    if (!canStartAnotherItem(startedAt, processed)) break;
 
     const outcome = await ingestForUser({
       userId,
@@ -236,8 +229,12 @@ async function ingestForUser(args: {
   let processed = 0;
 
   for (const ref of candidates) {
-    if (args.alreadyProcessed + processed >= MAX_MESSAGES_PER_RUN) break;
-    if (Date.now() - startedAt > RUN_BUDGET_MS) break;
+    const started = args.alreadyProcessed + processed;
+    if (started >= MAX_MESSAGES_PER_RUN) break;
+    // Whisper puis l'extraction peuvent tenir la fonction jusqu'au
+    // `maxDuration` : on n'entame un message de plus que s'il y tient
+    // (cf. `run-budget.ts`).
+    if (!canStartAnotherItem(startedAt, started)) break;
 
     const existing = await conn
       .select({ id: meetings.id })
