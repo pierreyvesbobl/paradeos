@@ -23,3 +23,16 @@ export const updateMeetingsEmailLabelSchema = z.object({
       "Nom de label invalide (segment vide ou `/` en trop).",
     ),
 });
+
+/**
+ * Adresse dédiée aux réunions. Chaîne vide = ne plus la surveiller.
+ * Doit retomber dans la boîte d'un compte Google connecté (alias ou
+ * groupe) : Parade OS lit Gmail, il ne reçoit pas de mail lui-même.
+ */
+export const updateMeetingsEmailAddressSchema = z.object({
+  address: z
+    .string()
+    .trim()
+    .max(320)
+    .refine((v) => v === "" || z.string().email().safeParse(v).success, "Adresse mail invalide."),
+});

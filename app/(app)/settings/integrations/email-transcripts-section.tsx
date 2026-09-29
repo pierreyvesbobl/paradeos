@@ -11,8 +11,9 @@ import { EmailTranscriptsForm } from "./email-transcripts-form";
  * et le bouton « Sync now » font le même travail.
  */
 export async function EmailTranscriptsSection({ userId }: { userId: string }) {
-  const [labelName, account] = await Promise.all([
+  const [labelName, address, account] = await Promise.all([
     getSetting(SETTING_KEYS.MEETINGS_EMAIL_LABEL),
+    getSetting(SETTING_KEYS.MEETINGS_EMAIL_ADDRESS),
     getGoogleAccount(userId),
   ]);
   const scopesOk = account ? hasRequiredGmailScopes(account.scopes) : false;
@@ -23,11 +24,11 @@ export async function EmailTranscriptsSection({ userId }: { userId: string }) {
         <div>
           <h2 className="font-medium text-sm">Transcripts par mail (auto-import)</h2>
           <p className="mt-1 text-muted-foreground text-xs">
-            Transfère un compte-rendu ou un enregistrement à ton adresse Gmail, range-le sous un
-            label, et Parade OS en fait une réunion : pièce jointe texte, PDF ou audio (transcrit
-            par Whisper), ou à défaut le corps du mail. L'extraction LLM suit, puis le label est
-            remplacé par <span className="font-mono">…/Traité</span>. Cron toutes les 30 min — sync
-            manuel disponible.
+            Envoie un compte-rendu ou un enregistrement à l'adresse dédiée (ou range le mail sous le
+            label), et Parade OS en fait une réunion : pièce jointe texte, PDF ou audio (transcrit
+            par Whisper), ou à défaut le corps du mail. L'extraction LLM suit, puis le mail passe
+            sous <span className="font-mono">…/Traité</span>. Cron toutes les 30 min — sync manuel
+            disponible.
           </p>
         </div>
         {labelName ? (
@@ -43,6 +44,7 @@ export async function EmailTranscriptsSection({ userId }: { userId: string }) {
       {scopesOk ? (
         <EmailTranscriptsForm
           currentLabel={labelName}
+          currentAddress={address}
           suggestedLabel={SUGGESTED_MEETINGS_EMAIL_LABEL}
           gmailAddress={account?.email ?? null}
         />

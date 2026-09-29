@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAddressQuery,
   classifyEmailAttachment,
   cleanEmailBodyForTranscript,
   fileExtension,
@@ -150,5 +151,13 @@ describe("sanitizeAudioFileName", () => {
 
   it("garde un nom par défaut si tout est filtré", () => {
     expect(sanitizeAudioFileName("///")).toBe("audio");
+  });
+});
+
+describe("buildAddressQuery", () => {
+  it("couvre destinataire, livraison et copie, sur une fenêtre bornée", () => {
+    expect(buildAddressQuery("Reunions@Bobl.fr")).toBe(
+      "{to:reunions@bobl.fr deliveredto:reunions@bobl.fr cc:reunions@bobl.fr} newer_than:30d",
+    );
   });
 });

@@ -5,7 +5,10 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { getOrCreateGmailLabel, loadGmailLabelCache } from "@/lib/gmail/links";
 import { getValidAccessToken } from "@/lib/google/account";
 import { ingestEmailTranscripts } from "@/lib/meetings/ingest-from-email";
-import { updateMeetingsEmailLabelSchema } from "@/lib/schemas/email-ingest";
+import {
+  updateMeetingsEmailAddressSchema,
+  updateMeetingsEmailLabelSchema,
+} from "@/lib/schemas/email-ingest";
 import { SETTING_KEYS, setSetting } from "@/lib/settings";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -40,6 +43,25 @@ export const updateMeetingsEmailLabel = action(
     await setSetting(SETTING_KEYS.MEETINGS_EMAIL_LABEL, input.label, user.id);
     revalidatePath("/settings/integrations");
     return { ok: true as const, labelCreated };
+  },
+);
+
+/**
+ * Enregistre l'adresse dédiée. Rien à créer côté Google ici : l'alias
+ * ou le groupe se pose dans la console Workspace, Parade OS se contente
+ * de chercher les mails qui en viennent.
+ */
+export const updateMeetingsEmailAddress = action(
+  updateMeetingsEmailAddressSchema,
+  async ({ input, user }) => {
+    await requireAdmin(user);
+    await setSetting(
+      SETTING_KEYS.MEETINGS_EMAIL_ADDRESS,
+      input.address === "" ? null : input.address.toLowerCase(),
+      user.id,
+    );
+    revalidatePath("/settings/integrations");
+    return { ok: true as const };
   },
 );
 

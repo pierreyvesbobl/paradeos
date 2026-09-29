@@ -3,7 +3,11 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { syncEmailTranscriptsNow, updateMeetingsEmailLabel } from "@/lib/actions/email-ingest";
+import {
+  syncEmailTranscriptsNow,
+  updateMeetingsEmailAddress,
+  updateMeetingsEmailLabel,
+} from "@/lib/actions/email-ingest";
 import { ArrowsClockwise } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -11,16 +15,20 @@ import { toast } from "sonner";
 
 export function EmailTranscriptsForm({
   currentLabel,
+  currentAddress,
   suggestedLabel,
   gmailAddress,
 }: {
   currentLabel: string | null;
+  currentAddress: string | null;
   suggestedLabel: string;
   gmailAddress: string | null;
 }) {
   const router = useRouter();
   const [value, setValue] = useState(currentLabel ?? suggestedLabel);
+  const [address, setAddress] = useState(currentAddress ?? "");
   const [pending, startTransition] = useTransition();
+  const [savingAddress, startAddressSave] = useTransition();
   const [syncing, startSync] = useTransition();
 
   function save(e: React.FormEvent<HTMLFormElement>) {
@@ -38,6 +46,21 @@ export function EmailTranscriptsForm({
           res.data.labelCreated ? "Label créé dans Gmail." : "Label surveillé enregistré.",
         );
       }
+      router.refresh();
+    });
+  }
+
+  function saveAddress(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    startAddressSave(async () => {
+      const res = await updateMeetingsEmailAddress({ address: address.trim() });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(
+        address.trim() === "" ? "Adresse dédiée retirée." : "Adresse dédiée enregistrée.",
+      );
       router.refresh();
     });
   }
@@ -74,6 +97,8 @@ export function EmailTranscriptsForm({
   }
 
   const unchanged = value.trim() === (currentLabel ?? "").trim();
+  const addressUnchanged = address.trim().toLowerCase() === (currentAddress ?? "").trim();
+  const aliasSuggestion = gmailAddress ? `reunions@${gmailAddress.split("@")[1]}` : "reunions@…";
 
   return (
     <div className="space-y-4">
@@ -102,21 +127,48 @@ export function EmailTranscriptsForm({
         </p>
       </form>
 
+      <form onSubmit={saveAddress} className="space-y-2 border-t pt-3">
+        <Label htmlFor="meetings-email-address" className="text-xs">
+          Adresse dédiée (optionnel)
+        </Label>
+        <div className="flex gap-2">
+          <Input
+            id="meetings-email-address"
+            type="email"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={aliasSuggestion}
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            disabled={savingAddress}
+            className="font-mono text-sm"
+          />
+          <Button type="submit" size="sm" disabled={savingAddress || addressUnchanged}>
+            {savingAddress ? "…" : "Enregistrer"}
+          </Button>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          Alias ou groupe Google qui retombe dans la boîte connectée (
+          {gmailAddress ?? "compte Google"}) : les mails qui lui sont adressés sont lus directement,
+          sans filtre Gmail à écrire. À créer dans la console Google Workspace — aucune modification
+          DNS n'est nécessaire, le domaine reçoit déjà son courrier chez Google.
+        </p>
+      </form>
+
       {currentLabel ? (
         <div className="space-y-3 border-t pt-3">
           <div className="space-y-1 text-muted-foreground text-xs">
             <p className="font-medium text-foreground">Comment envoyer une réunion</p>
             <p>
-              1. Transfère le compte-rendu ou l'audio à{" "}
-              <span className="font-mono">{gmailAddress ?? "ton adresse Gmail"}</span>.
+              1. Envoie ou transfère le compte-rendu (ou l'audio) à{" "}
+              <span className="font-mono">
+                {currentAddress ?? gmailAddress ?? "ton adresse Gmail"}
+              </span>
+              .
             </p>
             <p>
-              2. Range le mail sous <span className="font-mono">{currentLabel}</span> — à la main,
-              ou via un filtre Gmail (par exemple sur un alias{" "}
-              <span className="font-mono">
-                {gmailAddress ? gmailAddress.replace("@", "+reunion@") : "toi+reunion@gmail.com"}
-              </span>
-              ) pour que ce soit automatique.
+              2. Sans adresse dédiée, range le mail sous{" "}
+              <span className="font-mono">{currentLabel}</span> — à la main ou via un filtre Gmail.
             </p>
             <p>
               3. Au run suivant, la réunion apparaît dans Réunions avec ses propositions, et le mail

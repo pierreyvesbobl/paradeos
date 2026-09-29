@@ -21,6 +21,7 @@ import {
   MAX_AUDIO_BYTES,
   MIN_BODY_CHARS,
   MIN_TRANSCRIPT_CHARS,
+  buildAddressQuery,
   cleanEmailBodyForTranscript,
   htmlToPlainText,
   pickTranscriptSource,
@@ -97,7 +98,10 @@ export async function ingestEmailTranscripts(): Promise<EmailIngestResult> {
     errorDetails: [],
   };
 
-  const labelName = await getSetting(SETTING_KEYS.MEETINGS_EMAIL_LABEL);
+  const [labelName, address] = await Promise.all([
+    getSetting(SETTING_KEYS.MEETINGS_EMAIL_LABEL),
+    getSetting(SETTING_KEYS.MEETINGS_EMAIL_ADDRESS),
+  ]);
   if (!labelName) {
     result.errorDetails.push("MEETINGS_EMAIL_LABEL non configuré.");
     return result;
@@ -111,11 +115,12 @@ export async function ingestEmailTranscripts(): Promise<EmailIngestResult> {
 
   const startedAt = Date.now();
   let processed = 0;
-  let labelFoundSomewhere = false;
+  let sourceFoundSomewhere = false;
 
-  // Le réglage est global mais le label vit dans une boîte : on balaie
-  // les comptes admin connectés, et seul celui qui porte le label
-  // travaille. Une boîte sans ce label n'est pas une erreur.
+  // Les réglages sont globaux mais une boîte est une boîte : on balaie
+  // les comptes admin connectés, et seuls ceux qui portent le label ou
+  // reçoivent l'adresse travaillent. Une boîte muette n'est pas une
+  // erreur — c'est celle de l'autre admin.
   for (const userId of userIds) {
     if (processed >= MAX_MESSAGES_PER_RUN) break;
     if (Date.now() - startedAt > RUN_BUDGET_MS) break;
@@ -123,17 +128,24 @@ export async function ingestEmailTranscripts(): Promise<EmailIngestResult> {
     const outcome = await ingestForUser({
       userId,
       labelName,
+      address,
       result,
       startedAt,
       alreadyProcessed: processed,
     });
-    if (outcome.labelFound) labelFoundSomewhere = true;
+    if (outcome.sourceFound) sourceFoundSomewhere = true;
     processed += outcome.processed;
   }
 
-  if (!labelFoundSomewhere) {
+  // Aucune boîte n'offre ni le label ni une recherche qui aboutit :
+  // c'est une configuration cassée, pas une journée calme. On compte
+  // une erreur pour que la cron réponde 500 et se voie.
+  if (!sourceFoundSomewhere) {
+    result.errors++;
     result.errorDetails.push(
-      `Label "${labelName}" introuvable dans Gmail — crée-le depuis les réglages.`,
+      `Label "${labelName}" introuvable dans Gmail${
+        address ? ` et aucune recherche possible sur ${address}` : ""
+      } — vérifie les réglages.`,
     );
   }
 
@@ -141,18 +153,20 @@ export async function ingestEmailTranscripts(): Promise<EmailIngestResult> {
 }
 
 /**
- * Draine la file d'un compte. Rend `labelFound: false` quand cette
- * boîte n'a simplement pas le label — l'appelant décide si c'est un
- * problème (aucune boîte ne l'a) ou la normale (une autre l'a).
+ * Draine la file d'un compte. Rend `sourceFound: false` quand cette
+ * boîte n'a ni le label ni un mail pour l'adresse dédiée — l'appelant
+ * décide si c'est un problème (aucune boîte n'a rien) ou la normale
+ * (c'est l'autre admin qui reçoit).
  */
 async function ingestForUser(args: {
   userId: string;
   labelName: string;
+  address: string | null;
   result: EmailIngestResult;
   startedAt: number;
   alreadyProcessed: number;
-}): Promise<{ labelFound: boolean; processed: number }> {
-  const { userId, labelName, result, startedAt } = args;
+}): Promise<{ sourceFound: boolean; processed: number }> {
+  const { userId, labelName, address, result, startedAt } = args;
 
   let accessToken: string | null = null;
   try {
@@ -160,9 +174,9 @@ async function ingestForUser(args: {
   } catch (err) {
     result.errors++;
     result.errorDetails.push(`Token Google invalide : ${(err as Error).message}`);
-    return { labelFound: false, processed: 0 };
+    return { sourceFound: false, processed: 0 };
   }
-  if (!accessToken) return { labelFound: false, processed: 0 };
+  if (!accessToken) return { sourceFound: false, processed: 0 };
 
   let labelCache: Map<string, string>;
   try {
@@ -170,26 +184,55 @@ async function ingestForUser(args: {
   } catch (err) {
     result.errors++;
     result.errorDetails.push(`Lecture des labels Gmail : ${(err as Error).message}`);
-    return { labelFound: false, processed: 0 };
+    return { sourceFound: false, processed: 0 };
   }
 
   const labelId = resolveLabelId(labelCache, labelName);
-  if (!labelId) return { labelFound: false, processed: 0 };
+  if (!labelId && !address) return { sourceFound: false, processed: 0 };
 
-  let messageIds: Array<{ id: string; threadId: string }>;
-  try {
-    const listed = await listMessages(accessToken, { labelIds: [labelId], maxResults: 25 });
-    messageIds = listed.messages ?? [];
-  } catch (err) {
-    result.errors++;
-    result.errorDetails.push(`Listing du label : ${(err as Error).message}`);
-    return { labelFound: true, processed: 0 };
+  const candidates: Candidate[] = [];
+  let sourceFound = false;
+
+  // Source 1 : le label, posé à la main ou par un filtre. C'est une
+  // file : ce qui y est traité en ressort.
+  if (labelId) {
+    sourceFound = true;
+    try {
+      const listed = await listMessages(accessToken, { labelIds: [labelId], maxResults: 25 });
+      for (const m of listed.messages ?? []) candidates.push({ ...m, fromLabel: true });
+    } catch (err) {
+      result.errors++;
+      result.errorDetails.push(`Listing du label : ${(err as Error).message}`);
+    }
+  }
+
+  // Source 2 : l'adresse dédiée. Pas besoin de filtre Gmail — ce qui a
+  // déjà donné une réunion est écarté en base, pas par un label.
+  if (address) {
+    try {
+      const listed = await listMessages(accessToken, {
+        q: buildAddressQuery(address),
+        maxResults: 25,
+      });
+      // La recherche a abouti : il y a bien un endroit où regarder,
+      // qu'elle rende zéro mail ou vingt. Une boîte vide est la normale
+      // d'un lundi matin, pas une erreur de configuration.
+      sourceFound = true;
+      const seen = new Set(candidates.map((c) => c.id));
+      for (const m of listed.messages ?? []) {
+        if (seen.has(m.id)) continue;
+        candidates.push({ ...m, fromLabel: false });
+      }
+    } catch (err) {
+      result.errors++;
+      result.errorDetails.push(`Recherche sur ${address} : ${(err as Error).message}`);
+    }
   }
 
   const conn = await db();
   let processed = 0;
 
-  for (const ref of messageIds) {
+  for (const ref of candidates) {
     if (args.alreadyProcessed + processed >= MAX_MESSAGES_PER_RUN) break;
     if (Date.now() - startedAt > RUN_BUDGET_MS) break;
 
@@ -200,9 +243,12 @@ async function ingestForUser(args: {
       .limit(1);
     if (existing.length > 0) {
       result.skippedExisting++;
-      // Le message a déjà donné une réunion : on le sort de la file,
-      // sinon il serait relu à chaque run jusqu'à la fin des temps.
-      await markProcessed(accessToken, ref.threadId, labelName, labelId, labelCache, result);
+      // Venu du label : on l'en sort, sinon il serait relu à chaque run
+      // jusqu'à la fin des temps. Venu de l'adresse : la base suffit à
+      // l'écarter, inutile de toucher à la boîte de quelqu'un.
+      if (ref.fromLabel) {
+        await markProcessed(accessToken, ref.threadId, labelName, labelId, labelCache, result);
+      }
       continue;
     }
 
@@ -223,8 +269,11 @@ async function ingestForUser(args: {
     }
   }
 
-  return { labelFound: true, processed };
+  return { sourceFound, processed };
 }
+
+/** Un mail à traiter, avec la source qui l'a fait remonter. */
+type Candidate = { id: string; threadId: string; fromLabel: boolean };
 
 /**
  * Gmail est sensible à la casse sur les noms de label mais les humains
@@ -245,7 +294,9 @@ type IngestArgs = {
   userId: string;
   messageRef: { id: string; threadId: string };
   labelName: string;
-  labelId: string;
+  /** `null` quand le mail vient de l'adresse et que la boîte n'a pas
+   * encore le label : il n'y a alors rien à retirer. */
+  labelId: string | null;
   labelCache: Map<string, string>;
   result: EmailIngestResult;
 };
@@ -465,7 +516,7 @@ async function markProcessed(
   accessToken: string,
   threadId: string,
   labelName: string,
-  labelId: string,
+  labelId: string | null,
   labelCache: Map<string, string>,
   result: EmailIngestResult,
   segment: string = PROCESSED_SEGMENT,
@@ -478,7 +529,7 @@ async function markProcessed(
     );
     await modifyThreadLabels(accessToken, threadId, {
       addLabelIds: [processedId],
-      removeLabelIds: [labelId],
+      removeLabelIds: labelId ? [labelId] : [],
     });
   } catch (err) {
     result.errors++;

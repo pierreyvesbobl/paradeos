@@ -199,3 +199,21 @@ export function sanitizeAudioFileName(name: string): string {
   // un caractère signifiant, le chemin Storage devient illisible.
   return /[a-zA-Z0-9]/.test(safe) ? safe : "audio";
 }
+
+/**
+ * Fenêtre de recherche de l'adresse dédiée. Au-delà, un mail qui n'a
+ * jamais été ingéré (pipeline coupé, clé LLM absente…) est considéré
+ * comme perdu : il reste rattrapable à la main avec le label.
+ */
+export const ADDRESS_QUERY_WINDOW_DAYS = 30;
+
+/**
+ * Requête Gmail des mails adressés à l'adresse dédiée. `deliveredto:`
+ * attrape ce qu'un alias ou un groupe a livré dans la boîte, là où
+ * `to:` ne voit que l'entête — les deux sont nécessaires, un transfert
+ * automatique ne réécrivant pas forcément les destinataires.
+ */
+export function buildAddressQuery(address: string): string {
+  const safe = address.trim().toLowerCase();
+  return `{to:${safe} deliveredto:${safe} cc:${safe}} newer_than:${ADDRESS_QUERY_WINDOW_DAYS}d`;
+}
