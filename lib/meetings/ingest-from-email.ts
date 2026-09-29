@@ -1,6 +1,7 @@
 import "server-only";
 
 import { meetings } from "@/db/schema/meetings";
+import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
 import { getOrCreateGmailLabel, loadGmailLabelCache } from "@/lib/gmail/links";
 import { extractPdfText } from "@/lib/gmail/pdf";
@@ -36,7 +37,7 @@ import { canStartAnotherItem } from "@/lib/meetings/run-budget";
 import { transcribeMeetingAudio } from "@/lib/meetings/transcribe";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 /**
  * Ingestion des réunions envoyées par mail.
@@ -463,14 +464,33 @@ async function readTextTranscript(
 }
 
 /**
- * Rapproche le projet déclaré de l'existant. Seuil bas : on écrit
- * « GpasPlus » pour « GpasPlus - Automatisation des processus
- * e-commerce ». Sans correspondance, on laisse la réunion sans projet —
- * l'extraction le proposera, et le rattacher reste à un clic.
+ * Rapproche le projet déclaré de l'existant.
+ *
+ * La similarité trigramme ne suffit pas ici : on écrit « GpasPlus »
+ * pour « GpasPlus - Automatisation des processus e-commerce », et huit
+ * caractères sur cinquante ne franchissent aucun seuil raisonnable. Ce
+ * qu'on écrit est un morceau du nom, donc on cherche d'abord un nom qui
+ * le contient, et on ne retombe sur le flou que pour les fautes de
+ * frappe.
+ *
+ * Deux projets contiennent le morceau → aucun n'est choisi : rattacher
+ * la réunion au mauvais « GpasPlus » coûte plus cher que de la laisser
+ * sans projet, où l'extraction le proposera et où un clic suffit.
  */
 async function resolveDeclaredProject(hint: string | null): Promise<string | null> {
-  if (!hint) return null;
-  const match = await fuzzyMatchProject(hint, { threshold: 0.3 });
+  const needle = hint?.trim();
+  if (!needle || needle.length < 3) return null;
+
+  const conn = await db();
+  const contained = await conn
+    .select({ id: projects.id })
+    .from(projects)
+    .where(sql`${projects.name} ilike ${`%${needle}%`}`)
+    .limit(2);
+  if (contained.length === 1) return contained[0]?.id ?? null;
+  if (contained.length > 1) return null;
+
+  const match = await fuzzyMatchProject(needle);
   return match?.id ?? null;
 }
 
