@@ -2,10 +2,10 @@ import "server-only";
 
 import { contacts } from "@/db/schema/contacts";
 import { linkedinConnections } from "@/db/schema/linkedin";
+import { fuzzyMatchContact } from "@/lib/crm/match";
 import { findContactByEmail } from "@/lib/db/queries/contacts";
 import { db } from "@/lib/db/server";
 import { sanitizeNameInput } from "@/lib/format";
-import { fuzzyMatchContact } from "@/lib/meetings/extract";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { normalizeLinkedinIdentifier } from "./identity";
 

@@ -11,6 +11,7 @@ import { getInvoiceSuggestions, getQuoteSuggestions } from "@/lib/dougs/reconcil
 import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
+import { compactNameKey, normalizeEmail, personCompactKey } from "@/lib/crm/name-key";
 import { formatPersonName } from "@/lib/format";
 /**
  * L'inbox liste chaque extraction IA à valider individuellement, tous
@@ -339,7 +340,24 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
     list.push(item);
     dedupGroups.set(dedupKey, list);
   }
-  const norm = (v: unknown): string => (typeof v === "string" ? v.trim().toLowerCase() : "");
+  // Les clés de dédup passent par la normalisation partagée
+  // (`lib/crm/name-key.ts`) : sans elle, « MKP Doctor » et « mkpdoctor »
+  // comptaient pour deux lignes distinctes dans la file.
+  const norm = (v: unknown): string => (typeof v === "string" ? compactNameKey(v) : "");
+  const normEmail = (v: unknown): string => (typeof v === "string" ? normalizeEmail(v) : "");
+  /**
+   * Clé de dédup d'une proposition de création. Retourne "" quand
+   * l'identité est vide (payload sans nom exploitable) : l'appelant garde
+   * alors sa clé par défaut, unique à la ligne — sinon toutes les
+   * propositions mal nommées fusionneraient en une seule.
+   */
+  const keyed = (kind: string, identity: string, suffix = ""): string =>
+    identity ? `${kind}:${identity}${suffix}` : "";
+  const normPerson = (first: unknown, last: unknown): string =>
+    personCompactKey(
+      typeof first === "string" ? first : null,
+      typeof last === "string" ? last : null,
+    );
 
   // Extractions "déjà connu" à masquer : le LLM a trouvé un record
   // existant qui matche → pas de décision humaine "créer ou lier" à
@@ -413,17 +431,15 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
     // de la proposition. Same email extraction → same key → 1 seule ligne.
     let dedupKey = `email:${r.id}`;
     if (r.kind === "task") {
-      dedupKey = `task:${norm(payload.title)}:${payloadProjectId ?? ""}`;
+      dedupKey = keyed("task", norm(payload.title), `:${payloadProjectId ?? ""}`) || dedupKey;
     } else if (r.kind === "contact") {
-      const emailPart = norm(payload.email);
-      const namePart = norm(
-        formatPersonName(payload.firstName as string | null, payload.lastName as string | null, ""),
-      );
-      dedupKey = `contact:${emailPart || namePart}`;
+      const emailPart = normEmail(payload.email);
+      const namePart = normPerson(payload.firstName, payload.lastName);
+      dedupKey = keyed("contact", emailPart || namePart) || dedupKey;
     } else if (r.kind === "entity") {
-      dedupKey = `entity:${norm(payload.name)}`;
+      dedupKey = keyed("entity", norm(payload.name)) || dedupKey;
     } else if (r.kind === "project") {
-      dedupKey = `project:${norm(payload.name)}`;
+      dedupKey = keyed("project", norm(payload.name)) || dedupKey;
     } else if (r.kind === "project_link") {
       dedupKey = `project_link:${r.matchedId ?? norm(payload.projectName)}:${r.threadId}`;
     } else if (r.kind === "entity_link") {
@@ -505,19 +521,18 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
 
     let dedupKey = `meeting:${r.id}`;
     if (r.kind === "task") {
-      dedupKey = `task:${norm(payload.title)}:${payloadProjectId ?? r.projectId ?? ""}`;
+      dedupKey =
+        keyed("task", norm(payload.title), `:${payloadProjectId ?? r.projectId ?? ""}`) || dedupKey;
     } else if (r.kind === "contact") {
-      const emailPart = norm(payload.email);
-      const namePart = norm(
-        formatPersonName(payload.firstName as string | null, payload.lastName as string | null, ""),
-      );
-      dedupKey = `contact:${emailPart || namePart}`;
+      const emailPart = normEmail(payload.email);
+      const namePart = normPerson(payload.firstName, payload.lastName);
+      dedupKey = keyed("contact", emailPart || namePart) || dedupKey;
     } else if (r.kind === "entity") {
-      dedupKey = `entity:${norm(payload.name)}`;
+      dedupKey = keyed("entity", norm(payload.name)) || dedupKey;
     } else if (r.kind === "project") {
-      dedupKey = `project:${norm(payload.name)}`;
+      dedupKey = keyed("project", norm(payload.name)) || dedupKey;
     } else if (r.kind === "opportunity") {
-      dedupKey = `opportunity:${norm(payload.title)}`;
+      dedupKey = keyed("opportunity", norm(payload.title)) || dedupKey;
     }
 
     pushDedup(

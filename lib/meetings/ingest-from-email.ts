@@ -2,6 +2,7 @@ import "server-only";
 
 import { meetings } from "@/db/schema/meetings";
 import { projects } from "@/db/schema/projects";
+import { fuzzyMatchProject } from "@/lib/crm/match";
 import { db } from "@/lib/db/server";
 import { getOrCreateGmailLabel, loadGmailLabelCache } from "@/lib/gmail/links";
 import { extractPdfText } from "@/lib/gmail/pdf";
@@ -29,7 +30,6 @@ import {
   titleFromSubject,
 } from "@/lib/meetings/email-attachments";
 import { parseEmailContext } from "@/lib/meetings/email-directives";
-import { fuzzyMatchProject } from "@/lib/meetings/extract";
 import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import { getIngestionUserIds } from "@/lib/meetings/ingestion-user";
 import { syncParticipantsFromAttendees } from "@/lib/meetings/participants";

@@ -9,7 +9,11 @@ import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { action } from "@/lib/actions/action";
-import { findContactByEmail } from "@/lib/db/queries/contacts";
+import {
+  findExistingContactId,
+  findExistingEntityId,
+  findExistingProjectId,
+} from "@/lib/crm/find-or-link";
 import { type AssigneeRef, setTaskAssignees } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
 import {
@@ -21,7 +25,7 @@ import {
 import { getValidAccessToken } from "@/lib/google/account";
 import { createGmailDraft, getHeader, getMessage } from "@/lib/google/gmail-api";
 import { hasGmailComposeScope, hasRequiredGmailScopes } from "@/lib/google/oauth";
-import { eq, ilike, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -56,13 +60,7 @@ function readAssigneesFromPayload(payload: Record<string, unknown>): AssigneeRef
 async function resolveEntityByName(name: string | null | undefined): Promise<string | null> {
   const trimmed = (name ?? "").trim();
   if (!trimmed) return null;
-  const conn = await db();
-  const [matched] = await conn
-    .select({ id: entities.id })
-    .from(entities)
-    .where(ilike(entities.name, trimmed))
-    .limit(1);
-  return matched?.id ?? null;
+  return findExistingEntityId(trimmed);
 }
 
 async function getGmailUserId(): Promise<string | null> {
@@ -256,15 +254,13 @@ export const acceptEmailProposal = action(
       } else {
         const name = String(payload.name ?? "").trim();
         if (!name) throw new Error("Nom d'entité vide.");
-        // Find-or-create case-insensitive : dédoublonnage défensif si le
-        // user tape un nom déjà existant.
-        const [existing] = await conn
-          .select({ id: entities.id })
-          .from(entities)
-          .where(ilike(entities.name, name))
-          .limit(1);
-        if (existing) {
-          createdEntityId = existing.id;
+        // Find-or-create : le `matchedId` de la proposition date de
+        // l'extraction, donc il ignore ce qui a été créé entre-temps —
+        // typiquement l'entité issue d'un autre mail du même fil, accepté
+        // trente secondes plus tôt. On revérifie sur le nom normalisé.
+        const existingId = await findExistingEntityId(name);
+        if (existingId) {
+          createdEntityId = existingId;
         } else {
           const [row] = await conn
             .insert(entities)
@@ -289,12 +285,10 @@ export const acceptEmailProposal = action(
         if (!firstName && !lastName) throw new Error("Nom du contact vide.");
         const email = (payload.email as string | null | undefined)?.trim() || null;
 
-        // Match par email d'abord (preuve d'identité forte).
-        let foundId: string | null = null;
-        if (email) {
-          const exact = await findContactByEmail(email);
-          if (exact) foundId = exact.id;
-        }
+        // Email d'abord (preuve d'identité forte), puis nom normalisé :
+        // la même personne revient de mail en mail, et deux propositions
+        // pending ne se voient pas l'une l'autre.
+        const foundId = await findExistingContactId({ firstName, lastName, email });
 
         if (foundId) {
           createdEntityId = foundId;
@@ -366,19 +360,16 @@ export const acceptEmailProposal = action(
         const name = String(payload.name ?? "").trim();
         if (!name) throw new Error("Nom du projet vide.");
 
-        // Find-or-create : dédoublonnage défensif si le user tape un nom
-        // qui matche déjà.
-        const [existing] = await conn
-          .select({ id: projects.id })
-          .from(projects)
-          .where(ilike(projects.name, name))
-          .limit(1);
-        if (existing) {
-          createdEntityId = existing.id;
+        const entityId =
+          (payload.entityId as string | null | undefined) ??
+          (await resolveEntityByName((payload.entityName as string | null | undefined) ?? null));
+        // Find-or-create, scopé sur l'entité résolue quand on la connaît :
+        // sans scope, deux projets d'un même client se ressemblent trop ;
+        // avec, on rattrape le vrai doublon.
+        const existingId = await findExistingProjectId(name, entityId);
+        if (existingId) {
+          createdEntityId = existingId;
         } else {
-          const entityId =
-            (payload.entityId as string | null | undefined) ??
-            (await resolveEntityByName((payload.entityName as string | null | undefined) ?? null));
           const rawStatus = payload.status as string | null | undefined;
           const allowedStatuses = [
             "not_started",

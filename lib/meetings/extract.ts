@@ -109,7 +109,13 @@ export type MeetingExtraction = z.infer<typeof extractionSchema>;
 
 export type Vocabulary = {
   entities: { name: string; kind: string }[];
-  contacts: { fullName: string; entityName: string | null; jobTitle: string | null }[];
+  contacts: {
+    fullName: string;
+    entityName: string | null;
+    jobTitle: string | null;
+    /** Injecté dans le prompt : c'est le discriminant le plus fiable. */
+    email: string | null;
+  }[];
   projects: { name: string; kind: string; status: string; entityName: string | null }[];
   users: string[];
   /** Tâches encore ouvertes — pour éviter de re-proposer une action déjà notée. */
@@ -138,6 +144,7 @@ export async function getKnownVocabulary(): Promise<Vocabulary> {
         firstName: contacts.firstName,
         lastName: contacts.lastName,
         jobTitle: contacts.jobTitle,
+        email: contacts.email,
         entityName: entities.name,
         updatedAt: contacts.updatedAt,
       })
@@ -181,6 +188,7 @@ export async function getKnownVocabulary(): Promise<Vocabulary> {
       fullName: formatPersonName(r.firstName, r.lastName),
       entityName: r.entityName ?? null,
       jobTitle: r.jobTitle ?? null,
+      email: r.email ?? null,
     })),
     projects: projectRows.map((r) => ({
       name: r.name,
@@ -219,6 +227,10 @@ export function formatVocabulary(v: Vocabulary): string {
       `Contacts :\n${v.contacts
         .map((c) => {
           const bits = [c.fullName];
+          // L'email d'abord : une signature de mail le porte presque
+          // toujours, et c'est ce qui permet au modèle de reconnaître une
+          // personne déjà connue même quand le nom est écrit autrement.
+          if (c.email) bits.push(c.email);
           if (c.jobTitle) bits.push(c.jobTitle);
           if (c.entityName) bits.push(`@ ${c.entityName}`);
           return `- ${bits.join(" — ")}`;
@@ -253,40 +265,6 @@ export function formatVocabulary(v: Vocabulary): string {
   }
 
   return sections.join("\n\n");
-}
-
-/**
- * Fuzzy match d'un titre de tâche parmi les tâches déjà en base, avec
- * scope facultatif sur un projet donné. Sert au dédup côté extraction :
- * si le LLM propose une action déjà tracée sur ce projet, on peut skip
- * la proposition (cf. `extract-and-save.ts` pour meetings et emails).
- *
- * Seuil bas (0.4) — on préfère skip trop que pas assez ; l'utilisateur
- * peut toujours créer manuellement s'il veut vraiment une 2e tâche.
- */
-export async function fuzzyMatchTaskInProject(
-  title: string,
-  projectId: string | null,
-  threshold = 0.4,
-): Promise<Match> {
-  const conn = await db();
-  const scope = projectId
-    ? sql`${tasks.projectId} = ${projectId}`
-    : sql`${tasks.projectId} is null`;
-  const rows = await conn
-    .select({
-      id: tasks.id,
-      name: tasks.title,
-      sim: sql<number>`similarity(${tasks.title}, ${title})`,
-    })
-    .from(tasks)
-    .where(
-      sql`${scope} and ${tasks.status} not in ('done', 'cancelled') and similarity(${tasks.title}, ${title}) > ${threshold}`,
-    )
-    .orderBy(sql`similarity(${tasks.title}, ${title}) desc`)
-    .limit(1);
-  const top = rows[0];
-  return top ? { id: top.id, name: top.name, confidence: Number(top.sim) } : null;
 }
 
 export type ProjectContext = {
@@ -481,113 +459,4 @@ export async function extractMeeting(
   );
 
   return object;
-}
-
-/**
- * Match fuzzy par similarité pg_trgm. Retourne le meilleur candidat
- * avec son score si > seuil minimum.
- */
-export type Match = { id: string; name: string; confidence: number } | null;
-
-export async function fuzzyMatchEntity(name: string, threshold = 0.6): Promise<Match> {
-  const conn = await db();
-  const rows = await conn
-    .select({
-      id: entities.id,
-      name: entities.name,
-      sim: sql<number>`similarity(${entities.name}, ${name})`,
-    })
-    .from(entities)
-    .where(sql`similarity(${entities.name}, ${name}) > ${threshold}`)
-    .orderBy(sql`similarity(${entities.name}, ${name}) desc`)
-    .limit(1);
-  const top = rows[0];
-  return top ? { id: top.id, name: top.name, confidence: Number(top.sim) } : null;
-}
-
-export async function fuzzyMatchContact(
-  firstName: string,
-  lastName: string,
-  threshold = 0.55,
-): Promise<Match> {
-  const conn = await db();
-  const full = `${firstName} ${lastName}`.trim();
-  const rows = await conn
-    .select({
-      id: contacts.id,
-      firstName: contacts.firstName,
-      lastName: contacts.lastName,
-      sim: sql<number>`similarity(${contacts.firstName} || ' ' || ${contacts.lastName}, ${full})`,
-    })
-    .from(contacts)
-    .where(
-      sql`similarity(${contacts.firstName} || ' ' || ${contacts.lastName}, ${full}) > ${threshold}`,
-    )
-    .orderBy(sql`similarity(${contacts.firstName} || ' ' || ${contacts.lastName}, ${full}) desc`)
-    .limit(1);
-  const top = rows[0];
-  return top
-    ? {
-        id: top.id,
-        name: formatPersonName(top.firstName, top.lastName),
-        confidence: Number(top.sim),
-      }
-    : null;
-}
-
-/**
- * Fuzzy match d'un projet par nom, avec scope entité facultatif.
- *
- * `opts.entityId` :
- *  - `string` → restreint la recherche aux projets de cette entité. Évite
- *    le faux positif "GpasPlus - Nouveau X" ↔ "GpasPlus - Automatisation
- *    des processus" quand le nom d'entité domine la similarité trigram.
- *  - `null` → restreint aux projets internes (entityId is null).
- *  - `undefined` (défaut) → pas de scope.
- *
- * Seuil par défaut relevé à 0.55 : le 0.4 historique faisait matcher deux
- * projets différents partageant seulement le préfixe entité.
- */
-export async function fuzzyMatchProject(
-  name: string,
-  opts?: { entityId?: string | null; threshold?: number },
-): Promise<Match> {
-  const threshold = opts?.threshold ?? 0.55;
-  const conn = await db();
-  const conditions = [sql`similarity(${projects.name}, ${name}) > ${threshold}`];
-  if (opts && "entityId" in opts) {
-    conditions.push(
-      opts.entityId === null
-        ? sql`${projects.entityId} is null`
-        : sql`${projects.entityId} = ${opts.entityId}`,
-    );
-  }
-  const rows = await conn
-    .select({
-      id: projects.id,
-      name: projects.name,
-      sim: sql<number>`similarity(${projects.name}, ${name})`,
-    })
-    .from(projects)
-    .where(sql.join(conditions, sql` and `))
-    .orderBy(sql`similarity(${projects.name}, ${name}) desc`)
-    .limit(1);
-  const top = rows[0];
-  return top ? { id: top.id, name: top.name, confidence: Number(top.sim) } : null;
-}
-
-export async function fuzzyMatchUser(name: string, threshold = 0.35): Promise<Match> {
-  const conn = await db();
-  const rows = await conn
-    .select({
-      id: users.id,
-      name: users.fullName,
-      sim: sql<number>`similarity(coalesce(${users.fullName}, ''), ${name})`,
-    })
-    .from(users)
-    .where(sql`similarity(coalesce(${users.fullName}, ''), ${name}) > ${threshold}`)
-    .orderBy(sql`similarity(coalesce(${users.fullName}, ''), ${name}) desc`)
-    .limit(1);
-  const top = rows[0];
-  return top ? { id: top.id, name: top.name ?? "(sans nom)", confidence: Number(top.sim) } : null;
 }

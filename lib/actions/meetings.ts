@@ -8,18 +8,16 @@ import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { action } from "@/lib/actions/action";
+import {
+  findExistingContactId,
+  findExistingEntityId,
+  findExistingOpenTaskId,
+  findExistingProjectId,
+} from "@/lib/crm/find-or-link";
+import type { Match } from "@/lib/crm/match";
 import { setTaskAssignees } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
-import {
-  type Match,
-  type ProjectContext,
-  extractMeeting,
-  fuzzyMatchContact,
-  fuzzyMatchEntity,
-  fuzzyMatchProject,
-  fuzzyMatchUser,
-} from "@/lib/meetings/extract";
-import { getParticipantContext, syncParticipantsFromAttendees } from "@/lib/meetings/participants";
+import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import {
   createMeetingSchema,
   decideProposalSchema,
@@ -33,8 +31,6 @@ import {
 import { and, eq, ilike } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
-import { formatPersonName, sanitizeNameInput } from "@/lib/format";
 export const createMeeting = action(createMeetingSchema, async ({ input, user }) => {
   const conn = await db();
   const occurredAt = input.occurredAt ? new Date(input.occurredAt) : null;
@@ -94,198 +90,20 @@ export const updateMeetingSubject = action(updateMeetingSubjectSchema, async ({ 
 
 /**
  * Lance l'extraction LLM sur le transcript du meeting et persiste les
- * propositions. Idempotent côté UX : on ne supprime pas les propositions
- * déjà décidées (`accepted`/`rejected`), on ré-injecte uniquement les
- * `pending` non encore présents.
+ * propositions.
  *
- * Pour la première itération on remplace tout : si le user re-extrait,
- * il signifie qu'il veut repartir de zéro.
+ * Toute la logique vit dans `extractAndSaveProposals` : le cron Drive
+ * appelle le même helper, et les deux chemins partagent donc le même
+ * dédoublonnage. Ici on ne fait que le contrôle d'accès (via `action`) et
+ * l'invalidation des caches Next.
  */
 export const extractMeetingProposals = action(extractMeetingSchema, async ({ input }) => {
-  const conn = await db();
-  const [meeting] = await conn
-    .select()
-    .from(meetings)
-    .where(eq(meetings.id, input.meetingId))
-    .limit(1);
-  if (!meeting) throw new Error("Meeting introuvable.");
+  const { count } = await extractAndSaveProposals(input.meetingId);
 
-  // Si le meeting est rattaché à un projet, on file le contexte au LLM :
-  // par défaut les tâches extraites pointeront sur ce projet, et les
-  // contacts liés au client deviennent les assignés externes prioritaires.
-  let projectContext: ProjectContext | undefined;
-  if (meeting.projectId) {
-    const [proj] = await conn
-      .select({
-        name: projects.name,
-        entityName: entities.name,
-        entityId: projects.entityId,
-      })
-      .from(projects)
-      .leftJoin(entities, eq(entities.id, projects.entityId))
-      .where(eq(projects.id, meeting.projectId))
-      .limit(1);
-    if (proj) {
-      const projectContacts = proj.entityId
-        ? await conn
-            .select({
-              firstName: contacts.firstName,
-              lastName: contacts.lastName,
-              jobTitle: contacts.jobTitle,
-            })
-            .from(contacts)
-            .where(eq(contacts.entityId, proj.entityId))
-        : [];
-      projectContext = {
-        name: proj.name,
-        entityName: proj.entityName ?? null,
-        contacts: projectContacts.map((c) => ({
-          fullName: formatPersonName(c.firstName, c.lastName),
-          jobTitle: c.jobTitle ?? null,
-        })),
-      };
-    }
-  }
-
-  if (!meeting.transcript || meeting.transcript.trim().length === 0) {
-    throw new Error("Transcript vide : importe un audio ou colle un texte avant d'extraire.");
-  }
-  // Idem : qui était dans la pièce fait partie du contexte envoyé au LLM,
-  // et les personnes qu'il repère en retour viennent enrichir la liste.
-  const participants = await getParticipantContext(meeting.id);
-  const result = await extractMeeting(meeting.transcript, { projectContext, participants });
-
-  await syncParticipantsFromAttendees(meeting.id, result.attendees);
-
-  await conn.delete(meetingProposals).where(eq(meetingProposals.meetingId, meeting.id));
-
-  const proposalsRows: {
-    meetingId: string;
-    kind: "task" | "project" | "opportunity" | "contact" | "entity";
-    payload: unknown;
-    matchedId: string | null;
-    matchConfidence: string | null;
-  }[] = [];
-
-  // Mémoire entité → id existant pour scoper le match projet et éviter le
-  // faux positif "MêmeClient - Nouveau X" ↔ "MêmeClient - Ancien Y".
-  const norm = (s: string) => s.trim().toLowerCase();
-  const entityMatchByName = new Map<string, string | null>();
-  for (const e of result.proposedEntities) {
-    const match = await fuzzyMatchEntity(e.name);
-    entityMatchByName.set(norm(e.name), match?.id ?? null);
-    proposalsRows.push({
-      meetingId: meeting.id,
-      kind: "entity",
-      payload: e,
-      matchedId: match?.id ?? null,
-      matchConfidence: match ? match.confidence.toFixed(3) : null,
-    });
-  }
-  for (const raw of result.proposedContacts) {
-    // Même nettoyage que dans extract-and-save : le modèle peut rendre
-    // la chaîne "null" faute de nom de famille, et elle se propagerait
-    // jusqu'en base à l'acceptation de la proposition.
-    const c = {
-      ...raw,
-      firstName: sanitizeNameInput(raw.firstName),
-      lastName: sanitizeNameInput(raw.lastName),
-    };
-    const match = await fuzzyMatchContact(c.firstName, c.lastName);
-    proposalsRows.push({
-      meetingId: meeting.id,
-      kind: "contact",
-      payload: c,
-      matchedId: match?.id ?? null,
-      matchConfidence: match ? match.confidence.toFixed(3) : null,
-    });
-  }
-  for (const p of result.proposedProjects) {
-    const entityId = await resolveProposedProjectEntityId(p.entityName, entityMatchByName);
-    const match = await fuzzyMatchProject(
-      p.name,
-      entityId !== undefined ? { entityId } : undefined,
-    );
-    proposalsRows.push({
-      meetingId: meeting.id,
-      kind: "project",
-      payload: p,
-      matchedId: match?.id ?? null,
-      matchConfidence: match ? match.confidence.toFixed(3) : null,
-    });
-  }
-  for (const t of result.proposedTasks) {
-    // Pré-résolution des FKs via fuzzy match (pg_trgm). Le LLM phrase
-    // souvent les noms autrement que la base — on accepte des écarts
-    // raisonnables pour pré-cocher le bon projet / la bonne assignée.
-    //
-    // projectId : si le LLM ne propose pas de projet OU pointe vers le
-    // projet du meeting → on retombe sur meeting.projectId. C'est le
-    // défaut souhaité (cf. UI : un meeting dans projet X = ses tâches
-    // sont dans projet X sauf mention explicite d'un autre projet).
-    const projectMatch = t.projectName ? await fuzzyMatchProject(t.projectName) : null;
-    const projectId = projectMatch?.id ?? meeting.projectId ?? null;
-
-    // Assignee : selon assigneeKind, on cherche dans users (internal) ou
-    // contacts (external). En l'absence d'indication on tente d'abord
-    // user (rétrocompat), puis contact si rien ne matche.
-    let assigneeUserId: string | null = null;
-    let assigneeContactId: string | null = null;
-    if (t.assigneeName) {
-      if (t.assigneeKind === "external") {
-        const parts = t.assigneeName.trim().split(/\s+/);
-        const first = parts[0] ?? t.assigneeName;
-        const last = parts.slice(1).join(" ") || parts[0] || "";
-        const contactMatch = await fuzzyMatchContact(first, last);
-        assigneeContactId = contactMatch?.id ?? null;
-      } else if (t.assigneeKind === "internal") {
-        const userMatch = await fuzzyMatchUser(t.assigneeName);
-        assigneeUserId = userMatch?.id ?? null;
-      } else {
-        const userMatch = await fuzzyMatchUser(t.assigneeName);
-        if (userMatch) {
-          assigneeUserId = userMatch.id;
-        } else {
-          const parts = t.assigneeName.trim().split(/\s+/);
-          const first = parts[0] ?? t.assigneeName;
-          const last = parts.slice(1).join(" ") || parts[0] || "";
-          const contactMatch = await fuzzyMatchContact(first, last);
-          assigneeContactId = contactMatch?.id ?? null;
-        }
-      }
-    }
-
-    proposalsRows.push({
-      meetingId: meeting.id,
-      kind: "task",
-      payload: {
-        ...t,
-        projectId,
-        assigneeId: assigneeUserId,
-        assigneeContactId,
-      },
-      matchedId: null,
-      matchConfidence: null,
-    });
-  }
-
-  if (proposalsRows.length > 0) {
-    await conn.insert(meetingProposals).values(proposalsRows);
-  }
-
-  await conn
-    .update(meetings)
-    .set({
-      summary: result.summary,
-      occurredAt: meeting.occurredAt ?? (result.occurredAt ? new Date(result.occurredAt) : null),
-      status: "extracted",
-    })
-    .where(eq(meetings.id, meeting.id));
-
-  revalidatePath(`/meetings/${meeting.id}`);
+  revalidatePath(`/meetings/${input.meetingId}`);
   revalidatePath("/meetings");
   revalidatePath("/inbox");
-  return { count: proposalsRows.length };
+  return { count };
 });
 
 export const updateMeetingSummary = action(updateMeetingSummarySchema, async ({ input }) => {
@@ -489,24 +307,6 @@ export async function deleteMeetingAndRedirect(formData: FormData) {
 
 // ----- helpers -----
 
-/**
- * Résout l'entité d'un projet proposé pour scoper le fuzzy match.
- * Voir `lib/meetings/extract-and-save.ts` pour la sémantique complète.
- */
-async function resolveProposedProjectEntityId(
-  entityName: string | null,
-  entityMatchByName: Map<string, string | null>,
-): Promise<string | null | undefined> {
-  if (entityName === null) return null;
-  const key = entityName.trim().toLowerCase();
-  if (entityMatchByName.has(key)) {
-    const cached = entityMatchByName.get(key);
-    return cached === null ? undefined : cached;
-  }
-  const match = await fuzzyMatchEntity(entityName);
-  return match?.id ?? undefined;
-}
-
 async function createForKind(
   kind: "task" | "project" | "opportunity" | "contact" | "entity",
   payload: Record<string, unknown>,
@@ -517,16 +317,12 @@ async function createForKind(
   switch (kind) {
     case "entity": {
       const entityName = String(payload.name ?? "Sans nom");
-      // Find-or-create : si une entité du même nom existe déjà, on la
-      // réutilise plutôt que d'en créer une 2e. Évite les doublons quand
-      // plusieurs propositions visent la même société, ou en cas de
-      // ré-acceptation après revert.
-      const [existing] = await conn
-        .select({ id: entities.id })
-        .from(entities)
-        .where(ilike(entities.name, entityName))
-        .limit(1);
-      if (existing) return existing.id;
+      // Find-or-create : si une entité équivalente existe déjà, on la
+      // réutilise plutôt que d'en créer une 2e. Le matcher normalise le
+      // nom (accents, ponctuation, forme juridique), donc « mkpdoctor »
+      // retrouve « MKP Doctor » — ce qu'un `ilike` exact ne faisait pas.
+      const existingId = await findExistingEntityId(entityName);
+      if (existingId) return existingId;
       const [row] = await conn
         .insert(entities)
         .values({
@@ -541,23 +337,27 @@ async function createForKind(
       return row?.id ?? "";
     }
     case "contact": {
+      const firstName = String(payload.firstName ?? "");
+      const lastName = String(payload.lastName ?? "");
+      const email = (payload.email as string | null) ?? null;
+      // Find-or-link : la même personne revient d'un meeting à l'autre, et
+      // le `matchedId` de la proposition date de l'extraction. On revérifie
+      // (email puis nom normalisé) avant de créer un 2e contact.
+      const existingContactId = await findExistingContactId({ firstName, lastName, email });
+      if (existingContactId) return existingContactId;
+
       // Si entityName fourni → tente de le lier à une entité existante.
       let entityId: string | null = (payload.entityId as string | null | undefined) ?? null;
       const entityName = payload.entityName as string | null | undefined;
       if (!entityId && entityName) {
-        const [matched] = await conn
-          .select({ id: entities.id })
-          .from(entities)
-          .where(ilike(entities.name, entityName))
-          .limit(1);
-        entityId = matched?.id ?? null;
+        entityId = await findExistingEntityId(entityName);
       }
       const [row] = await conn
         .insert(contacts)
         .values({
-          firstName: String(payload.firstName ?? ""),
-          lastName: String(payload.lastName ?? ""),
-          email: (payload.email as string | null) ?? null,
+          firstName,
+          lastName,
+          email,
           jobTitle: (payload.jobTitle as string | null) ?? null,
           entityId,
           createdBy: userId,
@@ -575,12 +375,7 @@ async function createForKind(
       let entityId: string | null = (payload.entityId as string | null | undefined) ?? null;
       const entityName = payload.entityName as string | null | undefined;
       if (!entityId && entityName) {
-        const [matched] = await conn
-          .select({ id: entities.id })
-          .from(entities)
-          .where(ilike(entities.name, entityName))
-          .limit(1);
-        entityId = matched?.id ?? null;
+        entityId = await findExistingEntityId(entityName);
       }
       const valueAmount = payload.valueAmount as number | null | undefined;
       const rawStatus = payload.status as string | null | undefined;
@@ -604,6 +399,10 @@ async function createForKind(
             : "planning";
       // Le LLM propose `title` pour une opp et `name` pour un projet — on supporte les deux.
       const projectName = String(payload.name ?? payload.title ?? "Sans nom");
+      // Find-or-link, scopé sur l'entité résolue : deux propositions nées
+      // de deux réunions du même client ne doivent pas donner deux projets.
+      const existingProjectId = await findExistingProjectId(projectName, entityId);
+      if (existingProjectId) return existingProjectId;
       const [row] = await conn
         .insert(projects)
         .values({
@@ -624,15 +423,13 @@ async function createForKind(
       let projectId: string | null = (payload.projectId as string | null | undefined) ?? null;
       if (!projectId) {
         const projectName = payload.projectName as string | null | undefined;
-        if (projectName) {
-          const [matched] = await conn
-            .select({ id: projects.id })
-            .from(projects)
-            .where(ilike(projects.name, projectName))
-            .limit(1);
-          projectId = matched?.id ?? null;
-        }
+        if (projectName) projectId = await findExistingProjectId(projectName);
       }
+      // Même action acceptée deux fois (deux réunions, deux mails d'un
+      // fil) → on renvoie la tâche déjà ouverte au lieu d'en ouvrir une 2e.
+      const taskTitle = String(payload.title ?? "Sans titre");
+      const existingTaskId = await findExistingOpenTaskId(taskTitle, projectId);
+      if (existingTaskId) return existingTaskId;
       // XOR-ish : si un contact externe est désigné, on ignore assigneeId.
       // Sinon on retombe sur user via assigneeId ou fuzzy-match nom.
       let assigneeContactId: string | null =
@@ -670,7 +467,7 @@ async function createForKind(
         const [row] = await tx
           .insert(tasks)
           .values({
-            title: String(payload.title ?? "Sans titre"),
+            title: taskTitle,
             status: "todo",
             priority,
             projectId,
@@ -774,12 +571,7 @@ async function applyUpdateForKind(
       let entityId: string | null = (payload.entityId as string | null | undefined) ?? null;
       const entityName = payload.entityName as string | null | undefined;
       if (!entityId && entityName) {
-        const [matched] = await conn
-          .select({ id: entities.id })
-          .from(entities)
-          .where(ilike(entities.name, entityName))
-          .limit(1);
-        entityId = matched?.id ?? null;
+        entityId = await findExistingEntityId(entityName);
       }
       const valueAmount = payload.valueAmount as number | null | undefined;
       await conn
@@ -796,15 +588,9 @@ async function applyUpdateForKind(
       let projectId: string | null = (payload.projectId as string | null | undefined) ?? null;
       if (!projectId) {
         const projectName = payload.projectName as string | null | undefined;
-        if (projectName) {
-          const [matched] = await conn
-            .select({ id: projects.id })
-            .from(projects)
-            .where(ilike(projects.name, projectName))
-            .limit(1);
-          projectId = matched?.id ?? null;
-        }
+        if (projectName) projectId = await findExistingProjectId(projectName);
       }
+      const taskTitle = String(payload.title ?? "Sans titre");
       const assigneeContactId: string | null =
         (payload.assigneeContactId as string | null | undefined) ?? null;
       let assigneeId: string | null = assigneeContactId
@@ -829,7 +615,7 @@ async function applyUpdateForKind(
         await tx
           .update(tasks)
           .set({
-            title: String(payload.title ?? "Sans titre"),
+            title: taskTitle,
             priority,
             projectId,
             assigneeId: null,

@@ -6,12 +6,12 @@ import {
   isEditableKind,
   matchedSubtitle,
   matchedViewHref,
-  normalizeName,
   orderProposals,
   readAssignees,
   summaryFor,
 } from "@/components/proposals/helpers";
 import type { Proposal, ProposalKind, ProposalStatus } from "@/components/proposals/types";
+import { normalizeNameKey } from "@/lib/crm/name-key";
 import { describe, expect, it } from "vitest";
 
 function proposal(
@@ -193,9 +193,11 @@ describe("readAssignees", () => {
   });
 });
 
-describe("normalizeName / findByName", () => {
+describe("findByName", () => {
   it("ignore casse, accents et ponctuation", () => {
-    expect(normalizeName("  Bénilde-Liotard ")).toBe("benilde liotard");
+    // La normalisation est celle du dédoublonnage serveur
+    // (`lib/crm/name-key.ts`), testée là-bas.
+    expect(normalizeNameKey("  Bénilde-Liotard ")).toBe("benilde liotard");
   });
 
   it("préfère le match exact puis l'inclusion", () => {

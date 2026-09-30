@@ -1,3 +1,4 @@
+import { normalizeNameKey } from "@/lib/crm/name-key";
 import { formatPersonName } from "@/lib/format";
 import type {
   ContactOption,
@@ -183,32 +184,28 @@ export function readAssignees(draft: Record<string, unknown>): StoredAssignee[] 
     .map((a) => ({ kind: a.kind, id: a.id }));
 }
 
-export function normalizeName(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
+/**
+ * Résolution par nom côté client. Utilise la même normalisation que le
+ * dédoublonnage serveur (`lib/crm/name-key.ts`) — une seule implémentation,
+ * donc un client et un serveur qui tranchent pareil.
+ */
 export function findByName<T>(
   list: T[],
   query: string,
   getter: (item: T) => string | null,
 ): T | null {
-  const q = normalizeName(query);
+  const q = normalizeNameKey(query);
   if (!q) return null;
   // 1) match exact normalisé
   for (const item of list) {
     const v = getter(item);
-    if (v && normalizeName(v) === q) return item;
+    if (v && normalizeNameKey(v) === q) return item;
   }
   // 2) inclusion bidirectionnelle (gère "Bénilde" ↔ "Bénilde Liotard")
   for (const item of list) {
     const v = getter(item);
     if (!v) continue;
-    const nv = normalizeName(v);
+    const nv = normalizeNameKey(v);
     if (nv.includes(q) || q.includes(nv)) return item;
   }
   return null;
