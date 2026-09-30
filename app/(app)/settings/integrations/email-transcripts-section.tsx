@@ -7,7 +7,7 @@ import { EmailTranscriptsForm } from "./email-transcripts-form";
 /**
  * Section UI pour l'ingestion des réunions envoyées par mail. Un label
  * Gmail sert de file d'attente : ce qui y arrive devient une réunion,
- * puis le label est retiré. Le cron `ingest-email-transcripts` (30 min)
+ * puis le label est retiré. Le cron `ingest-email-transcripts` (15 min)
  * et le bouton « Sync now » font le même travail.
  */
 export async function EmailTranscriptsSection({ userId }: { userId: string }) {
@@ -27,7 +27,7 @@ export async function EmailTranscriptsSection({ userId }: { userId: string }) {
             Envoie un compte-rendu ou un enregistrement à l'adresse dédiée (ou range le mail sous le
             label), et Parade OS en fait une réunion : pièce jointe texte, PDF ou audio (transcrit
             par Whisper), ou à défaut le corps du mail. L'extraction LLM suit, puis le mail passe
-            sous <span className="font-mono">…/Traité</span>. Cron toutes les 30 min — sync manuel
+            sous <span className="font-mono">…/Traité</span>. Cron toutes les 15 min — sync manuel
             disponible.
           </p>
         </div>

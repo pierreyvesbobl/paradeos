@@ -53,7 +53,15 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
   // précédente) partent dans le prompt : ils lèvent l'ambiguïté des
   // prénoms seuls et des « je m'en occupe ».
   const participants = await getParticipantContext(meeting.id);
-  const result = await extractMeeting(meeting.transcript, { projectContext, participants });
+  // Le titre part avec : il nomme souvent le client, le projet ou les
+  // personnes là où le transcript ne dit que « on ». Et si la source a
+  // déjà établi la date (horodatage du nom de fichier Drive, directive
+  // dans un mail), le modèle la reprend au lieu de la recalculer.
+  const result = await extractMeeting(meeting.transcript, {
+    projectContext,
+    participants,
+    meetingContext: { title: meeting.title, occurredAt: meeting.occurredAt },
+  });
 
   await syncParticipantsFromAttendees(meeting.id, result.attendees);
 
@@ -143,6 +151,10 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
       matchConfidence: match ? match.confidence.toFixed(3) : null,
     });
   }
+  // Projets du transcript reconnus à coup sûr dans l'existant. S'il n'y
+  // en a qu'un, c'est celui de la réunion (cf. plus bas) : la réunion se
+  // rattache seule au lieu d'attendre qu'on la rattache à la main.
+  const certainProjectIds = new Set<string>();
   for (const p of dedupedProjects) {
     const entityId = await resolveProposedEntityId(p.entityName, entityMatchByName);
     const match = await fuzzyMatchProject(
@@ -151,6 +163,7 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
     );
     if (isCertainMatch(match)) {
       skipped.alreadyKnown++;
+      if (match) certainProjectIds.add(match.id);
       continue;
     }
     if (
@@ -233,11 +246,22 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
     await conn.insert(meetingProposals).values(proposalsRows);
   }
 
+  // Rattachement automatique : uniquement si la réunion n'a pas déjà un
+  // projet, et uniquement si le transcript n'en a reconnu **qu'un** à
+  // coup sûr. Deux projets certains, c'est une réunion transverse — la
+  // rattacher à l'un des deux serait un choix arbitraire, et un mauvais
+  // rattachement se voit moins qu'une absence de rattachement.
+  const autoProjectId =
+    meeting.projectId === null && certainProjectIds.size === 1
+      ? ([...certainProjectIds][0] as string)
+      : null;
+
   await conn
     .update(meetings)
     .set({
       summary: result.summary,
       occurredAt: meeting.occurredAt ?? (result.occurredAt ? new Date(result.occurredAt) : null),
+      ...(autoProjectId ? { projectId: autoProjectId } : {}),
       status: "extracted",
     })
     .where(eq(meetings.id, meeting.id));

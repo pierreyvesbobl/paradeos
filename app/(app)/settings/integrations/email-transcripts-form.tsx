@@ -72,8 +72,15 @@ export function EmailTranscriptsForm({
         toast.error(res.message);
         return;
       }
-      const { ingested, transcribed, skippedExisting, skippedUnsupported, errors, errorDetails } =
-        res.data;
+      const {
+        ingested,
+        transcribed,
+        skippedExisting,
+        skippedDuplicate,
+        skippedUnsupported,
+        errors,
+        errorDetails,
+      } = res.data;
       if (errors > 0) {
         toast.error(`Sync : ${errors} erreur(s)`, {
           description: errorDetails.slice(0, 3).join(" · "),
@@ -81,11 +88,13 @@ export function EmailTranscriptsForm({
       } else if (ingested === 0) {
         toast.info("Sync : rien à ingérer.", {
           description:
-            skippedUnsupported > 0
-              ? `${skippedUnsupported} mail(s) sans transcript exploitable.`
-              : skippedExisting > 0
-                ? `${skippedExisting} mail(s) déjà traité(s).`
-                : undefined,
+            skippedDuplicate > 0
+              ? `${skippedDuplicate} transcript(s) déjà en base sous une autre source.`
+              : skippedUnsupported > 0
+                ? `${skippedUnsupported} mail(s) sans transcript exploitable.`
+                : skippedExisting > 0
+                  ? `${skippedExisting} mail(s) déjà traité(s).`
+                  : undefined,
         });
       } else {
         toast.success(`${ingested} réunion(s) créée(s).`, {
@@ -203,7 +212,7 @@ export function EmailTranscriptsForm({
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground text-xs">
-              Sync auto toutes les 30 min — ou déclenche manuellement :
+              Sync auto toutes les 15 min — ou déclenche manuellement :
             </span>
             <Button
               type="button"

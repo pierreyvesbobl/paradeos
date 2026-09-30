@@ -35,12 +35,19 @@ export function DriveTranscriptsForm({ currentFolderId }: { currentFolderId: str
         toast.error(res.message);
         return;
       }
-      const { ingested, skippedExisting, skippedUnsupported, errors, errorDetails } = res.data;
+      const {
+        ingested,
+        skippedExisting,
+        skippedDuplicate,
+        skippedUnsupported,
+        errors,
+        errorDetails,
+      } = res.data;
       if (errors > 0) {
         toast.error(`Sync : ${errors} erreur(s)`, {
           description: errorDetails.slice(0, 3).join(" · "),
         });
-      } else if (ingested === 0 && skippedExisting === 0) {
+      } else if (ingested === 0 && skippedExisting === 0 && skippedDuplicate === 0) {
         toast.info("Sync : rien à ingérer.", {
           description:
             skippedUnsupported > 0 ? `${skippedUnsupported} fichier(s) ignoré(s).` : undefined,
@@ -49,7 +56,15 @@ export function DriveTranscriptsForm({ currentFolderId }: { currentFolderId: str
         toast.success(
           ingested > 0
             ? `${ingested} transcript(s) ingéré(s).`
-            : `Aucun nouveau (${skippedExisting} déjà ingéré).`,
+            : `Aucun nouveau (${skippedExisting} déjà ingéré${
+                skippedDuplicate > 0 ? `, ${skippedDuplicate} doublon(s) écarté(s)` : ""
+              }).`,
+          {
+            description:
+              ingested > 0 && skippedDuplicate > 0
+                ? `${skippedDuplicate} doublon(s) écarté(s).`
+                : undefined,
+          },
         );
       }
       router.refresh();
@@ -99,14 +114,20 @@ export function DriveTranscriptsForm({ currentFolderId }: { currentFolderId: str
         ) : null}
         <p className="text-muted-foreground text-xs">
           Le compte Google admin connecté doit avoir accès à ce dossier (ou un raccourci dans son My
-          Drive). Formats supportés : Google Docs, .txt, .md.
+          Drive). Formats supportés : Google Docs, .txt, .md. Le nom que Meet donne à ses fichiers
+          («{" "}
+          <span className="font-mono">
+            Prénom Nom et Prénom Nom - 2026/07/03 10:28 CEST - Transcript
+          </span>{" "}
+          ») est exploité tel quel : date, heure et participants en sortent. Un transcript déjà en
+          base — copie du fichier, ou même réunion arrivée par mail — est écarté.
         </p>
       </form>
 
       {currentFolderId ? (
         <div className="flex items-center justify-between gap-2 border-t pt-3">
           <span className="text-muted-foreground text-xs">
-            Sync auto toutes les 30 min — ou déclenche manuellement :
+            Sync auto toutes les 15 min — ou déclenche manuellement :
           </span>
           <Button
             type="button"

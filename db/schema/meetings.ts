@@ -93,6 +93,13 @@ export const meetings = pgTable(
     /** Expéditeur du mail source, pour retrouver d'où vient le transcript. */
     sourceEmailFrom: text("source_email_from"),
     sourceEmailReceivedAt: timestamp("source_email_received_at", { withTimezone: true }),
+    /**
+     * Empreinte SHA-256 du transcript, blancs normalisés (cf.
+     * `lib/meetings/dedupe.ts`). Unique partiel en base : c'est ce qui
+     * empêche qu'un même compte-rendu entre deux fois par deux chemins
+     * (copie Drive, mail + Drive, re-collage à la main).
+     */
+    contentFingerprint: text("content_fingerprint"),
     /** Lien optionnel vers un projet (couvre aussi les anciens deals/opps). */
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),

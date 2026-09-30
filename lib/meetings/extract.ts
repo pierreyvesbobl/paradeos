@@ -267,6 +267,21 @@ export function formatVocabulary(v: Vocabulary): string {
   return sections.join("\n\n");
 }
 
+/**
+ * Ce que l'on sait de la réunion *avant* de lire le transcript : son
+ * titre et, quand la source la portait, sa date.
+ *
+ * Un titre de réunion nomme souvent le client, le projet ou les
+ * personnes présentes là où le transcript ne dit que « on ». Ne pas le
+ * donner au modèle, c'était lui demander de deviner ce qui était écrit
+ * en clair sur le fichier.
+ */
+export type MeetingContext = {
+  title: string;
+  /** Date déjà établie par la source. Le modèle ne doit pas la contredire. */
+  occurredAt: Date | null;
+};
+
 export type ProjectContext = {
   name: string;
   entityName: string | null;
@@ -289,6 +304,7 @@ function buildSystemPrompt(
   vocab: Vocabulary,
   projectContext?: ProjectContext,
   participants?: ParticipantContext[],
+  meetingContext?: MeetingContext,
 ): string {
   const baseRules = `Tu es un assistant qui dépouille un transcript de meeting professionnel
 et en extrait :
@@ -369,6 +385,28 @@ Règles :
     contextBlock = `\n\n---\n\n# Contexte projet\n\n${lines.join("\n")}`;
   }
 
+  if (meetingContext) {
+    const lines = [
+      `Titre de la réunion (tel que la source l'a nommée) : « ${meetingContext.title} »`,
+    ];
+    if (meetingContext.occurredAt) {
+      lines.push(
+        `Date et heure déjà établies : ${meetingContext.occurredAt.toISOString()}.`,
+        "→ Reprends cette valeur dans `occurredAt`. Ne la recalcule pas depuis le transcript.",
+      );
+    }
+    lines.push(
+      "",
+      "Ce titre est une source de premier ordre, souvent plus explicite que le",
+      "transcript : il nomme fréquemment le client, le projet ou les personnes",
+      "présentes là où le transcript ne dit que « on » et « le projet ».",
+      "Exploite-le pour rattacher la réunion au bon projet et aux bonnes",
+      "personnes du vocabulaire ci-dessous. Il reste indicatif : n'invente pas",
+      "un projet à partir d'un titre qui n'en nomme aucun.",
+    );
+    contextBlock += `\n\n---\n\n# Contexte de la réunion\n\n${lines.join("\n")}`;
+  }
+
   if (participants && participants.length > 0) {
     const line = (p: ParticipantContext) => {
       const bits = [p.name];
@@ -413,7 +451,11 @@ ${vocabBlock}`;
 
 export async function extractMeeting(
   transcript: string,
-  options?: { projectContext?: ProjectContext; participants?: ParticipantContext[] },
+  options?: {
+    projectContext?: ProjectContext;
+    participants?: ParticipantContext[];
+    meetingContext?: MeetingContext;
+  },
 ): Promise<MeetingExtraction> {
   const apiKey = await getSetting(SETTING_KEYS.OPENROUTER_API_KEY);
   if (!apiKey) {
@@ -422,7 +464,12 @@ export async function extractMeeting(
   const modelId = (await getSetting(SETTING_KEYS.LLM_MODEL)) ?? DEFAULT_LLM_MODEL;
 
   const vocab = await getKnownVocabulary();
-  const systemPrompt = buildSystemPrompt(vocab, options?.projectContext, options?.participants);
+  const systemPrompt = buildSystemPrompt(
+    vocab,
+    options?.projectContext,
+    options?.participants,
+    options?.meetingContext,
+  );
 
   // OpenRouter expose une API OpenAI-compatible : on réutilise le
   // provider `@ai-sdk/openai` avec un baseURL custom. Les headers

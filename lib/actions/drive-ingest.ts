@@ -26,7 +26,7 @@ export const updateMeetingsDriveFolder = action(
 
 /**
  * Déclenche manuellement la sync Drive depuis l'UI (bouton « Sync now »).
- * Le cron 30 min fait le même boulot en automatique.
+ * Le cron 15 min fait le même boulot en automatique.
  */
 export const syncDriveTranscriptsNow = action(z.object({}), async ({ user }) => {
   await requireAdmin(user);

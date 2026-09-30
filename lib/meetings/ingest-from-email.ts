@@ -1,8 +1,6 @@
 import "server-only";
 
 import { meetings } from "@/db/schema/meetings";
-import { projects } from "@/db/schema/projects";
-import { fuzzyMatchProject } from "@/lib/crm/match";
 import { db } from "@/lib/db/server";
 import { getOrCreateGmailLabel, loadGmailLabelCache } from "@/lib/gmail/links";
 import { extractPdfText } from "@/lib/gmail/pdf";
@@ -18,6 +16,8 @@ import {
   modifyThreadLabels,
   parseAddressList,
 } from "@/lib/google/gmail-api";
+import { resolveDeclaredProject, saveDeclaredParticipants } from "@/lib/meetings/declared-context";
+import { findDuplicateMeeting, transcriptFingerprint } from "@/lib/meetings/dedupe";
 import {
   MAX_AUDIO_BYTES,
   MIN_BODY_CHARS,
@@ -32,12 +32,11 @@ import {
 import { parseEmailContext } from "@/lib/meetings/email-directives";
 import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import { getIngestionUserIds } from "@/lib/meetings/ingestion-user";
-import { syncParticipantsFromAttendees } from "@/lib/meetings/participants";
 import { canStartAnotherItem } from "@/lib/meetings/run-budget";
 import { transcribeMeetingAudio } from "@/lib/meetings/transcribe";
 import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 /**
  * Ingestion des réunions envoyées par mail.
@@ -79,6 +78,8 @@ export type EmailIngestResult = {
   /** Parmi les ingérés, ceux passés par Whisper (audio en PJ). */
   transcribed: number;
   skippedExisting: number;
+  /** Transcript déjà en base sous une autre source (Drive, collage à la main). */
+  skippedDuplicate: number;
   skippedUnsupported: number;
   errors: number;
   errorDetails: string[];
@@ -89,6 +90,7 @@ export async function ingestEmailTranscripts(): Promise<EmailIngestResult> {
     ingested: 0,
     transcribed: 0,
     skippedExisting: 0,
+    skippedDuplicate: 0,
     skippedUnsupported: 0,
     errors: 0,
     errorDetails: [],
@@ -347,6 +349,8 @@ async function ingestOneMessage(args: IngestArgs): Promise<void> {
       return;
     }
 
+    // Pas d'empreinte ici : le transcript n'existe pas encore. Whisper la
+    // posera en même temps qu'il remplit `transcript`.
     const meetingId = await insertMeeting(conn, {
       title,
       transcript: null,
@@ -356,7 +360,9 @@ async function ingestOneMessage(args: IngestArgs): Promise<void> {
       receivedAt,
       occurredAt,
       projectId,
+      fingerprint: null,
     });
+    if (!meetingId) throw new Error("Insert réunion sans id retourné.");
     await saveDeclaredParticipants(meetingId, context.participants);
 
     const attachmentData = await getAttachment(accessToken, messageRef.id, ref.attachmentId);
@@ -412,6 +418,20 @@ async function ingestOneMessage(args: IngestArgs): Promise<void> {
     return;
   }
 
+  // Le même compte-rendu peut déjà être entré par Drive, ou avoir été
+  // collé à la main. Le message sort quand même de la file : le laisser
+  // labellisé le ferait rejouer à chaque run pour rien.
+  const fingerprint = transcriptFingerprint(transcript);
+  const duplicate = await findDuplicateMeeting({ fingerprint, title, occurredAt });
+  if (duplicate) {
+    result.skippedDuplicate++;
+    console.info(
+      `[ingest-email] "${title}" doublon de la réunion ${duplicate.id} (${duplicate.reason}) — ignoré.`,
+    );
+    await markIgnored(args);
+    return;
+  }
+
   const meetingId = await insertMeeting(conn, {
     title,
     transcript,
@@ -421,7 +441,15 @@ async function ingestOneMessage(args: IngestArgs): Promise<void> {
     receivedAt,
     occurredAt,
     projectId,
+    fingerprint,
   });
+  if (!meetingId) {
+    // Empreinte prise entre le contrôle et l'insert : l'autre cron a
+    // gagné la course, il n'y a rien à faire de plus.
+    result.skippedDuplicate++;
+    await markIgnored(args);
+    return;
+  }
   await saveDeclaredParticipants(meetingId, context.participants);
   result.ingested++;
   await markProcessed(
@@ -463,54 +491,6 @@ async function readTextTranscript(
   return cleaned.length >= MIN_BODY_CHARS ? cleaned : null;
 }
 
-/**
- * Rapproche le projet déclaré de l'existant.
- *
- * La similarité trigramme ne suffit pas ici : on écrit « GpasPlus »
- * pour « GpasPlus - Automatisation des processus e-commerce », et huit
- * caractères sur cinquante ne franchissent aucun seuil raisonnable. Ce
- * qu'on écrit est un morceau du nom, donc on cherche d'abord un nom qui
- * le contient, et on ne retombe sur le flou que pour les fautes de
- * frappe.
- *
- * Deux projets contiennent le morceau → aucun n'est choisi : rattacher
- * la réunion au mauvais « GpasPlus » coûte plus cher que de la laisser
- * sans projet, où l'extraction le proposera et où un clic suffit.
- */
-async function resolveDeclaredProject(hint: string | null): Promise<string | null> {
-  const needle = hint?.trim();
-  if (!needle || needle.length < 3) return null;
-
-  const conn = await db();
-  const contained = await conn
-    .select({ id: projects.id })
-    .from(projects)
-    .where(sql`${projects.name} ilike ${`%${needle}%`}`)
-    .limit(2);
-  if (contained.length === 1) return contained[0]?.id ?? null;
-  if (contained.length > 1) return null;
-
-  const match = await fuzzyMatchProject(needle);
-  return match?.id ?? null;
-}
-
-/**
- * Enregistre les participants déclarés avant l'extraction : le prompt
- * les lit (cf. `extract-and-save.ts`), ce qui lève l'ambiguïté des
- * prénoms seuls au lieu de la laisser au modèle.
- */
-async function saveDeclaredParticipants(
-  meetingId: string,
-  participants: Array<{ name: string; email: string | null }>,
-): Promise<void> {
-  if (participants.length === 0) return;
-  await syncParticipantsFromAttendees(
-    meetingId,
-    participants.map((p) => ({ name: p.name, email: p.email, role: null })),
-    "manual",
-  );
-}
-
 async function insertMeeting(
   conn: Awaited<ReturnType<typeof db>>,
   args: {
@@ -522,8 +502,9 @@ async function insertMeeting(
     receivedAt: Date | null;
     occurredAt: Date | null;
     projectId: string | null;
+    fingerprint: string | null;
   },
-): Promise<string> {
+): Promise<string | null> {
   const [row] = await conn
     .insert(meetings)
     .values({
@@ -540,11 +521,15 @@ async function insertMeeting(
       sourceEmailMessageId: args.messageId,
       sourceEmailFrom: args.fromEmail,
       sourceEmailReceivedAt: args.receivedAt,
+      contentFingerprint: args.fingerprint,
       createdBy: args.userId,
     })
+    // L'unique partiel sur `content_fingerprint` est le dernier filet :
+    // deux crons peuvent contrôler le doublon en même temps et conclure
+    // tous les deux qu'il n'y en a pas. Rien inséré = l'autre a gagné.
+    .onConflictDoNothing()
     .returning({ id: meetings.id });
-  if (!row?.id) throw new Error("Insert réunion sans id retourné.");
-  return row.id;
+  return row?.id ?? null;
 }
 
 async function runExtraction(

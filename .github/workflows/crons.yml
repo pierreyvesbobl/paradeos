@@ -1,19 +1,24 @@
 # Crons externes.
 #
 # Vercel Hobby ne descend pas sous un passage par jour, or l'ingestion des
-# transcripts (Drive et mail) n'a d'intérêt qu'à la demi-heure : un
-# compte-rendu envoyé le matin doit être exploitable dans la foulée, pas le
-# lendemain. Ces endpoints sont donc déclenchés d'ici (cf. docs/cron-external.md).
+# transcripts (Drive et mail) n'a d'intérêt qu'au quart d'heure : un
+# compte-rendu de la réunion qui vient de finir doit être exploitable dans la
+# foulée. Ces endpoints sont donc déclenchés d'ici (cf. docs/cron-external.md).
+#
+# Le quart d'heure plutôt que la demi-heure : GitHub peut décaler un run
+# planifié de 5 à 10 minutes, ce qui poussait l'attente réelle jusqu'à 40
+# minutes après le dépôt du transcript par Meet. À `*/15`, le pire cas
+# retombe sous le quart d'heure, et un run ne coûte que deux requêtes HTTP —
+# les endpoints ne font rien quand il n'y a rien à ingérer.
 #
 # Le dépôt est public : les minutes Actions sont gratuites. Deux caveats,
-# assumés pour des jobs non critiques — la planification GitHub peut dériver
-# de 5 à 10 minutes, et les workflows planifiés sont désactivés après 60
-# jours sans activité sur le dépôt.
+# assumés pour des jobs non critiques — la dérive ci-dessus, et les workflows
+# planifiés sont désactivés après 60 jours sans activité sur le dépôt.
 name: Crons externes
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/15 * * * *"
   # Permet de déclencher à la main depuis l'onglet Actions.
   workflow_dispatch:
 

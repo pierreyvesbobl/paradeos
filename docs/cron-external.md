@@ -2,7 +2,7 @@
 
 Vercel Hobby limite les Cron Jobs à 1× par jour. Pour les jobs qui doivent
 tourner plus fréquemment (sync calendar 15 min, sync transcripts Drive et mail
-30 min), on les a sortis de `vercel.json` et on les déclenche depuis l'extérieur.
+15 min), on les a sortis de `vercel.json` et on les déclenche depuis l'extérieur.
 
 Les endpoints restent en place :
 
@@ -15,8 +15,12 @@ Auth : header `Authorization: Bearer $CRON_SECRET`.
 
 ## En place aujourd'hui : GitHub Actions
 
-`.github/workflows/crons.yml` appelle les deux endpoints d'ingestion toutes
-les 30 minutes. Le dépôt étant public, les minutes Actions sont gratuites.
+`.github/workflows/crons.yml` appelle les deux endpoints d'ingestion tous les
+quarts d'heure. Le dépôt étant public, les minutes Actions sont gratuites.
+
+Pourquoi 15 et pas 30 : la dérive GitHub s'ajoute à l'intervalle, donc à
+`*/30` un transcript déposé par Meet pouvait attendre 40 minutes. Un run à
+vide ne coûte que deux requêtes HTTP.
 
 Prérequis : le secret `CRON_SECRET` du dépôt doit valoir la variable
 d'environnement `CRON_SECRET` de Vercel (Production) —
@@ -54,7 +58,7 @@ bouton **Sync now**. Pour Calendar : section « Google Calendar » → bouton
    - Schedule : `*/15 * * * *`
    - Header : `Authorization: Bearer <CRON_SECRET>`
 3. Idem pour `/api/cron/ingest-drive-transcripts` et
-   `/api/cron/ingest-email-transcripts` avec `*/30 * * * *`
+   `/api/cron/ingest-email-transcripts` avec `*/15 * * * *`
 
 Free tier suffit largement (jusqu'à 50 crons, exécution illimitée).
 
@@ -91,11 +95,11 @@ Re-mets les entrées dans `vercel.json` :
 },
 {
   "path": "/api/cron/ingest-drive-transcripts",
-  "schedule": "*/30 * * * *"
+  "schedule": "*/15 * * * *"
 },
 {
   "path": "/api/cron/ingest-email-transcripts",
-  "schedule": "*/30 * * * *"
+  "schedule": "*/15 * * * *"
 }
 ```
 
