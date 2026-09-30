@@ -6,6 +6,7 @@
  */
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import type { Database } from "../db/client";
 
 let _client: ReturnType<typeof postgres> | undefined;
 
@@ -24,8 +25,11 @@ function getPgClient() {
   return _client;
 }
 
-let _db: ReturnType<typeof drizzle> | undefined;
-export function db() {
+// Typé `Database` (et non `ReturnType<typeof drizzle>`, qui s'instancie sur
+// le schéma par défaut) pour rester interchangeable avec la connexion de
+// l'app : les helpers partagés de `lib/` prennent l'une ou l'autre.
+let _db: Database | undefined;
+export function db(): Database {
   if (_db) return _db;
   _db = drizzle(getPgClient());
   return _db;

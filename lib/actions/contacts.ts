@@ -3,6 +3,8 @@
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { action } from "@/lib/actions/action";
+import { assertContactIsNew } from "@/lib/crm/assert-new";
+import { findExistingContactId } from "@/lib/crm/find-or-link";
 import { db } from "@/lib/db/server";
 import {
   createContactSchema,
@@ -19,6 +21,11 @@ import { z } from "zod";
 import { formatPersonName } from "@/lib/format";
 export const createContact = action(createContactSchema, async ({ input, user }) => {
   const conn = await db();
+  await assertContactIsNew({
+    firstName: input.firstName,
+    lastName: input.lastName,
+    email: input.email ?? null,
+  });
   const [row] = await conn
     .insert(contacts)
     .values({
@@ -78,6 +85,27 @@ export const quickCreateContact = action(quickCreateContactSchema, async ({ inpu
   const idx = trimmed.indexOf(" ");
   const firstName = idx > 0 ? trimmed.slice(0, idx) : "";
   const lastName = idx > 0 ? trimmed.slice(idx + 1) : trimmed;
+
+  // Find-or-create : le picker attend un id, donc on rend la fiche
+  // existante plutôt que de refuser (cf. `quickCreateEntity`).
+  const existingId = await findExistingContactId({ firstName, lastName });
+  if (existingId) {
+    const [existing] = await conn
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+      })
+      .from(contacts)
+      .where(eq(contacts.id, existingId))
+      .limit(1);
+    if (existing) {
+      return {
+        id: existing.id,
+        fullName: formatPersonName(existing.firstName, existing.lastName),
+      };
+    }
+  }
 
   const [row] = await conn
     .insert(contacts)

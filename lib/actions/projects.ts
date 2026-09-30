@@ -2,6 +2,8 @@
 
 import { projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
+import { assertProjectIsNew } from "@/lib/crm/assert-new";
+import { findExistingProjectId } from "@/lib/crm/find-or-link";
 import { getDefaultProjectEntityId } from "@/lib/db/queries/entities";
 import { db } from "@/lib/db/server";
 import {
@@ -20,6 +22,9 @@ export const createProject = action(createProjectSchema, async ({ input, user })
   // Auto-rattachement à l'entité Parade pour les projets internes
   // (product / transverse) si aucune entité n'a été choisie explicitement.
   const entityId = input.entityId ?? (await getDefaultProjectEntityId(input.kind));
+  // Scopé sur l'entité retenue : « Refonte site » peut exister chez deux
+  // clients sans que ce soit un doublon.
+  await assertProjectIsNew(input.name, entityId ?? null);
   const [row] = await conn
     .insert(projects)
     .values({
@@ -102,6 +107,17 @@ export const quickCreateProject = action(quickCreateProjectSchema, async ({ inpu
   const kind = input.kind ?? "transverse";
   // Idem createProject : product/transverse → entity Parade par défaut.
   const entityId = await getDefaultProjectEntityId(kind);
+  // Find-or-create : le picker et le bas de colonne pipeline attendent un
+  // id en retour (cf. `quickCreateEntity`).
+  const existingId = await findExistingProjectId(input.name, entityId ?? null);
+  if (existingId) {
+    const [existing] = await conn
+      .select({ id: projects.id, name: projects.name })
+      .from(projects)
+      .where(eq(projects.id, existingId))
+      .limit(1);
+    if (existing) return { id: existing.id, name: existing.name };
+  }
   const [row] = await conn
     .insert(projects)
     .values({

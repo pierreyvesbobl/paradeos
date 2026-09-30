@@ -23,6 +23,8 @@ import { taskAssignees } from "../db/schema/task-assignees";
 import { tasks } from "../db/schema/tasks";
 import { timeEntries } from "../db/schema/time-entries";
 import { users } from "../db/schema/users";
+import { matchContact, matchEntity, matchOpenTask, matchProject } from "../lib/crm/candidates";
+import { isCertainMatch } from "../lib/crm/pick";
 import { getMeetingParticipants } from "../lib/db/queries/meeting-participants";
 import { setTaskAssignees } from "../lib/db/queries/task-assignees";
 import type { UserContext } from "./context";
@@ -823,6 +825,13 @@ export const createTaskSchema = z.object({
 
 export async function createTask(args: z.infer<typeof createTaskSchema>, ctx: UserContext) {
   const conn = db();
+  // Garde-fou doublon : même titre (après normalisation) déjà ouvert sur le
+  // même projet → on renvoie la tâche existante. Un agent qui reprend un
+  // compte rendu deux fois ne doit pas doubler la liste à faire.
+  const existingTask = await matchOpenTask(conn, args.title, args.projectId ?? null);
+  if (existingTask && isCertainMatch(existingTask)) {
+    return { id: existingTask.id, title: existingTask.name, alreadyExisted: true as const };
+  }
   // Source de vérité = task_assignees. Si `assigneeId` n'est pas fourni,
   // l'auteur est ajouté par défaut (parité avec quickCreateTask).
   const assigneeUserId = args.assigneeId ?? ctx.userId;
@@ -1320,6 +1329,22 @@ export const createContactSchema = z.object({
 
 export async function createContact(args: z.infer<typeof createContactSchema>, ctx: UserContext) {
   const conn = db();
+  // Garde-fou doublon : un agent qui ne retrouve pas une fiche en crée une
+  // seconde. Sur une correspondance certaine (email identique ou nom
+  // strictement équivalent après normalisation), on renvoie l'existante —
+  // `alreadyExisted` le dit explicitement pour que l'appelant ne croie pas
+  // avoir créé quelque chose.
+  const existing = await matchContact(conn, args.firstName, args.lastName, {
+    email: args.email ?? null,
+  });
+  if (existing && isCertainMatch(existing)) {
+    const [found] = await conn
+      .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
+      .from(contacts)
+      .where(eq(contacts.id, existing.id))
+      .limit(1);
+    return { ...found, alreadyExisted: true as const };
+  }
   const [row] = await conn
     .insert(contacts)
     .values({
@@ -1340,7 +1365,7 @@ export async function createContact(args: z.infer<typeof createContactSchema>, c
       firstName: contacts.firstName,
       lastName: contacts.lastName,
     });
-  return row;
+  return { ...row, alreadyExisted: false as const };
 }
 
 export const updateContactSchema = z.object({
@@ -1400,6 +1425,17 @@ export const createEntitySchema = z.object({
 
 export async function createEntity(args: z.infer<typeof createEntitySchema>, ctx: UserContext) {
   const conn = db();
+  // Cf. `createContact` : « MKP Doctor » et « mkpdoctor » sont la même
+  // société, et c'est l'agent qui écrit le nom au hasard de ce qu'il lit.
+  const existing = await matchEntity(conn, args.name);
+  if (existing && isCertainMatch(existing)) {
+    const [found] = await conn
+      .select({ id: entities.id, name: entities.name, kind: entities.kind })
+      .from(entities)
+      .where(eq(entities.id, existing.id))
+      .limit(1);
+    return { ...found, alreadyExisted: true as const };
+  }
   const [row] = await conn
     .insert(entities)
     .values({
@@ -1414,7 +1450,7 @@ export async function createEntity(args: z.infer<typeof createEntitySchema>, ctx
       createdBy: ctx.userId,
     })
     .returning({ id: entities.id, name: entities.name, kind: entities.kind });
-  return row;
+  return { ...row, alreadyExisted: false as const };
 }
 
 export const updateEntitySchema = z.object({
@@ -1530,6 +1566,27 @@ export const createProjectSchema = z.object({
 
 export async function createProject(args: z.infer<typeof createProjectSchema>, ctx: UserContext) {
   const conn = db();
+  // Scopé sur l'entité quand elle est fournie : deux projets d'un même
+  // client partagent leur préfixe, sans scope on risquerait de confondre
+  // deux affaires distinctes.
+  const existing = await matchProject(
+    conn,
+    args.name,
+    args.entityId ? { entityId: args.entityId } : undefined,
+  );
+  if (existing && isCertainMatch(existing)) {
+    const [found] = await conn
+      .select({
+        id: projects.id,
+        name: projects.name,
+        kind: projects.kind,
+        status: projects.status,
+      })
+      .from(projects)
+      .where(eq(projects.id, existing.id))
+      .limit(1);
+    return { ...found, alreadyExisted: true as const };
+  }
   const [row] = await conn
     .insert(projects)
     .values({
@@ -1559,7 +1616,7 @@ export async function createProject(args: z.infer<typeof createProjectSchema>, c
       kind: projects.kind,
       status: projects.status,
     });
-  return row ?? null;
+  return row ? { ...row, alreadyExisted: false as const } : null;
 }
 
 export const updateProjectSchema = z.object({
