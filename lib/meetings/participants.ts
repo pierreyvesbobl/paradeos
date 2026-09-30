@@ -2,10 +2,11 @@ import "server-only";
 
 import { contacts } from "@/db/schema/contacts";
 import { meetingParticipants } from "@/db/schema/meeting-participants";
+import { fuzzyMatchContact, fuzzyMatchUser } from "@/lib/crm/match";
 import { getMeetingParticipants } from "@/lib/db/queries/meeting-participants";
 import { db } from "@/lib/db/server";
 import { sanitizeNameInput } from "@/lib/format";
-import { type ParticipantContext, fuzzyMatchContact, fuzzyMatchUser } from "@/lib/meetings/extract";
+import type { ParticipantContext } from "@/lib/meetings/extract";
 import { sql } from "drizzle-orm";
 
 /** Ce que le LLM sait d'une personne citée dans le transcript. */

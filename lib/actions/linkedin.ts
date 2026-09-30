@@ -3,6 +3,7 @@
 import { contacts } from "@/db/schema/contacts";
 import { linkedinConnections } from "@/db/schema/linkedin";
 import { action } from "@/lib/actions/action";
+import { findExistingContactId } from "@/lib/crm/find-or-link";
 import { db } from "@/lib/db/server";
 import { sanitizeNameInput } from "@/lib/format";
 import { and, eq } from "drizzle-orm";
@@ -106,6 +107,30 @@ export const decideLinkedinConnection = action(decideSchema, async ({ input, use
   const firstName = sanitizeNameInput(row.firstName) ?? "";
   const lastName = sanitizeNameInput(row.lastName) ?? "";
   if (!firstName && !lastName) throw new Error("Relation sans nom exploitable.");
+
+  // Garde-fou doublon : le rapprochement a été calculé à l'import, il
+  // ignore les contacts créés depuis. Si une fiche correspond de façon
+  // certaine (même email, ou même nom après normalisation), on la rattache
+  // au lieu d'en ouvrir une seconde.
+  const existingContactId = await findExistingContactId({
+    firstName,
+    lastName,
+    email: row.email ?? null,
+  });
+  if (existingContactId) {
+    await conn
+      .update(linkedinConnections)
+      .set({
+        matchedContactId: existingContactId,
+        matchStatus: "auto_merged",
+        decidedBy: user.id,
+        decidedAt: now,
+      })
+      .where(eq(linkedinConnections.id, row.id));
+    revalidatePath("/inbox");
+    revalidatePath(`/contacts/${existingContactId}`);
+    return { status: "linked" as const, contactId: existingContactId };
+  }
 
   const [created] = await conn
     .insert(contacts)

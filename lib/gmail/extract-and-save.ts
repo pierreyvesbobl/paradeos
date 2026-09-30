@@ -4,16 +4,18 @@ import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages, gmailTags, gmailThreads } from "@/db/schema/gmail";
 import { projectContacts } from "@/db/schema/project-contacts";
 import { projects } from "@/db/schema/projects";
-import { findContactByEmail } from "@/lib/db/queries/contacts";
-import { db } from "@/lib/db/server";
-import { extractEmail } from "@/lib/gmail/extract";
-import { computeThreadLinkSignals, linkThread } from "@/lib/gmail/links";
 import {
   fuzzyMatchContact,
   fuzzyMatchEntity,
   fuzzyMatchProject,
   fuzzyMatchTaskInProject,
-} from "@/lib/meetings/extract";
+  isCertainMatch,
+} from "@/lib/crm/match";
+import { compactNameKey } from "@/lib/crm/name-key";
+import { hasPendingProposalElsewhere, proposalDedupeKey } from "@/lib/crm/proposal-dedupe";
+import { db } from "@/lib/db/server";
+import { extractEmail } from "@/lib/gmail/extract";
+import { computeThreadLinkSignals, linkThread } from "@/lib/gmail/links";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { sanitizeNameInput } from "@/lib/format";
@@ -104,20 +106,40 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
 
   const rows: ProposalRow[] = [];
 
-  // 1. Tâches — avec dédup contre les tâches déjà en base sur le projet
-  //    matché. Évite de re-suggérer une action déjà tracée (l'utilisateur
-  //    l'a peut-être déjà créée à partir d'un mail précédent).
-  const TASK_DEDUP_THRESHOLD = 0.5;
-  let skippedDupTasks = 0;
+  // 1. Tâches — trois filtres avant de proposer : doublon dans la même
+  //    extraction, tâche équivalente déjà ouverte en base, proposition
+  //    équivalente déjà en attente sur un autre message ou une réunion.
+  const skipped = { pendingElsewhere: 0, dupTask: 0, alreadyKnown: 0 };
+  const seenTaskKeys = new Set<string>();
   for (const t of result.proposedTasks) {
     const projectMatch = t.projectName ? await fuzzyMatchProject(t.projectName) : null;
-    const dupTask = await fuzzyMatchTaskInProject(
-      t.title,
-      projectMatch?.id ?? null,
-      TASK_DEDUP_THRESHOLD,
-    );
+    const taskProjectId = projectMatch?.id ?? null;
+
+    const taskKey = proposalDedupeKey.task(t.title, taskProjectId);
+    if (taskKey && seenTaskKeys.has(taskKey)) {
+      skipped.dupTask++;
+      continue;
+    }
+    if (taskKey) seenTaskKeys.add(taskKey);
+
+    const dupTask = await fuzzyMatchTaskInProject(t.title, taskProjectId, undefined, {
+      // Sans projet cible, on compare à toutes les tâches ouvertes : un
+      // mail qui ne nomme pas le projet re-proposait sinon une action
+      // déjà tracée.
+      anyProject: taskProjectId === null,
+    });
     if (dupTask) {
-      skippedDupTasks++;
+      skipped.dupTask++;
+      continue;
+    }
+    if (
+      await hasPendingProposalElsewhere({
+        kind: "task",
+        key: taskKey,
+        excludeMessageId: messageId,
+      })
+    ) {
+      skipped.pendingElsewhere++;
       continue;
     }
     rows.push({
@@ -128,17 +150,12 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
         dueDate: t.dueDate,
         priority: t.priority,
         projectName: t.projectName,
-        projectId: projectMatch?.id ?? null,
+        projectId: taskProjectId,
         assigneeName: t.assigneeName,
       },
       matchedId: null,
       matchConfidence: null,
     });
-  }
-  if (skippedDupTasks > 0) {
-    console.info(
-      `[extract email ${messageId}] ${skippedDupTasks} tâche(s) LLM ignorée(s) : déjà en base sur le projet.`,
-    );
   }
 
   // 2. Rattachement projet — signaux combinés :
@@ -305,7 +322,21 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     const name = e.name.trim();
     if (!name) continue;
     const match = await fuzzyMatchEntity(name);
-    entityMatchByName.set(name.toLowerCase(), match?.id ?? null);
+    entityMatchByName.set(compactNameKey(name), match?.id ?? null);
+    if (isCertainMatch(match)) {
+      skipped.alreadyKnown++;
+      continue;
+    }
+    if (
+      await hasPendingProposalElsewhere({
+        kind: "entity",
+        key: proposalDedupeKey.entity(name),
+        excludeMessageId: messageId,
+      })
+    ) {
+      skipped.pendingElsewhere++;
+      continue;
+    }
     rows.push({
       messageId,
       kind: "entity",
@@ -326,11 +357,24 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     const lastName = sanitizeNameInput(c.lastName);
     if (!firstName && !lastName) continue;
     const email = c.email?.trim() ?? null;
-    if (email) {
-      const exact = await findContactByEmail(email);
-      if (exact) continue; // contact déjà connu, rien à proposer
+    const match = await fuzzyMatchContact(firstName, lastName, { email });
+    // Contact déjà en base avec preuve forte (email identique, ou nom
+    // strictement équivalent) : rien à proposer du tout, on n'encombre pas
+    // la file avec une ligne « déjà en base ».
+    if (isCertainMatch(match)) {
+      skipped.alreadyKnown++;
+      continue;
     }
-    const match = firstName || lastName ? await fuzzyMatchContact(firstName, lastName) : null;
+    if (
+      await hasPendingProposalElsewhere({
+        kind: "contact",
+        key: proposalDedupeKey.contact({ firstName, lastName, email }),
+        excludeMessageId: messageId,
+      })
+    ) {
+      skipped.pendingElsewhere++;
+      continue;
+    }
     rows.push({
       messageId,
       kind: "contact",
@@ -359,6 +403,20 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     );
     const match = await fuzzyMatchProject(name, entityId !== undefined ? { entityId } : undefined);
     if (match && match.id === autoLinkedProjectId) continue;
+    if (isCertainMatch(match)) {
+      skipped.alreadyKnown++;
+      continue;
+    }
+    if (
+      await hasPendingProposalElsewhere({
+        kind: "project",
+        key: proposalDedupeKey.project(name),
+        excludeMessageId: messageId,
+      })
+    ) {
+      skipped.pendingElsewhere++;
+      continue;
+    }
     rows.push({
       messageId,
       kind: "project",
@@ -401,6 +459,12 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     });
   }
 
+  if (skipped.dupTask > 0 || skipped.pendingElsewhere > 0 || skipped.alreadyKnown > 0) {
+    console.info(
+      `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs.`,
+    );
+  }
+
   if (rows.length > 0) {
     await conn.insert(emailProposals).values(rows);
   }
@@ -439,7 +503,7 @@ async function resolveProjectEntityIdForMatch(
   matchedEntityIdsFromThread: string[],
 ): Promise<string | null | undefined> {
   if (entityName) {
-    const key = entityName.trim().toLowerCase();
+    const key = compactNameKey(entityName);
     if (entityMatchByName.has(key)) {
       const cached = entityMatchByName.get(key);
       if (cached !== null && cached !== undefined) return cached;
