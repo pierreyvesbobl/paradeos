@@ -10,6 +10,7 @@ import {
   fuzzyMatchProject,
   fuzzyMatchTaskInProject,
   isCertainMatch,
+  isGenericProjectName,
 } from "@/lib/crm/match";
 import { compactNameKey } from "@/lib/crm/name-key";
 import { hasPendingProposalElsewhere, proposalDedupeKey } from "@/lib/crm/proposal-dedupe";
@@ -396,6 +397,11 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   for (const p of result.proposedProjects) {
     const name = p.name.trim();
     if (!name) continue;
+    // Même garde-fou que côté réunion : un nom de remplissage ne crée rien.
+    if (isGenericProjectName(name, p.entityName)) {
+      skipped.alreadyKnown++;
+      continue;
+    }
     const entityId = await resolveProjectEntityIdForMatch(
       p.entityName,
       entityMatchByName,

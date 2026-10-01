@@ -43,6 +43,25 @@ export const MATCH_THRESHOLD = {
   project: 0.55,
   user: 0.35,
   task: 0.5,
+  /**
+   * Projet comparé **à l'intérieur d'un même client**, nom du client
+   * retiré des deux côtés (cf. `pickBestProject`).
+   *
+   * Bien plus bas que `project` (0.55), et ce n'est pas un relâchement :
+   * c'est le même signal mesuré sans son bruit. Tant que le nom du client
+   * restait dans la comparaison, « Avenir Focus - Mirror Lab » et « Avenir
+   * Focus - Echolab » — deux projets distincts — scoraient 0.67, autant
+   * que « Automatisation devis et facturation ETC » et « Automatisation
+   * process - ETC », qui sont le même. Les deux familles étaient
+   * inséparables, et le seuil haut tranchait en faveur du « nouveau
+   * projet » à chaque fois.
+   *
+   * Sur le reste, une fois le client retiré, les deux familles se
+   * séparent : les vrais doublons tombent à 0.38 et au-dessus, les projets
+   * réellement distincts à 0.36 et en dessous (mesuré sur les 15 paires de
+   * la base, cf. `pick.test.ts`).
+   */
+  projectWithinEntity: 0.35,
 } as const;
 
 /**
@@ -83,6 +102,154 @@ export function pickBestMatch(candidates: Named[], needle: string, threshold: nu
   }
   return best;
 }
+
+/**
+ * Mots qui désignent un projet sans le nommer. Un modèle qui n'a pas trouvé
+ * le nom du projet dans un transcript écrit « Projet en cours » ou « Suivi
+ * de projet » — ce n'est pas un nom, c'est un aveu, et il ne doit jamais
+ * créer de fiche.
+ */
+const GENERIC_PROJECT_WORDS = new Set([
+  "projet",
+  "projets",
+  "project",
+  "dossier",
+  "mission",
+  "chantier",
+  "en",
+  "cours",
+  "suivi",
+  "point",
+  "divers",
+  "general",
+  "generale",
+  "nouveau",
+  "nouvelle",
+  "autre",
+  "autres",
+  "a",
+  "definir",
+  "preciser",
+  "venir",
+  "tbd",
+  "wip",
+  "na",
+  "inconnu",
+  "sans",
+  "nom",
+  "titre",
+  "client",
+]);
+
+/**
+ * Vrai si le nom proposé ne contient aucun mot distinctif : « Projet en
+ * cours », « Suivi de projet », « À définir ». L'appelant ne doit pas en
+ * faire un projet.
+ *
+ * `entityName` est retiré avant l'examen, sans quoi « Flow Boreal - Projet
+ * en cours » passerait pour un nom : le client ne distingue pas un projet
+ * de ses voisins, et c'est précisément ce que le modèle écrit quand il n'a
+ * trouvé que le client.
+ */
+export function isGenericProjectName(
+  name: string | null | undefined,
+  entityName: string | null = null,
+): boolean {
+  if (!name) return true;
+  const tokens = distinctiveTokens(name, entityName);
+  const entityTokens = new Set(
+    entityName ? normalizeNameKey(entityName).split(" ").filter(Boolean) : [],
+  );
+  if (tokens.length === 0) return true;
+  // `distinctiveTokens` rend le nom complet quand tout serait retiré : un
+  // projet qui s'appelle comme son client porte bien un nom.
+  if (tokens.every((t) => entityTokens.has(t))) return false;
+  return tokens.every((t) => GENERIC_PROJECT_WORDS.has(t));
+}
+
+/**
+ * Mots du nom, le nom du client retiré.
+ *
+ * Scopé à un client, ses propres mots ne distinguent plus rien : ils sont
+ * dans tous ses projets. Les garder, c'est noter « Avenir Focus - Echolab »
+ * et « Avenir Focus - Mirror Lab » comme proches à cause de « Avenir
+ * Focus ». On retombe sur le nom complet si tout disparaît — un projet qui
+ * s'appelle exactement comme son client.
+ */
+function distinctiveTokens(name: string, entityName: string | null): string[] {
+  const entityTokens = new Set(
+    entityName ? normalizeNameKey(entityName).split(" ").filter(Boolean) : [],
+  );
+  const tokens = normalizeNameKey(name).split(" ").filter(Boolean);
+  const kept = tokens.filter((t) => !entityTokens.has(t));
+  return kept.length > 0 ? kept : tokens;
+}
+
+/**
+ * Élit le projet existant que désigne un nom proposé, à l'intérieur d'un
+ * même client.
+ *
+ * Deux verdicts seulement, et surtout pas de recouvrement de mots dans le
+ * score : c'est lui qui produisait les faux positifs, « Pilotes TV clips
+ * IA » et « Zapping IA » partageant « IA » comme seul mot commun.
+ *
+ *  1. **Certain** (confiance 1, aucune proposition n'est créée) : les mots
+ *     distinctifs de l'un sont tous dans l'autre — « APKI - Refonte charte
+ *     + Landing » est « Flow Boreal - APKI - Refonte charte + Landing »
+ *     écrit plus court. On exige deux mots au moins : un seul mot commun ne
+ *     prouve rien, et « Lab » ⊂ « Mirror Lab » serait un faux doublon.
+ *     Même verdict pour un trigram très haut, qui est une faute de frappe.
+ *  2. **Candidat** (confiance = le score) : au-dessus du seuil, la
+ *     proposition reste mais porte le projet existant, donc /inbox la
+ *     montre comme « déjà en base » au lieu d'un projet neuf.
+ */
+export function pickBestProject(
+  candidates: Named[],
+  needle: string,
+  entityName: string | null,
+  threshold: number = MATCH_THRESHOLD.projectWithinEntity,
+): Match {
+  const needleKey = normalizeNameKey(needle);
+  if (!needleKey) return null;
+  const needleCompact = compactNameKey(needle);
+  const needleTokens = distinctiveTokens(needle, entityName);
+
+  let best: Match = null;
+  for (const c of candidates) {
+    if (!c.name) continue;
+    if (compactNameKey(c.name) === needleCompact) {
+      return { id: c.id, name: c.name, confidence: 1 };
+    }
+
+    const candTokens = distinctiveTokens(c.name, entityName);
+    const needleSet = new Set(needleTokens);
+    const candSet = new Set(candTokens);
+    const needleInCand = needleTokens.every((t) => candSet.has(t));
+    const candInNeedle = candTokens.every((t) => needleSet.has(t));
+    const shorter = Math.min(needleTokens.length, candTokens.length);
+    if (shorter >= 2 && (needleInCand || candInNeedle)) {
+      return { id: c.id, name: c.name, confidence: 1 };
+    }
+
+    const score = trigramSimilarity(needleTokens.join(" "), candTokens.join(" "));
+    if (score >= CERTAIN_PROJECT_TRIGRAM) {
+      return { id: c.id, name: c.name, confidence: 1 };
+    }
+    if (score > threshold && (best === null || score > best.confidence)) {
+      best = { id: c.id, name: c.name, confidence: score };
+    }
+  }
+  return best;
+}
+
+/**
+ * Au-delà, deux noms de projet d'un même client ne diffèrent plus que par
+ * l'orthographe (« Ecolab » / « Echolab » valent 0.50 — une lettre sur un
+ * mot court coûte cher en trigram, d'où un seuil qui peut sembler bas).
+ * Le plus haut score observé entre deux projets réellement distincts est
+ * 0.36, on garde donc une marge large.
+ */
+const CERTAIN_PROJECT_TRIGRAM = 0.7;
 
 type ContactCandidate = { id: string; firstName: string; lastName: string; email: string | null };
 

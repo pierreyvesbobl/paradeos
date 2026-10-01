@@ -240,14 +240,24 @@ export function formatVocabulary(v: Vocabulary): string {
   }
 
   if (v.projects.length > 0) {
+    // Groupés par client, et plus à plat : la décision « ré-mention ou
+    // nouveau projet » se prend en relisant les projets d'UN client, pas en
+    // cherchant un nom dans une liste de deux cents lignes.
+    const byEntity = new Map<string, typeof v.projects>();
+    for (const p of v.projects) {
+      const key = p.entityName ?? "Projets internes (sans client)";
+      byEntity.set(key, [...(byEntity.get(key) ?? []), p]);
+    }
+    const blocks = [...byEntity.entries()]
+      .map(
+        ([entity, list]) =>
+          `${entity} :\n${list.map((p) => `  - ${p.name} (${p.kind}, ${p.status})`).join("\n")}`,
+      )
+      .join("\n");
     sections.push(
-      `Projets / deals (couvre tout le cycle commercial → delivery) :\n${v.projects
-        .map((p) => {
-          const bits = [`${p.name} (${p.kind}, ${p.status})`];
-          if (p.entityName) bits.push(`pour ${p.entityName}`);
-          return `- ${bits.join(" ")}`;
-        })
-        .join("\n")}`,
+      `Projets / deals existants, groupés par client (un projet couvre tout
+le cycle commercial → delivery). Avant de proposer un projet pour un
+client, relis la liste de CE client :\n${blocks}`,
     );
   }
 
@@ -354,16 +364,35 @@ Règles :
    - "on bosse sur X", "tâches X", "deadline X" → **active**
 3. Pour les projets internes (kind=product/transverse), \`status\` est
    normalement \`active\` directement.
-4. **Ré-mention d'un projet existant** vs **nouveau projet** :
-   - Si le transcript parle du MÊME deal/projet qu'un projet du vocabulaire
-     (même objet, même périmètre) → ne re-propose pas, mentionne l'avancée
-     dans le résumé.
-   - Si le transcript parle d'un NOUVEAU deal/projet pour une entité qui a
-     déjà d'autres projets → propose-le comme nouveau projet (nom distinct),
-     même si l'entité est la même. Ne fusionne pas deux objets différents
-     sous prétexte qu'ils partagent le client. En cas de doute, choisis
-     "nouveau projet" plutôt que "ré-mention" — un doublon est plus facile
-     à rejeter qu'un projet manqué.`;
+4. **Ré-mention d'un projet existant** vs **nouveau projet**. C'est la
+   décision la plus coûteuse à rater : un projet en doublon pollue le CRM,
+   se traîne dans les filtres et les rapports, et il faut aller fusionner
+   deux historiques à la main. Procède dans cet ordre :
+
+   a. Trouve le client dont il est question, puis **relis la liste de SES
+      projets** dans le vocabulaire ci-dessous. La question n'est jamais
+      « ce nom est-il dans la liste ? » mais « l'un de ses projets
+      désigne-t-il déjà cet objet ? ».
+   b. **C'est une ré-mention** — donc on ne propose rien, on raconte
+      l'avancée dans le résumé — dès que le transcript parle du même objet,
+      même s'il le dit autrement. Sont des ré-mentions :
+      - le même objet reformulé : « automatisation des devis et de la
+        facturation » quand le projet s'appelle « Automatisation process » ;
+      - une phase, un lot, une étape ou une relance du même objet : un
+        projet couvre tout son cycle (cf. \`status\`), il n'y a pas de
+        « phase 2 » séparée ;
+      - le même objet sous un angle technique différent (l'outil, le
+        fichier, le format changent, l'objet non).
+   c. **C'est un nouveau projet** seulement si le transcript nomme un objet
+      que tu peux distinguer en une phrase de chacun des projets existants
+      du client — une autre livraison, un autre besoin, un autre budget.
+      Alors donne-lui un nom qui dit cet objet-là, pas un nom générique.
+   d. **En cas de doute, c'est une ré-mention.** Le doute lui-même est le
+      signe que l'objet n'est pas distinguable des projets existants.
+   e. Si tu ne sais pas nommer le projet dont on parle, **ne propose pas de
+      projet** et n'invente jamais un nom de remplissage : « Projet en
+      cours », « Suivi de projet », « À définir » ne sont pas des noms et
+      seront jetés.`;
 
   const vocabBlock = formatVocabulary(vocab);
 

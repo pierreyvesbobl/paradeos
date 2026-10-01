@@ -11,13 +11,14 @@ import {
   fuzzyMatchTaskInProject,
   fuzzyMatchUser,
   isCertainMatch,
+  isGenericProjectName,
 } from "@/lib/crm/match";
 import { compactNameKey, personCompactKey } from "@/lib/crm/name-key";
 import { hasPendingProposalElsewhere, proposalDedupeKey } from "@/lib/crm/proposal-dedupe";
 import { db } from "@/lib/db/server";
 import { type ProjectContext, extractMeeting } from "@/lib/meetings/extract";
 import { getParticipantContext, syncParticipantsFromAttendees } from "@/lib/meetings/participants";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 
 import { formatPersonName, sanitizeNameInput } from "@/lib/format";
 /**
@@ -96,7 +97,7 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
   const dedupedProjects = dedupeBy(result.proposedProjects, (p) => compactNameKey(p.name));
 
   /** Propositions écartées, comptées par motif pour le log. */
-  const skipped = { pendingElsewhere: 0, dupTask: 0, alreadyKnown: 0 };
+  const skipped = { pendingElsewhere: 0, dupTask: 0, alreadyKnown: 0, genericName: 0 };
 
   // On mémorise les entités matchées pour scoper le match projet ensuite :
   // "GpasPlus - Nouveau X" ne doit pas être confondu avec "GpasPlus -
@@ -157,10 +158,20 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
   const certainProjectIds = new Set<string>();
   for (const p of dedupedProjects) {
     const entityId = await resolveProposedEntityId(p.entityName, entityMatchByName);
-    const match = await fuzzyMatchProject(
-      p.name,
-      entityId !== undefined ? { entityId } : undefined,
-    );
+    const scope = entityId !== undefined ? { entityId } : undefined;
+
+    // « Projet en cours », « Suivi de projet » : le modèle n'a pas trouvé le
+    // nom, il a rempli la case. Créer ça produit une fiche que personne ne
+    // retrouvera. Si le client n'a qu'un seul projet, c'est de lui qu'on
+    // parlait — sinon on ne propose rien du tout.
+    if (isGenericProjectName(p.name, p.entityName)) {
+      skipped.genericName++;
+      const only = scope ? await soleProjectOfEntity(entityId ?? null) : null;
+      if (only) certainProjectIds.add(only);
+      continue;
+    }
+
+    const match = await fuzzyMatchProject(p.name, scope);
     if (isCertainMatch(match)) {
       skipped.alreadyKnown++;
       if (match) certainProjectIds.add(match.id);
@@ -236,9 +247,14 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
       matchConfidence: null,
     });
   }
-  if (skipped.dupTask > 0 || skipped.pendingElsewhere > 0 || skipped.alreadyKnown > 0) {
+  if (
+    skipped.dupTask > 0 ||
+    skipped.pendingElsewhere > 0 ||
+    skipped.alreadyKnown > 0 ||
+    skipped.genericName > 0
+  ) {
     console.info(
-      `[extract meeting ${meeting.id}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs.`,
+      `[extract meeting ${meeting.id}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.genericName} nom(s) de projet sans contenu.`,
     );
   }
 
@@ -267,6 +283,21 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
     .where(eq(meetings.id, meeting.id));
 
   return { count: proposalsRows.length };
+}
+
+/**
+ * Id du projet d'un client **s'il n'en a qu'un**. Sert au cas du nom
+ * générique : « Projet en cours » chez un client qui n'a qu'un dossier ne
+ * laisse aucun doute, et deux dossiers n'en laissent que du doute.
+ */
+async function soleProjectOfEntity(entityId: string | null): Promise<string | null> {
+  const conn = await db();
+  const rows = await conn
+    .select({ id: projects.id })
+    .from(projects)
+    .where(entityId === null ? isNull(projects.entityId) : eq(projects.entityId, entityId))
+    .limit(2);
+  return rows.length === 1 ? (rows[0]?.id ?? null) : null;
 }
 
 /** Garde la 1re occurrence par clé. Préserve l'ordre d'entrée. */

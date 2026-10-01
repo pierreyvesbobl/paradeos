@@ -5,7 +5,13 @@ import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { normalizeEmail, normalizeNameKey, personNameKey } from "@/lib/crm/name-key";
-import { MATCH_THRESHOLD, type Match, pickBestContact, pickBestMatch } from "@/lib/crm/pick";
+import {
+  MATCH_THRESHOLD,
+  type Match,
+  pickBestContact,
+  pickBestMatch,
+  pickBestProject,
+} from "@/lib/crm/pick";
 import { sql } from "drizzle-orm";
 
 /**
@@ -69,31 +75,50 @@ export async function matchContact(
  * Match d'un projet par nom, avec scope entité facultatif.
  *
  * `opts.entityId` :
- *  - `string` → restreint aux projets de cette entité. Évite le faux
- *    positif "GpasPlus - Nouveau X" ↔ "GpasPlus - Automatisation" quand le
- *    nom d'entité domine la similarité.
- *  - `null` → restreint aux projets internes (entityId is null).
- *  - `undefined` (défaut) → pas de scope.
+ *  - `string` → restreint aux projets de cette entité. Le scope ne sert pas
+ *    qu'à éviter un faux positif entre deux clients : il change la façon de
+ *    comparer. À l'intérieur d'un client, on retire son nom des deux côtés
+ *    et on descend le seuil (`pickBestProject`), ce qui rapproche enfin
+ *    « Automatisation devis et facturation ETC » de « Automatisation
+ *    process - ETC » sans rapprocher « Mirror Lab » de « Echolab ».
+ *  - `null` → restreint aux projets internes (entityId is null). Même
+ *    traitement, sans nom de client à retirer.
+ *  - `undefined` (défaut) → pas de scope, comparaison symétrique au seuil
+ *    haut : sans client pour cadrer, un rapprochement large se tromperait
+ *    de dossier.
  */
 export async function matchProject(
   conn: Database,
   name: string,
   opts?: { entityId?: string | null; threshold?: number },
 ): Promise<Match> {
-  const threshold = opts?.threshold ?? MATCH_THRESHOLD.project;
   if (!normalizeNameKey(name)) return null;
-  const query = conn.select({ id: projects.id, name: projects.name }).from(projects);
-  const rows =
-    opts && "entityId" in opts
-      ? await query
-          .where(
-            opts.entityId === null
-              ? sql`${projects.entityId} is null`
-              : sql`${projects.entityId} = ${opts.entityId}`,
-          )
-          .limit(CANDIDATE_SCAN_LIMIT)
-      : await query.limit(CANDIDATE_SCAN_LIMIT);
-  return pickBestMatch(rows, name, threshold);
+
+  if (!opts || !("entityId" in opts)) {
+    const rows = await conn
+      .select({ id: projects.id, name: projects.name })
+      .from(projects)
+      .limit(CANDIDATE_SCAN_LIMIT);
+    return pickBestMatch(rows, name, opts?.threshold ?? MATCH_THRESHOLD.project);
+  }
+
+  const rows = await conn
+    .select({ id: projects.id, name: projects.name, entityName: entities.name })
+    .from(projects)
+    .leftJoin(entities, sql`${entities.id} = ${projects.entityId}`)
+    .where(
+      opts.entityId === null
+        ? sql`${projects.entityId} is null`
+        : sql`${projects.entityId} = ${opts.entityId}`,
+    )
+    .limit(CANDIDATE_SCAN_LIMIT);
+
+  return pickBestProject(
+    rows,
+    name,
+    rows.find((r) => r.entityName)?.entityName ?? null,
+    opts.threshold ?? MATCH_THRESHOLD.projectWithinEntity,
+  );
 }
 
 export async function matchUser(

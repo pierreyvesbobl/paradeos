@@ -17,7 +17,14 @@ import { db } from "@/lib/db/server";
  * toujours par ici ; le serveur MCP, lui, appelle `candidates.ts`
  * directement avec sa propre connexion.
  */
-export { MATCH_THRESHOLD, isCertainMatch, pickBestContact, pickBestMatch } from "@/lib/crm/pick";
+export {
+  MATCH_THRESHOLD,
+  isCertainMatch,
+  isGenericProjectName,
+  pickBestContact,
+  pickBestMatch,
+  pickBestProject,
+} from "@/lib/crm/pick";
 export type { ContactIdentity, Match } from "@/lib/crm/pick";
 
 export async function fuzzyMatchEntity(name: string, threshold?: number): Promise<Match> {
