@@ -9,6 +9,8 @@ import { getSyncTokensForUser } from "@/lib/dougs/sync-tokens";
 import { SETTING_KEYS, getSetting, getSettingStatus } from "@/lib/settings";
 import { eq } from "drizzle-orm";
 import { ApiTokensSection } from "./api-tokens-section";
+import { BrandLogosSection } from "./brand-logos-section";
+import { CoworkingAutoSendSection } from "./coworking-autosend-section";
 import { DougsSection } from "./dougs-section";
 import { DriveTranscriptsSection } from "./drive-transcripts-section";
 import { EmailTranscriptsSection } from "./email-transcripts-section";
@@ -21,6 +23,7 @@ import { LinkedinSection } from "./linkedin-section";
 import { LlmConfigForm } from "./llm-config-form";
 import { OauthCallbackToast } from "./oauth-callback-toast";
 import { OpenAiKeyForm } from "./openai-key-form";
+import { SalesInvoiceDriveSection } from "./sales-invoice-drive-section";
 
 export default async function IntegrationsSettingsPage({
   searchParams,
@@ -71,6 +74,9 @@ export default async function IntegrationsSettingsPage({
             lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
           }))}
       />
+      {isAdmin ? <BrandLogosSection /> : null}
+      {isAdmin ? <CoworkingAutoSendSection /> : null}
+      {isAdmin ? <SalesInvoiceDriveSection /> : null}
       <LinkedinSection
         appUrl={appUrl}
         syncTokens={linkedin.syncTokens}

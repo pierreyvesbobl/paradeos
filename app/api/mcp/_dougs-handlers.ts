@@ -2,19 +2,24 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { contacts as contactsTable } from "../../../db/schema/contacts";
 import { coworkingContracts } from "../../../db/schema/coworking";
-import { entities as entitiesTable } from "../../../db/schema/entities";
+import { type EntityAddress, entities as entitiesTable } from "../../../db/schema/entities";
 import { invoices } from "../../../db/schema/invoices";
 import { projects } from "../../../db/schema/projects";
+import { resolveInvoiceDocument } from "../../../lib/billing/brand-documents";
+import { brandTemplateFor } from "../../../lib/billing/brand-templates";
+import {
+  buildDocumentPatch,
+  pushDougsSalesInvoiceDraft,
+  resolveDougsClientData,
+} from "../../../lib/billing/dougs-push";
 import { db } from "../../../lib/db/server";
 import {
   createDougsQuoteDraft,
-  createDougsSalesInvoiceDraft,
   getDougsDraftUrl,
   getDougsQuoteUrl,
-  searchDougsClients,
   updateDougsQuote,
-  updateDougsSalesInvoice,
 } from "../../../lib/dougs/client";
+import { monthsBetween } from "../../../lib/schemas/coworking";
 
 /**
  * Outils MCP qui orchestrent : push Dougs + écriture dans invoices.
@@ -25,68 +30,39 @@ import {
 
 // ---------- Helper : clientData depuis une entité ----------
 
+/**
+ * Adaptateur vers `resolveDougsClientData`. Le helper local faisait la même
+ * chose en moins bien : il prenait le résultat Dougs en bloc, donc il écrasait
+ * la rue connue de Parade OS par une chaîne vide quand la recherche ne la
+ * renvoyait pas, et il envoyait toujours `siret: null`.
+ */
 async function buildClientDataFromEntity(
   userId: string,
   entityName: string,
   fallback: {
+    legalName?: string | null;
     siren: string | null;
+    siret?: string | null;
     vatNumber: string | null;
-    address: unknown;
+    address: EntityAddress | null;
+    deliveryAddress?: EntityAddress | null;
   },
   contactEmail: string | null,
 ): Promise<Record<string, unknown>> {
-  const matches = await searchDougsClients(userId, entityName, true);
-  const best = matches[0];
-  if (best) {
-    return {
-      isBToB: best.isBtoB,
-      legalName: best.legalName ?? best.name,
-      siren: best.siren,
-      siret: null,
-      vatNumber: best.vatNumber,
-      firstName: best.firstName,
-      lastName: best.lastName,
-      address: best.address
-        ? {
-            street: best.address.street ?? "",
-            zipCode: best.address.zipcode ?? "",
-            city: best.address.city ?? "",
-            country: "France",
-          }
-        : { street: "", zipCode: "", city: "", country: "France" },
-      deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
-      others: [],
-      email: best.email ?? contactEmail ?? null,
-      phone: best.phone ?? null,
-      clientId: best.clientId,
-    };
-  }
-  const localAddr = fallback.address as {
-    street?: string;
-    postalCode?: string;
-    city?: string;
-    country?: string;
-  } | null;
-  return {
-    isBToB: true,
-    legalName: entityName,
-    siren: fallback.siren ?? null,
-    siret: null,
-    vatNumber: fallback.vatNumber ?? null,
-    firstName: null,
-    lastName: null,
-    address: {
-      street: localAddr?.street ?? "",
-      zipCode: localAddr?.postalCode ?? "",
-      city: localAddr?.city ?? "",
-      country: localAddr?.country ?? "France",
+  return resolveDougsClientData({
+    userId,
+    isBtoB: true,
+    searchName: entityName,
+    local: {
+      legalName: fallback.legalName ?? entityName,
+      siren: fallback.siren,
+      siret: fallback.siret ?? null,
+      vatNumber: fallback.vatNumber,
+      address: fallback.address,
+      deliveryAddress: fallback.deliveryAddress ?? null,
+      email: contactEmail,
     },
-    deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
-    others: [],
-    email: contactEmail ?? null,
-    phone: null,
-    clientId: null,
-  };
+  });
 }
 
 // ---------- 1. push_project_quote ----------
@@ -118,10 +94,14 @@ export async function pushProjectQuote(
     .select({
       project: projects,
       entityName: entitiesTable.name,
+      entityLegalName: entitiesTable.legalName,
       entitySiren: entitiesTable.siren,
+      entitySiret: entitiesTable.siret,
       entityVatNumber: entitiesTable.vatNumber,
       entityAddress: entitiesTable.address,
+      entityDeliveryAddress: entitiesTable.deliveryAddress,
       contactEmail: contactsTable.email,
+      projectBillingTerms: projects.billingTerms,
     })
     .from(projects)
     .leftJoin(entitiesTable, eq(entitiesTable.id, projects.entityId))
@@ -141,9 +121,12 @@ export async function pushProjectQuote(
     ctx.userId,
     row.entityName,
     {
+      legalName: row.entityLegalName,
       siren: row.entitySiren,
+      siret: row.entitySiret,
       vatNumber: row.entityVatNumber,
       address: row.entityAddress,
+      deliveryAddress: row.entityDeliveryAddress,
     },
     row.contactEmail,
   );
@@ -164,8 +147,15 @@ export async function pushProjectQuote(
   }));
 
   const draft = await createDougsQuoteDraft(ctx.userId);
+  // Mêmes mentions que depuis l'UI : logo de la marque, sous-titre, modalités.
+  // `dueDateOption` est écarté — un devis a une expiration, pas une échéance.
+  const { dueDateOption: _ignoré, ...quoteDocument } = (
+    await resolveInvoiceDocument("automato", row.projectBillingTerms)
+  ).document;
+
   const updated = await updateDougsQuote(ctx.userId, draft.id, {
     ...draft,
+    ...buildDocumentPatch(draft as unknown as Record<string, unknown>, quoteDocument),
     subject: args.subject,
     thankYouNote: args.thankYouNote,
     clientData,
@@ -184,7 +174,7 @@ export async function pushProjectQuote(
   const quoteValues = {
     label: `Devis ${project.name}`,
     amountHt: total.toFixed(2),
-    vatRate: "0.2",
+    vatRate: brandTemplateFor("automato").defaultVatRate.toString(),
     status: "sent" as const,
     dougsQuoteId: updated.id,
     dougsReference: updated.reference,
@@ -198,6 +188,7 @@ export async function pushProjectQuote(
   } else {
     await conn.insert(invoices).values({
       kind: "quote",
+      brand: "automato",
       projectId: args.projectId,
       createdBy: ctx.userId,
       ...quoteValues,
@@ -234,9 +225,12 @@ export async function pushProjectMilestoneInvoice(
     .select({
       project: projects,
       entityName: entitiesTable.name,
+      entityLegalName: entitiesTable.legalName,
       entitySiren: entitiesTable.siren,
+      entitySiret: entitiesTable.siret,
       entityVatNumber: entitiesTable.vatNumber,
       entityAddress: entitiesTable.address,
+      entityDeliveryAddress: entitiesTable.deliveryAddress,
       contactEmail: contactsTable.email,
     })
     .from(projects)
@@ -313,37 +307,33 @@ export async function pushProjectMilestoneInvoice(
     ctx.userId,
     row.entityName,
     {
+      legalName: row.entityLegalName,
       siren: row.entitySiren,
+      siret: row.entitySiret,
       vatNumber: row.entityVatNumber,
       address: row.entityAddress,
+      deliveryAddress: row.entityDeliveryAddress,
     },
     row.contactEmail,
   );
 
-  const description =
-    percent != null
-      ? `${percent.toLocaleString("fr-FR")} % du projet "${project.name}".`
-      : `Facture liée au projet "${project.name}".`;
+  const template = brandTemplateFor("automato");
+  const ctxLines = {
+    label,
+    amountHt,
+    vatRate: template.defaultVatRate,
+    clientName: row.entityName,
+    projectName: project.name,
+    milestonePercent: percent ?? null,
+  };
 
-  const lines = [
-    {
-      title: label,
-      description,
-      unit: "forfait",
-      quantity: 1,
-      unitAmount: amountHt,
-      vatRate: 0.2,
-      discount: 0,
-      discountUnit: "%",
-      reference: null,
-      amount: amountHt,
-      discountInEuros: 0,
-      isPriceWithVat: false,
-    },
-  ];
-
-  const draft = await createDougsSalesInvoiceDraft(ctx.userId);
-  await updateDougsSalesInvoice(ctx.userId, draft.id, { ...draft, clientData, lines });
+  const draft = await pushDougsSalesInvoiceDraft({
+    userId: ctx.userId,
+    clientData,
+    lines: template.buildLines(ctxLines),
+    subject: template.invoiceSubject(ctxLines),
+    document: template.document,
+  });
 
   let milestoneInvoiceId: string;
   if (milestone) {
@@ -365,10 +355,11 @@ export async function pushProjectMilestoneInvoice(
       .insert(invoices)
       .values({
         kind: "milestone",
+        brand: "automato",
         projectId: args.projectId,
         label,
         amountHt: amountHt.toFixed(2),
-        vatRate: "0.2",
+        vatRate: template.defaultVatRate.toString(),
         status: "sent",
         milestoneType: mType,
         milestonePercent: percent,
@@ -414,9 +405,12 @@ export async function pushCoworkingInvoiceMcp(
       contactEmail: contactsTable.email,
       contactAddress: contactsTable.address,
       billToEntityName: entitiesTable.name,
+      billToEntityLegalName: entitiesTable.legalName,
       billToEntitySiren: entitiesTable.siren,
+      billToEntitySiret: entitiesTable.siret,
       billToEntityVatNumber: entitiesTable.vatNumber,
       billToEntityAddress: entitiesTable.address,
+      billToEntityDeliveryAddress: entitiesTable.deliveryAddress,
     })
     .from(invoices)
     .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
@@ -436,83 +430,54 @@ export async function pushCoworkingInvoiceMcp(
     : `${row.contactFirstName ?? ""} ${row.contactLastName ?? ""}`.trim();
   if (!searchName) throw new Error("Nom client introuvable (entité ou contact manquant).");
 
-  let clientData: Record<string, unknown>;
-  if (isBtoB) {
-    clientData = await buildClientDataFromEntity(
-      ctx.userId,
-      searchName,
-      {
-        siren: row.billToEntitySiren,
-        vatNumber: row.billToEntityVatNumber,
-        address: row.billToEntityAddress,
-      },
-      row.contactEmail,
-    );
-  } else {
-    const addr = row.contactAddress as {
-      street?: string;
-      postalCode?: string;
-      city?: string;
-      country?: string;
-    } | null;
-    clientData = {
-      isBToB: false,
-      legalName: null,
-      siren: null,
-      siret: null,
-      vatNumber: null,
-      firstName: row.contactFirstName,
-      lastName: row.contactLastName,
-      address: {
-        street: addr?.street ?? "",
-        zipCode: addr?.postalCode ?? "",
-        city: addr?.city ?? "",
-        country: addr?.country ?? "France",
-      },
-      deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
-      others: [],
+  // Une seule voie pour B2B et B2C : la branche B2C ne cherchait pas le client
+  // chez Dougs, donc elle n'en résolvait jamais le `clientId` et créait un
+  // doublon à chaque push.
+  const clientData = await resolveDougsClientData({
+    userId: ctx.userId,
+    isBtoB,
+    searchName,
+    local: {
+      legalName: row.billToEntityLegalName ?? row.billToEntityName ?? null,
+      siren: row.billToEntitySiren ?? null,
+      siret: row.billToEntitySiret ?? null,
+      vatNumber: row.billToEntityVatNumber ?? null,
+      firstName: row.contactFirstName ?? null,
+      lastName: row.contactLastName ?? null,
+      address: isBtoB ? row.billToEntityAddress : row.contactAddress,
+      deliveryAddress: isBtoB ? row.billToEntityDeliveryAddress : null,
       email: row.contactEmail ?? null,
-      phone: null,
-      clientId: null,
-    };
-  }
-
-  const start = new Date(invoice.periodStart);
-  const end = new Date(invoice.periodEnd);
-  const months = Math.max(
-    1,
-    (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1,
-  );
-  const desks = invoice.desks ?? contract.desks;
-  const monthlyHt = Number(invoice.unitPriceHt ?? contract.unitPriceHt);
-  const vatRate = Number(invoice.vatRate);
-  const lineAmount = desks * monthlyHt * months;
-
-  const lines = [
-    {
-      title: "Prestation d'hébergement",
-      description: `${desks} poste${desks > 1 ? "s" : ""} × ${monthlyHt.toLocaleString("fr-FR")} €/mois × ${months} mois (${invoice.periodStart} → ${invoice.periodEnd})`,
-      unit: "mois",
-      quantity: months,
-      unitAmount: desks * monthlyHt,
-      vatRate,
-      discount: 0,
-      discountUnit: "%",
-      reference: null,
-      amount: lineAmount,
-      discountInEuros: 0,
-      isPriceWithVat: false,
     },
-  ];
+  });
 
-  const draft = await createDougsSalesInvoiceDraft(ctx.userId);
-  await updateDougsSalesInvoice(ctx.userId, draft.id, { ...draft, clientData, lines });
+  const template = brandTemplateFor(invoice.brand);
+  const lineCtx = {
+    label: invoice.label,
+    amountHt: Number(invoice.amountHt),
+    vatRate: Number(invoice.vatRate),
+    clientName: searchName,
+    periodStart: invoice.periodStart,
+    periodEnd: invoice.periodEnd,
+    months: monthsBetween(invoice.periodStart, invoice.periodEnd),
+    desks: invoice.desks ?? contract.desks,
+    unitPriceHt: Number(invoice.unitPriceHt ?? contract.unitPriceHt),
+  };
 
+  const draft = await pushDougsSalesInvoiceDraft({
+    userId: ctx.userId,
+    clientData,
+    lines: template.buildLines(lineCtx),
+    subject: template.invoiceSubject(lineCtx),
+    document: template.document,
+  });
+
+  // Pas de passage à 'sent' ici : un brouillon Dougs n'est pas une facture
+  // émise. Ce handler divergeait de l'action UI, qui ne touche pas au statut.
+  // Seul l'envoi automatique (lib/coworking/auto-send.ts), qui finalise
+  // vraiment, pose 'sent'.
   await conn
     .update(invoices)
     .set({
-      status: "sent",
-      invoicedAt: new Date(),
       dougsInvoiceId: draft.id,
       dougsReference: draft.reference,
       dougsStatus: "DRAFT",
@@ -523,4 +488,51 @@ export async function pushCoworkingInvoiceMcp(
 
   const url = await getDougsDraftUrl(ctx.userId, draft.id);
   return { dougsInvoiceId: draft.id, reference: draft.reference, url };
+}
+
+// ---------- 4. Envoi d'un document au client ----------
+
+/**
+ * Envoi (ou aperçu) d'un devis ou d'une facture au client.
+ *
+ * `confirm` est obligatoire pour un envoi réel, et ce n'est pas une politesse :
+ * l'appel finalise le document chez Dougs — numéro définitif, irréversible pour
+ * une facture — puis expédie un mail à un tiers. Un agent ne doit le poser que
+ * sur une instruction explicite de l'utilisateur. Sans `confirm`, on se limite
+ * à l'aperçu, qui n'émet rien et part à l'utilisateur lui-même.
+ */
+export const sendDocumentMcpSchema = z.object({
+  invoiceId: z.string().uuid(),
+  /** `true` = finalise et envoie au client. Absent ou `false` = aperçu. */
+  confirm: z.boolean().optional(),
+});
+
+export async function sendDocumentMcp(
+  args: z.infer<typeof sendDocumentMcpSchema>,
+  ctx: { userId: string },
+) {
+  const conn = await db();
+  const [row] = await conn
+    .select({ kind: invoices.kind, label: invoices.label })
+    .from(invoices)
+    .where(eq(invoices.id, args.invoiceId))
+    .limit(1);
+  if (!row) throw new Error("Document introuvable.");
+
+  const send = args.confirm === true;
+  const { sendProjectInvoiceToClient, sendProjectQuoteToClient } = await import(
+    "../../../lib/actions/send-to-client"
+  );
+  const act = row.kind === "quote" ? sendProjectQuoteToClient : sendProjectInvoiceToClient;
+  const res = await act({ invoiceId: args.invoiceId, send });
+  if (!res.ok) throw new Error(res.message);
+
+  return {
+    document: row.label,
+    kind: row.kind,
+    ...res.data,
+    note: send
+      ? "Document finalisé chez Dougs et envoyé au client."
+      : "Aperçu envoyé à l'utilisateur. Rien n'a été émis ; rappeler avec confirm=true pour envoyer au client.",
+  };
 }
