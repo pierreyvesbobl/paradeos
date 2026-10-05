@@ -5,6 +5,8 @@ import { entities as entitiesTable } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
+import { resolveInvoiceDocument } from "@/lib/billing/brand-documents";
+import { buildDocumentPatch, resolveDougsClientData } from "@/lib/billing/dougs-push";
 import { db } from "@/lib/db/server";
 import {
   DougsApiError,
@@ -12,7 +14,6 @@ import {
   createDougsQuoteDraft,
   getDougsQuoteDraft,
   getDougsQuoteUrl,
-  searchDougsClients,
   updateDougsQuote,
 } from "@/lib/dougs/client";
 import { and, eq } from "drizzle-orm";
@@ -71,12 +72,16 @@ export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }
     .select({
       project: projects,
       entityName: entitiesTable.name,
+      entityLegalName: entitiesTable.legalName,
       entitySiren: entitiesTable.siren,
+      entitySiret: entitiesTable.siret,
       entityVatNumber: entitiesTable.vatNumber,
       entityAddress: entitiesTable.address,
+      entityDeliveryAddress: entitiesTable.deliveryAddress,
       contactFirstName: contactsTable.firstName,
       contactLastName: contactsTable.lastName,
       contactEmail: contactsTable.email,
+      projectBillingTerms: projects.billingTerms,
     })
     .from(projects)
     .leftJoin(entitiesTable, eq(entitiesTable.id, projects.entityId))
@@ -108,68 +113,33 @@ export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }
   // Projets client = B2B par construction (entityId requis).
   const isBtoB = true;
 
-  let clientData: Record<string, unknown>;
-  try {
-    const matches = await searchDougsClients(user.id, row.entityName, isBtoB);
-    const best = matches[0];
-    if (best) {
-      clientData = {
-        isBToB: best.isBtoB,
-        legalName: best.legalName ?? best.name,
-        siren: best.siren,
-        siret: null,
-        vatNumber: best.vatNumber,
-        firstName: best.firstName,
-        lastName: best.lastName,
-        address: best.address
-          ? {
-              street: best.address.street ?? "",
-              zipCode: best.address.zipcode ?? "",
-              city: best.address.city ?? "",
-              country: "France",
-            }
-          : { street: "", zipCode: "", city: "", country: "France" },
-        deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
-        others: [],
-        email: best.email ?? row.contactEmail ?? null,
-        phone: best.phone ?? null,
-        clientId: best.clientId,
-      };
-    } else {
-      const localAddr = row.entityAddress as {
-        street?: string;
-        postalCode?: string;
-        city?: string;
-        country?: string;
-      } | null;
-      clientData = {
-        isBToB: true,
-        legalName: row.entityName,
-        siren: row.entitySiren ?? null,
-        siret: null,
-        vatNumber: row.entityVatNumber ?? null,
-        firstName: null,
-        lastName: null,
-        address: {
-          street: localAddr?.street ?? "",
-          zipCode: localAddr?.postalCode ?? "",
-          city: localAddr?.city ?? "",
-          country: localAddr?.country ?? "France",
-        },
-        deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
-        others: [],
-        email: row.contactEmail ?? null,
-        phone: null,
-        clientId: null,
-      };
-    }
-  } catch (err) {
-    if (err instanceof DougsAuthError) throw err;
-    if (err instanceof DougsApiError) {
-      throw new Error(`Recherche client Dougs : ${err.message}`);
-    }
-    throw err;
-  }
+  const clientData = await resolveDougsClientData({
+    userId: user.id,
+    isBtoB,
+    searchName: row.entityName,
+    local: {
+      legalName: row.entityLegalName ?? row.entityName,
+      siren: row.entitySiren ?? null,
+      siret: row.entitySiret ?? null,
+      vatNumber: row.entityVatNumber ?? null,
+      firstName: row.contactFirstName ?? null,
+      lastName: row.contactLastName ?? null,
+      address: row.entityAddress,
+      deliveryAddress: row.entityDeliveryAddress,
+      email: row.contactEmail ?? null,
+    },
+  });
+
+  // Un devis relève d'Automato, et doit porter les mêmes mentions que les
+  // factures du projet : logo de la marque, sous-titre émetteur, modalités de
+  // paiement négociées, mentions de pied. Sans ça, un devis empruntait le logo
+  // par défaut de la société — donc celui d'une autre marque dès qu'on le
+  // changeait.
+  //
+  // `dueDateOption` est écarté : un devis a une date d'expiration, pas une
+  // échéance de paiement.
+  const terms = await resolveInvoiceDocument("automato", row.projectBillingTerms);
+  const { dueDateOption: _ignoré, ...quoteDocument } = terms.document;
 
   const lines = input.lines.map((l) => ({
     title: l.title,
@@ -198,8 +168,11 @@ export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }
       const current = await getDougsQuoteDraft(user.id, existingDougsId);
       const updated = await updateDougsQuote(user.id, existingDougsId, {
         ...current,
+        ...buildDocumentPatch(current as unknown as Record<string, unknown>, quoteDocument),
         subject: input.subject,
-        thankYouNote: input.thankYouNote,
+        // La note saisie dans le formulaire fait foi ; vide, on retombe sur
+        // celle de la marque ou du deal.
+        thankYouNote: input.thankYouNote || (quoteDocument.thankYouNote ?? ""),
         clientData,
         lines,
       });
@@ -210,8 +183,9 @@ export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }
       const draft = await createDougsQuoteDraft(user.id);
       const updated = await updateDougsQuote(user.id, draft.id, {
         ...draft,
+        ...buildDocumentPatch(draft as unknown as Record<string, unknown>, quoteDocument),
         subject: input.subject,
-        thankYouNote: input.thankYouNote,
+        thankYouNote: input.thankYouNote || (quoteDocument.thankYouNote ?? ""),
         clientData,
         lines,
       });

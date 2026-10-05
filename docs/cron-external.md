@@ -10,6 +10,11 @@ Les endpoints restent en place :
 - `GET /api/cron/ingest-drive-transcripts` — ingestion auto des transcripts Drive
 - `GET /api/cron/ingest-email-transcripts` — ingestion des réunions envoyées par
   mail (label Gmail configuré dans les réglages)
+- `GET /api/cron/file-sales-invoices` — classe dans le Drive comptable les
+  factures de vente émises dont le PDF n'y est pas encore. Sert au rattrapage
+  du stock historique, puis de filet : une facture finalisée à la main dans
+  Dougs ne passe par aucun envoi de notre côté et ne serait jamais classée.
+  Idempotent, par lots de 25.
 
 Auth : header `Authorization: Bearer $CRON_SECRET`.
 

@@ -11,7 +11,15 @@ import { DemoBlur } from "@/lib/demo/components";
 import { useDemoMode } from "@/lib/demo/context";
 import { type EntityKind, entityKindLabels } from "@/lib/schemas/entities";
 
-type FieldId = "name" | "kind" | "website" | "siren" | "vatNumber" | "notes";
+type FieldId =
+  | "name"
+  | "kind"
+  | "website"
+  | "siren"
+  | "siret"
+  | "legalName"
+  | "vatNumber"
+  | "notes";
 
 function makeSaver<T>(id: string, field: FieldId): Saver<T> {
   return async (value): Promise<SaveResult> => {
@@ -141,6 +149,40 @@ export function EntSiren({ id, value }: { id: string; value: string | null }) {
   );
 }
 
+export function EntSiret({ id, value }: { id: string; value: string | null }) {
+  return (
+    <InlineText
+      value={value}
+      maxLength={14}
+      placeholder="14 chiffres"
+      className="font-mono text-sm"
+      onSave={async (raw): Promise<SaveResult> => {
+        const trimmed = raw?.replace(/\s/g, "") ?? "";
+        if (trimmed === "") {
+          const res = await patchEntity({ id, siret: null });
+          return res.ok ? { ok: true } : { ok: false, message: res.message };
+        }
+        if (!/^\d{14}$/.test(trimmed)) {
+          return { ok: false, message: "Le SIRET doit contenir 14 chiffres." };
+        }
+        const res = await patchEntity({ id, siret: trimmed });
+        return res.ok ? { ok: true } : { ok: false, message: res.message };
+      }}
+    />
+  );
+}
+
+export function EntLegalName({ id, value }: { id: string; value: string | null }) {
+  return (
+    <InlineText
+      value={value}
+      maxLength={200}
+      placeholder="Si différente du nom d'usage"
+      onSave={makeSaver<string | null>(id, "legalName")}
+    />
+  );
+}
+
 export function EntVat({ id, value }: { id: string; value: string | null }) {
   return (
     <InlineText
@@ -214,6 +256,45 @@ export function EntAddressField({
         next[field] = trimmed === "" ? null : trimmed;
         const allEmpty = Object.values(next).every((v) => v === null);
         const res = await patchEntity({ id, address: allEmpty ? null : next });
+        return res.ok ? { ok: true } : { ok: false, message: res.message };
+      }}
+    />
+  );
+}
+
+/**
+ * Même éditeur que l'adresse de facturation, sur `delivery_address`. Elle n'a
+ * de sens que si elle diffère de l'adresse de facturation — c'est dans ce cas
+ * que la facture électronique l'exige.
+ */
+export function EntDeliveryAddressField({
+  id,
+  field,
+  current,
+  placeholder,
+}: {
+  id: string;
+  field: AddressField;
+  current: Address;
+  placeholder?: string;
+}) {
+  const value = (current?.[field] as string | null | undefined) ?? null;
+  return (
+    <InlineText
+      value={value}
+      maxLength={ADDRESS_LIMITS[field]}
+      placeholder={placeholder}
+      onSave={async (raw): Promise<SaveResult> => {
+        const trimmed = raw?.trim() ?? "";
+        const next: Record<AddressField, string | null> = {
+          street: (current?.street as string | null) ?? null,
+          postalCode: (current?.postalCode as string | null) ?? null,
+          city: (current?.city as string | null) ?? null,
+          country: (current?.country as string | null) ?? null,
+        };
+        next[field] = trimmed === "" ? null : trimmed;
+        const allEmpty = Object.values(next).every((v) => v === null);
+        const res = await patchEntity({ id, deliveryAddress: allEmpty ? null : next });
         return res.ok ? { ok: true } : { ok: false, message: res.message };
       }}
     />

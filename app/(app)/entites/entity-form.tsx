@@ -29,8 +29,11 @@ type Props = {
     kind: EntityKind;
     website: string;
     siren: string;
+    siret: string;
+    legalName: string;
     vatNumber: string;
     address: Address;
+    deliveryAddress: Address;
     notes: string;
   };
 };
@@ -44,11 +47,19 @@ export function EntityForm({ mode, defaultValues }: Props) {
   const [kind, setKind] = useState<EntityKind>(defaultValues.kind);
   const [website, setWebsite] = useState(defaultValues.website);
   const [siren, setSiren] = useState(defaultValues.siren);
+  const [siret, setSiret] = useState(defaultValues.siret);
+  const [legalName, setLegalName] = useState(defaultValues.legalName);
   const [vatNumber, setVatNumber] = useState(defaultValues.vatNumber);
   const [street, setStreet] = useState(defaultValues.address.street ?? "");
   const [postalCode, setPostalCode] = useState(defaultValues.address.postalCode ?? "");
   const [city, setCity] = useState(defaultValues.address.city ?? "");
   const [country, setCountry] = useState(defaultValues.address.country ?? "");
+  const [delStreet, setDelStreet] = useState(defaultValues.deliveryAddress.street ?? "");
+  const [delPostalCode, setDelPostalCode] = useState(
+    defaultValues.deliveryAddress.postalCode ?? "",
+  );
+  const [delCity, setDelCity] = useState(defaultValues.deliveryAddress.city ?? "");
+  const [delCountry, setDelCountry] = useState(defaultValues.deliveryAddress.country ?? "");
   const [notes, setNotes] = useState(defaultValues.notes);
 
   function buildPayload() {
@@ -59,13 +70,23 @@ export function EntityForm({ mode, defaultValues }: Props) {
       country: country.trim() || undefined,
     };
     const hasAddress = Object.values(address).some(Boolean);
+    const deliveryAddress = {
+      street: delStreet.trim() || undefined,
+      postalCode: delPostalCode.trim() || undefined,
+      city: delCity.trim() || undefined,
+      country: delCountry.trim() || undefined,
+    };
+    const hasDeliveryAddress = Object.values(deliveryAddress).some(Boolean);
     return {
       name,
       kind,
       website: website || undefined,
       siren: siren || undefined,
+      siret: siret || undefined,
+      legalName: legalName || undefined,
       vatNumber: vatNumber || undefined,
       address: hasAddress ? address : undefined,
+      deliveryAddress: hasDeliveryAddress ? deliveryAddress : undefined,
       notes: notes || undefined,
     };
   }
@@ -160,6 +181,21 @@ export function EntityForm({ mode, defaultValues }: Props) {
             <FieldError messages={errors.siren} />
           </div>
           <div className="space-y-2">
+            <Label htmlFor="siret">SIRET</Label>
+            <Input
+              id="siret"
+              value={siret}
+              onChange={(e) => setSiret(e.target.value)}
+              placeholder="14 chiffres"
+              disabled={pending}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Requis pour la facture électronique : le SIREN seul ne suffit pas à identifier
+              l'établissement destinataire.
+            </p>
+            <FieldError messages={errors.siret} />
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="vatNumber">N° TVA intracommunautaire</Label>
             <Input
               id="vatNumber"
@@ -168,6 +204,21 @@ export function EntityForm({ mode, defaultValues }: Props) {
               placeholder="FR…"
               disabled={pending}
             />
+            <FieldError messages={errors.vatNumber} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="legalName">Dénomination sociale</Label>
+            <Input
+              id="legalName"
+              value={legalName}
+              onChange={(e) => setLegalName(e.target.value)}
+              placeholder="Si différente du nom d'usage"
+              disabled={pending}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              C'est elle qui figure sur la facture.
+            </p>
+            <FieldError messages={errors.legalName} />
           </div>
         </div>
       </section>
@@ -210,6 +261,55 @@ export function EntityForm({ mode, defaultValues }: Props) {
               id="country"
               value={country}
               onChange={(e) => setCountry(e.target.value)}
+              placeholder="France"
+              disabled={pending}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+          Adresse de livraison
+        </h2>
+        <p className="text-[11px] text-muted-foreground">
+          À ne remplir que si elle diffère de l'adresse de facturation. La facture électronique
+          l'exige dans ce cas.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="delStreet">Rue</Label>
+            <Input
+              id="delStreet"
+              value={delStreet}
+              onChange={(e) => setDelStreet(e.target.value)}
+              disabled={pending}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="delPostalCode">Code postal</Label>
+            <Input
+              id="delPostalCode"
+              value={delPostalCode}
+              onChange={(e) => setDelPostalCode(e.target.value)}
+              disabled={pending}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="delCity">Ville</Label>
+            <Input
+              id="delCity"
+              value={delCity}
+              onChange={(e) => setDelCity(e.target.value)}
+              disabled={pending}
+            />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="delCountry">Pays</Label>
+            <Input
+              id="delCountry"
+              value={delCountry}
+              onChange={(e) => setDelCountry(e.target.value)}
               placeholder="France"
               disabled={pending}
             />

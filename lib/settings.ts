@@ -71,6 +71,38 @@ export const SETTING_KEYS = {
    */
   PURCHASE_AUTO_ATTACH_ENABLED: "PURCHASE_AUTO_ATTACH_ENABLED",
   /**
+   * Interrupteur de l'envoi automatique des factures coworking. Si absent
+   * ou "false", le cron mensuel génère les factures comme avant et n'envoie
+   * rien. À "true", il pousse le brouillon sur Dougs, vérifie `can-finalize`,
+   * finalise et déclenche le mail au coworker.
+   *
+   * Double verrou volontaire : ce réglage ne suffit pas, il faut aussi
+   * `coworking_contracts.auto_send` sur chaque contrat concerné. Un seul
+   * interrupteur global ferait partir d'un coup toutes les factures de tous
+   * les contrats, ce qui est exactement ce qu'on ne veut pas découvrir après.
+   */
+  COWORKING_AUTOSEND_ENABLED: "COWORKING_AUTOSEND_ENABLED",
+  /**
+   * UUID du logo Dougs à imprimer sur les documents de chaque marque.
+   *
+   * En base plutôt qu'en dur : un logo est un réglage de marque, pas du code.
+   * Si la clé est absente, on retombe sur l'UUID épinglé dans
+   * `lib/billing/brand-templates.ts`, et en dernier recours sur le logo par
+   * défaut de la société — qui est **global**, donc à ne pas laisser décider.
+   */
+  BRAND_LOGO_COWORKING: "BRAND_LOGO_COWORKING",
+  BRAND_LOGO_AUTOMATO: "BRAND_LOGO_AUTOMATO",
+  BRAND_LOGO_PARADE: "BRAND_LOGO_PARADE",
+  /**
+   * Dossier Drive où atterrissent les PDF des factures de **vente**
+   * (`Parade/Admin/Comptabilité/Factures Ventes`). Distinct de
+   * `INVOICE_FILING_ROOT_FOLDER_ID`, qui range les factures d'**achat** par
+   * année et par fournisseur : ce sont deux arborescences et deux logiques.
+   *
+   * Absent = pas de classement, et l'envoi au client n'en est pas affecté.
+   */
+  SALES_INVOICE_DRIVE_FOLDER_ID: "SALES_INVOICE_DRIVE_FOLDER_ID",
+  /**
    * Mode démo global : si "true", l'UI affiche des alias déterministes pour
    * les noms d'entreprises, contacts, projets, et applique un facteur (~×1)
    * aux montants. Les données en base restent intactes. Les exports

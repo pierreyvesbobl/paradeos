@@ -44,6 +44,18 @@ export const invoiceStatus = pgEnum("invoice_status", [
 ]);
 
 /**
+ * Marque commerciale émettrice. Parade SAS est une seule entité juridique
+ * (un seul `companyId` Dougs) mais porte trois marques : `parade` (divers),
+ * `coworking` et `automato` (prestation client). C'est la clé du registre de
+ * templates (`lib/billing/brand-templates.ts`), qui porte les lignes de
+ * facture, l'objet, les mentions, le mail d'accompagnement et l'échéance.
+ *
+ * Pas de table `brands` — choix d'architecture assumé, cf. README.
+ * Cf. migration 0073_invoice_brands.
+ */
+export const invoiceBrand = pgEnum("invoice_brand", ["parade", "coworking", "automato"]);
+
+/**
  * Table unique pour toute la facturation Paradeos (devis + factures
  * jalons projet + factures coworking + factures libres + avoirs).
  *
@@ -62,6 +74,9 @@ export const invoices = pgTable(
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     kind: invoiceKind("kind").notNull(),
+    /** Marque émettrice. Déduite du kind à la création (`brandForInvoice`),
+     *  modifiable ensuite — un `one_off` peut relever de n'importe laquelle. */
+    brand: invoiceBrand("brand").notNull().default("parade"),
 
     // Liens métier (nullable selon kind).
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
@@ -113,6 +128,19 @@ export const invoices = pgTable(
     unitPriceHt: numeric("unit_price_ht", { precision: 10, scale: 2 }),
     billedBy: text("billed_by"),
 
+    // Envoi automatique (coworking). `auto_sent_at` rend le cron idempotent ;
+    // `auto_send_error` porte le dernier blocage `can-finalize` pour l'afficher
+    // dans l'UI plutôt que de réessayer en boucle. Cf. migration 0074.
+    autoSentAt: timestamp("auto_sent_at", { withTimezone: true }),
+    autoSendError: text("auto_send_error"),
+
+    // Classement du PDF dans le Drive comptable. `drive_file_id` non nul
+    // signifie « déjà classée » et sert de verrou d'idempotence.
+    // Cf. migration 0078.
+    driveFileId: text("drive_file_id"),
+    driveFiledAt: timestamp("drive_filed_at", { withTimezone: true }),
+    driveFilingError: text("drive_filing_error"),
+
     // Snapshot Dougs (un seul jeu, peu importe le kind)
     dougsInvoiceId: text("dougs_invoice_id"),
     dougsQuoteId: text("dougs_quote_id"),
@@ -131,6 +159,7 @@ export const invoices = pgTable(
   },
   (t) => ({
     kindIdx: index("invoices_kind_idx").on(t.kind),
+    brandIdx: index("invoices_brand_idx").on(t.brand),
     projectIdx: index("invoices_project_idx").on(t.projectId),
     coworkingContractIdx: index("invoices_coworking_contract_idx").on(t.coworkingContractId),
     statusIdx: index("invoices_status_idx").on(t.status),
@@ -143,11 +172,20 @@ export const invoices = pgTable(
     coworkingPeriodUidx: uniqueIndex("invoices_coworking_period_uidx")
       .on(t.coworkingContractId, t.periodStart)
       .where(sql`kind = 'coworking' and coworking_contract_id is not null`),
+    /** Factures émises dont le PDF n'est pas encore dans le Drive. */
+    driveFilingQueueIdx: index("invoices_drive_filing_queue_idx")
+      .on(t.invoicedAt)
+      .where(sql`drive_file_id is null and status in ('sent', 'paid')`),
+    /** File d'attente de la passe d'envoi auto du cron coworking. */
+    coworkingAutoSendQueueIdx: index("invoices_coworking_autosend_queue_idx")
+      .on(t.coworkingContractId)
+      .where(sql`kind = 'coworking' and status = 'draft' and auto_sent_at is null`),
   }),
 );
 
 export type Invoice = typeof invoices.$inferSelect;
 export type NewInvoice = typeof invoices.$inferInsert;
 export type InvoiceKind = "quote" | "milestone" | "coworking" | "one_off" | "credit_note";
+export type InvoiceBrand = "parade" | "coworking" | "automato";
 export type InvoiceStatus = "draft" | "sent" | "accepted" | "refused" | "paid";
 export type MilestoneType = "acompte" | "intermediaire" | "solde";

@@ -1,8 +1,10 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -46,6 +48,15 @@ export const coworkingContracts = pgTable(
     unitPriceHt: numeric("unit_price_ht", { precision: 10, scale: 2 }).notNull().default("0"),
     status: coworkingContractStatus("status").notNull().default("en_cours"),
     billingFrequency: coworkingBillingFrequency("billing_frequency").notNull().default("quarterly"),
+    /** Opt-in de l'envoi automatique des factures de ce contrat (brouillon
+     *  Dougs → finalisation → mail au coworker, cf. lib/coworking/auto-send.ts).
+     *  Double verrou : il faut aussi le réglage global
+     *  COWORKING_AUTOSEND_ENABLED. Cf. migration 0074. */
+    autoSend: boolean("auto_send").notNull().default(false),
+    /** Conditions de facturation négociées pour ce deal, en surcharge éparse
+     *  des défauts de la marque. Cf. lib/billing/billing-terms.ts et la
+     *  migration 0077. */
+    billingTerms: jsonb("billing_terms").$type<Record<string, unknown> | null>(),
     notes: text("notes"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),

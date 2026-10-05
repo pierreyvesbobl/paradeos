@@ -3,6 +3,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -74,6 +75,10 @@ export const projects = pgTable(
     budgetAmount: numeric("budget_amount", { precision: 12, scale: 2 }),
     /** Taux horaire facturé €HT (utilisé si billingType=hourly). */
     hourlyRate: numeric("hourly_rate", { precision: 8, scale: 2 }),
+    /** Conditions de facturation négociées pour ce projet, en surcharge éparse
+     *  des défauts de la marque (modalités, échéance, mentions de pied, note de
+     *  bas de document). Cf. lib/billing/billing-terms.ts, migration 0077. */
+    billingTerms: jsonb("billing_terms").$type<Record<string, unknown> | null>(),
     // Champs commerciaux — pertinents avant won (kind=client uniquement).
     valueAmount: numeric("value_amount", { precision: 12, scale: 2 }),
     probability: integer("probability"),

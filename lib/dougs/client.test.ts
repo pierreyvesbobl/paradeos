@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parseDougsAgingBuckets, pickDougsPaymentHint, sumDougsAging } from "./client";
+import {
+  parseDougsAgingBuckets,
+  parseDougsFinalizeBlockers,
+  pickDougsFileUuid,
+  pickDougsPaymentHint,
+  sumDougsAging,
+} from "./client";
 
 /**
  * Ces deux parseurs lisent des payloads Dougs dont le schéma n'est ni
@@ -118,5 +124,107 @@ describe("parseDougsAgingBuckets", () => {
     expect(parseDougsAgingBuckets(null)).toEqual([]);
     expect(parseDougsAgingBuckets(undefined)).toEqual([]);
     expect(parseDougsAgingBuckets(7)).toEqual([]);
+  });
+});
+
+/**
+ * `can-finalize` garde la porte de la seule opération irréversible de l'app.
+ * Sa forme n'a pas pu être vérifiée en live (Dougs répond 401 hors Vercel),
+ * donc le parseur doit être tolérant **sans jamais** conclure « pas de
+ * bloqueur » sur une réponse qu'il n'a pas comprise : finaliser à l'aveugle
+ * émettrait une facture fausse qu'il faudrait annuler par un avoir.
+ */
+describe("parseDougsFinalizeBlockers", () => {
+  it("lit la forme documentée", () => {
+    expect(
+      parseDougsFinalizeBlockers([
+        { field: "legalName", message: "Vous devez renseigner le nom de la société du client." },
+        { field: "address", message: "Vous devez renseigner l'adresse du client." },
+      ]),
+    ).toEqual([
+      { field: "legalName", message: "Vous devez renseigner le nom de la société du client." },
+      { field: "address", message: "Vous devez renseigner l'adresse du client." },
+    ]);
+  });
+
+  it("considère un tableau vide comme « prêt à finaliser »", () => {
+    expect(parseDougsFinalizeBlockers([])).toEqual([]);
+  });
+
+  it("considère null et la chaîne vide comme « prêt »", () => {
+    expect(parseDougsFinalizeBlockers(null)).toEqual([]);
+    expect(parseDougsFinalizeBlockers(undefined)).toEqual([]);
+    expect(parseDougsFinalizeBlockers("")).toEqual([]);
+  });
+
+  it("déballe un tableau emballé dans un objet", () => {
+    expect(
+      parseDougsFinalizeBlockers({ errors: [{ field: "lines", message: "Ligne sans prix." }] }),
+    ).toEqual([{ field: "lines", message: "Ligne sans prix." }]);
+    expect(parseDougsFinalizeBlockers({ blockers: [] })).toEqual([]);
+    expect(parseDougsFinalizeBlockers({ data: null })).toEqual([]);
+  });
+
+  it("accepte des entrées réduites à une chaîne", () => {
+    expect(parseDougsFinalizeBlockers(["Adresse manquante."])).toEqual([
+      { field: "_", message: "Adresse manquante." },
+    ]);
+  });
+
+  it("comble un bloqueur sans message", () => {
+    expect(parseDougsFinalizeBlockers([{ field: "siren" }])).toEqual([
+      { field: "siren", message: "Blocage non détaillé par Dougs." },
+    ]);
+    expect(parseDougsFinalizeBlockers([{ error: "TVA invalide" }])).toEqual([
+      { field: "_", message: "TVA invalide" },
+    ]);
+  });
+
+  it("refuse de finaliser quand la réponse est illisible", () => {
+    // C'est le cas qui compte : ne JAMAIS renvoyer [] par défaut.
+    expect(parseDougsFinalizeBlockers(42)).toHaveLength(1);
+    expect(parseDougsFinalizeBlockers(42)[0]?.field).toBe("_unknown");
+    expect(parseDougsFinalizeBlockers({ statut: "ok" })).toHaveLength(1);
+    expect(parseDougsFinalizeBlockers({ errors: "pas un tableau" })).toHaveLength(1);
+  });
+
+  it("ne lève jamais", () => {
+    for (const input of [{}, [null], [undefined], true, Number.NaN, { errors: {} }]) {
+      expect(() => parseDougsFinalizeBlockers(input)).not.toThrow();
+    }
+  });
+});
+
+/**
+ * Le PDF légal est joint à nos propres mails : si on ne sait pas en extraire
+ * l'UUID, le client reçoit un mail sans sa facture.
+ */
+describe("pickDougsFileUuid", () => {
+  const uuid = "cf07bd01-497e-455f-b144-84c038bf457b";
+
+  it("lit l'UUID dans filePath", () => {
+    expect(pickDougsFileUuid({ filePath: `/files/${uuid}/actions/download` })).toBe(uuid);
+  });
+
+  it("accepte pdfFileId quand il a la forme d'un UUID", () => {
+    expect(pickDougsFileUuid({ pdfFileId: uuid })).toBe(uuid);
+  });
+
+  it("ignore un fileId numérique, qui n'est pas exploitable", () => {
+    expect(pickDougsFileUuid({ fileId: 12345 })).toBeNull();
+  });
+
+  it("préfère filePath aux autres champs", () => {
+    expect(
+      pickDougsFileUuid({
+        filePath: `/files/${uuid}/actions/download`,
+        pdfFileId: "11111111-2222-3333-4444-555555555555",
+      }),
+    ).toBe(uuid);
+  });
+
+  it("renvoie null plutôt que de deviner", () => {
+    expect(pickDougsFileUuid({})).toBeNull();
+    expect(pickDougsFileUuid({ filePath: "/files/pas-un-uuid/actions/download" })).toBeNull();
   });
 });

@@ -6,6 +6,8 @@ import { RecentExchangesCard } from "@/app/(app)/projets/[id]/overview/recent-ex
 import { StakeholdersCard } from "@/app/(app)/projets/[id]/overview/stakeholders-card";
 import { StatusBanner } from "@/app/(app)/projets/[id]/overview/status-banner";
 import { ProjectStatusSelect } from "@/app/(app)/projets/[id]/overview/status-select";
+import { BillingTermsForm } from "@/components/billing/billing-terms-form";
+import { SendToClientButtons } from "@/components/billing/send-to-client-buttons";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { DriveFolderSection } from "@/components/drive/drive-folder-section";
@@ -28,6 +30,8 @@ import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { deleteProjectAndRedirect } from "@/lib/actions/projects";
+import { parseBillingTerms, resolveBillingTerms } from "@/lib/billing/billing-terms";
+import { brandTemplateFor } from "@/lib/billing/brand-templates";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { getProjectProfitability } from "@/lib/db/queries/profitability";
 import { getProjectContacts, getProjectMembers } from "@/lib/db/queries/project-members";
@@ -60,10 +64,13 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       project: projects,
       entity: entities,
       ownerId: users.id,
+      /** Destinataire des devis et factures envoyés au client. */
+      contactEmail: contactsTable.email,
     })
     .from(projects)
     .leftJoin(entities, eq(projects.entityId, entities.id))
     .leftJoin(users, eq(projects.ownerId, users.id))
+    .leftJoin(contactsTable, eq(projects.contactId, contactsTable.id))
     .where(eq(projects.id, id))
     .limit(1);
 
@@ -314,6 +321,18 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
               dougsQuoteTotalHt={quoteTotalHt}
               dougsQuoteTotalTtc={quoteTotalTtc}
             />
+            {quoteInvoice?.dougsQuoteId ? (
+              <div className="mt-3 border-t pt-3">
+                <SendToClientButtons
+                  invoiceId={quoteInvoice.id}
+                  documentKind="quote"
+                  clientName={row.entity?.name ?? project.name}
+                  contactEmail={row.contactEmail}
+                  alreadyIssued={(quoteInvoice.dougsStatus ?? "DRAFT").toUpperCase() !== "DRAFT"}
+                  alreadySent={Boolean(quoteInvoice.autoSentAt)}
+                />
+              </div>
+            ) : null}
           </SidebarSection>
           <SidebarSection title="Jalons de facturation">
             <BillingMilestonesSection
@@ -326,6 +345,14 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
             />
           </SidebarSection>
         </div>
+        <SidebarSection title="Conditions de facturation">
+          <BillingTermsForm
+            projectId={id}
+            brandLabel={brandTemplateFor("automato").label}
+            terms={parseBillingTerms(project.billingTerms)}
+            effective={resolveBillingTerms("automato", project.billingTerms)}
+          />
+        </SidebarSection>
       </div>
     ) : null;
 

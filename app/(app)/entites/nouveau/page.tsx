@@ -12,8 +12,11 @@ export default function NewEntityPage() {
           kind: "prospect",
           website: "",
           siren: "",
+          siret: "",
+          legalName: "",
           vatNumber: "",
           address: {},
+          deliveryAddress: {},
           notes: "",
         }}
       />

@@ -196,6 +196,150 @@ export async function deleteDougsSalesInvoiceDraft(userId: string, draftId: stri
   });
 }
 
+/** Un motif de refus de finalisation renvoyé par Dougs. */
+export type DougsFinalizeBlocker = { field: string; message: string };
+
+/**
+ * Parseur tolérant de la réponse `can-finalize`. Dougs documente un tableau
+ * d'objets `{field, message}`, mais comme pour les autres endpoints de ce
+ * fichier la forme n'a pas pu être vérifiée en live (401 hors Vercel) : on
+ * accepte aussi un `null`, un objet qui emballe le tableau, et des entrées
+ * qui ne seraient que des chaînes.
+ *
+ * Le défaut est volontairement « pas de bloqueur » uniquement pour une
+ * réponse vide ou nulle. Une forme inattendue remonte un bloqueur
+ * synthétique : mieux vaut refuser de finaliser que finaliser à l'aveugle
+ * parce qu'on n'a pas su lire la réponse.
+ */
+export function parseDougsFinalizeBlockers(raw: unknown): DougsFinalizeBlocker[] {
+  if (raw == null || raw === "") return [];
+  const arr = Array.isArray(raw)
+    ? raw
+    : typeof raw === "object"
+      ? ((raw as Record<string, unknown>).errors ??
+        (raw as Record<string, unknown>).blockers ??
+        (raw as Record<string, unknown>).data)
+      : undefined;
+  if (arr === undefined) {
+    return [{ field: "_unknown", message: `Réponse can-finalize illisible : ${typeof raw}` }];
+  }
+  if (arr == null) return [];
+  if (!Array.isArray(arr)) {
+    return [{ field: "_unknown", message: "Réponse can-finalize illisible (pas un tableau)." }];
+  }
+  return arr.map((item) => {
+    if (typeof item === "string") return { field: "_", message: item };
+    const o = (item ?? {}) as Record<string, unknown>;
+    return {
+      field: typeof o.field === "string" ? o.field : "_",
+      message:
+        typeof o.message === "string"
+          ? o.message
+          : typeof o.error === "string"
+            ? o.error
+            : "Blocage non détaillé par Dougs.",
+    };
+  });
+}
+
+/**
+ * Vérifie qu'un brouillon de facture de vente est finalisable. Tableau vide
+ * = prêt. Les blocages typiques portent sur le client (`legalName`, `address`)
+ * ou sur des lignes sans titre ni prix.
+ *
+ * On ne corrige jamais un blocage en patchant les données émetteur à la
+ * place de l'utilisateur : ça concerne souvent les réglages de facturation
+ * Parade, qu'il vaut mieux faire corriger à la main.
+ */
+export async function canFinalizeDougsSalesInvoice(
+  userId: string,
+  draftId: string,
+): Promise<DougsFinalizeBlocker[]> {
+  const res = await dougsFetch(
+    userId,
+    `/companies/{companyId}/sales-invoices-drafts/${draftId}/actions/can-finalize`,
+  );
+  const text = await res.text();
+  if (!text.trim()) return [];
+  try {
+    return parseDougsFinalizeBlockers(JSON.parse(text));
+  } catch {
+    return [{ field: "_unknown", message: "Réponse can-finalize non JSON." }];
+  }
+}
+
+/**
+ * Finalise un brouillon : génère le numéro de facture définitif et ouvre le
+ * cycle de vie comptable. **Irréversible** — une facture finalisée ne peut
+ * plus qu'être annulée par un avoir.
+ *
+ * Noter le verbe : c'est un POST pour les factures de vente, là où les devis
+ * utilisent un PUT. Ne pas recopier le pattern des devis.
+ */
+export async function finalizeDougsSalesInvoice(
+  userId: string,
+  draftId: string,
+): Promise<DougsSalesInvoiceDraft> {
+  const res = await dougsFetch(
+    userId,
+    `/companies/{companyId}/sales-invoices-drafts/${draftId}/actions/finalize`,
+    {
+      method: "POST",
+      body: "{}",
+      // Dougs génère le PDF définitif pendant cet appel : les 8 s par défaut
+      // sont trop justes.
+      timeoutMs: 20000,
+    },
+  );
+  return res.json();
+}
+
+/**
+ * Envoie une facture par mail au client, depuis Dougs (le PDF joint est donc le
+ * document légal, avec son numéro définitif).
+ *
+ * S'applique à `/sales-invoices/{id}`, la ressource **finalisée**. Attention :
+ * après finalisation Dougs attribue à la facture un **id différent de celui du
+ * brouillon** — passer l'id du brouillon ici renvoie 400.
+ *
+ * La forme du payload a été relevée sur l'UI Dougs (2026-10-05), parce que la
+ * doc interne ne la donnait pas et que les noms ne sont pas ceux qu'on devine :
+ * `recipient` est une **chaîne** (pas un tableau `to`), le corps s'appelle
+ * `message` (pas `body`), et `copyReceivers` / `selfCopy` sont attendus même
+ * vides. Un champ inconnu ou manquant fait répondre
+ * `{"message":"Bad Request","statusCode":400}`, sans dire lequel.
+ */
+export async function sendDougsSalesInvoiceEmail(
+  userId: string,
+  invoiceId: string,
+  mail: {
+    /** Destinataire principal. Un seul, c'est ce qu'attend Dougs. */
+    to: string;
+    subject: string;
+    body: string;
+    /** Destinataires en copie. */
+    cc?: string[];
+    /** Copie à l'émetteur. */
+    selfCopy?: boolean;
+  },
+): Promise<void> {
+  await dougsFetch(
+    userId,
+    `/companies/{companyId}/sales-invoices/${invoiceId}/actions/send-email`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        recipient: mail.to,
+        copyReceivers: mail.cc ?? [],
+        selfCopy: mail.selfCopy ?? false,
+        subject: mail.subject,
+        message: mail.body,
+      }),
+      timeoutMs: 20000,
+    },
+  );
+}
+
 /**
  * URL de la facture dans l'UI Dougs. Pattern Angular Dougs (vérifié
  * 2026-05) : query params, pas path segments. `salesInvoiceId` ouvre
@@ -259,6 +403,13 @@ type DougsPayloadAny = {
   operationAttachments?: DougsOperationAttachment[] | null;
   /** Pré-match bancaire non validé — cf. pickDougsPaymentHint. */
   operationCandidate?: unknown;
+  reference?: unknown;
+  numberPrefix?: unknown;
+  number?: unknown;
+  filePath?: unknown;
+  pdfFileId?: unknown;
+  file?: unknown;
+  fileId?: unknown;
   clientName?: string | null;
   clientData?: {
     legalName?: string | null;
@@ -307,6 +458,47 @@ export function pickDougsPaidAt(o: DougsPayloadAny): string | null {
 
 export function pickDougsIssuedAt(o: DougsPayloadAny): string | null {
   return o.issuedAt ?? o.date ?? null;
+}
+
+/**
+ * Référence lisible d'une facture ou d'un devis. Dougs la renvoie tantôt dans
+ * `reference`, tantôt seulement en pièces détachées (`numberPrefix` + `number`)
+ * — observé sur une facture fraîchement finalisée, dont le `reference` était
+ * absent alors que le numéro était bien attribué.
+ */
+export function pickDougsReference(o: DougsPayloadAny): string | null {
+  const direct = (o as { reference?: unknown }).reference;
+  if (typeof direct === "string" && direct.trim()) return direct;
+  const prefix = (o as { numberPrefix?: unknown }).numberPrefix;
+  const number = (o as { number?: unknown }).number;
+  if (
+    typeof prefix === "string" &&
+    prefix &&
+    (typeof number === "number" || typeof number === "string")
+  ) {
+    return `${prefix}${number}`;
+  }
+  if (typeof number === "number" || (typeof number === "string" && number)) return String(number);
+  return null;
+}
+
+/**
+ * UUID du PDF d'une facture ou d'un devis, à passer à `downloadDougsFile`.
+ *
+ * Attention : le champ `fileId` est un identifiant **numérique** inutilisable
+ * tel quel ; l'UUID vit dans `filePath`, de la forme
+ * `/files/{uuid}/actions/download`. On accepte aussi `pdfFileId` quand il a
+ * déjà la forme d'un UUID.
+ */
+export function pickDougsFileUuid(o: DougsPayloadAny): string | null {
+  const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  for (const key of ["filePath", "pdfFileId", "file", "fileId"] as const) {
+    const raw = (o as Record<string, unknown>)[key];
+    if (typeof raw !== "string") continue;
+    const found = raw.match(UUID);
+    if (found) return found[0];
+  }
+  return null;
 }
 
 export function pickDougsStatus(o: DougsPayloadAny): string | null {
@@ -431,6 +623,23 @@ export async function updateDougsQuote(
     method: "PUT",
     body: JSON.stringify(payload),
   });
+  return res.json();
+}
+
+/**
+ * Finalise un devis : il sort du brouillon, reçoit son numéro définitif et
+ * passe en attente de réponse du client.
+ *
+ * Noter le verbe : **PUT** pour un devis, là où une facture de vente utilise un
+ * POST. Moins engageant qu'une facture — un devis ne consomme pas la séquence
+ * comptable — mais le numéro est tout de même attribué.
+ */
+export async function finalizeDougsQuote(userId: string, draftId: string): Promise<DougsQuote> {
+  const res = await dougsFetch(
+    userId,
+    `/companies/{companyId}/invoicing/quote-drafts/${draftId}/actions/finalize`,
+    { method: "PUT", body: "{}", timeoutMs: 20000 },
+  );
   return res.json();
 }
 
@@ -926,6 +1135,93 @@ export async function deleteDougsOperationAttachment(
 }
 
 /** URL de la liste des opérations dans l'UI Dougs. */
+/**
+ * Téléverse une image comme logo de facturation et renvoie son UUID, à poser
+ * sur `logoUuid` d'un devis ou d'une facture.
+ *
+ * Endpoint relevé sur l'UI Dougs (2026-10-05) :
+ * `POST /companies/{id}/attachments?filename=…&type=invoicingLogo`, multipart,
+ * champ nommé exactement `file`. Le nom de fichier est passé **deux fois** —
+ * en query et dans le Content-Disposition — c'est ce que fait l'UI.
+ *
+ * À la différence d'un téléversement depuis les réglages Dougs, cet appel ne
+ * crée que la pièce jointe : il **ne déplace pas** `defaultLogoUuid`. C'est
+ * exactement ce qu'on veut, puisque ce défaut est global à la société et
+ * repeindrait les factures de toutes les marques.
+ *
+ * La forme de la réponse n'est pas documentée, d'où l'extraction tolérante de
+ * l'UUID.
+ */
+export async function uploadDougsInvoicingLogo(
+  userId: string,
+  file: { filename: string; content: Buffer; contentType: string },
+): Promise<{ uuid: string; raw: unknown }> {
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([new Uint8Array(file.content)], { type: file.contentType }),
+    file.filename,
+  );
+
+  const res = await dougsFetch(
+    userId,
+    `/companies/{companyId}/attachments?filename=${encodeURIComponent(file.filename)}&type=invoicingLogo`,
+    { method: "POST", body: form, multipart: true, timeoutMs: 30000 },
+  );
+  const raw = await res.json();
+  const uuid = pickUuidDeep(raw);
+  if (!uuid) {
+    throw new DougsApiError(
+      "Logo téléversé mais Dougs n'a pas renvoyé d'identifiant exploitable.",
+      res.status,
+      JSON.stringify(raw).slice(0, 300),
+    );
+  }
+  return { uuid, raw };
+}
+
+/**
+ * Cherche un UUID n'importe où dans une réponse Dougs. Volontairement laxiste :
+ * selon les endpoints l'identifiant s'appelle `uuid`, `id`, ou n'apparaît que
+ * dans un `filePath`, et on ne sait pas lequel s'applique ici.
+ */
+function pickUuidDeep(value: unknown, depth = 0): string | null {
+  const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  if (depth > 4) return null;
+  if (typeof value === "string") return value.match(UUID)?.[0] ?? null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = pickUuidDeep(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (value && typeof value === "object") {
+    // On privilégie les clés les plus probables avant de ratisser le reste.
+    const o = value as Record<string, unknown>;
+    for (const key of ["uuid", "fileUuid", "filePath", "id", "file"]) {
+      if (key in o) {
+        const found = pickUuidDeep(o[key], depth + 1);
+        if (found) return found;
+      }
+    }
+    for (const v of Object.values(o)) {
+      const found = pickUuidDeep(v, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Réglages de facturation de la société : identité légale de l'émetteur,
+ * numérotation, logo par défaut. Lecture seule.
+ */
+export async function getDougsInvoicer(userId: string): Promise<Record<string, unknown>> {
+  const res = await dougsFetch(userId, "/companies/{companyId}/invoicer");
+  return res.json();
+}
+
 export function buildDougsOperationsUrl(companyId: string): string {
   return `${BASE}/app/c/${companyId}/accounting/operations/payments`;
 }
@@ -960,6 +1256,46 @@ export async function downloadDougsFile(
   userId: string,
   fileUuid: string,
 ): Promise<DougsDownloadedFile> {
+  return downloadFromDougs(
+    userId,
+    `/files/${encodeURIComponent(fileUuid)}/actions/download`,
+    fileUuid,
+  );
+}
+
+/**
+ * PDF d'un **brouillon** de facture de vente. Permet de montrer le document
+ * exact que recevra le client sans le finaliser, donc sans consommer de numéro
+ * de facture.
+ */
+export async function downloadDougsSalesInvoiceDraftPdf(
+  userId: string,
+  draftId: string,
+): Promise<DougsDownloadedFile> {
+  return downloadFromDougs(
+    userId,
+    `/companies/{companyId}/sales-invoices-drafts/${draftId}/actions/download`,
+    `brouillon ${draftId}`,
+  );
+}
+
+/** PDF d'un brouillon de devis. Même usage que ci-dessus. */
+export async function downloadDougsQuoteDraftPdf(
+  userId: string,
+  draftId: string,
+): Promise<DougsDownloadedFile> {
+  return downloadFromDougs(
+    userId,
+    `/companies/{companyId}/invoicing/quote-drafts/${draftId}/actions/download`,
+    `devis ${draftId}`,
+  );
+}
+
+async function downloadFromDougs(
+  userId: string,
+  pathTemplate: string,
+  label: string,
+): Promise<DougsDownloadedFile> {
   const session = await loadSession(userId);
   if (!session) {
     throw new DougsAuthError(
@@ -967,7 +1303,7 @@ export async function downloadDougsFile(
     );
   }
 
-  let url = new URL(`${BASE}/files/${encodeURIComponent(fileUuid)}/actions/download`);
+  let url = new URL(`${BASE}${pathTemplate.replace("{companyId}", session.companyId)}`);
   let redirects = 0;
 
   while (true) {
@@ -1017,7 +1353,7 @@ export async function downloadDougsFile(
     }
     if (!res.ok) {
       throw new DougsApiError(
-        `Dougs ${res.status} ${res.statusText} (téléchargement ${fileUuid})`,
+        `Dougs ${res.status} ${res.statusText} (téléchargement ${label})`,
         res.status,
         "",
       );

@@ -2,6 +2,7 @@ import "server-only";
 
 import { coworkingContracts } from "@/db/schema/coworking";
 import { invoices } from "@/db/schema/invoices";
+import { brandTemplateFor } from "@/lib/billing/brand-templates";
 import { db } from "@/lib/db/server";
 import { coworkingBillingFrequencyMonths } from "@/lib/schemas/coworking";
 import { and, desc, eq } from "drizzle-orm";
@@ -62,15 +63,17 @@ export async function generateNextInvoiceForContract(opts: {
 
   const periodLabel = labelForPeriod(periodStart, contract.billingFrequency);
   const amountHt = Number(contract.unitPriceHt) * contract.desks * months;
+  const template = brandTemplateFor("coworking");
 
   const [row] = await conn
     .insert(invoices)
     .values({
       kind: "coworking",
+      brand: "coworking",
       coworkingContractId: contractId,
       label: periodLabel,
       amountHt: amountHt.toFixed(2),
-      vatRate: "0.2",
+      vatRate: template.defaultVatRate.toString(),
       status: "draft",
       periodStart: fmtDate(periodStart),
       periodEnd: fmtDate(periodEnd),

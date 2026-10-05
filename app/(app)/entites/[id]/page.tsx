@@ -17,10 +17,13 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import {
   EntAddressField,
+  EntDeliveryAddressField,
   EntKind,
+  EntLegalName,
   EntName,
   EntNotes,
   EntSiren,
+  EntSiret,
   EntVat,
   EntWebsite,
 } from "./inline-fields";
@@ -59,6 +62,7 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
   }
 
   const address = entity.address ?? null;
+  const deliveryAddress = entity.deliveryAddress ?? null;
 
   return (
     <div className="space-y-8">
@@ -109,9 +113,23 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
               </dd>
             </div>
             <div>
+              <dt className="text-muted-foreground text-xs uppercase tracking-wide">SIRET</dt>
+              <dd className="mt-1 text-sm">
+                <EntSiret id={id} value={entity.siret} />
+              </dd>
+            </div>
+            <div>
               <dt className="text-muted-foreground text-xs uppercase tracking-wide">N° TVA</dt>
               <dd className="mt-1 text-sm">
                 <EntVat id={id} value={entity.vatNumber} />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs uppercase tracking-wide">
+                Dénomination sociale
+              </dt>
+              <dd className="mt-1 text-sm">
+                <EntLegalName id={id} value={entity.legalName} />
               </dd>
             </div>
           </dl>
@@ -130,6 +148,44 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
               <EntAddressField id={id} field="city" current={address} placeholder="Ville" />
               <div className="sm:col-span-2">
                 <EntAddressField id={id} field="country" current={address} placeholder="Pays" />
+              </div>
+            </div>
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs uppercase tracking-wide">
+              Adresse de livraison
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              À renseigner seulement si elle diffère de l'adresse de facturation.
+            </p>
+            <div className="mt-1 grid gap-2 text-sm sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <EntDeliveryAddressField
+                  id={id}
+                  field="street"
+                  current={deliveryAddress}
+                  placeholder="Rue"
+                />
+              </div>
+              <EntDeliveryAddressField
+                id={id}
+                field="postalCode"
+                current={deliveryAddress}
+                placeholder="Code postal"
+              />
+              <EntDeliveryAddressField
+                id={id}
+                field="city"
+                current={deliveryAddress}
+                placeholder="Ville"
+              />
+              <div className="sm:col-span-2">
+                <EntDeliveryAddressField
+                  id={id}
+                  field="country"
+                  current={deliveryAddress}
+                  placeholder="Pays"
+                />
               </div>
             </div>
           </div>

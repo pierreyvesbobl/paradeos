@@ -10,6 +10,14 @@ export const entityKind = pgEnum("entity_kind", [
   "other",
 ]);
 
+/** Adresse postale telle que stockée en jsonb sur `entities` et `contacts`. */
+export type EntityAddress = {
+  street?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+};
+
 /**
  * Entités morales suivies par Parade : clients, prospects, partenaires,
  * fournisseurs. À ne pas confondre avec `projects.kind` (client/product/transverse)
@@ -23,13 +31,17 @@ export const entities = pgTable(
     kind: entityKind("kind").notNull().default("prospect"),
     website: text("website"),
     siren: text("siren"),
+    /** 14 chiffres. Le SIREN seul ne suffit pas à router une facture
+     *  électronique vers le bon établissement destinataire. Cf. migration 0075. */
+    siret: text("siret"),
+    /** Dénomination sociale, quand elle diffère du nom d'usage (`name`).
+     *  C'est elle qui doit figurer sur la facture. */
+    legalName: text("legal_name"),
     vatNumber: text("vat_number"),
-    address: jsonb("address").$type<{
-      street?: string;
-      postalCode?: string;
-      city?: string;
-      country?: string;
-    } | null>(),
+    address: jsonb("address").$type<EntityAddress | null>(),
+    /** Adresse de livraison, exigée par la facture électronique quand elle
+     *  diffère de l'adresse de facturation. */
+    deliveryAddress: jsonb("delivery_address").$type<EntityAddress | null>(),
     notes: text("notes"),
     ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),

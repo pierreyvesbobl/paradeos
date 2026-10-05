@@ -147,12 +147,15 @@ export async function getCoworkingContractWithInvoices(id: string) {
       contactId: coworkingContracts.contactId,
       contactFirstName: contacts.firstName,
       contactLastName: contacts.lastName,
+      contactEmail: contacts.email,
       startDate: coworkingContracts.startDate,
       endDate: coworkingContracts.endDate,
       desks: coworkingContracts.desks,
       unitPriceHt: coworkingContracts.unitPriceHt,
       status: coworkingContracts.status,
       billingFrequency: coworkingContracts.billingFrequency,
+      autoSend: coworkingContracts.autoSend,
+      billingTerms: coworkingContracts.billingTerms,
       billToEntityId: coworkingContracts.billToEntityId,
       billToEntityName: entities.name,
       notes: coworkingContracts.notes,
@@ -217,8 +220,10 @@ export async function getCoworkingInvoice(id: string) {
       contractId: coworkingContracts.id,
       contractDesks: coworkingContracts.desks,
       contractUnitPriceHt: coworkingContracts.unitPriceHt,
+      contractAutoSend: coworkingContracts.autoSend,
       contactFirstName: contacts.firstName,
       contactLastName: contacts.lastName,
+      contactEmail: contacts.email,
     })
     .from(invoices)
     .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
@@ -241,6 +246,8 @@ export async function getCoworkingInvoice(id: string) {
     unitPriceHt: row.contractUnitPriceHt ?? i.unitPriceHt ?? "0",
     status: toOldCoworkingStatus(i.status),
     contractName: row.contractName ?? "(contrat supprimé)",
+    contractAutoSend: row.contractAutoSend ?? false,
+    contactEmail: row.contactEmail ?? null,
     contactName:
       row.contactFirstName || row.contactLastName
         ? `${row.contactFirstName ?? ""} ${row.contactLastName ?? ""}`.trim()

@@ -1,9 +1,11 @@
 "use server";
 
 import { coworkingContracts } from "@/db/schema/coworking";
-import { invoices } from "@/db/schema/invoices";
+import { type InvoiceBrand, invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
+import { resolveBillingTerms } from "@/lib/billing/billing-terms";
+import { brandForInvoice, brandTemplateFor } from "@/lib/billing/brand-templates";
 import {
   extractDougsUuid,
   isDougsInvoicePaid,
@@ -40,6 +42,34 @@ import { z } from "zod";
 
 /** Récupère l'owner du projet pour préremplir `assigned_to`. Null si pas
  *  de projet ou owner non défini. */
+/**
+ * Conditions de facturation du deal auquel la facture est rattachée : le projet
+ * client, ou le contrat coworking. `null` si la facture n'est rattachée à
+ * aucun des deux (facture libre) — on retombe alors sur les défauts de marque.
+ */
+async function loadDealBillingTerms(
+  conn: Awaited<ReturnType<typeof db>>,
+  link: { projectId: string | null; coworkingContractId: string | null },
+): Promise<unknown> {
+  if (link.projectId) {
+    const [row] = await conn
+      .select({ terms: projects.billingTerms })
+      .from(projects)
+      .where(eq(projects.id, link.projectId))
+      .limit(1);
+    return row?.terms ?? null;
+  }
+  if (link.coworkingContractId) {
+    const [row] = await conn
+      .select({ terms: coworkingContracts.billingTerms })
+      .from(coworkingContracts)
+      .where(eq(coworkingContracts.id, link.coworkingContractId))
+      .limit(1);
+    return row?.terms ?? null;
+  }
+  return null;
+}
+
 async function resolveProjectOwner(
   conn: Awaited<ReturnType<typeof db>>,
   projectId: string | null | undefined,
@@ -98,6 +128,7 @@ export const upsertInvoice = action(upsertInvoiceSchema, async ({ input, user })
   // pas de race significative : un upsert n'est pas concurrent sur la
   // même ligne en pratique.
   let existing: {
+    brand: InvoiceBrand;
     invoicedAt: Date | null;
     dueDate: string | null;
     assignedTo: string | null;
@@ -105,6 +136,7 @@ export const upsertInvoice = action(upsertInvoiceSchema, async ({ input, user })
   if (input.id) {
     const [row] = await conn
       .select({
+        brand: invoices.brand,
         invoicedAt: invoices.invoicedAt,
         dueDate: invoices.dueDate,
         assignedTo: invoices.assignedTo,
@@ -124,11 +156,30 @@ export const upsertInvoice = action(upsertInvoiceSchema, async ({ input, user })
   // Calcul due_date : si l'appelant en fournit une, elle l'emporte
   // (y compris null explicite). Sinon, on garde l'existante. Sinon, on
   // génère une valeur uniquement quand status='sent' (point d'émission).
+  // La marque n'est jamais écrasée par un upsert : à la création elle est
+  // déduite du kind, ensuite elle reste celle qu'on a (éventuellement
+  // corrigée à la main sur la fiche).
+  const brand =
+    existing?.brand ??
+    brandForInvoice({
+      kind: input.kind,
+      coworkingContractId: input.coworkingContractId ?? null,
+    });
+
+  // Conditions du deal : elles surchargent les défauts de la marque, donc
+  // elles déterminent aussi l'échéance. Sans cette lecture, une facture d'un
+  // projet à 60 jours repartirait sur les 30 jours de la marque.
+  const dealTerms = await loadDealBillingTerms(conn, {
+    projectId: input.projectId ?? null,
+    coworkingContractId: input.coworkingContractId ?? null,
+  });
+
   const nextDueDate = resolveUpsertDueDate({
     inputDueDate: input.dueDate,
     status: input.status,
     existing,
     now: new Date(),
+    dueDays: resolveBillingTerms(brand, dealTerms).dueDays,
   });
 
   const baseValues = {
@@ -166,7 +217,7 @@ export const upsertInvoice = action(upsertInvoiceSchema, async ({ input, user })
   } else {
     const [row] = await conn
       .insert(invoices)
-      .values({ ...baseValues, createdBy: user.id })
+      .values({ ...baseValues, brand, createdBy: user.id })
       .returning({ id: invoices.id });
     if (!row) throw new Error("Création échouée.");
     id = row.id;
@@ -202,6 +253,7 @@ export const setInvoiceStatus = action(
     const now = new Date();
     const [existing] = await conn
       .select({
+        brand: invoices.brand,
         invoicedAt: invoices.invoicedAt,
         paidAt: invoices.paidAt,
         dueDate: invoices.dueDate,
@@ -215,9 +267,18 @@ export const setInvoiceStatus = action(
     if (!existing) throw new Error("Facture introuvable.");
 
     // Dates dérivées du nouveau statut (cf. resolveStatusTransition) :
-    // au passage à 'sent' sans due_date, on initialise à invoiced_at + 30j
-    // (cohérent avec upsertInvoice).
-    const transition = resolveStatusTransition({ status: input.status, existing, now });
+    // au passage à 'sent' sans due_date, on initialise à invoiced_at + le
+    // délai de la marque (cohérent avec upsertInvoice).
+    const dealTerms = await loadDealBillingTerms(conn, {
+      projectId: existing.projectId,
+      coworkingContractId: existing.coworkingContractId,
+    });
+    const transition = resolveStatusTransition({
+      status: input.status,
+      existing,
+      now,
+      dueDays: resolveBillingTerms(existing.brand, dealTerms).dueDays,
+    });
     // Assignee : pose le lead projet à 'sent' s'il n'y a personne.
     // Ça couvre le cas d'une facture créée avant l'arrivée du champ
     // (backfill OK pour celles liées à un projet) ou d'un upsert qui
@@ -380,10 +441,11 @@ export const seedProjectMilestones = action(seedSchema, async ({ input, user }) 
   await conn.insert(invoices).values([
     {
       kind: "milestone",
+      brand: "automato",
       projectId: input.projectId,
       label: split.acompte.label,
       amountHt: toNumeric(split.acompte.amountHt) ?? "0",
-      vatRate: "0.2",
+      vatRate: brandTemplateFor("automato").defaultVatRate.toString(),
       status: "draft",
       milestoneType: "acompte",
       milestonePercent: split.acompte.percent,
@@ -392,10 +454,11 @@ export const seedProjectMilestones = action(seedSchema, async ({ input, user }) 
     },
     {
       kind: "milestone",
+      brand: "automato",
       projectId: input.projectId,
       label: split.solde.label,
       amountHt: toNumeric(split.solde.amountHt) ?? "0",
-      vatRate: "0.2",
+      vatRate: brandTemplateFor("automato").defaultVatRate.toString(),
       status: "draft",
       milestoneType: "solde",
       milestonePercent: split.solde.percent,
@@ -438,6 +501,7 @@ export const createCoworkingInvoice = action(createCoworkingSchema, async ({ inp
     .insert(invoices)
     .values({
       kind: "coworking",
+      brand: "coworking",
       coworkingContractId: input.contractId,
       label: input.name,
       amountHt: toNumeric(amountHt) ?? "0",
@@ -844,6 +908,7 @@ export const linkDougsCreditNote = action(
     const [cancelled] = await conn
       .select({
         id: invoices.id,
+        brand: invoices.brand,
         projectId: invoices.projectId,
         coworkingContractId: invoices.coworkingContractId,
       })
@@ -870,6 +935,9 @@ export const linkDougsCreditNote = action(
     } else {
       await conn.insert(invoices).values({
         kind: "credit_note",
+        // Un avoir relève de la marque de la facture qu'il annule ; faute de
+        // facture Paradeos correspondante, il retombe sur le fourre-tout.
+        brand: cancelled?.brand ?? "parade",
         label: `Avoir Dougs ${input.creditNoteId.slice(0, 8)}`,
         amountHt: "0",
         status: "sent",
@@ -1015,10 +1083,11 @@ export const linkProjectAsNewMilestone = action(
       .insert(invoices)
       .values({
         kind: "milestone",
+        brand: "automato",
         projectId: input.projectId,
         label,
         amountHt: toNumeric(Math.round(dougsAmount * 100) / 100) ?? "0",
-        vatRate: "0.2",
+        vatRate: brandTemplateFor("automato").defaultVatRate.toString(),
         status: isDougsInvoicePaid(pickDougsStatus(invoice), paid) ? "paid" : "sent",
         milestoneType: mType,
         milestonePercent,
@@ -1103,10 +1172,11 @@ export const linkCoworkingContractAsNewInvoice = action(
       .insert(invoices)
       .values({
         kind: "coworking",
+        brand: "coworking",
         coworkingContractId: contract.id,
         label: `${contract.name} — ${periodStartStr.slice(0, 7)}`,
         amountHt: toNumeric(amountHt) ?? "0",
-        vatRate: "0.2",
+        vatRate: brandTemplateFor("coworking").defaultVatRate.toString(),
         status: isDougsInvoicePaid(pickDougsStatus(invoice), paid) ? "paid" : "sent",
         periodStart: periodStartStr,
         periodEnd: periodEndStr,
@@ -1194,10 +1264,11 @@ export const linkProjectQuoteToDougs = action(
       if (!proj) throw new Error("Projet introuvable.");
       await conn.insert(invoices).values({
         kind: "quote",
+        brand: "automato",
         projectId: input.projectId,
         label: `Devis ${proj.name}`,
         amountHt: toNumeric(pickDougsHt(quote)) ?? "0",
-        vatRate: "0.2",
+        vatRate: brandTemplateFor("automato").defaultVatRate.toString(),
         ...snap,
         createdBy: user.id,
       });
@@ -1311,3 +1382,62 @@ export const moveInvoiceDougsLink = action(
 
 // Re-export utilitaire utilisé par d'autres lib (push devis depuis un projet, etc.).
 export { extractDougsUuid };
+
+// =====================================================================
+// Conditions de facturation négociées par deal
+// =====================================================================
+
+/**
+ * Enregistre les conditions d'un projet ou d'un contrat coworking.
+ *
+ * Volontairement **épars** : une valeur vide n'est pas stockée comme chaîne
+ * vide, elle est retirée de l'objet. C'est ce qui fait qu'on « revient au
+ * défaut de la marque » en vidant un champ, plutôt que d'imposer un texte
+ * vide sur la facture.
+ */
+export const setBillingTerms = action(
+  z.object({
+    projectId: z.string().uuid().optional(),
+    coworkingContractId: z.string().uuid().optional(),
+    paymentTerms: z.string().trim().max(1000).optional(),
+    dueDateOption: z.enum(["DAYS_15", "DAYS_30", "DAYS_60"]).optional(),
+    footerOthers: z.array(z.string().trim().max(1000)).max(5).optional(),
+    thankYouNote: z.string().trim().max(2000).optional(),
+    /** Efface explicitement la note, au lieu de garder celle de la marque. */
+    clearThankYouNote: z.boolean().optional(),
+  }),
+  async ({ input }) => {
+    if (!input.projectId && !input.coworkingContractId) {
+      throw new Error("Préciser un projet ou un contrat coworking.");
+    }
+    const conn = await db();
+
+    const terms: Record<string, unknown> = {};
+    if (input.paymentTerms) terms.paymentTerms = input.paymentTerms;
+    if (input.dueDateOption) terms.dueDateOption = input.dueDateOption;
+    const footer = (input.footerOthers ?? []).filter((l) => l.length > 0);
+    if (footer.length > 0) terms.footerOthers = footer;
+    if (input.clearThankYouNote) terms.thankYouNote = null;
+    else if (input.thankYouNote) terms.thankYouNote = input.thankYouNote;
+
+    // Aucune condition négociée : on efface la colonne plutôt que d'y laisser
+    // un objet vide, pour que « pas de surcharge » se lise d'un coup d'œil.
+    const value = Object.keys(terms).length > 0 ? terms : null;
+
+    if (input.projectId) {
+      await conn
+        .update(projects)
+        .set({ billingTerms: value, updatedAt: new Date() })
+        .where(eq(projects.id, input.projectId));
+      revalidatePath(`/projets/${input.projectId}`);
+    } else if (input.coworkingContractId) {
+      await conn
+        .update(coworkingContracts)
+        .set({ billingTerms: value, updatedAt: new Date() })
+        .where(eq(coworkingContracts.id, input.coworkingContractId));
+      revalidatePath(`/coworking/contrats/${input.coworkingContractId}`);
+    }
+    revalidatePath("/compta");
+    return { ok: true as const, hasTerms: value !== null };
+  },
+);

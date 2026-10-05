@@ -7,7 +7,11 @@
 export type InvoiceStatus = "draft" | "sent" | "accepted" | "refused" | "paid";
 export type QuoteLocalStatus = Exclude<InvoiceStatus, "paid">;
 
-/** Délai par défaut (30j) appliqué quand une facture passe à 'sent' sans due_date. */
+/**
+ * Délai de repli (30 j) quand l'appelant ne précise pas le délai de la marque.
+ * Le délai réel vient de `brandTemplateFor(brand).dueDays` — ce module reste
+ * pur, donc il le reçoit en paramètre plutôt que d'importer le registre.
+ */
 export const DEFAULT_DUE_DAYS = 30;
 
 /** Renvoie YYYY-MM-DD = base + days (UTC, suffisant pour une date). */
@@ -84,12 +88,14 @@ export function resolveUpsertDueDate(args: {
   status: InvoiceStatus;
   existing: { invoicedAt: Date | null; dueDate: string | null } | null;
   now: Date;
+  /** Délai de paiement de la marque. Défaut 30 j. */
+  dueDays?: number;
 }): string | null {
   if (args.inputDueDate !== undefined) return args.inputDueDate;
   const fallbackBase = args.existing?.invoicedAt ?? args.now;
   return (
     args.existing?.dueDate ??
-    (args.status === "sent" ? addDaysISO(fallbackBase, DEFAULT_DUE_DAYS) : null)
+    (args.status === "sent" ? addDaysISO(fallbackBase, args.dueDays ?? DEFAULT_DUE_DAYS) : null)
   );
 }
 
@@ -106,8 +112,9 @@ export type StatusTransition = {
  *   - draft efface invoiced_at et paid_at (la facture n'est plus émise) ;
  *   - toute autre valeur pose invoiced_at si absent ;
  *   - paid pose paid_at si absent, les autres statuts le conservent ;
- *   - sent sans due_date initialise invoiced_at + 30j. La due_date
- *     existante n'est jamais touchée, même au retour à draft.
+ *   - sent sans due_date initialise invoiced_at + le délai de la marque
+ *     (`dueDays`, 30 j par défaut). La due_date existante n'est jamais
+ *     touchée, même au retour à draft.
  */
 export function resolveStatusTransition(args: {
   status: InvoiceStatus;
@@ -118,6 +125,8 @@ export function resolveStatusTransition(args: {
     assignedTo: string | null;
   };
   now: Date;
+  /** Délai de paiement de la marque. Défaut 30 j. */
+  dueDays?: number;
 }): StatusTransition {
   const { status, existing, now } = args;
   const invoicedAt = status === "draft" ? null : (existing.invoicedAt ?? now);
@@ -125,7 +134,7 @@ export function resolveStatusTransition(args: {
     status === "paid" ? (existing.paidAt ?? now) : status === "draft" ? null : existing.paidAt;
   const dueDate =
     status === "sent" && !existing.dueDate && invoicedAt
-      ? addDaysISO(invoicedAt, DEFAULT_DUE_DAYS)
+      ? addDaysISO(invoicedAt, args.dueDays ?? DEFAULT_DUE_DAYS)
       : existing.dueDate;
   return {
     invoicedAt,

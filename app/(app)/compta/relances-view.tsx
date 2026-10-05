@@ -5,6 +5,7 @@ import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
+import { reminderLabel, reminderState } from "@/lib/billing/reminders";
 import { db } from "@/lib/db/server";
 import { demoAmount, demoCompanyName, demoProjectName } from "@/lib/demo/anonymize";
 import { isDemoMode } from "@/lib/demo/server";
@@ -33,6 +34,9 @@ export type UserOption = { id: string; fullName: string | null; avatarUrl: strin
  *   - overdue : due_date passée
  *   - soon    : due_date dans les 7 prochains jours
  *   - later   : plus tard ou sans échéance
+ * Chaque ligne porte en plus l'état de sa cadence de relance, qui dépend de la
+ * marque (cf. lib/billing/reminders.ts) : l'échéance dépassée dit qu'on attend
+ * un paiement, la cadence dit qu'on doit relancer.
  * Exclut les factures coworking facturées par G&O (cohérent avec le
  * dashboard Compta).
  *
@@ -66,6 +70,7 @@ export async function RelancesView({ assigneeFilter }: { assigneeFilter: "all" |
       .select({
         id: invoices.id,
         kind: invoices.kind,
+        brand: invoices.brand,
         label: invoices.label,
         amountHt: invoices.amountHt,
         invoicedAt: invoices.invoicedAt,
@@ -117,7 +122,22 @@ export async function RelancesView({ assigneeFilter }: { assigneeFilter: "all" |
       assignedFullName: r.assignedFullName,
       assignedAvatarUrl: r.assignedAvatarUrl,
       paymentHint: r.dougsInvoiceId ? (paymentHints.get(r.dougsInvoiceId) ?? null) : null,
+      reminderDue: false,
+      reminderNote: null,
     };
+
+    // Cadence de relance propre à la marque : dit si une relance est attendue
+    // maintenant, pas seulement si l'échéance est passée.
+    const state = reminderState({
+      brand: r.brand,
+      dueDate: r.dueDate,
+      reminderCount: r.reminderCount,
+      lastRemindedAt: r.lastRemindedAt ? r.lastRemindedAt.toISOString() : null,
+      today,
+    });
+    item.reminderDue = state.due;
+    item.reminderNote = reminderLabel(state);
+
     if (!r.dueDate) {
       later.push(item);
       continue;

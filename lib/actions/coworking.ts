@@ -5,21 +5,20 @@ import { coworkingContracts } from "@/db/schema/coworking";
 import { entities as entitiesTable } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { action } from "@/lib/actions/action";
+import { requireAdmin } from "@/lib/auth/admin";
+import { resolveInvoiceDocument } from "@/lib/billing/brand-documents";
+import { brandTemplateFor } from "@/lib/billing/brand-templates";
+import { pushDougsSalesInvoiceDraft, resolveDougsClientData } from "@/lib/billing/dougs-push";
+import { autoSendCoworkingInvoice } from "@/lib/coworking/auto-send";
 import { generateNextInvoiceForContract } from "@/lib/coworking/generate-invoice";
 import { db } from "@/lib/db/server";
-import {
-  DougsApiError,
-  DougsAuthError,
-  createDougsSalesInvoiceDraft,
-  getDougsDraftUrl,
-  searchDougsClients,
-  updateDougsSalesInvoice,
-} from "@/lib/dougs/client";
+import { getDougsDraftUrl } from "@/lib/dougs/client";
 import {
   createCoworkingContractSchema,
   monthsBetween,
   updateCoworkingContractSchema,
 } from "@/lib/schemas/coworking";
+import { SETTING_KEYS, setSetting } from "@/lib/settings";
 import { eq } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
@@ -127,9 +126,12 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
       contactEmail: contactsTable.email,
       contactAddress: contactsTable.address,
       billToEntityName: entitiesTable.name,
+      billToEntityLegalName: entitiesTable.legalName,
       billToEntitySiren: entitiesTable.siren,
+      billToEntitySiret: entitiesTable.siret,
       billToEntityVatNumber: entitiesTable.vatNumber,
       billToEntityAddress: entitiesTable.address,
+      billToEntityDeliveryAddress: entitiesTable.deliveryAddress,
     })
     .from(invoices)
     .leftJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
@@ -161,114 +163,44 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
     );
   }
 
-  // Adresse locale Paradeos, utilisée en fallback si la recherche Dougs
-  // ne renvoie pas d'adresse (endpoint search qui ne l'inclut pas, ou
-  // fiche client Dougs incomplète). Sans ce fallback on écraserait tout
-  // à chaque push avec des chaînes vides.
-  const localAddr = (isBtoB ? row.billToEntityAddress : row.contactAddress) as {
-    street?: string;
-    postalCode?: string;
-    city?: string;
-    country?: string;
-  } | null;
-  const localAddressPayload = {
-    street: localAddr?.street ?? "",
-    zipCode: localAddr?.postalCode ?? "",
-    city: localAddr?.city ?? "",
-    country: localAddr?.country ?? "France",
+  const clientData = await resolveDougsClientData({
+    userId: user.id,
+    isBtoB,
+    searchName,
+    local: {
+      legalName: row.billToEntityLegalName ?? row.billToEntityName ?? null,
+      siren: row.billToEntitySiren ?? null,
+      siret: row.billToEntitySiret ?? null,
+      vatNumber: row.billToEntityVatNumber ?? null,
+      firstName: row.contactFirstName ?? null,
+      lastName: row.contactLastName ?? null,
+      address: isBtoB ? row.billToEntityAddress : row.contactAddress,
+      deliveryAddress: isBtoB ? row.billToEntityDeliveryAddress : null,
+      email: row.contactEmail ?? null,
+    },
+  });
+
+  const template = brandTemplateFor(invoice.brand);
+  const terms = await resolveInvoiceDocument(invoice.brand, contract.billingTerms);
+  const ctx = {
+    label: invoice.label,
+    amountHt: Number(invoice.amountHt),
+    vatRate: Number(invoice.vatRate),
+    clientName: searchName,
+    periodStart: invoice.periodStart,
+    periodEnd: invoice.periodEnd,
+    months: monthsBetween(invoice.periodStart, invoice.periodEnd),
+    desks: invoice.desks ?? contract.desks,
+    unitPriceHt: Number(invoice.unitPriceHt ?? contract.unitPriceHt),
   };
 
-  let clientData: Record<string, unknown>;
-  try {
-    const matches = await searchDougsClients(user.id, searchName, isBtoB);
-    const best = matches[0];
-    if (best) {
-      // Merge champ par champ : Dougs prioritaire si non-vide, sinon
-      // fallback local. L'endpoint search renvoie souvent ville +
-      // code postal mais pas la rue → si on prenait Dougs en bloc,
-      // on écraserait la rue Paradeos avec "".
-      clientData = {
-        isBToB: best.isBtoB,
-        legalName: best.legalName ?? best.name,
-        siren: best.siren,
-        siret: null,
-        vatNumber: best.vatNumber,
-        firstName: best.firstName,
-        lastName: best.lastName,
-        address: {
-          street: best.address?.street || localAddressPayload.street,
-          zipCode: best.address?.zipcode || localAddressPayload.zipCode,
-          city: best.address?.city || localAddressPayload.city,
-          country: localAddressPayload.country,
-        },
-        deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
-        others: [],
-        email: best.email ?? row.contactEmail ?? null,
-        phone: best.phone ?? null,
-        clientId: best.clientId,
-      };
-    } else {
-      clientData = {
-        isBToB: isBtoB,
-        legalName: isBtoB ? row.billToEntityName : null,
-        siren: row.billToEntitySiren ?? null,
-        siret: null,
-        vatNumber: row.billToEntityVatNumber ?? null,
-        firstName: isBtoB ? null : row.contactFirstName,
-        lastName: isBtoB ? null : row.contactLastName,
-        address: localAddressPayload,
-        deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
-        others: [],
-        email: row.contactEmail ?? null,
-        phone: null,
-        clientId: null,
-      };
-    }
-  } catch (err) {
-    if (err instanceof DougsAuthError) throw err;
-    if (err instanceof DougsApiError) {
-      throw new Error(`Recherche client Dougs : ${err.message}`);
-    }
-    throw err;
-  }
-
-  const months = monthsBetween(invoice.periodStart, invoice.periodEnd);
-  const desks = invoice.desks ?? contract.desks;
-  const monthlyHt = Number(invoice.unitPriceHt ?? contract.unitPriceHt);
-  const vatRate = Number(invoice.vatRate);
-
-  const lines = [
-    {
-      title: "Prestation d'hébergement",
-      description: `${desks} poste${desks > 1 ? "s" : ""} × ${monthlyHt.toLocaleString("fr-FR")} €/mois × ${months} mois (${invoice.periodStart} → ${invoice.periodEnd})`,
-      unit: "mois",
-      quantity: months,
-      unitAmount: desks * monthlyHt,
-      vatRate,
-      discount: 0,
-      discountUnit: "%",
-      reference: null,
-      amount: desks * monthlyHt * months,
-      discountInEuros: 0,
-      isPriceWithVat: false,
-    },
-  ];
-
-  let draft: Awaited<ReturnType<typeof createDougsSalesInvoiceDraft>>;
-  try {
-    draft = await createDougsSalesInvoiceDraft(user.id);
-    await updateDougsSalesInvoice(user.id, draft.id, {
-      ...draft,
-      clientData,
-      lines,
-    });
-  } catch (err) {
-    if (err instanceof DougsAuthError) throw err;
-    if (err instanceof DougsApiError) {
-      throw new Error(`Push Dougs : ${err.message}`);
-    }
-    throw err;
-  }
+  const draft = await pushDougsSalesInvoiceDraft({
+    userId: user.id,
+    clientData,
+    lines: template.buildLines(ctx),
+    subject: template.invoiceSubject(ctx),
+    document: terms.document,
+  });
 
   await conn
     .update(invoices)
@@ -288,4 +220,63 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
   revalidatePath(`/coworking/factures/${input.id}`);
   revalidatePath("/compta");
   return { dougsId: draft.id, reference: draft.reference, url };
+});
+
+// =====================================================================
+// Envoi automatique
+// =====================================================================
+
+/**
+ * Interrupteur global de l'envoi automatique. Réservé aux admins : une
+ * facture envoyée est irréversible, c'est le geste le plus engageant de
+ * l'app.
+ *
+ * Activer ce réglage ne fait rien partir à lui seul — il faut aussi cocher
+ * `auto_send` sur chaque contrat concerné.
+ */
+export const setCoworkingAutoSendEnabled = action(
+  z.object({ enabled: z.boolean() }),
+  async ({ input, user }) => {
+    await requireAdmin(user);
+    await setSetting(
+      SETTING_KEYS.COWORKING_AUTOSEND_ENABLED,
+      input.enabled ? "true" : "false",
+      user.id,
+    );
+    revalidatePath("/settings/integrations");
+    revalidatePath("/coworking");
+    return { ok: true as const, enabled: input.enabled };
+  },
+);
+
+/** Opt-in de l'envoi automatique pour un contrat donné. */
+export const setCoworkingContractAutoSend = action(
+  z.object({ id: z.string().uuid(), autoSend: z.boolean() }),
+  async ({ input }) => {
+    const conn = await db();
+    await conn
+      .update(coworkingContracts)
+      .set({ autoSend: input.autoSend, updatedAt: new Date() })
+      .where(eq(coworkingContracts.id, input.id));
+    revalidatePath("/coworking");
+    revalidatePath(`/coworking/contrats/${input.id}`);
+    revalidatePath("/settings/integrations");
+    return { ok: true as const, autoSend: input.autoSend };
+  },
+);
+
+/**
+ * Relance l'envoi d'une facture coworking depuis l'UI, après avoir corrigé
+ * un blocage. Même chemin que le cron, donc mêmes garde-fous.
+ */
+export const retryCoworkingAutoSend = action(idSchema, async ({ input, user }) => {
+  const res = await autoSendCoworkingInvoice({ userId: user.id, invoiceId: input.id });
+  revalidateTag(`dougs:${user.id}`);
+  revalidatePath("/coworking");
+  revalidatePath(`/coworking/factures/${input.id}`);
+  revalidatePath("/compta");
+  if (!res.ok) throw new Error(res.message);
+  return res.sent
+    ? { sent: true as const, reference: res.reference, to: res.to }
+    : { sent: false as const, reason: res.reason, blockers: res.blockers ?? [] };
 });
