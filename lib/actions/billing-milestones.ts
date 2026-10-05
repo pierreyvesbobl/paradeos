@@ -5,16 +5,12 @@ import { entities as entitiesTable } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
-import { buildMilestoneDougsLine } from "@/lib/billing/milestones-math";
+import { dueDateFrom } from "@/lib/billing/billing-terms";
+import { resolveInvoiceDocument } from "@/lib/billing/brand-documents";
+import { brandTemplateFor } from "@/lib/billing/brand-templates";
+import { pushDougsSalesInvoiceDraft, resolveDougsClientData } from "@/lib/billing/dougs-push";
 import { db } from "@/lib/db/server";
-import {
-  DougsApiError,
-  DougsAuthError,
-  createDougsSalesInvoiceDraft,
-  getDougsDraftUrl,
-  searchDougsClients,
-  updateDougsSalesInvoice,
-} from "@/lib/dougs/client";
+import { getDougsDraftUrl } from "@/lib/dougs/client";
 import { eq } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
@@ -35,9 +31,13 @@ export const pushProjectMilestoneToDougs = action(
         invoice: invoices,
         project: projects,
         entityName: entitiesTable.name,
+        entityLegalName: entitiesTable.legalName,
         entitySiren: entitiesTable.siren,
+        entitySiret: entitiesTable.siret,
         entityVatNumber: entitiesTable.vatNumber,
         entityAddress: entitiesTable.address,
+        entityDeliveryAddress: entitiesTable.deliveryAddress,
+        projectBillingTerms: projects.billingTerms,
         contactEmail: contactsTable.email,
       })
       .from(invoices)
@@ -61,101 +61,51 @@ export const pushProjectMilestoneToDougs = action(
     const amountHt = Number(invoice.amountHt);
     if (amountHt <= 0) throw new Error("Montant du jalon = 0.");
 
-    // ClientData — pattern identique au push devis/coworking.
-    let clientData: Record<string, unknown>;
-    try {
-      const matches = await searchDougsClients(user.id, row.entityName, true);
-      const best = matches[0];
-      if (best) {
-        clientData = {
-          isBToB: best.isBtoB,
-          legalName: best.legalName ?? best.name,
-          siren: best.siren,
-          siret: null,
-          vatNumber: best.vatNumber,
-          firstName: best.firstName,
-          lastName: best.lastName,
-          address: best.address
-            ? {
-                street: best.address.street ?? "",
-                zipCode: best.address.zipcode ?? "",
-                city: best.address.city ?? "",
-                country: "France",
-              }
-            : { street: "", zipCode: "", city: "", country: "France" },
-          deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
-          others: [],
-          email: best.email ?? row.contactEmail ?? null,
-          phone: best.phone ?? null,
-          clientId: best.clientId,
-        };
-      } else {
-        const localAddr = row.entityAddress as {
-          street?: string;
-          postalCode?: string;
-          city?: string;
-          country?: string;
-        } | null;
-        clientData = {
-          isBToB: true,
-          legalName: row.entityName,
-          siren: row.entitySiren ?? null,
-          siret: null,
-          vatNumber: row.entityVatNumber ?? null,
-          firstName: null,
-          lastName: null,
-          address: {
-            street: localAddr?.street ?? "",
-            zipCode: localAddr?.postalCode ?? "",
-            city: localAddr?.city ?? "",
-            country: localAddr?.country ?? "France",
-          },
-          deliveryAddress: { street: "", zipCode: "", city: "", country: "" },
-          others: [],
-          email: row.contactEmail ?? null,
-          phone: null,
-          clientId: null,
-        };
-      }
-    } catch (err) {
-      if (err instanceof DougsAuthError) throw err;
-      if (err instanceof DougsApiError) {
-        throw new Error(`Recherche client Dougs : ${err.message}`);
-      }
-      throw err;
-    }
+    const clientData = await resolveDougsClientData({
+      userId: user.id,
+      isBtoB: true,
+      searchName: row.entityName,
+      local: {
+        legalName: row.entityLegalName ?? row.entityName,
+        siren: row.entitySiren ?? null,
+        siret: row.entitySiret ?? null,
+        vatNumber: row.entityVatNumber ?? null,
+        address: row.entityAddress,
+        deliveryAddress: row.entityDeliveryAddress,
+        email: row.contactEmail ?? null,
+      },
+    });
 
-    const lines = [
-      buildMilestoneDougsLine({
-        label: invoice.label,
-        milestonePercent: invoice.milestonePercent,
-        amountHt,
-        vatRate: Number(invoice.vatRate),
-        projectName: project.name,
-      }),
-    ];
+    const template = brandTemplateFor(invoice.brand);
+    // Conditions négociées sur ce projet, par-dessus les défauts de la marque.
+    const terms = await resolveInvoiceDocument(invoice.brand, row.projectBillingTerms);
+    const ctx = {
+      label: invoice.label,
+      amountHt,
+      vatRate: Number(invoice.vatRate),
+      clientName: row.entityName,
+      projectName: project.name,
+      milestonePercent: invoice.milestonePercent,
+    };
 
-    let draft: Awaited<ReturnType<typeof createDougsSalesInvoiceDraft>>;
-    try {
-      draft = await createDougsSalesInvoiceDraft(user.id);
-      await updateDougsSalesInvoice(user.id, draft.id, {
-        ...draft,
-        clientData,
-        lines,
-      });
-    } catch (err) {
-      if (err instanceof DougsAuthError) throw err;
-      if (err instanceof DougsApiError) {
-        throw new Error(`Push Dougs : ${err.message}`);
-      }
-      throw err;
-    }
+    const draft = await pushDougsSalesInvoiceDraft({
+      userId: user.id,
+      clientData,
+      lines: template.buildLines(ctx),
+      subject: template.invoiceSubject(ctx),
+      document: terms.document,
+    });
 
+    // Le push vaut émission pour un jalon : on pose l'échéance avec le délai
+    // de la marque, comme le ferait `setInvoiceStatus`. Sans ça la facture
+    // arrivait dans les relances sans date d'échéance.
+    const invoicedAt = new Date();
     await conn
       .update(invoices)
       .set({
         status: "sent",
-        invoicedAt: new Date(),
+        invoicedAt,
+        dueDate: invoice.dueDate ?? toIsoDate(dueDateFrom(invoicedAt, terms.dueDays)),
         dougsInvoiceId: draft.id,
         dougsReference: draft.reference,
         dougsStatus: "DRAFT",
@@ -171,3 +121,11 @@ export const pushProjectMilestoneToDougs = action(
     return { dougsId: draft.id, reference: draft.reference, url };
   },
 );
+
+/** `invoices.due_date` est une colonne `date`, pas un timestamp. */
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
