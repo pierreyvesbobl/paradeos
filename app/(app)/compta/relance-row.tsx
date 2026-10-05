@@ -68,6 +68,13 @@ export type RelanceItem = {
    * relancer sans vérifier.
    */
   paymentHint: DougsPaymentHint | null;
+  /**
+   * Où en est la relance selon la cadence de la marque, calculé côté serveur
+   * (cf. lib/billing/reminders.ts). `null` quand la facture n'a pas d'échéance,
+   * donc qu'aucune cadence ne peut s'appliquer.
+   */
+  reminderDue: boolean;
+  reminderNote: string | null;
 };
 
 export function RelanceRow({
@@ -302,6 +309,14 @@ export function RelanceRow({
             Jamais relancée
           </span>
         )}
+        {item.reminderNote ? (
+          <span
+            className="inline-flex items-center rounded-full px-2 py-0.5 font-semibold text-[11px]"
+            style={tintStyles(item.reminderDue ? "orange" : "gray")}
+          >
+            {item.reminderNote}
+          </span>
+        ) : null}
         <button
           type="button"
           onClick={markReminded}
