@@ -17,6 +17,7 @@ import {
   pickDougsHt,
   pickDougsIssuedAt,
   pickDougsPaidAt,
+  pickDougsReference,
   pickDougsStatus,
   pickDougsTtc,
   pickDougsVat,
@@ -105,7 +106,7 @@ async function syncForUser(userId: string, stats: Stats): Promise<void> {
       await conn
         .update(invoices)
         .set({
-          dougsReference: quote.reference ?? null,
+          dougsReference: pickDougsReference(quote),
           dougsStatus: newDougsStatus,
           dougsTotalHt: toNumeric(pickDougsHt(quote)),
           dougsTotalVat: toNumeric(pickDougsVat(quote)),
@@ -154,7 +155,7 @@ async function syncForUser(userId: string, stats: Stats): Promise<void> {
       await conn
         .update(invoices)
         .set({
-          dougsReference: i.reference ?? null,
+          dougsReference: pickDougsReference(i),
           dougsStatus,
           dougsTotalHt: toNumeric(pickDougsHt(i)),
           dougsTotalVat: toNumeric(pickDougsVat(i)),
