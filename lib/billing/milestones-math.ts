@@ -3,6 +3,13 @@
  * factures coworking. Module pur — pas de DB, pas d'API.
  */
 
+import { type DougsInvoiceLine, dougsLine } from "./dougs-lines";
+
+// Réexport : le type a déménagé dans `dougs-lines.ts` (toutes les marques en
+// ont besoin, pas seulement les jalons), les appelants historiques l'importent
+// encore d'ici.
+export type { DougsInvoiceLine };
+
 export type MilestoneType = "acompte" | "intermediaire" | "solde";
 
 /** Split par défaut acompte/solde : 40 % à la commande, 60 % à la livraison. */
@@ -102,21 +109,6 @@ export function coworkingPeriodFromDate(
   return { periodStart: toLocalISODate(periodStart), periodEnd: toLocalISODate(periodEnd), months };
 }
 
-export type DougsInvoiceLine = {
-  title: string;
-  description: string;
-  unit: "forfait";
-  quantity: 1;
-  unitAmount: number;
-  vatRate: number;
-  discount: 0;
-  discountUnit: "%";
-  reference: null;
-  amount: number;
-  discountInEuros: 0;
-  isPriceWithVat: false;
-};
-
 /**
  * Ligne de facture Dougs pour un jalon projet : une ligne forfaitaire,
  * décrite par le pourcentage du projet quand il est connu.
@@ -132,18 +124,12 @@ export function buildMilestoneDougsLine(args: {
     args.milestonePercent != null
       ? `${args.milestonePercent.toLocaleString("fr-FR")} % du projet "${args.projectName}".`
       : `Facture liée au projet "${args.projectName}".`;
-  return {
+  return dougsLine({
     title: args.label,
     description,
     unit: "forfait",
     quantity: 1,
     unitAmount: args.amountHt,
     vatRate: args.vatRate,
-    discount: 0,
-    discountUnit: "%",
-    reference: null,
-    amount: args.amountHt,
-    discountInEuros: 0,
-    isPriceWithVat: false,
-  };
+  });
 }
