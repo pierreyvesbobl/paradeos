@@ -151,6 +151,100 @@ export function renderDailyDigestEmail(input: {
   return { subject, html: emailLayout(content), text };
 }
 
+/**
+ * Récap de la passe d'envoi automatique des factures coworking.
+ *
+ * Envoyé au propriétaire de la session Dougs utilisée par le cron, et
+ * seulement s'il y a quelque chose à dire : une passe entièrement silencieuse
+ * ne produit pas de mail. Les factures bloquées passent avant les factures
+ * parties, parce que ce sont les seules qui demandent une action.
+ */
+export function renderCoworkingAutoSendDigestEmail(input: {
+  appUrl: string;
+  sent: { contractName: string; label: string; reference: string; to: string[] }[];
+  blocked: { contractName: string; label: string; blockers: string[] }[];
+  errors: { contractName: string; label: string; message: string }[];
+}): { subject: string; html: string; text: string } {
+  const needsAttention = input.blocked.length + input.errors.length;
+  const subject =
+    needsAttention > 0
+      ? `Factures coworking : ${input.sent.length} envoyée${input.sent.length > 1 ? "s" : ""}, ${needsAttention} à regarder`
+      : `Factures coworking : ${input.sent.length} envoyée${input.sent.length > 1 ? "s" : ""}`;
+
+  const section = (title: string, color: string, items: string[]) =>
+    items.length === 0
+      ? ""
+      : `
+      <p style="margin:0 0 8px 0;font-weight:600;color:${color};">${escapeHtml(title)}</p>
+      <ul style="margin:0 0 20px 0;padding-left:20px;">
+        ${items.map((li) => `<li style="margin:0 0 6px 0;">${li}</li>`).join("")}
+      </ul>`;
+
+  const blockedHtml = section(
+    `À débloquer (${input.blocked.length})`,
+    "#b45309",
+    input.blocked.map(
+      (b) =>
+        `${escapeHtml(b.contractName)} — ${escapeHtml(b.label)}<br />
+         <span style="color:#6b7280;font-size:12px;">${b.blockers.map(escapeHtml).join(" · ")}</span>`,
+    ),
+  );
+
+  const errorsHtml = section(
+    `En erreur (${input.errors.length})`,
+    "#b91c1c",
+    input.errors.map(
+      (e) =>
+        `${escapeHtml(e.contractName)} — ${escapeHtml(e.label)}<br />
+         <span style="color:#6b7280;font-size:12px;">${escapeHtml(e.message)}</span>`,
+    ),
+  );
+
+  const sentHtml = section(
+    `Envoyées (${input.sent.length})`,
+    "#047857",
+    input.sent.map(
+      (x) =>
+        `${escapeHtml(x.contractName)} — ${escapeHtml(x.label)} · ${escapeHtml(x.reference)}<br />
+         <span style="color:#6b7280;font-size:12px;">à ${escapeHtml(x.to.join(", "))}</span>`,
+    ),
+  );
+
+  const content = `
+    <p style="margin:0 0 16px 0;">Passe d'envoi automatique des factures coworking.</p>
+    ${blockedHtml}${errorsHtml}${sentHtml}
+    <p style="margin:16px 0 0 0;">
+      <a href="${input.appUrl}/compta" style="color:#4f46e5;font-size:12px;">Ouvrir la compta →</a>
+    </p>
+  `;
+
+  const textSection = (title: string, lines: string[]) =>
+    lines.length === 0 ? "" : `${title} :\n${lines.join("\n")}`;
+
+  const text = [
+    "Passe d'envoi automatique des factures coworking.",
+    textSection(
+      "À débloquer",
+      input.blocked.map((b) => `- ${b.contractName} — ${b.label} : ${b.blockers.join(" · ")}`),
+    ),
+    textSection(
+      "En erreur",
+      input.errors.map((e) => `- ${e.contractName} — ${e.label} : ${e.message}`),
+    ),
+    textSection(
+      "Envoyées",
+      input.sent.map(
+        (x) => `- ${x.contractName} — ${x.label} : ${x.reference} → ${x.to.join(", ")}`,
+      ),
+    ),
+    `${input.appUrl}/compta`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return { subject, html: emailLayout(content), text };
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

@@ -1,4 +1,6 @@
+import { BillingTermsForm } from "@/components/billing/billing-terms-form";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { AutoSendToggle } from "@/components/coworking/auto-send-toggle";
 import { ContractForm } from "@/components/coworking/contract-form";
 import { NewInvoiceButton } from "@/components/coworking/new-invoice-button";
 import { NextInvoiceButton } from "@/components/coworking/next-invoice-button";
@@ -17,6 +19,8 @@ import {
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { deleteCoworkingContract } from "@/lib/actions/coworking";
+import { parseBillingTerms, resolveBillingTerms } from "@/lib/billing/billing-terms";
+import { brandTemplateFor } from "@/lib/billing/brand-templates";
 import { getCoworkingContractWithInvoices } from "@/lib/db/queries/coworking";
 import { db } from "@/lib/db/server";
 import { demoAmount, demoCompanyName } from "@/lib/demo/anonymize";
@@ -29,6 +33,7 @@ import {
   invoiceTotalTtc,
   monthsBetween,
 } from "@/lib/schemas/coworking";
+import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
 import { asc } from "drizzle-orm";
 import Link from "next/link";
@@ -56,8 +61,12 @@ async function deleteAndRedirect(formData: FormData) {
 
 export default async function ContractDetailPage({ params }: { params: Params }) {
   const { id } = await params;
-  const data = await getCoworkingContractWithInvoices(id);
+  const [data, autoSendSetting] = await Promise.all([
+    getCoworkingContractWithInvoices(id),
+    getSetting(SETTING_KEYS.COWORKING_AUTOSEND_ENABLED),
+  ]);
   if (!data) notFound();
+  const autoSendGloballyEnabled = autoSendSetting === "true";
   const demo = await isDemoMode();
   const contract = demo
     ? {
@@ -116,6 +125,12 @@ export default async function ContractDetailPage({ params }: { params: Params })
           <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
             Informations
           </h2>
+          <AutoSendToggle
+            contractId={contract.id}
+            autoSend={contract.autoSend}
+            globalEnabled={autoSendGloballyEnabled}
+            recipientEmail={contract.contactEmail}
+          />
           <ContractForm
             mode="edit"
             contactOptions={contactRows.map((c) => ({
@@ -136,6 +151,18 @@ export default async function ContractDetailPage({ params }: { params: Params })
               billingFrequency: contract.billingFrequency,
               notes: contract.notes ?? "",
             }}
+          />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+            Conditions de facturation
+          </h2>
+          <BillingTermsForm
+            coworkingContractId={contract.id}
+            brandLabel={brandTemplateFor("coworking").label}
+            terms={parseBillingTerms(contract.billingTerms)}
+            effective={resolveBillingTerms("coworking", contract.billingTerms)}
           />
         </section>
 
