@@ -360,12 +360,22 @@ const PARADE: BrandTemplate = {
     ].join("\n"),
   }),
   reminderCadenceDays: [7, 21, 45],
-  // Mentions volontairement non arbitrées : la marque « Parade » est le
-  // fourre-tout, elle hérite donc des réglages Dougs, qui la sous-titrent
-  // « Automato » — à corriger quand le besoin se présentera.
   document: {
+    // Parade **est** l'entité juridique : un sous-titre « X est une marque de
+    // Parade SAS » n'aurait aucun sens, et le pied de page porte déjà
+    // l'identité légale complète. On vide donc le sous-titre plutôt que de
+    // laisser celui d'Automato, que Dougs applique par défaut.
+    invoicerOthers: [],
+    // Le défaut Dougs parle de coûts de pipeline LLM et de validité de devis :
+    // hors sujet sur une facture Parade.
+    thankYouNote: null,
+    paymentTerms: "Paiement à 30 jours date de facture, par virement bancaire.",
+    // La ligne de pied par défaut renvoie aux CGPS d'Automato et évoque la
+    // signature d'un devis.
+    footerOthers: [],
     dueDateOption: "DAYS_30",
-    // Même logo qu'Automato faute d'arbitrage sur cette marque.
+    // Même logo qu'Automato : Parade et Automato partagent leur identité
+    // visuelle, seule La Cachette a la sienne.
     logoUuid: "98426423-a3a5-4416-bd40-a48898585247",
   },
 };

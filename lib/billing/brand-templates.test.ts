@@ -269,3 +269,17 @@ describe("logo", () => {
     );
   });
 });
+
+describe("mentions de la marque Parade", () => {
+  it("ne se sous-titre pas « marque de Parade SAS » : elle EST Parade", () => {
+    const doc = brandTemplateFor("parade").document;
+    expect(doc.invoicerOthers).toEqual([]);
+  });
+
+  it("n'hérite ni de la note ni des CGPS d'Automato", () => {
+    const doc = brandTemplateFor("parade").document;
+    expect(doc.thankYouNote).toBeNull();
+    expect(doc.footerOthers).toEqual([]);
+    expect(doc.paymentTerms).toContain("30 jours");
+  });
+});
