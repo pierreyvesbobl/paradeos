@@ -520,17 +520,18 @@ export async function sendDocumentMcp(
   if (!row) throw new Error("Document introuvable.");
 
   const send = args.confirm === true;
-  const { sendProjectInvoiceToClient, sendProjectQuoteToClient } = await import(
-    "../../../lib/actions/send-to-client"
+  // On appelle le module serveur, pas la server action : une requête MCP n'a
+  // pas de cookie Supabase, donc l'action ne saurait pas qui agit.
+  const { sendProjectInvoiceCore, sendProjectQuoteCore } = await import(
+    "../../../lib/billing/send-document"
   );
-  const act = row.kind === "quote" ? sendProjectQuoteToClient : sendProjectInvoiceToClient;
-  const res = await act({ invoiceId: args.invoiceId, send });
-  if (!res.ok) throw new Error(res.message);
+  const core = row.kind === "quote" ? sendProjectQuoteCore : sendProjectInvoiceCore;
+  const result = await core({ userId: ctx.userId, invoiceId: args.invoiceId, send });
 
   return {
     document: row.label,
     kind: row.kind,
-    ...res.data,
+    ...result,
     note: send
       ? "Document finalisé chez Dougs et envoyé au client."
       : "Aperçu envoyé à l'utilisateur. Rien n'a été émis ; rappeler avec confirm=true pour envoyer au client.",

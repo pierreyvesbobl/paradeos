@@ -37,7 +37,7 @@ export function salesInvoiceFilename(reference: string, clientName: string): str
   const safe = (v: string) =>
     v
       .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
+      .replace(/\p{Diacritic}/gu, "")
       .replace(/[^\w.-]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 80);

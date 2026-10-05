@@ -76,8 +76,8 @@ function BrandLogoRow({
     <div className="flex items-center gap-4 rounded-md border bg-background p-3">
       <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted">
         {uuid ? (
-          // biome-ignore lint/performance/noImgElement: le proxy Dougs renvoie
-          // un type arbitraire, next/image exigerait de déclarer un domaine.
+          // Pas next/image : le proxy Dougs renvoie un type arbitraire et
+          // next/image exigerait de déclarer un domaine distant.
           <img
             src={`/api/dougs/file/${uuid}`}
             alt={`Logo ${row.label}`}

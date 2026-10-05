@@ -182,8 +182,12 @@ export function BillingTermsForm({
           placeholder={effective.document.thankYouNote ?? `Défaut ${brandLabel}`}
           disabled={pending || clearNote}
         />
-        <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <Label
+          htmlFor="clearThankYouNote"
+          className="flex items-center gap-2 font-normal text-[11px] text-muted-foreground"
+        >
           <Input
+            id="clearThankYouNote"
             type="checkbox"
             className="size-3.5"
             checked={clearNote}
@@ -191,7 +195,7 @@ export function BillingTermsForm({
             disabled={pending}
           />
           Aucune note sur ce deal, même si la marque en prévoit une
-        </label>
+        </Label>
       </div>
 
       <div className="flex items-center gap-2">

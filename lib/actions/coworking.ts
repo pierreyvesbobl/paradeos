@@ -199,7 +199,7 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
     clientData,
     lines: template.buildLines(ctx),
     subject: template.invoiceSubject(ctx),
-    document: template.document,
+    document: terms.document,
   });
 
   await conn
