@@ -36,8 +36,11 @@ export default async function EditEntityPage({ params }: { params: Params }) {
           kind: entity.kind,
           website: entity.website ?? "",
           siren: entity.siren ?? "",
+          siret: entity.siret ?? "",
+          legalName: entity.legalName ?? "",
           vatNumber: entity.vatNumber ?? "",
           address: entity.address ?? {},
+          deliveryAddress: entity.deliveryAddress ?? {},
           notes: entity.notes ?? "",
         }}
       />
