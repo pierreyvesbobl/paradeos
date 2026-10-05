@@ -49,3 +49,6 @@ backups/
 
 # exports locaux
 *.zip
+
+# Scripts jetables (diagnostics, correctifs ponctuels) — jamais versionnés.
+scripts/tmp/
