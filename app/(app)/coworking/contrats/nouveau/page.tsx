@@ -7,6 +7,7 @@ import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
 
 import { formatPersonName } from "@/lib/format";
+
 export default async function NewContractPage() {
   const conn = await db();
   const [contactRows, entityRows] = await Promise.all([

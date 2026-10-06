@@ -5,7 +5,7 @@ Outil interne de Parade SAS (Lyon). Modélisation unifiée :
 
 ## Stack
 
-Next.js 15 (App Router) · TypeScript strict · Supabase (Auth, Postgres,
+Next.js 16 (App Router, Turbopack) · TypeScript strict · Supabase (Auth, Postgres,
 Storage) · Drizzle ORM · Tailwind + shadcn/ui · Zod ·
 Server Actions · pnpm · Biome · Vercel.
 
@@ -65,10 +65,10 @@ lib/
   db/server.ts            client Drizzle (rôle postgres, sécurité côté app)
   db/queries/             requêtes de lecture partagées
   schemas/                Zod par domaine
-  supabase/               clients server / browser / middleware
+  supabase/               clients server / browser / proxy / admin (service_role)
   gmail/ google/ dougs/ linkedin/ meetings/   intégrations
   format.ts               formats fr-FR (€, dates)
-middleware.ts             auth gate global
+proxy.ts                  auth gate global (ex-middleware.ts, convention Next 16)
 mcp-server/               serveur MCP stdio (dev local) ; tools/ par domaine, tools.ts les agrège
 chrome-extension/         extension navigateur (synchro cookie Dougs, import LinkedIn)
 scripts/                  seed, magic-link, diagnostics

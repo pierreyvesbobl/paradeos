@@ -12,6 +12,7 @@ import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
 
 import { formatPersonName } from "@/lib/format";
+
 export default async function EmailPropositionsPage() {
   const user = await requireUser();
   const conn = await db();

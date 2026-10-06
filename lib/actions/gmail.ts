@@ -243,6 +243,3 @@ export const setGmailExtractionEnabled = action(
     return { ok: true as const, enabled: input.enabled };
   },
 );
-
-// Alias gardés pour compat avec les composants UI (à supprimer plus tard).
-export { triggerGmailSync as syncGmail };

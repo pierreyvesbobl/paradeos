@@ -217,7 +217,7 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
     .set({ autoSentAt: new Date(), autoSendError: null, updatedAt: new Date() })
     .where(eq(invoices.id, invoice.id));
 
-  revalidateTag(`dougs:${user.id}`);
+  revalidateTag(`dougs:${user.id}`, { expire: 0 });
   revalidatePath(`/projets/${project.id}`);
   revalidatePath("/compta");
   return { sent: true as const, reference, to: recipient };
@@ -313,7 +313,7 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
     .set({ autoSentAt: new Date(), autoSendError: null, updatedAt: new Date() })
     .where(eq(invoices.id, invoice.id));
 
-  revalidateTag(`dougs:${user.id}`);
+  revalidateTag(`dougs:${user.id}`, { expire: 0 });
   revalidatePath(`/projets/${project.id}`);
   return { sent: true as const, reference, to: recipient };
 }

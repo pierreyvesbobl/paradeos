@@ -115,7 +115,7 @@ export const pushProjectMilestoneToDougs = action(
       .where(eq(invoices.id, input.invoiceId));
 
     const url = await getDougsDraftUrl(user.id, draft.id);
-    revalidateTag(`dougs:${user.id}`);
+    revalidateTag(`dougs:${user.id}`, { expire: 0 });
     revalidatePath(`/projets/${invoice.projectId}`);
     revalidatePath("/compta");
     return { dougsId: draft.id, reference: draft.reference, url };

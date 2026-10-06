@@ -784,8 +784,8 @@ export const refreshInvoiceDougs = action(
 
     // Bust le tag spécifique du Dougs entry pour que les caches détail
     // (cachedGetDougsSalesInvoice / cachedGetDougsQuote) renvoient frais.
-    if (inv.dougsInvoiceId) revalidateTag(`dougs-invoice:${inv.dougsInvoiceId}`);
-    if (inv.dougsQuoteId) revalidateTag(`dougs-quote:${inv.dougsQuoteId}`);
+    if (inv.dougsInvoiceId) revalidateTag(`dougs-invoice:${inv.dougsInvoiceId}`, { expire: 0 });
+    if (inv.dougsQuoteId) revalidateTag(`dougs-quote:${inv.dougsQuoteId}`, { expire: 0 });
     revalidatePathsForInvoice(inv.projectId, inv.coworkingContractId, input.invoiceId);
     revalidatePath("/compta");
     return { ok: true as const };
@@ -878,7 +878,7 @@ export const refreshAllDougsLinks = action(z.object({}), async ({ user }) => {
 
   // Bust le cache Dougs (lib/dougs/cache.ts) pour que la prochaine
   // visite voie les statuts/montants fraîchement synchronisés.
-  revalidateTag(`dougs:${user.id}`);
+  revalidateTag(`dougs:${user.id}`, { expire: 0 });
   revalidatePath("/compta");
   return { updated, errors };
 });

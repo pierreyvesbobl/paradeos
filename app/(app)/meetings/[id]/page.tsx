@@ -21,6 +21,7 @@ import { CopyTranscriptButton } from "./copy-transcript-button";
 import { MeetingSubjectEditor } from "./meeting-subject-editor";
 import { ReExtractButton } from "./re-extract-button";
 import { SummaryEditor } from "./summary-editor";
+
 // Pas de cache statique sur cette page : les propositions et le résumé
 // changent en continu à chaque action humaine, on veut toujours la
 // donnée fraîche.

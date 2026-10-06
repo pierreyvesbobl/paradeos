@@ -215,7 +215,7 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
 
   const url = await getDougsDraftUrl(user.id, draft.id);
 
-  revalidateTag(`dougs:${user.id}`);
+  revalidateTag(`dougs:${user.id}`, { expire: 0 });
   revalidatePath("/coworking");
   revalidatePath(`/coworking/factures/${input.id}`);
   revalidatePath("/compta");
@@ -271,7 +271,7 @@ export const setCoworkingContractAutoSend = action(
  */
 export const retryCoworkingAutoSend = action(idSchema, async ({ input, user }) => {
   const res = await autoSendCoworkingInvoice({ userId: user.id, invoiceId: input.id });
-  revalidateTag(`dougs:${user.id}`);
+  revalidateTag(`dougs:${user.id}`, { expire: 0 });
   revalidatePath("/coworking");
   revalidatePath(`/coworking/factures/${input.id}`);
   revalidatePath("/compta");
@@ -377,7 +377,7 @@ export const sendDueCoworkingInvoices = action(z.object({}), async ({ user }) =>
     }
   }
 
-  revalidateTag(`dougs:${user.id}`);
+  revalidateTag(`dougs:${user.id}`, { expire: 0 });
   revalidatePath("/coworking");
   revalidatePath("/compta");
   return { sent, blocked, errors };

@@ -229,7 +229,7 @@ export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }
   const url = await getDougsQuoteUrl(user.id, quoteId);
   // Bust le cache Dougs (lib/dougs/cache.ts) : le push crée un nouveau
   // brouillon côté Dougs, la liste cached ne le contient pas encore.
-  revalidateTag(`dougs:${user.id}`);
+  revalidateTag(`dougs:${user.id}`, { expire: 0 });
   revalidatePath(`/projets/${input.projectId}`);
   return { dougsId: quoteId, reference, status, url };
 });
