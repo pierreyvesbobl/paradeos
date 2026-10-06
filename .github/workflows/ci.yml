@@ -34,10 +34,11 @@ jobs:
         # Version résolue via `packageManager` dans package.json
         uses: pnpm/action-setup@v4
 
+      # 24 = version du projet Vercel ; `engines` reste à >=22 pour les postes locaux.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
