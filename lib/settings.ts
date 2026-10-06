@@ -71,15 +71,17 @@ export const SETTING_KEYS = {
    */
   PURCHASE_AUTO_ATTACH_ENABLED: "PURCHASE_AUTO_ATTACH_ENABLED",
   /**
-   * Interrupteur de l'envoi automatique des factures coworking. Si absent
-   * ou "false", le cron mensuel génère les factures comme avant et n'envoie
-   * rien. À "true", il pousse le brouillon sur Dougs, vérifie `can-finalize`,
-   * finalise et déclenche le mail au coworker.
+   * Coupe-circuit de l'envoi **groupé** des factures coworking, déclenché depuis
+   * la page Coworking. Absent ou "false" : le bouton reste fermé.
+   *
+   * L'envoi n'est plus porté par le cron — l'API Dougs s'authentifie par un
+   * cookie de session rafraîchi par l'extension Chrome, donc un envoi nocturne
+   * sans personne devant la machine était un pari. La génération, elle, reste
+   * automatique : elle ne touche pas à Dougs.
    *
    * Double verrou volontaire : ce réglage ne suffit pas, il faut aussi
-   * `coworking_contracts.auto_send` sur chaque contrat concerné. Un seul
-   * interrupteur global ferait partir d'un coup toutes les factures de tous
-   * les contrats, ce qui est exactement ce qu'on ne veut pas découvrir après.
+   * `coworking_contracts.auto_send` sur chaque contrat. Un seul interrupteur
+   * global ferait partir d'un coup toutes les factures de tous les contrats.
    */
   COWORKING_AUTOSEND_ENABLED: "COWORKING_AUTOSEND_ENABLED",
   /**

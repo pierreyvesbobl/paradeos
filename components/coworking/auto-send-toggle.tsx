@@ -2,7 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { setCoworkingContractAutoSend } from "@/lib/actions/coworking";
+import {
+  setCoworkingContractAutoSend,
+  setCoworkingContractBilledBy,
+} from "@/lib/actions/coworking";
 import { CheckCircle, Circle, Warning } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -16,7 +19,7 @@ type Props = {
   globalEnabled: boolean;
   /** Adresse du coworker : sans elle, rien ne peut partir. */
   recipientEmail: string | null;
-  /** Les contrats facturés par G&O ne sont pas émis par Parade. */
+  /** Les contrats encaissés par G&O ne sont pas émis par Parade. */
   billedByGandO?: boolean;
 };
 
@@ -69,12 +72,12 @@ export function AutoSendToggle({
             ) : (
               <Circle className="size-4 shrink-0 text-muted-foreground" />
             )}
-            Envoi automatique
+            Envoi groupé
           </p>
           <p className="mt-1 text-muted-foreground text-xs">
             {autoSend
-              ? "Les factures de ce contrat sont finalisées chez Dougs et envoyées au coworker par le cron mensuel."
-              : "Les factures de ce contrat restent en brouillon : tu les pousses et les envoies à la main."}
+              ? "Ce contrat figure dans l'envoi groupé de la page Coworking : ses factures y sont finalisées chez Dougs puis envoyées au coworker."
+              : "Ce contrat est exclu de l'envoi groupé : tu pousses et envoies ses factures une par une."}
           </p>
 
           {blocker ? (
@@ -88,7 +91,7 @@ export function AutoSendToggle({
             <p className="mt-1.5 flex items-start gap-1.5 text-amber-700 text-xs dark:text-amber-400">
               <Warning className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                L'interrupteur global est fermé, donc rien ne partira.{" "}
+                Le coupe-circuit global est fermé, donc l'envoi groupé reste indisponible.{" "}
                 <Link href="/settings/integrations?tab=compta" className="underline">
                   L'ouvrir
                 </Link>
@@ -126,11 +129,46 @@ export function AutoSendToggle({
         )}
       </div>
 
+      <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3">
+        <div className="min-w-0">
+          <p className="font-medium text-sm">Qui encaisse</p>
+          <p className="mt-0.5 text-muted-foreground text-xs">
+            {billedByGandO
+              ? "G&O encaisse : Parade n'émet pas ces factures, et elles ne partent jamais d'ici."
+              : "Parade encaisse et émet les factures de ce contrat."}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={pending}
+          onClick={() => {
+            startTransition(async () => {
+              const res = await setCoworkingContractBilledBy({
+                id: contractId,
+                billedBy: billedByGandO ? "parade" : "g_and_o",
+              });
+              if (!res.ok) {
+                toast.error(res.message);
+                return;
+              }
+              toast.success(
+                res.data.billedBy === "g_and_o" ? "Encaissé par G&O." : "Encaissé par Parade.",
+              );
+              router.refresh();
+            });
+          }}
+        >
+          {billedByGandO ? "Basculer sur Parade" : "Basculer sur G&O"}
+        </Button>
+      </div>
+
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Activer l'envoi automatique ?"
-        description={`Les prochaines factures de ce contrat seront finalisées chez Dougs puis envoyées à ${recipientEmail ?? "le coworker"}, sans validation manuelle. La finalisation est irréversible : seul un avoir peut annuler une facture émise.`}
+        title="Inclure ce contrat dans l'envoi groupé ?"
+        description={`Ses factures dues apparaîtront dans la liste « Factures à envoyer » de la page Coworking. Au déclenchement, elles seront finalisées chez Dougs puis envoyées à ${recipientEmail ?? "le coworker"}. La finalisation est irréversible : seul un avoir peut annuler une facture émise.`}
         confirmLabel="Activer"
         onConfirm={() => {
           setConfirmOpen(false);

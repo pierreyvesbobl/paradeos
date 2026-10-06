@@ -9,17 +9,17 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { resolveInvoiceDocument } from "@/lib/billing/brand-documents";
 import { brandTemplateFor } from "@/lib/billing/brand-templates";
 import { pushDougsSalesInvoiceDraft, resolveDougsClientData } from "@/lib/billing/dougs-push";
-import { autoSendCoworkingInvoice } from "@/lib/coworking/auto-send";
+import { autoSendCoworkingInvoice, isCoworkingAutoSendEnabled } from "@/lib/coworking/auto-send";
 import { generateNextInvoiceForContract } from "@/lib/coworking/generate-invoice";
 import { db } from "@/lib/db/server";
-import { getDougsDraftUrl } from "@/lib/dougs/client";
+import { DougsAuthError, getDougsDraftUrl } from "@/lib/dougs/client";
 import {
   createCoworkingContractSchema,
   monthsBetween,
   updateCoworkingContractSchema,
 } from "@/lib/schemas/coworking";
 import { SETTING_KEYS, setSetting } from "@/lib/settings";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 
@@ -280,3 +280,120 @@ export const retryCoworkingAutoSend = action(idSchema, async ({ input, user }) =
     ? { sent: true as const, reference: res.reference, to: res.to }
     : { sent: false as const, reason: res.reason, blockers: res.blockers ?? [] };
 });
+
+/**
+ * Factures coworking prêtes à partir, pour affichage avant déclenchement.
+ *
+ * Chaque contrat a sa propre fréquence : une mensuelle a une facture par mois,
+ * une trimestrielle une par trimestre. On ne « facture pas le mois », on envoie
+ * ce qui est effectivement dû — d'où une liste qu'on lit avant de cliquer,
+ * plutôt qu'un bouton aveugle.
+ */
+export type DueCoworkingInvoice = {
+  invoiceId: string;
+  contractName: string;
+  label: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  frequency: string;
+  amountHt: string;
+  recipient: string | null;
+  /** Ce qui empêche l'envoi, s'il y a lieu. */
+  blocker: string | null;
+};
+
+/**
+ * Envoie en une fois les factures coworking dues.
+ *
+ * Remplace la passe d'envoi du cron : l'API Dougs s'authentifie par un cookie
+ * de session rafraîchi par l'extension Chrome, donc un envoi déclenché à 6 h du
+ * matin sans personne devant la machine est un pari. Déclenché à la main, le
+ * cookie est frais par construction.
+ *
+ * Les garde-fous restent ceux de l'envoi unitaire — réglage global, opt-in par
+ * contrat, G&O exclu, destinataire requis — appliqués facture par facture.
+ */
+export const sendDueCoworkingInvoices = action(z.object({}), async ({ user }) => {
+  const enabled = await isCoworkingAutoSendEnabled();
+  if (!enabled) throw new Error("L'envoi groupé est désactivé dans les réglages.");
+
+  const conn = await db();
+  const queue = await conn
+    .select({ id: invoices.id, label: invoices.label, contractName: coworkingContracts.name })
+    .from(invoices)
+    .innerJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
+    .where(
+      and(
+        eq(invoices.kind, "coworking"),
+        isNull(invoices.autoSentAt),
+        eq(coworkingContracts.autoSend, true),
+        ne(coworkingContracts.billedBy, "g_and_o"),
+        or(
+          eq(invoices.status, "draft"),
+          // Déjà émise mais le mail n'est pas parti : il reste l'envoi.
+          and(eq(invoices.status, "sent"), isNotNull(invoices.dougsInvoiceId)),
+        ),
+      ),
+    )
+    .orderBy(asc(invoices.periodStart));
+
+  const sent: Array<{ contractName: string; label: string; reference: string }> = [];
+  const blocked: Array<{ contractName: string; label: string; reason: string }> = [];
+  const errors: Array<{ contractName: string; label: string; message: string }> = [];
+
+  for (const item of queue) {
+    try {
+      const res = await autoSendCoworkingInvoice({
+        userId: user.id,
+        invoiceId: item.id,
+        enabled: true,
+      });
+      if (!res.ok) {
+        errors.push({ contractName: item.contractName, label: item.label, message: res.message });
+      } else if (res.sent) {
+        sent.push({ contractName: item.contractName, label: item.label, reference: res.reference });
+      } else {
+        blocked.push({
+          contractName: item.contractName,
+          label: item.label,
+          reason:
+            res.reason === "blockers"
+              ? (res.blockers ?? []).map((b) => b.message).join(" · ")
+              : res.reason,
+        });
+      }
+    } catch (err) {
+      // Cookie expiré : inutile d'insister sur les suivantes, et c'est
+      // exactement la panne qui a fait sortir l'envoi du cron.
+      if (err instanceof DougsAuthError) {
+        errors.push({ contractName: item.contractName, label: item.label, message: err.message });
+        break;
+      }
+      errors.push({
+        contractName: item.contractName,
+        label: item.label,
+        message: err instanceof Error ? err.message : "erreur inconnue",
+      });
+    }
+  }
+
+  revalidateTag(`dougs:${user.id}`);
+  revalidatePath("/coworking");
+  revalidatePath("/compta");
+  return { sent, blocked, errors };
+});
+
+/** Qui encaisse les factures de ce contrat. `g_and_o` interdit tout envoi. */
+export const setCoworkingContractBilledBy = action(
+  z.object({ id: z.string().uuid(), billedBy: z.enum(["parade", "g_and_o"]) }),
+  async ({ input }) => {
+    const conn = await db();
+    await conn
+      .update(coworkingContracts)
+      .set({ billedBy: input.billedBy, updatedAt: new Date() })
+      .where(eq(coworkingContracts.id, input.id));
+    revalidatePath("/coworking");
+    revalidatePath(`/coworking/contrats/${input.id}`);
+    return { ok: true as const, billedBy: input.billedBy };
+  },
+);

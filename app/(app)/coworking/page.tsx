@@ -10,6 +10,7 @@ import {
   InvoicePeriodEditor,
   InvoiceStatusEditor,
 } from "@/components/coworking/inline-editors";
+import { SendDueInvoices } from "@/components/coworking/send-due-invoices";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -21,11 +22,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { isCoworkingAutoSendEnabled } from "@/lib/coworking/auto-send";
 import {
   listCoworkers,
   listCoworkingContracts,
   listCoworkingInvoices,
 } from "@/lib/db/queries/coworking";
+import { listDueCoworkingInvoices } from "@/lib/db/queries/coworking";
 import { demoAmount, demoCompanyName } from "@/lib/demo/anonymize";
 import { isDemoMode } from "@/lib/demo/server";
 import { formatEuro, formatPersonName } from "@/lib/format";
@@ -43,11 +46,13 @@ import {
 import Link from "next/link";
 
 export default async function CoworkingPage() {
-  const [contractsRaw, invoicesRaw, coworkers, demo] = await Promise.all([
+  const [contractsRaw, invoicesRaw, coworkers, demo, autoSendEnabled, dueRows] = await Promise.all([
     listCoworkingContracts(),
     listCoworkingInvoices(),
     listCoworkers(),
     isDemoMode(),
+    isCoworkingAutoSendEnabled(),
+    listDueCoworkingInvoices(),
   ]);
 
   // Anonymisation déterministe : contact + prix unitaire sont mappés par id.
@@ -366,6 +371,20 @@ export default async function CoworkingPage() {
           sub="Factures payées cette année"
         />
       </div>
+
+      {dueRows.length > 0 || autoSendEnabled ? (
+        <section className="space-y-3 rounded-lg border bg-card p-6">
+          <div>
+            <h2 className="font-medium text-sm">Factures à envoyer</h2>
+            <p className="mt-1 text-muted-foreground text-xs">
+              Ce qui est effectivement dû, contrat par contrat — les fréquences diffèrent, donc on
+              n'envoie pas « le mois », on envoie ce qui est arrivé à échéance. Les contrats
+              encaissés par G&amp;O n'y figurent jamais.
+            </p>
+          </div>
+          <SendDueInvoices rows={dueRows} enabled={autoSendEnabled} />
+        </section>
+      ) : null}
 
       <CoworkingTabs
         contracts={contractsTab}

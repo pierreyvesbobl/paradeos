@@ -48,6 +48,10 @@ export const coworkingContracts = pgTable(
     unitPriceHt: numeric("unit_price_ht", { precision: 10, scale: 2 }).notNull().default("0"),
     status: coworkingContractStatus("status").notNull().default("en_cours"),
     billingFrequency: coworkingBillingFrequency("billing_frequency").notNull().default("quarterly"),
+    /** Qui encaisse les factures de ce contrat. `g_and_o` = ce n'est pas Parade
+     *  qui facture, donc jamais d'envoi de notre part. Porté par le contrat et
+     *  non par chaque facture, qui en hérite. Cf. migration 0080. */
+    billedBy: text("billed_by").notNull().default("parade"),
     /** Opt-in de l'envoi automatique des factures de ce contrat (brouillon
      *  Dougs → finalisation → mail au coworker, cf. lib/coworking/auto-send.ts).
      *  Double verrou : il faut aussi le réglage global

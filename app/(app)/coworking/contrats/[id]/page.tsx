@@ -130,6 +130,7 @@ export default async function ContractDetailPage({ params }: { params: Params })
             autoSend={contract.autoSend}
             globalEnabled={autoSendGloballyEnabled}
             recipientEmail={contract.contactEmail}
+            billedByGandO={contract.billedBy === "g_and_o"}
           />
           <ContractForm
             mode="edit"

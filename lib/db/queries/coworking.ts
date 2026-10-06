@@ -3,7 +3,7 @@ import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { db } from "@/lib/db/server";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
 
 export type ContractListRow = {
   id: string;
@@ -155,6 +155,7 @@ export async function getCoworkingContractWithInvoices(id: string) {
       status: coworkingContracts.status,
       billingFrequency: coworkingContracts.billingFrequency,
       autoSend: coworkingContracts.autoSend,
+      billedBy: coworkingContracts.billedBy,
       billingTerms: coworkingContracts.billingTerms,
       billToEntityId: coworkingContracts.billToEntityId,
       billToEntityName: entities.name,
@@ -277,4 +278,69 @@ export async function listCoworkers() {
     .from(contacts)
     .where(eq(contacts.qualification, "coworker"))
     .orderBy(asc(contacts.lastName), asc(contacts.firstName));
+}
+
+/**
+ * Factures coworking prêtes à être envoyées, avec ce qui bloque chacune.
+ *
+ * Affichée avant le déclenchement de l'envoi groupé : c'est cette liste qui
+ * tient lieu de relecture. Les fréquences de facturation diffèrent d'un contrat
+ * à l'autre, donc voir la période et le montant de chaque ligne est le seul
+ * moyen de vérifier qu'on n'envoie pas un trimestre pour un mois.
+ *
+ * Les contrats encaissés par G&O sont exclus à la source : ce n'est pas Parade
+ * qui facture, il n'y a donc rien à envoyer.
+ */
+export async function listDueCoworkingInvoices(): Promise<
+  Array<{
+    invoiceId: string;
+    contractName: string;
+    label: string;
+    frequency: string;
+    amountHt: string;
+    recipient: string | null;
+    blocker: string | null;
+  }>
+> {
+  const conn = await db();
+  const rows = await conn
+    .select({
+      invoiceId: invoices.id,
+      label: invoices.label,
+      amountHt: invoices.amountHt,
+      autoSendError: invoices.autoSendError,
+      contractName: coworkingContracts.name,
+      frequency: coworkingContracts.billingFrequency,
+      recipient: contacts.email,
+    })
+    .from(invoices)
+    .innerJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
+    .leftJoin(contacts, eq(contacts.id, coworkingContracts.contactId))
+    .where(
+      and(
+        eq(invoices.kind, "coworking"),
+        isNull(invoices.autoSentAt),
+        eq(coworkingContracts.autoSend, true),
+        ne(coworkingContracts.billedBy, "g_and_o"),
+        or(
+          eq(invoices.status, "draft"),
+          and(eq(invoices.status, "sent"), isNotNull(invoices.dougsInvoiceId)),
+        ),
+      ),
+    )
+    .orderBy(asc(invoices.periodStart));
+
+  return rows.map((r) => ({
+    invoiceId: r.invoiceId,
+    contractName: r.contractName,
+    label: r.label,
+    frequency: r.frequency,
+    amountHt: r.amountHt,
+    recipient: r.recipient,
+    blocker: !r.recipient
+      ? "Pas d'adresse mail sur le coworker."
+      : Number(r.amountHt) <= 0
+        ? "Montant nul."
+        : r.autoSendError,
+  }));
 }

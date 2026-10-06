@@ -79,7 +79,9 @@ export async function generateNextInvoiceForContract(opts: {
       periodEnd: fmtDate(periodEnd),
       desks: contract.desks,
       unitPriceHt: contract.unitPriceHt,
-      billedBy: "parade",
+      // Hérité du contrat : un contrat encaissé par G&O ne doit pas produire
+      // de factures marquées Parade, qui deviendraient éligibles à l'envoi.
+      billedBy: contract.billedBy,
       createdBy,
     })
     .returning({ id: invoices.id });
