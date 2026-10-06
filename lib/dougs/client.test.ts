@@ -4,6 +4,7 @@ import {
   parseDougsFinalizeBlockers,
   pickDougsFileUuid,
   pickDougsPaymentHint,
+  pickDougsSalesInvoiceId,
   sumDougsAging,
 } from "./client";
 
@@ -226,5 +227,34 @@ describe("pickDougsFileUuid", () => {
   it("renvoie null plutôt que de deviner", () => {
     expect(pickDougsFileUuid({})).toBeNull();
     expect(pickDougsFileUuid({ filePath: "/files/pas-un-uuid/actions/download" })).toBeNull();
+  });
+});
+
+/**
+ * Deux identifiants se ressemblent et ne désignent pas le même objet : prendre
+ * celui du brouillon pour celui de la facture émise fait répondre 404 à
+ * `send-email`, donc une facture finalisée que le client ne reçoit jamais.
+ */
+describe("pickDougsSalesInvoiceId", () => {
+  const draft = "32656ec4-629f-42b2-9233-62d980cdcba3";
+  const invoice = "52ec2e30-471b-402f-86d3-3c3ca880a9e8";
+
+  it("préfère salesInvoiceId à l'id du brouillon", () => {
+    expect(pickDougsSalesInvoiceId({ id: draft, salesInvoiceId: invoice })).toBe(invoice);
+  });
+
+  it("retombe sur id quand salesInvoiceId manque", () => {
+    expect(pickDougsSalesInvoiceId({ id: draft })).toBe(draft);
+  });
+
+  it("ignore un salesInvoiceId qui n'est pas un UUID", () => {
+    expect(pickDougsSalesInvoiceId({ id: draft, salesInvoiceId: null })).toBe(draft);
+    expect(pickDougsSalesInvoiceId({ id: draft, salesInvoiceId: 12345 })).toBe(draft);
+    expect(pickDougsSalesInvoiceId({ id: draft, salesInvoiceId: "" })).toBe(draft);
+  });
+
+  it("renvoie null plutôt que de deviner", () => {
+    expect(pickDougsSalesInvoiceId({})).toBeNull();
+    expect(pickDougsSalesInvoiceId({ id: "pas-un-uuid" })).toBeNull();
   });
 });

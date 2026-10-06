@@ -37,6 +37,7 @@ import {
   getDougsSalesInvoice,
   pickDougsHt,
   pickDougsReference,
+  pickDougsSalesInvoiceId,
   pickDougsTtc,
   pickDougsVat,
 } from "@/lib/dougs/client";
@@ -365,7 +366,9 @@ export async function autoSendCoworkingInvoice(args: {
   let finalInvoiceId = draft.id;
   try {
     const finalized = await finalizeDougsSalesInvoice(userId, draft.id);
-    if (typeof finalized?.id === "string" && finalized.id) finalInvoiceId = finalized.id;
+    // `finalized.id` est l'id du **brouillon** : s'en servir fait répondre 404
+    // à `send-email`. Le bon est `salesInvoiceId`.
+    finalInvoiceId = pickDougsSalesInvoiceId(finalized) ?? finalInvoiceId;
     finalReference = pickDougsReference(finalized) ?? finalReference;
   } catch (err) {
     if (err instanceof DougsAuthError) throw err;

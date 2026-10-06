@@ -406,6 +406,7 @@ type DougsPayloadAny = {
   reference?: unknown;
   numberPrefix?: unknown;
   number?: unknown;
+  salesInvoiceId?: unknown;
   filePath?: unknown;
   pdfFileId?: unknown;
   file?: unknown;
@@ -499,6 +500,24 @@ export function pickDougsFileUuid(o: DougsPayloadAny): string | null {
     if (found) return found[0];
   }
   return null;
+}
+
+/**
+ * Identifiant de la **facture de vente** derrière un brouillon ou une réponse de
+ * finalisation.
+ *
+ * Piège coûteux : `finalize` répond avec l'`id` du **brouillon**, pas celui de
+ * la facture émise. L'utiliser ensuite fait répondre 404 à `send-email`
+ * (« SalesInvoice not found for id »). Le bon identifiant est `salesInvoiceId`,
+ * que Dougs pose sur le brouillon. Vérifié le 2026-10-06 : brouillon
+ * `32656ec4…` → facture `52ec2e30…` pour la référence 2026-10-FAC52.
+ */
+export function pickDougsSalesInvoiceId(o: DougsPayloadAny): string | null {
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const direct = (o as { salesInvoiceId?: unknown }).salesInvoiceId;
+  if (typeof direct === "string" && UUID.test(direct)) return direct;
+  const own = (o as { id?: unknown }).id;
+  return typeof own === "string" && UUID.test(own) ? own : null;
 }
 
 export function pickDougsStatus(o: DougsPayloadAny): string | null {

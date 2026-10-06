@@ -64,12 +64,21 @@ export function buildDocumentPatch(
 /** Adresse au format attendu par Dougs (`zipCode` camelCase dans le payload). */
 type DougsAddress = { street: string; zipCode: string; city: string; country: string };
 
+/** Vide ou blanc = absent. `??` ne rattrape pas la chaîne vide. */
+function orEmpty(v: string | null | undefined): string {
+  return v?.trim() ?? "";
+}
+
 function toDougsAddress(addr: EntityAddress | null | undefined): DougsAddress {
   return {
-    street: addr?.street ?? "",
-    zipCode: addr?.postalCode ?? "",
-    city: addr?.city ?? "",
-    country: addr?.country ?? "France",
+    street: orEmpty(addr?.street),
+    zipCode: orEmpty(addr?.postalCode),
+    city: orEmpty(addr?.city),
+    // Le pays doit toujours valoir quelque chose : une adresse sans pays fait
+    // refuser la finalisation par Dougs (« Vous devez renseigner l'adresse du
+    // client »), et un champ saisi puis vidé vaut `""`, pas `null` — que `??`
+    // laisserait passer tel quel.
+    country: orEmpty(addr?.country) || "France",
   };
 }
 

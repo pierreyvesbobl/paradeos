@@ -17,6 +17,7 @@ import {
   finalizeDougsSalesInvoice,
   getDougsQuote,
   pickDougsReference,
+  pickDougsSalesInvoiceId,
 } from "@/lib/dougs/client";
 import { sendEmail } from "@/lib/email/client";
 import { getUserEmails } from "@/lib/email/users";
@@ -179,8 +180,9 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
       );
     }
     const finalized = await finalizeDougsSalesInvoice(user.id, documentId);
-    // La finalisation réattribue un identifiant : le garder est indispensable.
-    if (typeof finalized?.id === "string" && finalized.id) documentId = finalized.id;
+    // `finalized.id` est celui du brouillon ; la facture émise en a un autre,
+    // exposé par `salesInvoiceId`. Le confondre fait échouer l'envoi en 404.
+    documentId = pickDougsSalesInvoiceId(finalized) ?? documentId;
     reference = pickDougsReference(finalized) ?? reference;
 
     const invoicedAt = new Date();
