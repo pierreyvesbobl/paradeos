@@ -101,6 +101,18 @@ RLS**. Toute la sécurité repose donc sur le code applicatif :
   triggers SQL et schéma `auth`.
 - `pnpm test:e2e` : Playwright, smoke non connecté.
 
+### Rôle applicatif `paradeos_app` (migration 0081)
+
+Un rôle sans DDL, sans accès aux schémas `auth`/`storage`, avec des policies
+permissives explicites sur `public` (Supabase ne laisse pas créer de rôle
+BYPASSRLS). Il est créé `NOLOGIN` : pour basculer la prod dessus,
+
+1. lui donner un mot de passe : `alter role paradeos_app login password '…';`
+2. sur Vercel, `DATABASE_URL` → la même URL de pooler avec l'utilisateur
+   `paradeos_app.<ref projet>` ;
+3. garder l'URL `postgres` en local pour les migrations (drizzle-kit et les
+   scripts SQL font du DDL).
+
 ## Conventions
 
 - Fichiers `kebab-case`, composants React `PascalCase`.
@@ -120,7 +132,11 @@ RLS**. Toute la sécurité repose donc sur le code applicatif :
 3. Relire le SQL généré avant de l'appliquer.
 4. `pnpm db:migrate` (local ou cloud selon `DATABASE_URL`).
 5. Si la migration touche RLS ou triggers : ajouter un fichier
-   `supabase/migrations/<numéro>_<sujet>.sql` puis `supabase db push`.
+   `supabase/migrations/<numéro>_<sujet>.sql` puis l'appliquer avec
+   `pnpm exec tsx scripts/apply-supabase-sql-one.ts <fichier>` (la base n'a
+   pas d'historique `supabase_migrations`, `supabase db push` ne s'applique
+   pas). Toute migration qui crée une table se termine par
+   `select public.grant_paradeos_app();` (cf. 0081).
 
 ## Sécurité
 
