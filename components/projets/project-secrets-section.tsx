@@ -1,5 +1,21 @@
 "use client";
 
+import {
+  ArrowSquareOut,
+  Check,
+  Copy,
+  Eye,
+  EyeSlash,
+  Key,
+  Note,
+  PencilSimple,
+  Plus,
+  Trash,
+  User,
+} from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -22,22 +38,6 @@ import {
 } from "@/lib/actions/project-secrets";
 import type { ProjectSecretListItem } from "@/lib/db/queries/project-secrets";
 import { cn } from "@/lib/utils";
-import {
-  ArrowSquareOut,
-  Check,
-  Copy,
-  Eye,
-  EyeSlash,
-  Key,
-  Note,
-  PencilSimple,
-  Plus,
-  Trash,
-  User,
-} from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
 
 const REVEAL_AUTO_HIDE_MS = 30_000;
 
@@ -471,7 +471,7 @@ function SecretDialog({ open, onOpenChange, projectId, initial }: DialogProps) {
               <button
                 type="button"
                 onClick={() => setShowValue((v) => !v)}
-                className="-translate-y-1/2 absolute end-2 top-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 aria-label={showValue ? "Masquer" : "Afficher"}
                 tabIndex={-1}
               >

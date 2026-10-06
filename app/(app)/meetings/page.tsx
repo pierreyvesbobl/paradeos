@@ -1,7 +1,10 @@
+import { Kanban, Microphone, Plus } from "@phosphor-icons/react/dist/ssr";
+import { and, asc, desc, eq, ilike, type SQL, sql } from "drizzle-orm";
+import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { NotionFilters } from "@/components/table/notion-filters";
-import { type SortState, SortableHeader, parseSort } from "@/components/table/sortable-header";
+import { parseSort, SortableHeader, type SortState } from "@/components/table/sortable-header";
 import { Button } from "@/components/ui/button";
 import { SearchInputWithClear } from "@/components/ui/search-input";
 import {
@@ -20,9 +23,6 @@ import { DemoBlur, ProjectName } from "@/lib/demo/components";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
-import { Kanban, Microphone, Plus } from "@phosphor-icons/react/dist/ssr";
-import { type SQL, and, asc, desc, eq, ilike, sql } from "drizzle-orm";
-import Link from "next/link";
 
 const STATUS_LABEL = {
   ingested: "À extraire",

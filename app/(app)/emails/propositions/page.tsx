@@ -1,3 +1,5 @@
+import { Tray } from "@phosphor-icons/react/dist/ssr";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ProposalCard } from "@/components/emails/proposal-card";
 import { EmptyState } from "@/components/empty-state";
@@ -8,8 +10,6 @@ import { emailProposals, gmailMessages, gmailThreads } from "@/db/schema/gmail";
 import { projects } from "@/db/schema/projects";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
-import { Tray } from "@phosphor-icons/react/dist/ssr";
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
 
 import { formatPersonName } from "@/lib/format";
 export default async function EmailPropositionsPage() {

@@ -40,10 +40,11 @@
  *   pnpm tsx scripts/merge-duplicate-meetings.ts            # dry-run
  *   pnpm tsx scripts/merge-duplicate-meetings.ts --commit
  */
-import { type ProposalKind, payloadKey } from "@/lib/crm/proposal-keys";
-import { parseDriveTranscriptName } from "@/lib/meetings/drive-filename";
+
 import { config } from "dotenv";
 import postgres from "postgres";
+import { type ProposalKind, payloadKey } from "@/lib/crm/proposal-keys";
+import { parseDriveTranscriptName } from "@/lib/meetings/drive-filename";
 
 config({ path: ".env.local" });
 

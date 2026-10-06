@@ -1,6 +1,5 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import {
   BellRinging,
   FileText,
@@ -10,6 +9,7 @@ import {
   Receipt,
 } from "@phosphor-icons/react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 type Tab = "dashboard" | "rapprochement" | "factures" | "achats" | "justificatifs" | "relances";
 

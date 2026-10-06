@@ -1,3 +1,6 @@
+import { Briefcase, Plus, X } from "@phosphor-icons/react/dist/ssr";
+import { asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -17,10 +20,6 @@ import {
   projectKindLabels,
 } from "@/lib/schemas/projects";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
-import { Briefcase, Plus } from "@phosphor-icons/react/dist/ssr";
-import { X } from "@phosphor-icons/react/dist/ssr";
-import { asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
-import Link from "next/link";
 import { FacetsPanel, type Nature, type Role, type Scope, type State } from "./facets-panel";
 import { type ProjectRow, ResultsTable } from "./results-table";
 

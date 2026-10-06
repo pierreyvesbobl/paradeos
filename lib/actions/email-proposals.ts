@@ -1,5 +1,8 @@
 "use server";
 
+import { eq, inArray } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages } from "@/db/schema/gmail";
@@ -16,6 +19,7 @@ import {
 } from "@/lib/crm/find-or-link";
 import { type AssigneeRef, setTaskAssignees } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
+import { sanitizeNameInput } from "@/lib/format";
 import {
   clearThreadLinkDecisions,
   dismissThreadLinksOfKind,
@@ -25,11 +29,7 @@ import {
 import { getValidAccessToken } from "@/lib/google/account";
 import { createGmailDraft, getHeader, getMessage } from "@/lib/google/gmail-api";
 import { hasGmailComposeScope, hasRequiredGmailScopes } from "@/lib/google/oauth";
-import { eq, inArray } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
-import { sanitizeNameInput } from "@/lib/format";
 /**
  * Extrait la liste d'assignés d'un payload de proposition task. Supporte :
  *   - le format multi (`assignees: [{ kind, id }]`) — nouveau, produit

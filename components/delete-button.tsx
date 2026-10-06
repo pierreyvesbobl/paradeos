@@ -1,5 +1,8 @@
 "use client";
 
+import { Trash } from "@phosphor-icons/react";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,9 +14,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { Trash } from "@phosphor-icons/react";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type Props = {
   /** Action serveur qui supprime l'objet et redirige (FormData → id). */

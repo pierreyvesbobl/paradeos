@@ -1,12 +1,12 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { moveTimeEntry } from "@/lib/actions/time-entries";
-import { DAY_LABELS, addDays, startOfIsoWeek } from "@/lib/calendar";
-import { formatDuration } from "@/lib/format";
 import { Plus } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { moveTimeEntry } from "@/lib/actions/time-entries";
+import { addDays, DAY_LABELS, startOfIsoWeek } from "@/lib/calendar";
+import { formatDuration } from "@/lib/format";
 import {
   type AttributionDialogEvent,
   CalendarEventAttributionDialog,
@@ -505,7 +505,7 @@ function DayColumn({
           style={{ top: nowTop, borderTop: "2px solid var(--ds-tint-red-dot)" }}
         >
           <span
-            className="-translate-y-1/2 absolute left-0 inline-block size-2 rounded-full"
+            className="absolute left-0 inline-block size-2 -translate-y-1/2 rounded-full"
             style={{ background: "var(--ds-tint-red-dot)" }}
           />
         </div>
@@ -661,11 +661,13 @@ function DayColumn({
                       {formatHm(start)}–{formatHm(end)}
                     </p>
                   </button>
-                  <div
+                  {/* Poignée de redimensionnement : un bouton, comme le bloc
+                      « move » juste au-dessus — focusable nativement, sans
+                      rôle ARIA à bricoler. */}
+                  <button
+                    type="button"
                     className="absolute right-0 bottom-0 left-0 h-2 cursor-ns-resize bg-foreground/0 hover:bg-foreground/10"
                     onPointerDown={(ev) => startEntryDrag(ev, e, "resize")}
-                    role="separator"
-                    tabIndex={0}
                     aria-label="Redimensionner"
                   />
                 </div>

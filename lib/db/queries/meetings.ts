@@ -1,8 +1,8 @@
 import "server-only";
 
+import { desc, eq, sql } from "drizzle-orm";
 import { meetings } from "@/db/schema/meetings";
 import { db } from "@/lib/db/server";
-import { desc, eq, sql } from "drizzle-orm";
 
 /**
  * Liste les meetings rattachés à un projet, avec le compteur de

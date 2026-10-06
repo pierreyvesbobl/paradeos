@@ -1,12 +1,12 @@
 "use client";
 
+import { Funnel, MagnifyingGlass, X } from "@phosphor-icons/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Funnel, MagnifyingGlass, X } from "@phosphor-icons/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
 
 // ---------- Types ----------
 

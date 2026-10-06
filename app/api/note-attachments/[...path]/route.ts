@@ -1,9 +1,9 @@
-import { noteAttachments } from "@/db/schema/note-attachments";
-import { requireUser } from "@/lib/auth/server";
-import { db } from "@/lib/db/server";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { noteAttachments } from "@/db/schema/note-attachments";
+import { requireUser } from "@/lib/auth/server";
+import { db } from "@/lib/db/server";
 
 /**
  * Sert une pièce jointe de note : redirige (302) vers une URL signée

@@ -1,10 +1,10 @@
+import { and, eq, sql } from "drizzle-orm";
 import { emailProposals, gmailMessages, gmailSyncState, gmailThreads } from "@/db/schema/gmail";
 import { db } from "@/lib/db/server";
 import { formatDate } from "@/lib/format";
 import { getGoogleAccount } from "@/lib/google/account";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { and, eq, sql } from "drizzle-orm";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { GmailActions } from "./gmail-actions";
 import { GmailExtractionToggle } from "./gmail-extraction-toggle";
 

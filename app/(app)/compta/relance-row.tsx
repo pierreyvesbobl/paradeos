@@ -1,8 +1,5 @@
 "use client";
 
-import { UserAvatar } from "@/components/user/user-avatar";
-import { markInvoiceReminded, setInvoiceAssignee, setInvoiceDueDate } from "@/lib/actions/invoices";
-import type { DougsPaymentHint } from "@/lib/dougs/client";
 import {
   ArrowRight,
   BellRinging,
@@ -18,6 +15,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { UserAvatar } from "@/components/user/user-avatar";
+import { markInvoiceReminded, setInvoiceAssignee, setInvoiceDueDate } from "@/lib/actions/invoices";
+import type { DougsPaymentHint } from "@/lib/dougs/client";
 
 export type UserOption = { id: string; fullName: string | null; avatarUrl: string | null };
 

@@ -1,12 +1,12 @@
 "use server";
 
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { dougsSessions } from "@/db/schema/dougs";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
 import { encryptCookie } from "@/lib/dougs/crypto";
-import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 const connectSchema = z.object({
   cookie: z

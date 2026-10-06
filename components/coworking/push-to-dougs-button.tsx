@@ -1,10 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Input } from "@/components/ui/input";
-import { pushCoworkingInvoiceToDougs } from "@/lib/actions/coworking";
-import { linkInvoiceToDougs, refreshInvoiceDougs } from "@/lib/actions/invoices";
 import {
   ArrowSquareOut,
   ArrowsClockwise,
@@ -15,6 +10,11 @@ import {
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Input } from "@/components/ui/input";
+import { pushCoworkingInvoiceToDougs } from "@/lib/actions/coworking";
+import { linkInvoiceToDougs, refreshInvoiceDougs } from "@/lib/actions/invoices";
 
 type Props = {
   invoiceId: string;

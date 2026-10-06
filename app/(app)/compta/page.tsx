@@ -1,5 +1,5 @@
-import { PageHeader } from "@/components/page-header";
 import { Suspense } from "react";
+import { PageHeader } from "@/components/page-header";
 import { AchatsView } from "./achats-view";
 import { ComptaTabs } from "./compta-tabs";
 import { type ComptaSegment, DashboardView } from "./dashboard-view";
@@ -7,7 +7,7 @@ import { FacturesView } from "./factures-view";
 import { JustificatifsSkeleton, JustificatifsView } from "./justificatifs-view";
 import type { ComptaPeriod } from "./period-selector";
 import { RapprochementView } from "./rapprochement-view";
-import { RelancesView, countOverdueInvoices } from "./relances-view";
+import { countOverdueInvoices, RelancesView } from "./relances-view";
 
 export const dynamic = "force-dynamic";
 

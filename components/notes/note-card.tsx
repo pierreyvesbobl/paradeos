@@ -1,14 +1,14 @@
 "use client";
 
+import { ChatCircle, Note as NoteIcon, Paperclip, Phone, Users } from "@phosphor-icons/react";
+import dynamic from "next/dynamic";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import type { AttachmentRow } from "@/lib/db/queries/notes";
 import { formatDateTime } from "@/lib/format";
 import type { NoteKind, NoteSubjectType } from "@/lib/schemas/notes";
 import { noteKindLabels } from "@/lib/schemas/notes";
 import { cn } from "@/lib/utils";
-import { ChatCircle, Note as NoteIcon, Paperclip, Phone, Users } from "@phosphor-icons/react";
-import dynamic from "next/dynamic";
-import { useState } from "react";
 import { DeleteNoteButton } from "./delete-note-button";
 import { NoteDialog } from "./note-dialog";
 
@@ -22,6 +22,7 @@ const TiptapNoteEditor = dynamic(
     loading: () => (
       <div
         className="h-32 animate-pulse rounded bg-muted-foreground/15"
+        role="status"
         aria-label="Chargement de l'éditeur"
       />
     ),

@@ -1,7 +1,7 @@
-import { cn } from "@/lib/utils";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { cn } from "@/lib/utils";
 
 type MentionResolver = {
   /** Map login (lowercased) → user link href. */

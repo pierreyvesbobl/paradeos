@@ -1,6 +1,6 @@
+import { UsersThree } from "@phosphor-icons/react/dist/ssr";
 import { ProjectContactsField } from "@/components/projects/project-contacts-field";
 import { ProjectMembersField } from "@/components/projects/project-members-field";
-import { UsersThree } from "@phosphor-icons/react/dist/ssr";
 
 type Member = { id: string; fullName: string | null; avatarUrl: string | null };
 type Contact = {

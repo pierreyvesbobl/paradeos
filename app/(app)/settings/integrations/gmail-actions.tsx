@@ -1,5 +1,9 @@
 "use client";
 
+import { ArrowsClockwise, Funnel, MagicWand, Tag, Trash } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
@@ -9,10 +13,6 @@ import {
   rebuildAutoLinks,
   triggerGmailSync,
 } from "@/lib/actions/gmail";
-import { ArrowsClockwise, Funnel, MagicWand, Tag, Trash } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 export function GmailActions() {
   const router = useRouter();

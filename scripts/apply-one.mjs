@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { config } from "dotenv";
 import postgres from "postgres";
+
 config({ path: "/Users/pierre-yvessage/Dev/paradeos/.env.local", quiet: true });
 const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl) throw new Error("no DATABASE_URL");

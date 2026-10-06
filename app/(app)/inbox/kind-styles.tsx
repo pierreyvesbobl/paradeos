@@ -1,18 +1,18 @@
 "use client";
 
-import type { InboxExtractionKind, InboxSource } from "@/lib/db/queries/inbox";
 import {
   Buildings,
   CheckSquare,
   EnvelopeOpen,
-  Link as LinkIcon,
   LinkedinLogo,
+  Link as LinkIcon,
   Microphone,
   type Icon as PhosphorIcon,
   Receipt,
   Star,
   UserPlus,
 } from "@phosphor-icons/react";
+import type { InboxExtractionKind, InboxSource } from "@/lib/db/queries/inbox";
 
 /**
  * Vocabulaire visuel partagé entre « À traiter » et « Historique » :

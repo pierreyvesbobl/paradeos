@@ -1,10 +1,10 @@
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { requireUser } from "@/lib/auth/server";
 import { encryptSecret } from "@/lib/crypto/secrets";
 import { db } from "@/lib/db/server";
-import { GOOGLE_DRIVE_SCOPES, decodeIdTokenPayload, exchangeCode } from "@/lib/google/oauth";
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { decodeIdTokenPayload, exchangeCode, GOOGLE_DRIVE_SCOPES } from "@/lib/google/oauth";
 
 const STATE_COOKIE = "g_oauth_state";
 

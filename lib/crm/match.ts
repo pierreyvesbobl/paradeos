@@ -10,6 +10,7 @@ import {
 import type { Match } from "@/lib/crm/pick";
 import { db } from "@/lib/db/server";
 
+export type { ContactIdentity, Match } from "@/lib/crm/pick";
 /**
  * Façade côté app du rapprochement anti-doublon : les mêmes matchers que
  * `lib/crm/candidates.ts`, liés à la connexion Drizzle de l'app. Les
@@ -18,14 +19,13 @@ import { db } from "@/lib/db/server";
  * directement avec sa propre connexion.
  */
 export {
-  MATCH_THRESHOLD,
   isCertainMatch,
   isGenericProjectName,
+  MATCH_THRESHOLD,
   pickBestContact,
   pickBestMatch,
   pickBestProject,
 } from "@/lib/crm/pick";
-export type { ContactIdentity, Match } from "@/lib/crm/pick";
 
 export async function fuzzyMatchEntity(name: string, threshold?: number): Promise<Match> {
   return matchEntity(await db(), name, threshold);

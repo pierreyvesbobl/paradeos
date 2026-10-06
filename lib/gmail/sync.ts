@@ -1,5 +1,6 @@
 import "server-only";
 
+import { and, eq, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { gmailMessages, gmailSyncState, gmailThreads } from "@/db/schema/gmail";
@@ -7,9 +8,9 @@ import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import {
-  type GmailMessage,
   collectAttachments,
   extractBodies,
+  type GmailMessage,
   getHeader,
   getMessage,
   internalDateToDate,
@@ -17,9 +18,8 @@ import {
   listMessages,
   parseAddressList,
 } from "@/lib/google/gmail-api";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { and, eq, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
-import { GENERIC_EMAIL_DOMAINS, domainFromEmail, extractDomain } from "./domain";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import { domainFromEmail, extractDomain, GENERIC_EMAIL_DOMAINS } from "./domain";
 import { extractAndSaveEmailProposals } from "./extract-and-save";
 import { looksLikeInvoiceMessage } from "./invoice-detect";
 import { processInvoiceFiling, queueInvoiceCandidates } from "./invoice-filer";

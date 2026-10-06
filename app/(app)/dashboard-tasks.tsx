@@ -1,14 +1,14 @@
 "use client";
 
+import { CalendarDots, ListChecks, Plus, SunHorizon, WarningCircle } from "@phosphor-icons/react";
+import Link from "next/link";
+import { useState } from "react";
 import { AvatarStack, type StackedAssignee } from "@/components/tasks/avatar-stack";
 import { PriorityPill } from "@/components/tasks/priority-pill";
 import { TaskCheckbox } from "@/components/tasks/task-checkbox";
 import { DemoBlur, ProjectName } from "@/lib/demo/components";
 import type { TaskPriority } from "@/lib/schemas/tasks";
 import { cn } from "@/lib/utils";
-import { CalendarDots, ListChecks, Plus, SunHorizon, WarningCircle } from "@phosphor-icons/react";
-import Link from "next/link";
-import { useState } from "react";
 
 export type DashboardTask = {
   id: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { TaskAssigneeEditor } from "@/app/(app)/taches/inline-editors/assignee-editor";
 import { TaskDueDateEditor } from "@/app/(app)/taches/inline-editors/due-date-editor";
 import { TaskPriorityEditor } from "@/app/(app)/taches/inline-editors/priority-editor";
@@ -15,7 +16,6 @@ import type {
   TaskUserOption,
 } from "@/components/tasks/task-types";
 import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
 
 type Props = {
   row: TaskRowData;
@@ -84,11 +84,8 @@ export function TaskRow({
   }
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: la liste est intentionnellement en flexbox plutôt qu'en <table> (case 18px + hover-reveal + sélection ne tiennent pas dans un <tr>) ; la ligne est focusable et câble Enter/Espace.
     <div
-      // biome-ignore lint/a11y/useSemanticElements: la liste est intentionnellement
-      // en flexbox plutôt qu'en <table> (case 18px + hover-reveal + sélection
-      // ne tiennent pas dans un <tr>). role="row" sans tabIndex provoque l'erreur
-      // a11y ; on rend la ligne focusable et on câble Enter/Espace.
       role="row"
       tabIndex={0}
       onClick={handleRowClick}

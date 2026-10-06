@@ -1,9 +1,9 @@
+import { eq } from "drizzle-orm";
+import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { PageHeader } from "@/components/page-header";
 import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
-import { eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
 import { EntityForm } from "../../entity-form";
 
 type Params = Promise<{ id: string }>;

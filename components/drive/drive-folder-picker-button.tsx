@@ -1,13 +1,13 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { linkDriveFolder } from "@/lib/actions/drive-folders";
-import type { DriveFileSubjectType } from "@/lib/schemas/drive-files";
 import { FolderOpen } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { linkDriveFolder } from "@/lib/actions/drive-folders";
+import type { DriveFileSubjectType } from "@/lib/schemas/drive-files";
 
 /**
  * Bouton « Lier un dossier Drive existant » : ouvre le Google Picker

@@ -1,12 +1,12 @@
 import "server-only";
 
+import { and, eq, isNotNull } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { linkedinConnections } from "@/db/schema/linkedin";
 import { fuzzyMatchContact } from "@/lib/crm/match";
 import { findContactByEmail } from "@/lib/db/queries/contacts";
 import { db } from "@/lib/db/server";
 import { sanitizeNameInput } from "@/lib/format";
-import { and, eq, isNotNull } from "drizzle-orm";
 import { normalizeLinkedinIdentifier } from "./identity";
 
 /**

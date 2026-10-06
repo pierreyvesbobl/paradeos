@@ -1,7 +1,7 @@
-import { EmptyState } from "@/components/empty-state";
-import { Button } from "@/components/ui/button";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 
 /**
  * 404 hors zone (app) : URL inconnue qui ne matche aucun segment. Le

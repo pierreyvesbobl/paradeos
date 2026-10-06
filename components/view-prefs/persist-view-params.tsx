@@ -1,8 +1,8 @@
 "use client";
 
-import { saveViewPref } from "@/lib/actions/view-prefs";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { saveViewPref } from "@/lib/actions/view-prefs";
 
 /**
  * Composant invisible posé sur les pages liste : observe les

@@ -1,9 +1,9 @@
 "use client";
 
-import { patchTask } from "@/lib/actions/tasks";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { patchTask } from "@/lib/actions/tasks";
 
 /**
  * Titre inline en `contentEditable`. Commit sur blur (pas par frappe)

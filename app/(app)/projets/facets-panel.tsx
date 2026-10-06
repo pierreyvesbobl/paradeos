@@ -1,8 +1,8 @@
+import { Check, Crown, ListBullets, User, UserFocus } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
 import { HashedAvatar } from "@/components/user/hashed-avatar";
 import type { ProjectKind } from "@/lib/schemas/projects";
 import { cn } from "@/lib/utils";
-import { Check, Crown, ListBullets, User, UserFocus } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 
 export type Scope = "all" | "mine";
 export type Role = "lead" | "member";

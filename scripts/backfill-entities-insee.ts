@@ -20,10 +20,10 @@
  * `--all` élargit aux entités non clientes (par défaut : kind = 'client').
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import { MATCH_THRESHOLD, pickBestMatch } from "@/lib/crm/pick";
-import { type SireneCompany, searchCompanies } from "@/lib/gouv/sirene";
 import { config } from "dotenv";
 import postgres from "postgres";
+import { MATCH_THRESHOLD, pickBestMatch } from "@/lib/crm/pick";
+import { type SireneCompany, searchCompanies } from "@/lib/gouv/sirene";
 
 config({ path: ".env.local" });
 

@@ -1,6 +1,3 @@
-import type { ActivityItem, ActivityKind } from "@/app/(app)/projets/[id]/overview/activity-query";
-import { formatRelativeShort } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import {
   EnvelopeSimple,
   Flag,
@@ -9,6 +6,9 @@ import {
   Note as NoteIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import type { ActivityItem, ActivityKind } from "@/app/(app)/projets/[id]/overview/activity-query";
+import { formatRelativeShort } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const KIND_STYLE: Record<
   ActivityKind,

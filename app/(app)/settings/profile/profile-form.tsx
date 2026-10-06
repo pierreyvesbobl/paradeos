@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
@@ -7,8 +9,6 @@ import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/ui/money-input";
 import { updateProfile } from "@/lib/actions/profile";
 import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type Props = {
   defaultValues: { fullName: string; costRateHourly: string };

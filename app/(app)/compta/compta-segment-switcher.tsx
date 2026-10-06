@@ -1,9 +1,9 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import { Briefcase, Buildings, Stack } from "@phosphor-icons/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
+import { cn } from "@/lib/utils";
 import type { ComptaSegment } from "./dashboard-view";
 
 const OPTIONS: { value: ComptaSegment; label: string; icon: typeof Stack }[] = [

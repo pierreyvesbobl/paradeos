@@ -1,8 +1,8 @@
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { getCurrentUserRole } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/server";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { redirect } from "next/navigation";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { DemoModeSection } from "./demo-mode-section";
 
 export default async function DemoSettingsPage() {

@@ -21,7 +21,7 @@
  * d'écrire sur la base pointée par `DATABASE_URL` (qui est la production).
  */
 import "dotenv/config";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
 import postgres from "postgres";

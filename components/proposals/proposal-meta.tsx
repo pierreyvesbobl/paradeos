@@ -1,6 +1,5 @@
 "use client";
 
-import { HashedAvatar } from "@/components/user/hashed-avatar";
 import {
   Buildings,
   Calendar,
@@ -10,7 +9,8 @@ import {
   IdentificationBadge,
   Warning,
 } from "@phosphor-icons/react";
-import { PRIORITY_TINT, type PipelineStage, STAGE_STYLE, formatDueDate } from "./helpers";
+import { HashedAvatar } from "@/components/user/hashed-avatar";
+import { formatDueDate, type PipelineStage, PRIORITY_TINT, STAGE_STYLE } from "./helpers";
 import type { Proposal } from "./types";
 import { Tint } from "./ui";
 

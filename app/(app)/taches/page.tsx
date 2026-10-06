@@ -1,7 +1,10 @@
+import { CheckSquare, Plus } from "@phosphor-icons/react/dist/ssr";
+import { and, asc, desc, eq, ilike, or, type SQL, sql } from "drizzle-orm";
+import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { NotionFilters } from "@/components/table/notion-filters";
-import { type SortState, parseSort, sortToParam } from "@/components/table/sortable-header";
+import { parseSort, type SortState, sortToParam } from "@/components/table/sortable-header";
 import { TaskTable } from "@/components/tasks/task-table";
 import type { TaskRowData } from "@/components/tasks/task-types";
 import { Button } from "@/components/ui/button";
@@ -18,13 +21,10 @@ import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { collectF } from "@/lib/filters/url-helpers";
+import { formatPersonName } from "@/lib/format";
 import { type TaskStatus, taskStatusEnum } from "@/lib/schemas/tasks";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
-import { CheckSquare, Plus } from "@phosphor-icons/react/dist/ssr";
-import { type SQL, and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
-import Link from "next/link";
 
-import { formatPersonName } from "@/lib/format";
 const SORT_FIELDS = ["title", "project", "status", "priority", "assignee", "dueDate"] as const;
 
 const PERSISTED_KEYS = ["q", "f", "sort", "status", "scope"] as const;

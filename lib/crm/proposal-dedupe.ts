@@ -1,10 +1,10 @@
 import "server-only";
 
+import { and, eq, ne } from "drizzle-orm";
 import { emailProposals } from "@/db/schema/gmail";
 import { meetingProposals } from "@/db/schema/meetings";
 import { type ProposalKind, payloadKey } from "@/lib/crm/proposal-keys";
 import { db } from "@/lib/db/server";
-import { and, eq, ne } from "drizzle-orm";
 
 /**
  * Dédoublonnage des propositions **entre sources**.

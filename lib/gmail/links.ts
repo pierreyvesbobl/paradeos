@@ -1,30 +1,30 @@
 import "server-only";
 
+import { and, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
-import { gmailMessages, gmailTags, gmailThreadTags, gmailThreads } from "@/db/schema/gmail";
+import { gmailMessages, gmailTags, gmailThreads, gmailThreadTags } from "@/db/schema/gmail";
 import { projectContacts } from "@/db/schema/project-contacts";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import { createLabel, listLabels, modifyThreadLabels, updateLabel } from "@/lib/google/gmail-api";
-import { and, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import {
-  INVOICE_DIRECTION_LABEL,
-  type InvoiceDirection,
-  LABEL_PREFIX,
-  type LinkKind,
   buildLabelName,
   collectInvolvedDomains,
   collectInvolvedEmails,
+  INVOICE_DIRECTION_LABEL,
+  type InvoiceDirection,
   invoiceDirectionLabelName,
+  LABEL_PREFIX,
+  type LinkKind,
   matchEntityIdsByDomain,
 } from "./link-rules";
 
+export type { InvoiceDirection, LinkKind };
 // Les règles de nommage vivent dans link-rules.ts (module pur, testé) ;
 // on les ré-exporte pour les callers historiques.
-export { INVOICE_DIRECTION_LABEL, buildLabelName, invoiceDirectionLabelName };
-export type { InvoiceDirection, LinkKind };
+export { buildLabelName, INVOICE_DIRECTION_LABEL, invoiceDirectionLabelName };
 
 /**
  * Liaisons d'un thread email — et leur projection en labels Gmail.

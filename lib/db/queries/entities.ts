@@ -1,9 +1,9 @@
 import "server-only";
 
+import { sql } from "drizzle-orm";
 import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
 import type { ProjectKind } from "@/lib/schemas/projects";
-import { sql } from "drizzle-orm";
 
 /**
  * Nom de l'entité représentant Parade en interne (pour rattacher

@@ -7,6 +7,9 @@
  * avec la source `email`.
  */
 
+import { ArrowBendUpLeft, PaperPlaneTilt, Sparkle, X } from "@phosphor-icons/react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { STAGE_STYLE } from "@/components/proposals/helpers";
 import { ProposalsPanel } from "@/components/proposals/proposals-panel";
 import type { LinkOptions, Proposal } from "@/components/proposals/types";
@@ -17,9 +20,6 @@ import { Textarea } from "@/components/ui/textarea";
 import type { EmailProposal } from "@/db/schema/gmail";
 import { acceptEmailProposal, rejectEmailProposal } from "@/lib/actions/email-proposals";
 import type { ExtractionMeta } from "@/lib/gmail/queries";
-import { ArrowBendUpLeft, PaperPlaneTilt, Sparkle, X } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { toast } from "sonner";
 
 /**
  * `category_tag` reste dans l'enum Postgres pour les propositions

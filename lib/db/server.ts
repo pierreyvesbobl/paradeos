@@ -1,4 +1,4 @@
-import { type Database, createDrizzle } from "../../db/client";
+import { createDrizzle, type Database } from "../../db/client";
 
 /**
  * Client Drizzle pour Server Components, Server Actions et Route Handlers.

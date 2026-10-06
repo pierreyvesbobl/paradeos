@@ -1,5 +1,9 @@
 "use client";
 
+import { Check } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { type DateRange, DateRangePicker } from "@/components/ui/date-range-picker";
 import { Input } from "@/components/ui/input";
@@ -20,10 +24,6 @@ import {
   coworkingInvoiceStatusLabels,
 } from "@/lib/schemas/coworking";
 import { cn } from "@/lib/utils";
-import { Check } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
 
 // ---------- Génériques ----------
 
@@ -409,7 +409,10 @@ const contractStatusVariant: Record<
 export function ContractStatusEditor({
   id,
   value,
-}: { id: string; value: CoworkingContractStatus }) {
+}: {
+  id: string;
+  value: CoworkingContractStatus;
+}) {
   return (
     <InlineEnum
       value={value}

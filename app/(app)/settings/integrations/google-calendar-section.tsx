@@ -1,8 +1,8 @@
+import Link from "next/link";
 import { getCalendarsForUser } from "@/lib/db/queries/calendar";
 import { formatDate } from "@/lib/format";
 import { getGoogleAccount } from "@/lib/google/account";
 import { hasRequiredCalendarScopes } from "@/lib/google/oauth";
-import Link from "next/link";
 import { CalendarsList } from "./calendars-list";
 
 /**

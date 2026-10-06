@@ -1,3 +1,14 @@
+import {
+  ArrowRight,
+  Clock,
+  Envelope,
+  FileText,
+  Money,
+  Plus,
+  TrendUp,
+  Users,
+} from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
 import { CoworkingTabs } from "@/components/coworking/coworking-tabs";
 import {
   ContractDesksEditor,
@@ -27,23 +38,12 @@ import {
   listCoworkers,
   listCoworkingContracts,
   listCoworkingInvoices,
+  listDueCoworkingInvoices,
 } from "@/lib/db/queries/coworking";
-import { listDueCoworkingInvoices } from "@/lib/db/queries/coworking";
 import { demoAmount, demoCompanyName } from "@/lib/demo/anonymize";
 import { isDemoMode } from "@/lib/demo/server";
 import { formatEuro, formatPersonName } from "@/lib/format";
 import { invoiceTotalHt, invoiceTotalTtc, monthsBetween } from "@/lib/schemas/coworking";
-import {
-  ArrowRight,
-  Clock,
-  Envelope,
-  FileText,
-  Money,
-  Plus,
-  TrendUp,
-  Users,
-} from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 
 export default async function CoworkingPage() {
   const [contractsRaw, invoicesRaw, coworkers, demo, autoSendEnabled, dueRows] = await Promise.all([

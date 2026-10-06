@@ -1,14 +1,14 @@
 "use client";
 
+import { ArrowSquareOut, Globe, IdentificationCard, MapPin } from "@phosphor-icons/react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getEntityPreview } from "@/lib/actions/entities";
 import { ContactName } from "@/lib/demo/components";
 import { useDemoMode } from "@/lib/demo/context";
 import type { EntityKind } from "@/lib/schemas/entities";
 import { entityKindLabels } from "@/lib/schemas/entities";
-import { ArrowSquareOut, Globe, IdentificationCard, MapPin } from "@phosphor-icons/react";
-import Link from "next/link";
-import { useEffect, useState } from "react";
 import { LinkGlyph, type LinkItem } from "../link-field/link-chip";
 
 type Preview = {

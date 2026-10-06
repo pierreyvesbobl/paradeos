@@ -1,12 +1,12 @@
 import "server-only";
 
-import { meetings } from "@/db/schema/meetings";
-import { db } from "@/lib/db/server";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { experimental_transcribe as transcribe } from "ai";
 import { eq } from "drizzle-orm";
+import { meetings } from "@/db/schema/meetings";
+import { db } from "@/lib/db/server";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
 const BUCKET = "meeting-audio";
 const MODEL_ID = "whisper-1";

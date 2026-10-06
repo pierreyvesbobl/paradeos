@@ -15,9 +15,10 @@
  *
  *   pnpm tsx scripts/audit-crm-duplicates.ts
  */
-import { MATCH_THRESHOLD, pickBestContact, pickBestMatch } from "@/lib/crm/pick";
+
 import { config } from "dotenv";
 import postgres from "postgres";
+import { MATCH_THRESHOLD, pickBestContact, pickBestMatch } from "@/lib/crm/pick";
 
 config({ path: ".env.local" });
 

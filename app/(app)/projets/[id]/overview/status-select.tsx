@@ -1,5 +1,9 @@
 "use client";
 
+import { CaretDown, Check } from "@phosphor-icons/react/dist/ssr";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { statusTone } from "@/app/(app)/projets/[id]/overview/status-pill";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { patchProject } from "@/lib/actions/projects";
@@ -10,10 +14,6 @@ import {
   projectStatusLabels,
 } from "@/lib/schemas/projects";
 import { cn } from "@/lib/utils";
-import { CaretDown, Check } from "@phosphor-icons/react/dist/ssr";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
-import { toast } from "sonner";
 
 const GROUPS: { label: string; statuses: ProjectStatus[] }[] = [
   { label: "Commercial", statuses: COMMERCIAL_STATUSES },

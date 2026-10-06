@@ -1,13 +1,13 @@
+import { asc, eq } from "drizzle-orm";
+import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
-import { asc, eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { formatPersonName } from "@/lib/format";
 import { ContactForm } from "../../contact-form";
 
-import { formatPersonName } from "@/lib/format";
 type Params = Promise<{ id: string }>;
 
 export default async function EditContactPage({ params }: { params: Params }) {

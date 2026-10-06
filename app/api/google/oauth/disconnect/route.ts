@@ -1,10 +1,10 @@
+import { and, eq, isNull } from "drizzle-orm";
+import { NextResponse } from "next/server";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { requireUser } from "@/lib/auth/server";
 import { decryptSecret } from "@/lib/crypto/secrets";
 import { db } from "@/lib/db/server";
 import { revokeToken } from "@/lib/google/oauth";
-import { and, eq, isNull } from "drizzle-orm";
-import { NextResponse } from "next/server";
 
 /**
  * Déconnecte le compte Google : revoke le refresh_token côté Google

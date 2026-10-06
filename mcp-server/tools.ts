@@ -12,7 +12,7 @@ import type { Database } from "../db/client";
 import { contacts } from "../db/schema/contacts";
 import { coworkingContracts } from "../db/schema/coworking";
 import { entities } from "../db/schema/entities";
-import { gmailMessages, gmailTags, gmailThreadTags, gmailThreads } from "../db/schema/gmail";
+import { gmailMessages, gmailTags, gmailThreads, gmailThreadTags } from "../db/schema/gmail";
 import { invoices as invoicesTable } from "../db/schema/invoices";
 import { meetingParticipants } from "../db/schema/meeting-participants";
 import { meetingProposals, meetings } from "../db/schema/meetings";

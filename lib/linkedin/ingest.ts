@@ -1,5 +1,6 @@
 import "server-only";
 
+import { sql } from "drizzle-orm";
 import {
   linkedinConnections,
   linkedinConversations,
@@ -8,7 +9,6 @@ import {
 } from "@/db/schema/linkedin";
 import { db } from "@/lib/db/server";
 import type { IngestConnection, IngestConversation } from "@/lib/schemas/linkedin";
-import { sql } from "drizzle-orm";
 import { normalizeLinkedinIdentifier } from "./identity";
 import { matchPendingConnections } from "./match-connections";
 

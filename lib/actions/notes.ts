@@ -1,5 +1,7 @@
 "use server";
 
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { mentions } from "@/db/schema/mentions";
@@ -21,15 +23,13 @@ import {
 } from "@/lib/mentions";
 import { removeNoteAttachmentObjects } from "@/lib/notes/attachments-storage";
 import {
-  type NoteSubjectType,
   bulkDeleteNotesSchema,
   createNoteSchema,
   deleteNoteSchema,
   markAllMyMentionsReadSchema,
+  type NoteSubjectType,
   updateNoteSchema,
 } from "@/lib/schemas/notes";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
 async function fetchSubjectName(type: NoteSubjectType, id: string): Promise<string | null> {
   const conn = await db();

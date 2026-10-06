@@ -1,3 +1,4 @@
+import { describe, expect, it } from "vitest";
 import {
   augmentTaskPayload,
   findByName,
@@ -12,7 +13,6 @@ import {
 } from "@/components/proposals/helpers";
 import type { Proposal, ProposalKind, ProposalStatus } from "@/components/proposals/types";
 import { normalizeNameKey } from "@/lib/crm/name-key";
-import { describe, expect, it } from "vitest";
 
 function proposal(
   kind: ProposalKind,

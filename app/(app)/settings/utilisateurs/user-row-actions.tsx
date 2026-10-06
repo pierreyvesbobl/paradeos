@@ -1,5 +1,9 @@
 "use client";
 
+import { DotsThree, PencilSimple, Trash } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,10 +32,6 @@ import {
 } from "@/components/ui/select";
 import { deleteUser, updateUser } from "@/lib/actions/users";
 import { type UserRoleValue, userRoleEnum, userRoleLabels } from "@/lib/schemas/users";
-import { DotsThree, PencilSimple, Trash } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type UserRow = {
   id: string;

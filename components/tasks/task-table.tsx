@@ -1,5 +1,10 @@
 "use client";
 
+import { ArrowDown, ArrowsDownUp, ArrowUp, CaretDown, CaretRight } from "@phosphor-icons/react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { QuickAddTask } from "@/app/(app)/taches/quick-add-task";
 import type { SortState } from "@/components/table/sortable-header";
 import { FloatingActionBar } from "@/components/tasks/floating-action-bar";
@@ -12,11 +17,6 @@ import type {
 } from "@/components/tasks/task-types";
 import { bulkDeleteTasks, bulkPatchTasks } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils";
-import { ArrowDown, ArrowUp, ArrowsDownUp, CaretDown, CaretRight } from "@phosphor-icons/react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState, useTransition } from "react";
-import { toast } from "sonner";
 
 /**
  * Map champ → href de tri. Sérialisée côté serveur (les fonctions ne

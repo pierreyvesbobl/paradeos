@@ -1,5 +1,9 @@
 "use client";
 
+import { ArrowSquareOut, Check, Copy, Key, Lightning, Money, Trash } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
@@ -8,10 +12,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { connectDougsSession, disconnectDougsSession } from "@/lib/actions/dougs";
 import { createDougsSyncToken, revokeDougsSyncToken } from "@/lib/actions/dougs-sync-tokens";
 import { formatDate } from "@/lib/format";
-import { ArrowSquareOut, Check, Copy, Key, Lightning, Money, Trash } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type SyncToken = {
   id: string;

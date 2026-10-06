@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createOpenAI } from "@ai-sdk/openai";
+import { generateObject } from "ai";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
@@ -8,9 +10,7 @@ import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { LLM_BUDGET_MS, withLlmTimeout } from "@/lib/llm/timeout";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateObject } from "ai";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
 /**
  * Borne du transcript envoyé au LLM (~30k tokens). Un enregistrement de
@@ -19,11 +19,12 @@ import { generateObject } from "ai";
  * côté email.
  */
 const MAX_TRANSCRIPT_CHARS_FOR_LLM = 120_000;
-import { asc, desc, sql } from "drizzle-orm";
-import { eq } from "drizzle-orm";
+
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { formatPersonName } from "@/lib/format";
+
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 // Limite la taille du vocabulaire injecté pour ne pas exploser le prompt

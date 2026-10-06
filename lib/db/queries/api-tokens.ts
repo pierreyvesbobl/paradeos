@@ -1,9 +1,9 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { userApiTokens } from "@/db/schema/user-api-tokens";
 import { db } from "@/lib/db/server";
-import { and, desc, eq, isNull } from "drizzle-orm";
 
 /** Hash SHA-256 hex pour comparer un token brut à ce qu'on a en base. */
 export function hashToken(token: string): string {

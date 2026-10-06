@@ -1,4 +1,4 @@
-import { GENERIC_EMAIL_DOMAINS, domainFromEmail, extractDomain } from "./domain";
+import { domainFromEmail, extractDomain, GENERIC_EMAIL_DOMAINS } from "./domain";
 
 /**
  * Règles pures des liaisons emails : nommage des labels Gmail et

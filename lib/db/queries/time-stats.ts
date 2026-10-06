@@ -1,9 +1,9 @@
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { timeEntries } from "@/db/schema/time-entries";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 const durationMin = sql<number>`(extract(epoch from (${timeEntries.endAt} - ${timeEntries.startAt})) / 60)::int`;
 const sumActualMin = sql<number>`coalesce(sum((extract(epoch from (${timeEntries.endAt} - ${timeEntries.startAt})) / 60))

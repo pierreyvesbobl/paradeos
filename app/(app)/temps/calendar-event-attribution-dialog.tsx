@@ -1,5 +1,9 @@
 "use client";
 
+import { ArrowSquareOut, MagnifyingGlass } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,10 +14,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { attributeCalendarEvent } from "@/lib/actions/calendar";
-import { ArrowSquareOut, MagnifyingGlass } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type Project = { id: string; name: string };
 
@@ -75,13 +75,12 @@ export function CalendarEventAttributionDialog({
         <div className="space-y-3">
           <p className="font-medium text-foreground text-sm">Attribuer à un projet</p>
           <div className="relative">
-            <MagnifyingGlass className="-translate-y-1/2 absolute top-1/2 left-2 size-3.5 text-muted-foreground" />
+            <MagnifyingGlass className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Rechercher un projet…"
-              // biome-ignore lint/a11y/noAutofocus: focus voulu à l'ouverture du dialog
               autoFocus
               disabled={pending}
               className="w-full rounded-md border bg-background py-1.5 pr-2 pl-7 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"

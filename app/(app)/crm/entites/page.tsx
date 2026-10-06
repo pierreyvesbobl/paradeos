@@ -1,8 +1,11 @@
+import { ArrowRight, Buildings, Globe, Plus } from "@phosphor-icons/react/dist/ssr";
+import { and, asc, desc, ilike, or, type SQL } from "drizzle-orm";
+import Link from "next/link";
 import { EntKind, EntName, EntWebsite } from "@/app/(app)/entites/[id]/inline-fields";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { NotionFilters } from "@/components/table/notion-filters";
-import { type SortState, SortableHeader, parseSort } from "@/components/table/sortable-header";
+import { parseSort, SortableHeader, type SortState } from "@/components/table/sortable-header";
 import { Button } from "@/components/ui/button";
 import { SearchInputWithClear } from "@/components/ui/search-input";
 import {
@@ -21,9 +24,6 @@ import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply"
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
 import { entityKindEnum, entityKindLabels } from "@/lib/schemas/entities";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
-import { ArrowRight, Buildings, Globe, Plus } from "@phosphor-icons/react/dist/ssr";
-import { type SQL, and, asc, desc, ilike, or } from "drizzle-orm";
-import Link from "next/link";
 import { CrmTabs } from "../crm-tabs";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;

@@ -1,5 +1,8 @@
 "use server";
 
+import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { z } from "zod";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { type InvoiceBrand, invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
@@ -16,9 +19,9 @@ import {
   toNumeric,
 } from "@/lib/billing/invoice-lifecycle";
 import {
-  DEFAULT_ACOMPTE_PERCENT,
   coworkingInvoiceAmountHt,
   coworkingPeriodFromDate,
+  DEFAULT_ACOMPTE_PERCENT,
   milestoneFromDetectedPercent,
   splitMilestoneAmounts,
 } from "@/lib/billing/milestones-math";
@@ -36,9 +39,6 @@ import {
   pickDougsVat,
 } from "@/lib/dougs/client";
 import { monthsBetween } from "@/lib/schemas/coworking";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
-import { revalidatePath, revalidateTag } from "next/cache";
-import { z } from "zod";
 
 /** Récupère l'owner du projet pour préremplir `assigned_to`. Null si pas
  *  de projet ou owner non défini. */

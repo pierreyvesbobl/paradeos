@@ -8,6 +8,6 @@
  * (en dehors du tsconfig path alias `@/`).
  */
 
+export { getPromptMessages, PROMPTS } from "../../../mcp-server/prompts";
+export { RESOURCE_TEMPLATES, readResource } from "../../../mcp-server/resources";
 export * from "../../../mcp-server/tools";
-export { readResource, RESOURCE_TEMPLATES } from "../../../mcp-server/resources";
-export { PROMPTS, getPromptMessages } from "../../../mcp-server/prompts";

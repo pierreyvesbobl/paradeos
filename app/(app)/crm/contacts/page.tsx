@@ -1,4 +1,14 @@
 import {
+  ArrowRight,
+  Buildings,
+  EnvelopeSimple,
+  Phone,
+  Plus,
+  Users,
+} from "@phosphor-icons/react/dist/ssr";
+import { and, asc, desc, or, type SQL, sql } from "drizzle-orm";
+import Link from "next/link";
+import {
   ContEmail,
   ContEntity,
   ContFirstName,
@@ -9,7 +19,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { NotionFilters } from "@/components/table/notion-filters";
-import { type SortState, SortableHeader, parseSort } from "@/components/table/sortable-header";
+import { parseSort, SortableHeader, type SortState } from "@/components/table/sortable-header";
 import { Button } from "@/components/ui/button";
 import { SearchInputWithClear } from "@/components/ui/search-input";
 import {
@@ -27,21 +37,11 @@ import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
+import { formatPersonName } from "@/lib/format";
 import { contactQualificationEnum, contactQualificationLabels } from "@/lib/schemas/coworking";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
-import {
-  ArrowRight,
-  Buildings,
-  EnvelopeSimple,
-  Phone,
-  Plus,
-  Users,
-} from "@phosphor-icons/react/dist/ssr";
-import { type SQL, and, asc, desc, or, sql } from "drizzle-orm";
-import Link from "next/link";
 import { CrmTabs } from "../crm-tabs";
 
-import { formatPersonName } from "@/lib/format";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const SORT_FIELDS = ["lastName", "firstName", "jobTitle", "entity", "email"] as const;

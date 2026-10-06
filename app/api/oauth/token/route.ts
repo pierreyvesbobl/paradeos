@@ -5,6 +5,8 @@
  * Le corps est en `application/x-www-form-urlencoded`, conformément à
  * la spec — pas de JSON ici, plusieurs clients MCP n'envoient que ça.
  */
+
+import type { NextRequest } from "next/server";
 import { getAppUrl } from "@/lib/app-url";
 import { isAcceptableResource } from "@/lib/oauth/config";
 import { corsPreflight, jsonWithCors, oauthError } from "@/lib/oauth/http";
@@ -17,7 +19,6 @@ import {
   issueTokens,
   rotateRefreshToken,
 } from "@/lib/oauth/store";
-import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

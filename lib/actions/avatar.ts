@@ -1,11 +1,11 @@
 "use server";
 
-import { users } from "@/db/schema/users";
-import { requireUser } from "@/lib/auth/server";
-import { db } from "@/lib/db/server";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { users } from "@/db/schema/users";
+import { requireUser } from "@/lib/auth/server";
+import { db } from "@/lib/db/server";
 
 const BUCKET = "avatars";
 const MAX_BYTES = 5 * 1024 * 1024;

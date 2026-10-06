@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  MATCH_THRESHOLD,
   isGenericProjectName,
+  MATCH_THRESHOLD,
   pickBestContact,
   pickBestMatch,
   pickBestProject,

@@ -1,3 +1,6 @@
+import { Plus, Sparkle } from "@phosphor-icons/react/dist/ssr";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import Link from "next/link";
 import { PipelineBoard, type PipelineItem } from "@/app/(app)/projets/pipeline/pipeline-board";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -8,9 +11,6 @@ import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { COMMERCIAL_STATUSES } from "@/lib/schemas/projects";
-import { Plus, Sparkle } from "@phosphor-icons/react/dist/ssr";
-import { and, asc, eq, inArray } from "drizzle-orm";
-import Link from "next/link";
 import { CrmTabs } from "../crm-tabs";
 
 export default async function CrmPipelinePage() {

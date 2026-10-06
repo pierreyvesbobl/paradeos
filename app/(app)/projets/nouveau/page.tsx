@@ -1,3 +1,4 @@
+import { asc } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
@@ -5,7 +6,6 @@ import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
 import type { ProjectKind, ProjectStatus } from "@/lib/schemas/projects";
-import { asc } from "drizzle-orm";
 import { ProjectForm } from "../project-form";
 
 type SearchParams = Promise<{

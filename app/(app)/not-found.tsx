@@ -1,7 +1,7 @@
-import { EmptyState } from "@/components/empty-state";
-import { Button } from "@/components/ui/button";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 
 /**
  * Page 404 de la zone authentifiée. Déclenchée par `notFound()` dans les

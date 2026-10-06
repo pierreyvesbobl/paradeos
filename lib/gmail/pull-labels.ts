@@ -1,10 +1,10 @@
 import "server-only";
 
-import { gmailTags, gmailThreadTags, gmailThreads } from "@/db/schema/gmail";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { gmailTags, gmailThreads, gmailThreadTags } from "@/db/schema/gmail";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import { getThread, listThreadsByLabel } from "@/lib/google/gmail-api";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { SKIP_LABELS, upsertThreadAndMessage } from "./sync";
 
 /**

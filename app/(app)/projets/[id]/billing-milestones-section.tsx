@@ -1,18 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import type { Invoice } from "@/db/schema/invoices";
-import {
-  deleteInvoice,
-  linkInvoiceToDougs,
-  refreshInvoiceDougs,
-  seedProjectMilestones,
-  setInvoiceStatus,
-  upsertInvoice,
-} from "@/lib/actions/invoices";
 import {
   ArrowSquareOut,
   ArrowsClockwise,
@@ -26,6 +13,19 @@ import {
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import type { Invoice } from "@/db/schema/invoices";
+import {
+  deleteInvoice,
+  linkInvoiceToDougs,
+  refreshInvoiceDougs,
+  seedProjectMilestones,
+  setInvoiceStatus,
+  upsertInvoice,
+} from "@/lib/actions/invoices";
 
 type MilestoneType = "acompte" | "intermediaire" | "solde";
 type UiStatus = "todo" | "invoiced" | "paid";

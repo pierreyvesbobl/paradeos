@@ -1,10 +1,10 @@
 "use client";
 
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Receipt, Users } from "@phosphor-icons/react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const TABS = [
   { value: "invoices", label: "Factures", icon: Receipt },

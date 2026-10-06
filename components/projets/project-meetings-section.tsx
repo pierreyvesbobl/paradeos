@@ -1,8 +1,8 @@
+import { ArrowSquareOut, FileText } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { getMeetingsForProject } from "@/lib/db/queries/meetings";
 import { formatDate } from "@/lib/format";
-import { ArrowSquareOut, FileText } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 
 const STATUS_LABEL: Record<string, string> = {
   ingested: "Importé",

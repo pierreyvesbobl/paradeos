@@ -1,6 +1,6 @@
+import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth/server";
 import { getValidAccessToken } from "@/lib/google/account";
-import { NextResponse } from "next/server";
 
 /**
  * Renvoie un access_token Google valide pour le user courant. Utilisé

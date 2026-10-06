@@ -8,14 +8,15 @@
  * via le bouton "Sync now" pour drainer plus vite (cf.
  * `lib/actions/gmail.ts:triggerGmailSync`).
  */
+
+import { eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { users } from "@/db/schema/users";
 import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { db } from "@/lib/db/server";
 import { syncIncremental } from "@/lib/gmail/sync";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
-import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";

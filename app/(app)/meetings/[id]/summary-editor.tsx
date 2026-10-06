@@ -1,11 +1,11 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { updateMeetingSummary } from "@/lib/actions/meetings";
-import { useDemoMode } from "@/lib/demo/context";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { updateMeetingSummary } from "@/lib/actions/meetings";
+import { useDemoMode } from "@/lib/demo/context";
 
 export function SummaryEditor({
   meetingId,

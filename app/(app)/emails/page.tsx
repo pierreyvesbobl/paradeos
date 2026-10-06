@@ -1,3 +1,5 @@
+import { EnvelopeOpen } from "@phosphor-icons/react/dist/ssr";
+import { Suspense } from "react";
 import { type Bucket, EmailsListPane, type InvoiceDir } from "@/components/emails/emails-list-pane";
 import { EmailThreadDetail } from "@/components/emails/thread-detail";
 import { ThreadDetailSkeleton } from "@/components/emails/thread-detail-skeleton";
@@ -9,8 +11,6 @@ import {
   getProjectsForThreads,
   listThreads,
 } from "@/lib/gmail/queries";
-import { EnvelopeOpen } from "@phosphor-icons/react/dist/ssr";
-import { Suspense } from "react";
 
 // Split-view : la liste et le détail changent à chaque paramètre — pas de
 // cache statique. `bucket` et `thread` viennent des searchParams.

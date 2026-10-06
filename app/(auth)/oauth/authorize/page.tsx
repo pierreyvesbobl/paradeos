@@ -1,7 +1,7 @@
 import { getAppUrl } from "@/lib/app-url";
 import { requireUser } from "@/lib/auth/server";
 import { parseAuthorizeParams } from "@/lib/oauth/authorize-params";
-import { SCOPE_LABELS, type Scope, isAcceptableResource } from "@/lib/oauth/config";
+import { isAcceptableResource, SCOPE_LABELS, type Scope } from "@/lib/oauth/config";
 import { getClient } from "@/lib/oauth/store";
 import { ConsentForm } from "./consent-form";
 

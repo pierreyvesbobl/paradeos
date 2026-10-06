@@ -1,10 +1,10 @@
 "use client";
 
+import { CalendarBlank, CaretLeft, CaretRight, X } from "@phosphor-icons/react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CalendarBlank, CaretLeft, CaretRight, X } from "@phosphor-icons/react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 // Formatters Intl FR (cohérent avec lib/format.ts).
 const FMT_MONTH_YEAR = new Intl.DateTimeFormat("fr-FR", {

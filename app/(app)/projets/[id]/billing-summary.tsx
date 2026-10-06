@@ -1,4 +1,3 @@
-import type { Invoice } from "@/db/schema/invoices";
 import {
   ArrowSquareOut,
   CheckCircle,
@@ -7,6 +6,7 @@ import {
   Wallet,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import type { Invoice } from "@/db/schema/invoices";
 
 type Props = {
   /** Montant projet saisi à la main (valueAmount ou budgetAmount). */

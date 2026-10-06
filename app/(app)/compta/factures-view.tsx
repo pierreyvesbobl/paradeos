@@ -1,3 +1,6 @@
+import { ArrowSquareOut, FileText } from "@phosphor-icons/react/dist/ssr";
+import { desc, eq } from "drizzle-orm";
+import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { FilingActions } from "@/components/factures/filing-actions";
 import { Badge } from "@/components/ui/badge";
@@ -7,9 +10,6 @@ import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
 import { DemoBlur } from "@/lib/demo/components";
 import { formatDate } from "@/lib/format";
-import { ArrowSquareOut, FileText } from "@phosphor-icons/react/dist/ssr";
-import { desc, eq } from "drizzle-orm";
-import Link from "next/link";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "En attente",

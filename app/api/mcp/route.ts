@@ -13,6 +13,9 @@
  * publie un `WWW-Authenticate` pointant vers les métadonnées, ce qui
  * permet à un client de se connecter en ne connaissant que l'URL.
  */
+
+import { type NextRequest, NextResponse } from "next/server";
+import { type ZodTypeAny, z } from "zod";
 import { getAppUrl } from "@/lib/app-url";
 import { getUserRole } from "@/lib/auth/admin";
 import { toMcpInputSchema } from "@/lib/mcp/json-schema";
@@ -24,8 +27,6 @@ import {
   resolveMcpAuth,
   wwwAuthenticate,
 } from "@/lib/oauth/resource-server";
-import { type NextRequest, NextResponse } from "next/server";
-import { type ZodTypeAny, z } from "zod";
 
 import {
   pushCoworkingInvoiceMcp,
@@ -38,8 +39,6 @@ import {
   sendDocumentMcpSchema,
 } from "./_dougs-handlers";
 import {
-  PROMPTS,
-  RESOURCE_TEMPLATES,
   addNote,
   addNoteSchema,
   completeTask,
@@ -80,6 +79,8 @@ import {
   listTasksSchema,
   logTime,
   logTimeSchema,
+  PROMPTS,
+  RESOURCE_TEMPLATES,
   readResource,
   searchAll,
   searchAllSchema,

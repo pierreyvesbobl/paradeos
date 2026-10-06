@@ -1,7 +1,7 @@
 "use client";
 
-import { SelectionBar, SelectionBarButton } from "@/components/ui/selection-bar";
 import { CalendarBlank, CheckCircle, Trash, UserPlus } from "@phosphor-icons/react";
+import { SelectionBar, SelectionBarButton } from "@/components/ui/selection-bar";
 
 type Props = {
   count: number;

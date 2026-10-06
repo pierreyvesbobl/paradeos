@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -7,14 +7,15 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "ignore": [
-      ".next",
-      "node_modules",
-      "dist",
-      "db/migrations",
-      "supabase/migrations",
-      "types/database.ts",
-      "docs/design/**"
+    "includes": [
+      "**",
+      "!**/.next",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/db/migrations",
+      "!**/supabase/migrations",
+      "!**/types/database.ts",
+      "!**/docs/design"
     ]
   },
   "formatter": {
@@ -24,16 +25,26 @@
     "lineWidth": 100,
     "lineEnding": "lf"
   },
-  "organizeImports": {
-    "enabled": true
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "suspicious": {
         "noExplicitAny": "error",
-        "noConsole": { "level": "warn", "options": { "allow": ["error", "warn", "info"] } }
+        "noConsole": {
+          "level": "warn",
+          "options": {
+            "allow": ["error", "warn", "info"]
+          }
+        },
+        "noArrayIndexKey": "warn"
       },
       "style": {
         "noNonNullAssertion": "error",
@@ -64,5 +75,22 @@
       "semicolons": "always",
       "arrowParentheses": "always"
     }
-  }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.css"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noUnknownAtRules": "off"
+          }
+        }
+      }
+    }
+  ]
 }

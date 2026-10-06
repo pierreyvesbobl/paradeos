@@ -11,7 +11,7 @@ import "server-only";
  */
 
 import type { InvoiceBrand } from "@/db/schema/invoices";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { type ResolvedBillingTerms, resolveBillingTerms } from "./billing-terms";
 
 const LOGO_KEYS: Record<InvoiceBrand, (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS]> = {

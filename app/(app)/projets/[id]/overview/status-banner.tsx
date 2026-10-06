@@ -1,8 +1,8 @@
+import { FlowArrow, PlayCircle } from "@phosphor-icons/react/dist/ssr";
 import { statusTone } from "@/app/(app)/projets/[id]/overview/status-pill";
 import { ProjectStatusSelect } from "@/app/(app)/projets/[id]/overview/status-select";
 import { ProjectTransitionButtons } from "@/app/(app)/projets/[id]/transition-button";
 import type { ProjectStatus } from "@/lib/schemas/projects";
-import { FlowArrow, PlayCircle } from "@phosphor-icons/react/dist/ssr";
 
 const DESCRIPTION: Partial<Record<ProjectStatus, string>> = {
   planning: "— cadrage en cours, pas encore lancé.",
@@ -23,13 +23,7 @@ const DESCRIPTION: Partial<Record<ProjectStatus, string>> = {
  * discrète et raccourcis de transition (Repasser au pipeline, Démarrer la
  * delivery, etc.) alignés à droite.
  */
-export function StatusBanner({
-  projectId,
-  status,
-}: {
-  projectId: string;
-  status: ProjectStatus;
-}) {
+export function StatusBanner({ projectId, status }: { projectId: string; status: ProjectStatus }) {
   const tone = statusTone(status);
   const description = DESCRIPTION[status] ?? "";
 

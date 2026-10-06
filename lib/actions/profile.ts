@@ -1,11 +1,11 @@
 "use server";
 
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { users } from "@/db/schema/users";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
 import { updateProfileSchema } from "@/lib/schemas/profile";
-import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
 export const updateProfile = action(
   updateProfileSchema,

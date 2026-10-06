@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { and, eq, ne } from "drizzle-orm";
 import { gmailMessages } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { db } from "@/lib/db/server";
@@ -8,14 +9,13 @@ import { getValidAccessToken } from "@/lib/google/account";
 import { findOrCreateFolder, findOrCreateSupplierFolder, uploadFile } from "@/lib/google/drive-api";
 import { type GmailAttachmentRef, getAttachment } from "@/lib/google/gmail-api";
 import { normalizeCurrency, normalizeInvoiceNumber, toAmountColumn } from "@/lib/purchase/amounts";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { and, eq, ne } from "drizzle-orm";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { pickInvoicePdfs } from "./invoice-detect";
 import {
-  type InvoiceDirection,
   buildInvoiceFilename,
   directionFromDocumentKind,
   extractInvoiceMetadata,
+  type InvoiceDirection,
   sanitizeForFilename,
 } from "./invoice-extract";
 import { markThreadInvoiceDirection } from "./links";

@@ -1,13 +1,13 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setPassword } from "@/lib/actions/auth";
 import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 export function PasswordForm() {
   const [password, setPasswordValue] = useState("");

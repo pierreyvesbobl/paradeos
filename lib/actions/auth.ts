@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { action } from "@/lib/actions/action";
 import { getAppUrl } from "@/lib/app-url";
 import {
@@ -8,7 +9,6 @@ import {
   signInPasswordSchema,
 } from "@/lib/schemas/auth";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 
 export const signInWithPassword = action(
   signInPasswordSchema,

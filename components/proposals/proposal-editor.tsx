@@ -5,7 +5,7 @@ import { type AssigneeRef, AssigneesPicker } from "@/components/tasks/assignees-
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { quickCreateEntity } from "@/lib/actions/entities";
-import { type EditableKind, type StoredAssignee, readAssignees } from "./helpers";
+import { type EditableKind, readAssignees, type StoredAssignee } from "./helpers";
 import type { LinkOptions, ProposalSourceAdapter } from "./types";
 import { Field } from "./ui";
 

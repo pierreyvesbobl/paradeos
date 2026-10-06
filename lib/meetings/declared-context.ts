@@ -1,10 +1,10 @@
 import "server-only";
 
+import { sql } from "drizzle-orm";
 import { projects } from "@/db/schema/projects";
 import { fuzzyMatchProject } from "@/lib/crm/match";
 import { db } from "@/lib/db/server";
 import { syncParticipantsFromAttendees } from "@/lib/meetings/participants";
-import { sql } from "drizzle-orm";
 
 /**
  * Ce qu'une source d'ingestion déclare *avant* toute extraction : le

@@ -1,7 +1,6 @@
 import type { InvoiceBrand } from "@/db/schema/invoices";
 import { getBrandLogoUuid } from "@/lib/billing/brand-documents";
-import { INVOICE_BRAND_LABELS } from "@/lib/billing/brand-templates";
-import { brandTemplateFor } from "@/lib/billing/brand-templates";
+import { brandTemplateFor, INVOICE_BRAND_LABELS } from "@/lib/billing/brand-templates";
 import { BrandLogosSettings } from "./brand-logos-settings";
 
 const BRANDS: InvoiceBrand[] = ["coworking", "automato", "parade"];

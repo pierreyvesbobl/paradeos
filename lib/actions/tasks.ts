@@ -1,5 +1,8 @@
 "use server";
 
+import { eq, inArray, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { tasks } from "@/db/schema/tasks";
 import { action } from "@/lib/actions/action";
 import { type AssigneeRef, setTaskAssignees } from "@/lib/db/queries/task-assignees";
@@ -14,9 +17,6 @@ import {
   toggleTaskSchema,
   updateTaskSchema,
 } from "@/lib/schemas/tasks";
-import { eq, inArray, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 function revalidateTaskPaths(projectId: string | null | undefined) {
   revalidatePath("/"); // le dashboard liste mes tâches ouvertes

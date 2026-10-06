@@ -1,8 +1,8 @@
 import "server-only";
 
+import { eq } from "drizzle-orm";
 import { appSettings } from "@/db/schema/app-settings";
 import { db } from "@/lib/db/server";
-import { eq } from "drizzle-orm";
 
 export const SETTING_KEYS = {
   /**

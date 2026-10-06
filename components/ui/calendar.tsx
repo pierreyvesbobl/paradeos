@@ -1,9 +1,9 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { DayPicker, type DayPickerProps } from "react-day-picker";
 import { fr } from "react-day-picker/locale";
+import { cn } from "@/lib/utils";
 import "react-day-picker/style.css";
 
 export function Calendar({ className, classNames, ...props }: DayPickerProps) {

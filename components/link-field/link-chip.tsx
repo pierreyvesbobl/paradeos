@@ -1,6 +1,5 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import {
   Briefcase,
   Buildings,
@@ -10,8 +9,9 @@ import {
   Receipt,
   X,
 } from "@phosphor-icons/react";
-import { type ReactNode, forwardRef } from "react";
-import { TINT_CLASSES, initialsFrom, tintFor } from "./tint";
+import { forwardRef, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import { initialsFrom, TINT_CLASSES, tintFor } from "./tint";
 
 export type LinkKind = "person" | "entity" | "projet" | "facture" | "echeance" | "tag";
 

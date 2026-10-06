@@ -1,5 +1,8 @@
 "use client";
 
+import { Check, Copy } from "@phosphor-icons/react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,9 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Check, Copy } from "@phosphor-icons/react";
-import { useState } from "react";
-import { toast } from "sonner";
 
 const SHELL_SCRIPT = 'open "${1/#~/$HOME}"';
 

@@ -1,3 +1,6 @@
+import { FileText } from "@phosphor-icons/react/dist/ssr";
+import { and, asc, eq, sql } from "drizzle-orm";
+import { notFound } from "next/navigation";
 import { DeleteButton } from "@/components/delete-button";
 import { MeetingParticipantsField } from "@/components/meetings/meeting-participants-field";
 import { PageHeader } from "@/components/page-header";
@@ -12,16 +15,12 @@ import { deleteMeetingAndRedirect } from "@/lib/actions/meetings";
 import { getMeetingParticipants } from "@/lib/db/queries/meeting-participants";
 import { db } from "@/lib/db/server";
 import { DemoBlur } from "@/lib/demo/components";
-import { FileText } from "@phosphor-icons/react/dist/ssr";
-import { and, asc, eq, sql } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { formatPersonName } from "@/lib/format";
 import { AudioSection } from "./audio-section";
 import { CopyTranscriptButton } from "./copy-transcript-button";
 import { MeetingSubjectEditor } from "./meeting-subject-editor";
 import { ReExtractButton } from "./re-extract-button";
 import { SummaryEditor } from "./summary-editor";
-
-import { formatPersonName } from "@/lib/format";
 // Pas de cache statique sur cette page : les propositions et le résumé
 // changent en continu à chaque action humaine, on veut toujours la
 // donnée fraîche.

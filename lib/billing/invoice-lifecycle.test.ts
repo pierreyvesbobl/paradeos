@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_DUE_DAYS,
   addDaysISO,
+  DEFAULT_DUE_DAYS,
   extractDougsUuid,
   isDougsInvoicePaid,
   mapDougsQuoteStatus,

@@ -1,11 +1,11 @@
 "use client";
 
+import { MapPin } from "@phosphor-icons/react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { lookupAddresses } from "@/lib/actions/gouv";
 import type { AddressSuggestion } from "@/lib/gouv/adresse";
 import { cn } from "@/lib/utils";
-import { MapPin } from "@phosphor-icons/react";
-import { useEffect, useId, useRef, useState } from "react";
 
 type Props = {
   id?: string;
@@ -181,9 +181,6 @@ export function AddressAutocomplete({
       {open && suggestions.length > 0 ? (
         <div
           id={listId}
-          // biome-ignore lint/a11y/useSemanticElements: un <select> ne peut pas
-          // afficher deux lignes par option, et le motif combobox ARIA impose
-          // une listbox distincte du champ de saisie.
           role="listbox"
           tabIndex={-1}
           className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md"
@@ -192,9 +189,6 @@ export function AddressAutocomplete({
             <div
               key={suggestion.id}
               id={`${listId}-${index}`}
-              // biome-ignore lint/a11y/useSemanticElements: idem — <option> ne
-              // rend pas de contenu riche. Le focus ne quitte jamais l'input,
-              // d'où le tabIndex négatif et la sélection à la souris/clavier.
               role="option"
               tabIndex={-1}
               aria-selected={index === active}

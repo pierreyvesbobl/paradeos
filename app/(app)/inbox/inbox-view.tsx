@@ -1,16 +1,5 @@
 "use client";
 
-import { FkCombobox } from "@/components/inline/fk-combobox";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { decideInboxItem, loadInboxPreview } from "@/lib/actions/inbox";
-import type {
-  InboxExtractionKind,
-  InboxItem,
-  InboxReconciliation,
-  InboxSource,
-} from "@/lib/db/queries/inbox";
-import type { InboxPreview } from "@/lib/db/queries/inbox-preview";
-import { cn } from "@/lib/utils";
 import {
   ArrowSquareOut,
   Buildings,
@@ -29,16 +18,27 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { FkCombobox } from "@/components/inline/fk-combobox";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { decideInboxItem, loadInboxPreview } from "@/lib/actions/inbox";
+import type {
+  InboxExtractionKind,
+  InboxItem,
+  InboxReconciliation,
+  InboxSource,
+} from "@/lib/db/queries/inbox";
+import type { InboxPreview } from "@/lib/db/queries/inbox-preview";
+import { cn } from "@/lib/utils";
 import type { CoworkingInvoiceOption } from "../compta/reconciliation-actions";
 import {
-  KINDS,
+  formatDueDate,
   KIND_BY_KEY,
+  KINDS,
   MetaChip,
   PRIORITY_STYLE,
+  projectTint,
   SOURCE_ICON,
   SOURCE_LABEL,
-  formatDueDate,
-  projectTint,
 } from "./kind-styles";
 
 type FilterKey = "all" | InboxExtractionKind;

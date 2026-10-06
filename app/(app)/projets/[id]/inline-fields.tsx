@@ -1,5 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { InlineDate } from "@/components/inline/inline-date";
 import { InlineDateRange } from "@/components/inline/inline-date-range";
 import { InlineFk } from "@/components/inline/inline-fk";
@@ -25,9 +28,6 @@ import {
   projectKindLabels,
   projectStatusLabels,
 } from "@/lib/schemas/projects";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type FieldId =
   | "name"

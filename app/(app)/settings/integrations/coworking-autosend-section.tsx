@@ -1,8 +1,8 @@
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { invoices } from "@/db/schema/invoices";
 import { db } from "@/lib/db/server";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { CoworkingAutoSendSettings } from "./coworking-autosend-settings";
 
 /**

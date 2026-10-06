@@ -1,5 +1,8 @@
 "use server";
 
+import { eq } from "drizzle-orm";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { z } from "zod";
 import { contacts as contactsTable } from "@/db/schema/contacts";
 import { entities as entitiesTable } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
@@ -11,9 +14,6 @@ import { brandTemplateFor } from "@/lib/billing/brand-templates";
 import { pushDougsSalesInvoiceDraft, resolveDougsClientData } from "@/lib/billing/dougs-push";
 import { db } from "@/lib/db/server";
 import { getDougsDraftUrl } from "@/lib/dougs/client";
-import { eq } from "drizzle-orm";
-import { revalidatePath, revalidateTag } from "next/cache";
-import { z } from "zod";
 
 /**
  * Pousse un jalon projet vers Dougs en tant que brouillon facture.
@@ -47,7 +47,7 @@ export const pushProjectMilestoneToDougs = action(
       .where(eq(invoices.id, input.invoiceId))
       .limit(1);
 
-    if (!row || !row.project) throw new Error("Jalon introuvable.");
+    if (!row?.project) throw new Error("Jalon introuvable.");
     const { invoice, project } = row;
     if (invoice.kind !== "milestone") {
       throw new Error("Cette facture n'est pas un jalon projet.");

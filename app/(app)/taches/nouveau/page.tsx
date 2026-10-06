@@ -1,14 +1,14 @@
+import { asc, eq } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
 import { contacts as contactsTable } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
+import { formatPersonName } from "@/lib/format";
 import type { TaskPriority, TaskStatus } from "@/lib/schemas/tasks";
-import { asc, eq } from "drizzle-orm";
 import { TaskForm } from "../task-form";
 
-import { formatPersonName } from "@/lib/format";
 type SearchParams = Promise<{ projectId?: string; assigneeId?: string }>;
 
 export default async function NewTaskPage({ searchParams }: { searchParams: SearchParams }) {

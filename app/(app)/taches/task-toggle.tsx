@@ -1,9 +1,9 @@
 "use client";
 
-import { Checkbox } from "@/components/ui/checkbox";
-import { toggleTask } from "@/lib/actions/tasks";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toggleTask } from "@/lib/actions/tasks";
 
 export function TaskToggle({
   id,

@@ -1,10 +1,10 @@
 "use client";
 
-import { EmptyState } from "@/components/empty-state";
-import { Button } from "@/components/ui/button";
 import { WarningCircle } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useEffect } from "react";
+import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 
 /**
  * Error boundary de la zone authentifiée. Capture les exceptions levées

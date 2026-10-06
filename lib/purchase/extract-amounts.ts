@@ -1,5 +1,6 @@
 import "server-only";
 
+import { asc, eq, sql } from "drizzle-orm";
 import { purchaseDocuments } from "@/db/schema/purchase-matching";
 import { pMap } from "@/lib/async/p-map";
 import { db } from "@/lib/db/server";
@@ -8,7 +9,6 @@ import { extractPdfText } from "@/lib/gmail/pdf";
 import { normalizeSupplierKey } from "@/lib/gmail/supplier-key";
 import { getValidAccessToken } from "@/lib/google/account";
 import { downloadDriveFile } from "@/lib/google/drive-api";
-import { asc, eq, sql } from "drizzle-orm";
 import { normalizeCurrency, normalizeInvoiceNumber, toAmountColumn } from "./amounts";
 import { condenseInvoiceText, isPermanentExtractionFailure } from "./pdf-triage";
 

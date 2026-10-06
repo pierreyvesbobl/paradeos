@@ -1,5 +1,9 @@
 "use client";
 
+import { DotsThree, Trash } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,10 +20,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { deleteTask } from "@/lib/actions/tasks";
-import { DotsThree, Trash } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 export function TaskRowActions({ id, title }: { id: string; title: string }) {
   const router = useRouter();

@@ -1,3 +1,5 @@
+import type { NextRequest } from "next/server";
+import { z } from "zod";
 import { DEFAULT_SCOPE, normalizeScope } from "@/lib/oauth/config";
 import { corsPreflight, jsonWithCors, oauthError } from "@/lib/oauth/http";
 /**
@@ -11,8 +13,6 @@ import { corsPreflight, jsonWithCors, oauthError } from "@/lib/oauth/http";
  * surtout à éviter le remplissage de table et les redirections ouvertes.
  */
 import { recentClientRegistrations, registerClient } from "@/lib/oauth/store";
-import type { NextRequest } from "next/server";
-import { z } from "zod";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

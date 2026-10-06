@@ -1,10 +1,10 @@
+import { asc } from "drizzle-orm";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ContractForm } from "@/components/coworking/contract-form";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { db } from "@/lib/db/server";
-import { asc } from "drizzle-orm";
 
 import { formatPersonName } from "@/lib/format";
 export default async function NewContractPage() {

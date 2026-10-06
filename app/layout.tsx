@@ -1,6 +1,6 @@
-import { Toaster } from "@/components/ui/sonner";
 import type { Metadata } from "next";
 import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const sans = Hanken_Grotesk({

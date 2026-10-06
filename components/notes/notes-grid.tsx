@@ -1,5 +1,9 @@
 "use client";
 
+import { Trash } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { NoteCard } from "@/components/notes/note-card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -8,10 +12,6 @@ import { bulkDeleteNotes } from "@/lib/actions/notes";
 import type { AttachmentRow } from "@/lib/db/queries/notes";
 import type { NoteKind, NoteSubjectType } from "@/lib/schemas/notes";
 import { cn } from "@/lib/utils";
-import { Trash } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState, useTransition } from "react";
-import { toast } from "sonner";
 
 export type NotesGridItem = {
   note: {
@@ -127,7 +127,7 @@ export function NotesGrid({ items, columns = 3 }: Props) {
               {item.canDelete ? (
                 <span
                   className={cn(
-                    "-left-2 -top-2 absolute z-10 rounded-[5px] border bg-background p-0.5 shadow-sm transition-opacity",
+                    "absolute -top-2 -left-2 z-10 rounded-[5px] border bg-background p-0.5 shadow-sm transition-opacity",
                     isSelected || hasSelection
                       ? "opacity-100"
                       : "opacity-0 focus-within:opacity-100 group-hover/note:opacity-100",

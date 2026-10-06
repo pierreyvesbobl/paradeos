@@ -1,5 +1,9 @@
 "use client";
 
+import { ArrowCounterClockwise, FloppyDisk } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,10 +21,6 @@ import {
   type DueDateOption,
   type ResolvedBillingTerms,
 } from "@/lib/billing/billing-terms";
-import { ArrowCounterClockwise, FloppyDisk } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 /** Valeur de `Select` représentant « garder le défaut de la marque ». */
 const INHERIT = "__inherit__";

@@ -15,6 +15,9 @@
  *
  * Règle non négociable de l'étape 4 : on attache, on ne valide jamais.
  */
+
+import { eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { users } from "@/db/schema/users";
 import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
@@ -25,9 +28,7 @@ import { reconcilePurchaseInvoices } from "@/lib/dougs/vendor-reconcile";
 import { hasRequiredDriveScopes } from "@/lib/google/oauth";
 import { backfillPurchaseAmounts } from "@/lib/purchase/extract-amounts";
 import { pickInventoryOwner, syncPurchaseInventory } from "@/lib/purchase/inventory";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
 /** Documents passés au LLM par run. Borne le coût autant que la durée. */
 const BACKFILL_BATCH = 60;

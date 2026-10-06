@@ -1,10 +1,10 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { type DiagnosticStep, checkMcpSetup } from "@/lib/actions/mcp-setup";
 import { ArrowSquareOut, Check, CircleNotch, Copy, X } from "@phosphor-icons/react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { checkMcpSetup, type DiagnosticStep } from "@/lib/actions/mcp-setup";
 
 const FALLBACK_URL = "https://paradeos.vercel.app";
 

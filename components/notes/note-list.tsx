@@ -1,10 +1,10 @@
+import { Note as NoteIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { getUserRole } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/server";
 import type { AttachmentRow } from "@/lib/db/queries/notes";
 import type { NoteKind, NoteSubjectType } from "@/lib/schemas/notes";
-import { Note as NoteIcon } from "@phosphor-icons/react/dist/ssr";
 import { NoteDialog } from "./note-dialog";
 import { NotesGrid } from "./notes-grid";
 

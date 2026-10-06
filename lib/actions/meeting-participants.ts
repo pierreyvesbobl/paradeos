@@ -1,5 +1,7 @@
 "use server";
 
+import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { contacts } from "@/db/schema/contacts";
 import { meetingParticipants } from "@/db/schema/meeting-participants";
 import { users } from "@/db/schema/users";
@@ -10,8 +12,6 @@ import {
   addMeetingParticipantSchema,
   removeMeetingParticipantSchema,
 } from "@/lib/schemas/meetings";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
 export const addMeetingParticipant = action(
   addMeetingParticipantSchema,

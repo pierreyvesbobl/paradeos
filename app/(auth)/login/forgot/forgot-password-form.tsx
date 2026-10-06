@@ -1,11 +1,11 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { requestPasswordReset } from "@/lib/actions/auth";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");

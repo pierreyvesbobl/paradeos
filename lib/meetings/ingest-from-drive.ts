@@ -1,6 +1,7 @@
 import { fetchWithTimeout } from "@/lib/net/fetch-with-timeout";
 import "server-only";
 
+import { eq } from "drizzle-orm";
 import { meetings } from "@/db/schema/meetings";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
@@ -11,8 +12,7 @@ import { parseDriveTranscriptName } from "@/lib/meetings/drive-filename";
 import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import { getIngestionUserId } from "@/lib/meetings/ingestion-user";
 import { canStartAnotherItem } from "@/lib/meetings/run-budget";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { eq } from "drizzle-orm";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
 const GOOGLE_DOC_MIME = "application/vnd.google-apps.document";
 const TEXT_MIMES = new Set(["text/plain", "text/markdown", "text/x-markdown"]);

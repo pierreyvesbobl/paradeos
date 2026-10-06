@@ -1,3 +1,4 @@
+import { and, asc, desc, eq, ilike, inArray, or, type SQL, sql } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { noteAttachments } from "@/db/schema/note-attachments";
@@ -7,7 +8,6 @@ import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import type { NoteSubjectType } from "@/lib/schemas/notes";
-import { type SQL, and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
 export type AttachmentRow = {
   id: string;

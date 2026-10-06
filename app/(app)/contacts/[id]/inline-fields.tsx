@@ -1,7 +1,8 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { AddressAutocomplete } from "@/components/gouv/address-autocomplete";
-
 import { InlineFk } from "@/components/inline/inline-fk";
 import { InlineMultiline } from "@/components/inline/inline-multiline";
 import { InlineText } from "@/components/inline/inline-text";
@@ -15,8 +16,6 @@ import { quickCreateEntity } from "@/lib/actions/entities";
 import { demoCompanyName, demoEmail, demoFirstName, demoLastName } from "@/lib/demo/anonymize";
 import { DemoBlur } from "@/lib/demo/components";
 import { useDemoMode } from "@/lib/demo/context";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type FieldId =
   | "firstName"

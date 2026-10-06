@@ -1,9 +1,9 @@
 import "server-only";
 
+import { and, eq } from "drizzle-orm";
 import { driveFolders } from "@/db/schema/drive-folders";
 import { db } from "@/lib/db/server";
 import type { DriveFileSubjectType } from "@/lib/schemas/drive-files";
-import { and, eq } from "drizzle-orm";
 
 export async function getDriveFolderForSubject(
   subjectType: DriveFileSubjectType,

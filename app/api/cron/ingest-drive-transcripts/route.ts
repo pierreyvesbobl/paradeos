@@ -1,6 +1,6 @@
+import { NextResponse } from "next/server";
 import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { ingestDriveTranscripts } from "@/lib/meetings/ingest-from-drive";
-import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
 

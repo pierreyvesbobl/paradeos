@@ -1,10 +1,10 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { toggleDemoMode } from "@/lib/actions/demo-mode";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { toggleDemoMode } from "@/lib/actions/demo-mode";
 
 export function DemoModeSection({ enabled }: { enabled: boolean }) {
   const router = useRouter();

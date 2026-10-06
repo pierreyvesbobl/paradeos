@@ -1,9 +1,9 @@
+import sanitizeHtml from "sanitize-html";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/format";
 import { parseEmailThread } from "@/lib/gmail/thread-parse";
 import { cn } from "@/lib/utils";
-import sanitizeHtml from "sanitize-html";
 
 /**
  * Rendu d'un message d'un thread : avatar + header propre, corps HTML

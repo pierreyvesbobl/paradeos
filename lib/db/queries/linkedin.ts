@@ -1,3 +1,4 @@
+import { and, count, eq } from "drizzle-orm";
 import {
   linkedinConnections,
   linkedinConversations,
@@ -5,7 +6,6 @@ import {
 } from "@/db/schema/linkedin";
 import { db } from "@/lib/db/server";
 import { getLinkedinSyncTokensForUser } from "@/lib/linkedin/sync-tokens";
-import { and, count, eq } from "drizzle-orm";
 
 export type LinkedinSettingsSummary = {
   syncTokens: { id: string; label: string; createdAt: string; lastUsedAt: string | null }[];

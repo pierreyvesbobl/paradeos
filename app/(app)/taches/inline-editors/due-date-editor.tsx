@@ -1,11 +1,11 @@
 "use client";
 
-import { DateInput } from "@/components/ui/date-input";
-import { patchTask } from "@/lib/actions/tasks";
-import { formatDate } from "@/lib/format";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import { DateInput } from "@/components/ui/date-input";
+import { patchTask } from "@/lib/actions/tasks";
+import { formatDate } from "@/lib/format";
 
 function toIsoDate(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -18,13 +18,7 @@ function toIsoDate(value: Date | string | null | undefined): string | null {
  * sur le `DateInput` global (grille FR + presets) via un trigger texte
  * compact.
  */
-export function TaskDueDateEditor({
-  id,
-  value,
-}: {
-  id: string;
-  value: Date | string | null;
-}) {
+export function TaskDueDateEditor({ id, value }: { id: string; value: Date | string | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const initial = toIsoDate(value);

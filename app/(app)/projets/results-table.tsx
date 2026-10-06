@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatRelativeShort } from "@/lib/format";
 import {
   type ProjectKind,
@@ -5,7 +6,6 @@ import {
   projectKindLabels,
   projectStatusLabels,
 } from "@/lib/schemas/projects";
-import Link from "next/link";
 
 export type Person = {
   id: string;
@@ -341,6 +341,7 @@ function ClusterAvatar({
         background: `var(--ds-tint-${tint}-bg)`,
         color: `var(--ds-tint-${tint}-text)`,
       }}
+      role="img"
       title={isLead ? `${name} (lead)` : name}
       aria-label={isLead ? `${name} (lead)` : name}
     >

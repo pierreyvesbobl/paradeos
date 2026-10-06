@@ -1,6 +1,6 @@
-import { cn } from "@/lib/utils";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 export type BreadcrumbItem = {
   label: React.ReactNode;

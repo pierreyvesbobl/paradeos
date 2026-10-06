@@ -1,11 +1,11 @@
 "use client";
 
-import { AddressAutocomplete } from "@/components/gouv/address-autocomplete";
-import type { SaveResult } from "@/components/inline/types";
-import type { EntityAddress } from "@/db/schema/entities";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { AddressAutocomplete } from "@/components/gouv/address-autocomplete";
+import type { SaveResult } from "@/components/inline/types";
+import type { EntityAddress } from "@/db/schema/entities";
 
 type Props = {
   /** Rue courante. */

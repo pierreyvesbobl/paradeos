@@ -1,4 +1,4 @@
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { DriveTranscriptsForm } from "./drive-transcripts-form";
 
 /**

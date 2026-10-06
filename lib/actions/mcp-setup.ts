@@ -1,10 +1,10 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { getAppUrl } from "@/lib/app-url";
 import { requireUser } from "@/lib/auth/server";
 import { MCP_PATH } from "@/lib/oauth/config";
 import { revokeSession } from "@/lib/oauth/store";
-import { revalidatePath } from "next/cache";
 
 export type DiagnosticStep = {
   label: string;

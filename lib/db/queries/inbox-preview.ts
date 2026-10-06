@@ -1,9 +1,9 @@
+import { eq } from "drizzle-orm";
 import { emailProposals, gmailMessages } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
-import { eq } from "drizzle-orm";
 
 export type InboxPreview = {
   source: "email" | "meeting" | "filing" | "reconciliation" | "linkedin";

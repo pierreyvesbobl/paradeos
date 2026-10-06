@@ -1,11 +1,11 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { getAppUrl } from "@/lib/app-url";
 import { requireUser } from "@/lib/auth/server";
 import { parseAuthorizeParams } from "@/lib/oauth/authorize-params";
 import { isAcceptableResource, resourceUri } from "@/lib/oauth/config";
 import { createAuthorizationCode, getClient } from "@/lib/oauth/store";
-import { redirect } from "next/navigation";
 
 /**
  * Approbation de l'écran de consentement. Revalide *tout* côté serveur —
@@ -61,7 +61,7 @@ export async function denyAuthorization(formData: FormData): Promise<string | un
   const params = parsed.params;
 
   const client = await getClient(params.clientId);
-  if (!client || !client.redirectUris.includes(params.redirectUri)) {
+  if (!client?.redirectUris.includes(params.redirectUri)) {
     return "Client ou redirect_uri inconnu.";
   }
 

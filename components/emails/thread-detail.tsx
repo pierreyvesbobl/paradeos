@@ -1,3 +1,5 @@
+import { ArrowDownLeft, ArrowSquareOut, ArrowUpRight } from "@phosphor-icons/react/dist/ssr";
+import { asc, eq, inArray } from "drizzle-orm";
 import { MessageCard } from "@/components/emails/message-card";
 import { ProjectLinkBadge } from "@/components/emails/project-link-badge";
 import { EmailProposalsPanel } from "@/components/emails/proposals-panel";
@@ -11,11 +13,8 @@ import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
-import { getThreadDetail } from "@/lib/gmail/queries";
-import { ArrowDownLeft, ArrowSquareOut, ArrowUpRight } from "@phosphor-icons/react/dist/ssr";
-import { asc, eq, inArray } from "drizzle-orm";
-
 import { formatPersonName } from "@/lib/format";
+import { getThreadDetail } from "@/lib/gmail/queries";
 export async function EmailThreadDetail({ threadId }: { threadId: string }) {
   // Garde d'auth : le détail d'un thread n'est jamais rendu anonymement.
   await requireUser();

@@ -1,3 +1,4 @@
+import { asc, eq } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
@@ -5,7 +6,6 @@ import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { formatPersonName } from "@/lib/format";
-import { asc, eq } from "drizzle-orm";
 import { NewMeetingForm } from "./new-meeting-form";
 
 // Le formulaire enchaîne création puis extraction LLM dans la même

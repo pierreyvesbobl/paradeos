@@ -12,10 +12,11 @@
  *
  * CORS : ouvert. Le token Bearer fait l'auth.
  */
+
+import { type NextRequest, NextResponse } from "next/server";
 import { ingestConnections, ingestConversations } from "@/lib/linkedin/ingest";
 import { LINKEDIN_SYNC_TOKEN_PREFIX, resolveLinkedinSyncToken } from "@/lib/linkedin/sync-tokens";
 import { ingestPayloadSchema } from "@/lib/schemas/linkedin";
-import { type NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
   const match = auth?.match(
     new RegExp(`^Bearer\\s+(${LINKEDIN_SYNC_TOKEN_PREFIX}[A-Za-z0-9_-]+)$`),
   );
-  if (!match || !match[1]) {
+  if (!match?.[1]) {
     return withCors(
       NextResponse.json({ ok: false, error: "Token manquant ou mal formé." }, { status: 401 }),
     );

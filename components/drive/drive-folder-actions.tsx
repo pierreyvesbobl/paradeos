@@ -1,12 +1,12 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { unlinkDriveFolder } from "@/lib/actions/drive-folders";
-import type { DriveFileSubjectType } from "@/lib/schemas/drive-files";
 import { ArrowSquareOut, FolderOpen, LinkSimpleBreak, Question } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { unlinkDriveFolder } from "@/lib/actions/drive-folders";
+import type { DriveFileSubjectType } from "@/lib/schemas/drive-files";
 import { DriveLocalOpenSetupDialog } from "./drive-local-open-setup-dialog";
 
 /** Nom de l'Apple Shortcut que l'utilisateur doit avoir installée. */

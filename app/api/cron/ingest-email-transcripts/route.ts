@@ -1,6 +1,6 @@
+import { NextResponse } from "next/server";
 import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { ingestEmailTranscripts } from "@/lib/meetings/ingest-from-email";
-import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
 

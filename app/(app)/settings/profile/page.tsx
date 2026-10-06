@@ -1,7 +1,7 @@
+import { eq } from "drizzle-orm";
 import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
-import { eq } from "drizzle-orm";
 import { AvatarUploader } from "./avatar-uploader";
 import { PasswordForm } from "./password-form";
 import { ProfileForm } from "./profile-form";

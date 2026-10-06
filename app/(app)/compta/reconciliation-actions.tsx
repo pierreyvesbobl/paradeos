@@ -1,5 +1,9 @@
 "use client";
 
+import { CloudArrowDown, LinkSimple, Plus, X } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,10 +14,6 @@ import {
   refreshAllDougsLinks,
   unlinkDougsCreditNote,
 } from "@/lib/actions/invoices";
-import { CloudArrowDown, LinkSimple, Plus, X } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 export function RefreshAllButton() {
   const router = useRouter();
@@ -209,7 +209,10 @@ function ProjectPicker({
 export function ManualLinkQuote({
   dougsId,
   projects,
-}: { dougsId: string; projects: ProjectOption[] }) {
+}: {
+  dougsId: string;
+  projects: ProjectOption[];
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -273,7 +276,10 @@ export function ManualLinkQuote({
 export function ManualLinkInvoice({
   dougsId,
   projects,
-}: { dougsId: string; projects: ProjectOption[] }) {
+}: {
+  dougsId: string;
+  projects: ProjectOption[];
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -341,7 +347,10 @@ export function ManualLinkInvoice({
 export function ManualLinkCoworkingInvoice({
   dougsId,
   invoices,
-}: { dougsId: string; invoices: CoworkingInvoiceOption[] }) {
+}: {
+  dougsId: string;
+  invoices: CoworkingInvoiceOption[];
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -429,7 +438,10 @@ function formatEurOption(n: number | null): string {
 export function LinkCreditNotePicker({
   creditNoteId,
   options,
-}: { creditNoteId: string; options: InvoiceOption[] }) {
+}: {
+  creditNoteId: string;
+  options: InvoiceOption[];
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<string | null>(null);

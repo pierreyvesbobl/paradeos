@@ -27,11 +27,11 @@ import { deliverDocumentEmail } from "@/lib/billing/deliver-document";
 import { pushDougsSalesInvoiceDraft, resolveDougsClientData } from "@/lib/billing/dougs-push";
 import { db } from "@/lib/db/server";
 import {
+  canFinalizeDougsSalesInvoice,
   DougsApiError,
   DougsAuthError,
   type DougsFinalizeBlocker,
   type DougsSalesInvoice,
-  canFinalizeDougsSalesInvoice,
   deleteDougsSalesInvoiceDraft,
   finalizeDougsSalesInvoice,
   getDougsSalesInvoice,
@@ -44,9 +44,10 @@ import {
 
 /** Forme minimale acceptée par les pickers de `lib/dougs/client`. */
 type DougsPayloadLike = DougsSalesInvoice;
-import { monthsBetween } from "@/lib/schemas/coworking";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
+
 import { eq } from "drizzle-orm";
+import { monthsBetween } from "@/lib/schemas/coworking";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { type AutoSendSkipReason, autoSendPlan } from "./auto-send-guards";
 
 // Réexport : les appelants (cron, UI) importent tout depuis ce module.
@@ -158,7 +159,7 @@ export async function autoSendCoworkingInvoice(args: {
     .where(eq(invoices.id, invoiceId))
     .limit(1);
 
-  if (!row || !row.contract) return { ok: false, message: "Facture coworking introuvable." };
+  if (!row?.contract) return { ok: false, message: "Facture coworking introuvable." };
   const { invoice, contract } = row;
 
   if (invoice.kind !== "coworking") {

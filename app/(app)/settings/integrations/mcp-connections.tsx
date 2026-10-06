@@ -1,12 +1,12 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { revokeMcpGrant } from "@/lib/actions/mcp-setup";
-import { formatDate } from "@/lib/format";
 import { Plug, Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { revokeMcpGrant } from "@/lib/actions/mcp-setup";
+import { formatDate } from "@/lib/format";
 
 export type Connection = {
   clientId: string;

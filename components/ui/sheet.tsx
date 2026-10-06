@@ -117,12 +117,12 @@ SheetDescription.displayName = "SheetDescription";
 
 export {
   Sheet,
-  SheetTrigger,
-  SheetPortal,
   SheetClose,
-  SheetOverlay,
   SheetContent,
-  SheetHeader,
-  SheetTitle,
   SheetDescription,
+  SheetHeader,
+  SheetOverlay,
+  SheetPortal,
+  SheetTitle,
+  SheetTrigger,
 };

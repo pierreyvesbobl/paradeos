@@ -1,5 +1,9 @@
 "use client";
 
+import { MagnifyingGlass, Plus, PlusCircle } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { EntityPreviewDialog } from "@/components/projects/entity-preview-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { quickCreateEntity } from "@/lib/actions/entities";
@@ -7,10 +11,6 @@ import { patchProject } from "@/lib/actions/projects";
 import { demoCompanyName } from "@/lib/demo/anonymize";
 import { useDemoMode } from "@/lib/demo/context";
 import { cn } from "@/lib/utils";
-import { MagnifyingGlass, Plus, PlusCircle } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
 import { LinkChip, LinkGlyph, type LinkItem } from "../link-field/link-chip";
 import { LinkPeek, type PeekField } from "../link-field/link-peek";
 

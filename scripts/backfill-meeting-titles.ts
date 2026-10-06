@@ -27,10 +27,11 @@
  *   pnpm tsx scripts/backfill-meeting-titles.ts            # dry-run
  *   pnpm tsx scripts/backfill-meeting-titles.ts --commit
  */
-import { transcriptFingerprint } from "@/lib/meetings/dedupe-keys";
-import { parseDriveTranscriptName } from "@/lib/meetings/drive-filename";
+
 import { config } from "dotenv";
 import postgres from "postgres";
+import { transcriptFingerprint } from "@/lib/meetings/dedupe-keys";
+import { parseDriveTranscriptName } from "@/lib/meetings/drive-filename";
 
 config({ path: ".env.local" });
 

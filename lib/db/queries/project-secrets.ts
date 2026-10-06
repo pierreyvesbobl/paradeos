@@ -1,8 +1,8 @@
 import "server-only";
 
+import { asc, eq, isNotNull } from "drizzle-orm";
 import { projectSecrets } from "@/db/schema/project-secrets";
 import { db } from "@/lib/db/server";
-import { asc, eq, isNotNull } from "drizzle-orm";
 
 export type ProjectSecretListItem = {
   id: string;

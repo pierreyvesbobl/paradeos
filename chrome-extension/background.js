@@ -9,14 +9,14 @@
  */
 
 import {
-  LIMITS,
-  VoyagerError,
   diagnose,
   fetchConnections,
   fetchConversations,
   fetchMessages,
   humanDelay,
   isLoggedIn,
+  LIMITS,
+  VoyagerError,
 } from "./voyager.js";
 
 const ALARM = "linkedin-sync";

@@ -1,6 +1,6 @@
+import Link from "next/link";
 import { getUser } from "@/lib/auth/server";
 import { getInboxTotalCount } from "@/lib/db/queries/inbox";
-import Link from "next/link";
 import { SidebarNav } from "./sidebar-nav";
 
 export async function Sidebar() {

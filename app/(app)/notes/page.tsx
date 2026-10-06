@@ -1,3 +1,6 @@
+import { Note } from "@phosphor-icons/react/dist/ssr";
+import { asc } from "drizzle-orm";
+import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { NoteSortMenu } from "@/components/notes/note-sort-menu";
 import { NotesGrid } from "@/components/notes/notes-grid";
@@ -11,7 +14,7 @@ import { notes as notesTable } from "@/db/schema/notes";
 import { users as usersTable } from "@/db/schema/users";
 import { getUserRole } from "@/lib/auth/admin";
 import { requireUser } from "@/lib/auth/server";
-import { type NoteSortField, getAttachmentsForNotes, getRecentNotes } from "@/lib/db/queries/notes";
+import { getAttachmentsForNotes, getRecentNotes, type NoteSortField } from "@/lib/db/queries/notes";
 import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
@@ -23,9 +26,6 @@ import {
   noteSubjectTypeLabels,
 } from "@/lib/schemas/notes";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
-import { Note } from "@phosphor-icons/react/dist/ssr";
-import { asc } from "drizzle-orm";
-import Link from "next/link";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 

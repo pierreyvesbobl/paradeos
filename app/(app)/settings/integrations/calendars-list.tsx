@@ -1,13 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
+import { toast } from "sonner";
 import {
   refreshCalendarEvents,
   refreshCalendarList,
   toggleCalendarSync,
 } from "@/lib/actions/calendar";
-import { useRouter } from "next/navigation";
-import { useTransition } from "react";
-import { toast } from "sonner";
 
 type CalendarRow = {
   id: string;
@@ -121,7 +121,7 @@ export function CalendarsList({ calendars }: { calendars: CalendarRow[] }) {
                   aria-label={`Synchroniser ${c.summary}`}
                 />
                 <span className="relative h-5 w-9 rounded-full bg-muted transition-colors peer-checked:bg-foreground peer-disabled:opacity-50" />
-                <span className="-translate-y-1/2 absolute h-4 w-4 translate-x-0.5 rounded-full bg-background shadow-sm transition-transform peer-checked:translate-x-[18px]" />
+                <span className="absolute h-4 w-4 translate-x-0.5 -translate-y-1/2 rounded-full bg-background shadow-sm transition-transform peer-checked:translate-x-[18px]" />
               </label>
             </li>
           ))}

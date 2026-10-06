@@ -6,7 +6,7 @@ Outil interne de Parade SAS (Lyon). Modélisation unifiée :
 ## Stack
 
 Next.js 15 (App Router) · TypeScript strict · Supabase (Auth, Postgres,
-Storage) · Drizzle ORM · Tailwind + shadcn/ui · TanStack Query · Zod ·
+Storage) · Drizzle ORM · Tailwind + shadcn/ui · Zod ·
 Server Actions · pnpm · Biome · Vercel.
 
 Région Supabase : `eu-central-1` (Frankfurt).
@@ -70,7 +70,7 @@ lib/
   format.ts               formats fr-FR (€, dates)
 middleware.ts             auth gate global
 mcp-server/               serveur MCP stdio (dev local)
-chrome-extension/         extension LinkedIn (Voyager, hors service)
+chrome-extension/         extension navigateur (synchro cookie Dougs, import LinkedIn)
 scripts/                  seed, magic-link, diagnostics
 scripts/archive/          scripts one-shot déjà joués (ne pas relancer)
 supabase/migrations/      RLS + triggers SQL

@@ -100,7 +100,7 @@ async function getCsrfToken() {
     url: "https://www.linkedin.com/",
     name: "JSESSIONID",
   });
-  if (!cookie || !cookie.value) return null;
+  if (!cookie?.value) return null;
   return cookie.value.replace(/"/g, "");
 }
 
@@ -344,7 +344,7 @@ export async function fetchConnections(counters) {
 
     for (const el of elements) {
       const profile = readProfile(el?.connectedMemberResolutionResult || el, included);
-      if (!profile || !profile.urn) continue;
+      if (!profile?.urn) continue;
       out.push({
         memberUrn: profile.urn,
         publicIdentifier: profile.publicIdentifier,

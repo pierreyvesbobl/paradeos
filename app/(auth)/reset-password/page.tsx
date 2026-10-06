@@ -1,5 +1,5 @@
-import { requireUser } from "@/lib/auth/server";
 import Link from "next/link";
+import { requireUser } from "@/lib/auth/server";
 import { ResetPasswordForm } from "./reset-password-form";
 
 /**

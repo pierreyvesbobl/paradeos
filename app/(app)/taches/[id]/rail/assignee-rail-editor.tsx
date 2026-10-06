@@ -1,15 +1,15 @@
 "use client";
 
+import { Plus } from "@phosphor-icons/react/dist/ssr";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { type AssigneeRef, AssigneesPicker } from "@/components/tasks/assignees-picker";
 import type { TaskContactOption, TaskUserOption } from "@/components/tasks/task-types";
 import { ContactAvatar } from "@/components/user/contact-avatar";
 import { UserAvatar } from "@/components/user/user-avatar";
 import { patchTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils";
-import { Plus } from "@phosphor-icons/react/dist/ssr";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
-import { toast } from "sonner";
 
 /**
  * Variante rail : chaque assigné rendu comme (avatar 26 + nom + badge

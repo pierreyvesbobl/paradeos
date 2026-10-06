@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
 import { dougsSessions } from "@/db/schema/dougs";
 import { getAppUrl } from "@/lib/app-url";
@@ -6,8 +7,7 @@ import { requireUser } from "@/lib/auth/server";
 import { getLinkedinSettingsSummary } from "@/lib/db/queries/linkedin";
 import { db } from "@/lib/db/server";
 import { getSyncTokensForUser } from "@/lib/dougs/sync-tokens";
-import { SETTING_KEYS, getSetting, getSettingStatus } from "@/lib/settings";
-import { eq } from "drizzle-orm";
+import { getSetting, getSettingStatus, SETTING_KEYS } from "@/lib/settings";
 import { ApiTokensSection } from "./api-tokens-section";
 import { BrandLogosSection } from "./brand-logos-section";
 import { CoworkingAutoSendSection } from "./coworking-autosend-section";
@@ -153,11 +153,7 @@ export default async function IntegrationsSettingsPage({
   );
 }
 
-function Status({
-  status,
-}: {
-  status: NonNullable<Awaited<ReturnType<typeof getSettingStatus>>>;
-}) {
+function Status({ status }: { status: NonNullable<Awaited<ReturnType<typeof getSettingStatus>>> }) {
   if (!status.set) {
     return (
       <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-amber-700 text-xs dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">

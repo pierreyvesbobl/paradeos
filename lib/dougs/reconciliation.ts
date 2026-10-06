@@ -1,5 +1,6 @@
 import "server-only";
 
+import { and, eq, isNull } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
@@ -15,20 +16,20 @@ import {
 import { type DougsQuote, type DougsSalesInvoice, pickDougsClientName } from "@/lib/dougs/client";
 import {
   type CreditNoteLink,
-  type ExistingInvoiceCandidate,
-  INVOICE_CANDIDATES_LIMIT,
-  type InvoiceCandidate,
-  type LinkedDougsEntries,
-  type QuoteCandidate,
   classifyLinkedInvoiceRows,
   dougsName,
   dougsSideOf,
+  type ExistingInvoiceCandidate,
+  INVOICE_CANDIDATES_LIMIT,
+  type InvoiceCandidate,
   isDougsCreditNote,
   isMatchableInvoiceCandidate,
+  type LinkedDougsEntries,
   negate,
-  pMap,
   pickHt,
   pickTtc,
+  pMap,
+  type QuoteCandidate,
   rankCandidates,
   resolveCreditNoteLink,
   scoreExistingInvoiceCandidate,
@@ -39,7 +40,6 @@ import {
 } from "@/lib/dougs/reconciliation-rules";
 import { personNameOrNull } from "@/lib/format";
 import { monthsBetween } from "@/lib/schemas/coworking";
-import { and, eq, isNull } from "drizzle-orm";
 
 // Les types de résultat vivent dans reconciliation-rules.ts (module pur) ;
 // on les ré-exporte pour les callers (vue rapprochement, inbox).

@@ -1,11 +1,11 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { setBrandLogo } from "@/lib/actions/integrations";
 import { Image as ImageIcon, Upload } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { setBrandLogo } from "@/lib/actions/integrations";
 
 type BrandRow = {
   brand: "coworking" | "automato" | "parade";

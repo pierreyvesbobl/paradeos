@@ -5,6 +5,9 @@
  * Auth : `Authorization: Bearer <CRON_SECRET>` (Vercel le pose auto).
  * Limitations Vercel Hobby : 1 exécution/jour max (cf. vercel.json).
  */
+
+import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { NextResponse } from "next/server";
 import { dougsSessions } from "@/db/schema/dougs";
 import { invoices } from "@/db/schema/invoices";
 import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
@@ -22,8 +25,6 @@ import {
   pickDougsTtc,
   pickDougsVat,
 } from "@/lib/dougs/client";
-import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
-import { NextResponse } from "next/server";
 
 /**
  * Traitement par lots : chaque run ne prend que les N devis et N

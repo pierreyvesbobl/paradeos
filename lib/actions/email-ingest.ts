@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { action } from "@/lib/actions/action";
 import { requireAdmin } from "@/lib/auth/admin";
 import { getOrCreateGmailLabel, loadGmailLabelCache } from "@/lib/gmail/links";
@@ -10,8 +12,6 @@ import {
   updateMeetingsEmailLabelSchema,
 } from "@/lib/schemas/email-ingest";
 import { SETTING_KEYS, setSetting } from "@/lib/settings";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 /**
  * Enregistre le label surveillé et le crée dans Gmail s'il n'existe pas

@@ -1,7 +1,5 @@
 "use client";
 
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChartBar,
   Envelope,
@@ -15,6 +13,8 @@ import {
 } from "@phosphor-icons/react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const ALL_TABS = [
   { value: "overview", label: "Vue d'ensemble", icon: Info },

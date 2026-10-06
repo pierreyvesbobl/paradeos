@@ -1,20 +1,20 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { ContactPreviewDialog } from "@/components/projects/contact-preview-dialog";
 import {
   addMeetingParticipant,
   removeMeetingParticipant,
 } from "@/lib/actions/meeting-participants";
 import type { MeetingParticipantRow } from "@/lib/db/queries/meeting-participants";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 import type { PeekField } from "../link-field/link-peek";
 import {
   type ParticipantContactOption,
   type ParticipantDraft,
-  type ParticipantUserOption,
   ParticipantsPicker,
+  type ParticipantUserOption,
 } from "./participants-picker";
 
 function toDraft(p: MeetingParticipantRow): ParticipantDraft {

@@ -1,5 +1,8 @@
 "use server";
 
+import { createClient } from "@supabase/supabase-js";
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { users } from "@/db/schema/users";
 import { action } from "@/lib/actions/action";
 import { getAppUrl } from "@/lib/app-url";
@@ -7,9 +10,6 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { db } from "@/lib/db/server";
 import { emailLayout, sendEmail } from "@/lib/email/client";
 import { deleteUserSchema, inviteUserSchema, updateUserSchema } from "@/lib/schemas/users";
-import { createClient } from "@supabase/supabase-js";
-import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

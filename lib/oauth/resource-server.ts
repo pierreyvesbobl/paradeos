@@ -2,7 +2,7 @@ import "server-only";
 
 import { getAppUrl } from "@/lib/app-url";
 import { resolveToken } from "@/lib/db/queries/api-tokens";
-import { DEFAULT_SCOPE, type Scope, isAcceptableResource, scopeGrants } from "./config";
+import { DEFAULT_SCOPE, isAcceptableResource, type Scope, scopeGrants } from "./config";
 import { resolveAccessToken } from "./store";
 
 export type McpAuth = {

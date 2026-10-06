@@ -1,11 +1,11 @@
 "use client";
 
-import { toggleTask } from "@/lib/actions/tasks";
-import { cn } from "@/lib/utils";
 import { Check } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { toggleTask } from "@/lib/actions/tasks";
+import { cn } from "@/lib/utils";
 
 /**
  * Case carrée 18×18 — sert UNIQUEMENT à terminer la tâche (toggle status).

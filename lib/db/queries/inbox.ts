@@ -1,3 +1,5 @@
+import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages } from "@/db/schema/gmail";
@@ -5,13 +7,10 @@ import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { linkedinConnections } from "@/db/schema/linkedin";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
 import { projects } from "@/db/schema/projects";
+import { compactNameKey, normalizeEmail, personCompactKey } from "@/lib/crm/name-key";
 import { db } from "@/lib/db/server";
 import { DougsAuthError } from "@/lib/dougs/client";
 import { getInvoiceSuggestions, getQuoteSuggestions } from "@/lib/dougs/reconciliation";
-import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
-
-import { compactNameKey, normalizeEmail, personCompactKey } from "@/lib/crm/name-key";
 import { formatPersonName } from "@/lib/format";
 /**
  * L'inbox liste chaque extraction IA à valider individuellement, tous

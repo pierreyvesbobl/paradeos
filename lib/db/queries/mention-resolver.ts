@@ -1,12 +1,13 @@
+import { asc } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
-import { asc } from "drizzle-orm";
 
 import { formatPersonName } from "@/lib/format";
+
 function slug(s: string): string {
   return s
     .toLowerCase()

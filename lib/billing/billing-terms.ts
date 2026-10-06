@@ -12,7 +12,7 @@
  */
 
 import type { InvoiceBrand } from "@/db/schema/invoices";
-import { type DocumentOverrides, brandTemplateFor } from "./brand-templates";
+import { brandTemplateFor, type DocumentOverrides } from "./brand-templates";
 
 /**
  * Échéances que l'API Dougs accepte, et le délai correspondant en jours.

@@ -419,7 +419,7 @@ export async function pushCoworkingInvoiceMcp(
     .where(and(eq(invoices.id, args.coworkingInvoiceId), eq(invoices.kind, "coworking")))
     .limit(1);
 
-  if (!row || !row.contract) throw new Error("Facture coworking introuvable.");
+  if (!row?.contract) throw new Error("Facture coworking introuvable.");
   const { invoice, contract } = row;
   if (!invoice.periodStart || !invoice.periodEnd) {
     throw new Error("Période manquante sur la facture.");

@@ -1,13 +1,13 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { setCoworkingAutoSendEnabled } from "@/lib/actions/coworking";
 import { Power } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { setCoworkingAutoSendEnabled } from "@/lib/actions/coworking";
 
 type Props = {
   enabled: boolean;

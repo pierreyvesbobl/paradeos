@@ -1,3 +1,6 @@
+import { BellRinging, Clock, CurrencyEur, HandCoins, Scales } from "@phosphor-icons/react/dist/ssr";
+import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
@@ -14,9 +17,6 @@ import {
   getDougsAgingSummary,
   getDougsPaymentHints,
 } from "@/lib/dougs/signals";
-import { BellRinging, Clock, CurrencyEur, HandCoins, Scales } from "@phosphor-icons/react/dist/ssr";
-import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
-import Link from "next/link";
 import { type RelanceItem, RelanceRow } from "./relance-row";
 
 function formatEur(n: number): string {

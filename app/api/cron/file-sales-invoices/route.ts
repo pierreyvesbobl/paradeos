@@ -1,3 +1,4 @@
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { dougsSessions } from "@/db/schema/dougs";
 import { entities } from "@/db/schema/entities";
@@ -16,7 +17,6 @@ import {
   pickDougsFileUuid,
   pickDougsReference,
 } from "@/lib/dougs/client";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 
 /**
  * Classe dans le Drive comptable les factures de vente émises dont le PDF n'y

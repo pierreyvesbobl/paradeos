@@ -10,9 +10,10 @@
  * Auth : session Paradeos. Le fileId est passé tel quel à Dougs, qui
  * fait sa propre autorisation — un id d'une autre société renvoie 403.
  */
+
+import { type NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth/server";
 import { DougsApiError, DougsAuthError, downloadDougsFile } from "@/lib/dougs/client";
-import { type NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 

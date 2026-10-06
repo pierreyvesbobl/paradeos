@@ -1,5 +1,6 @@
 import "server-only";
 
+import { eq, isNull } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
@@ -16,11 +17,9 @@ import {
 import { compactNameKey, personCompactKey } from "@/lib/crm/name-key";
 import { hasPendingProposalElsewhere, proposalDedupeKey } from "@/lib/crm/proposal-dedupe";
 import { db } from "@/lib/db/server";
-import { type ProjectContext, extractMeeting } from "@/lib/meetings/extract";
-import { getParticipantContext, syncParticipantsFromAttendees } from "@/lib/meetings/participants";
-import { eq, isNull } from "drizzle-orm";
-
 import { formatPersonName, sanitizeNameInput } from "@/lib/format";
+import { extractMeeting, type ProjectContext } from "@/lib/meetings/extract";
+import { getParticipantContext, syncParticipantsFromAttendees } from "@/lib/meetings/participants";
 /**
  * Helper coeur du pipeline d'extraction : prend un meetingId, lit son
  * transcript, appelle le LLM, persiste les propositions (avec fuzzy

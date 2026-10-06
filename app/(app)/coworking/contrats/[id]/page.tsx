@@ -1,3 +1,7 @@
+import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
+import { asc } from "drizzle-orm";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import { BillingTermsForm } from "@/components/billing/billing-terms-form";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { AutoSendToggle } from "@/components/coworking/auto-send-toggle";
@@ -33,11 +37,7 @@ import {
   invoiceTotalTtc,
   monthsBetween,
 } from "@/lib/schemas/coworking";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
-import { asc } from "drizzle-orm";
-import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
 type Params = Promise<{ id: string }>;
 

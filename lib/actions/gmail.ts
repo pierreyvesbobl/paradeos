@@ -1,5 +1,8 @@
 "use server";
 
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { gmailSyncState } from "@/db/schema/gmail";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { projects } from "@/db/schema/projects";
@@ -18,9 +21,6 @@ import { pullLabeledThreadsFromGmail } from "@/lib/gmail/pull-labels";
 import { cleanupSpamThreads, purgeGmailData, syncIncremental } from "@/lib/gmail/sync";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
 import { SETTING_KEYS, setSetting } from "@/lib/settings";
-import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 /**
  * Boîte Gmail sur laquelle agir. C'est TOUJOURS celle de l'utilisateur

@@ -1,14 +1,5 @@
 "use client";
 
-import { loadInboxHistory, revertInboxItem, updateInboxHistoryItem } from "@/lib/actions/inbox";
-import type { InboxExtractionKind } from "@/lib/db/queries/inbox";
-import type {
-  InboxHistoryData,
-  InboxHistoryItem,
-  InboxHistorySource,
-  InboxHistoryStatus,
-} from "@/lib/db/queries/inbox-history";
-import { cn } from "@/lib/utils";
 import {
   ArrowCounterClockwise,
   ArrowSquareOut,
@@ -28,14 +19,23 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { loadInboxHistory, revertInboxItem, updateInboxHistoryItem } from "@/lib/actions/inbox";
+import type { InboxExtractionKind } from "@/lib/db/queries/inbox";
+import type {
+  InboxHistoryData,
+  InboxHistoryItem,
+  InboxHistorySource,
+  InboxHistoryStatus,
+} from "@/lib/db/queries/inbox-history";
+import { cn } from "@/lib/utils";
 import {
-  KINDS,
+  formatDueDate,
   KIND_BY_KEY,
+  KINDS,
   MetaChip,
   PRIORITY_STYLE,
-  SOURCE_ICON,
-  formatDueDate,
   projectTint,
+  SOURCE_ICON,
 } from "./kind-styles";
 
 type StatusFilter = "all" | InboxHistoryStatus;

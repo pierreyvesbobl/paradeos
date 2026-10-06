@@ -1,8 +1,8 @@
 "use client";
 
+import { Eye } from "@phosphor-icons/react";
 import { formatEuro, formatPersonName } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Eye } from "@phosphor-icons/react";
 import {
   demoAmount,
   demoCompanyName,

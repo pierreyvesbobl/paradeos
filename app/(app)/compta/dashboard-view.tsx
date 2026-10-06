@@ -1,10 +1,3 @@
-import { coworkingContracts } from "@/db/schema/coworking";
-import { entities } from "@/db/schema/entities";
-import { invoices } from "@/db/schema/invoices";
-import { projects } from "@/db/schema/projects";
-import { db } from "@/lib/db/server";
-import { demoAmount, demoCompanyName, demoProjectName } from "@/lib/demo/anonymize";
-import { isDemoMode } from "@/lib/demo/server";
 import {
   ArrowRight,
   BellRinging,
@@ -16,6 +9,13 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import Link from "next/link";
+import { coworkingContracts } from "@/db/schema/coworking";
+import { entities } from "@/db/schema/entities";
+import { invoices } from "@/db/schema/invoices";
+import { projects } from "@/db/schema/projects";
+import { db } from "@/lib/db/server";
+import { demoAmount, demoCompanyName, demoProjectName } from "@/lib/demo/anonymize";
+import { isDemoMode } from "@/lib/demo/server";
 import { ComptaSegmentSwitcher } from "./compta-segment-switcher";
 import { type ComptaPeriod, PeriodSelector } from "./period-selector";
 import { inWindow, periodWindow } from "./period-window";

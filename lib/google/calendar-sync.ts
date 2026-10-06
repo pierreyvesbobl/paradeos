@@ -8,13 +8,14 @@
  * doivent jamais vivre dans un fichier `"use server"`, sinon Next les
  * expose comme endpoints appelables sans auth.
  */
+
+import { and, eq, gte } from "drizzle-orm";
 import { calendarEvents } from "@/db/schema/calendar-events";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { googleCalendars } from "@/db/schema/google-calendars";
 import { db } from "@/lib/db/server";
 import { getGoogleAccount, getValidAccessToken } from "@/lib/google/account";
 import { type GoogleEvent, googleEventToRow, listGoogleEvents } from "@/lib/google/calendar-api";
-import { and, eq, gte } from "drizzle-orm";
 
 const FETCH_WINDOW_FUTURE_DAYS = 30;
 const FETCH_WINDOW_PAST_DAYS = 7;

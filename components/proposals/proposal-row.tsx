@@ -1,9 +1,8 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import {
-  ArrowUUpLeft,
   ArrowUpRight,
+  ArrowUUpLeft,
   Check,
   LinkSimple,
   PencilSimple,
@@ -12,6 +11,7 @@ import {
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
   editorDraftFor,
   isEditableKind,

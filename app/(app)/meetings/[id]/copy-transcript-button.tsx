@@ -1,9 +1,9 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { Check, Copy } from "@phosphor-icons/react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 export function CopyTranscriptButton({ transcript }: { transcript: string }) {
   const [copied, setCopied] = useState(false);

@@ -1,9 +1,9 @@
+import { and, asc, desc, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { db } from "@/lib/db/server";
-import { and, asc, desc, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
 
 export type ContractListRow = {
   id: string;

@@ -1,5 +1,18 @@
 "use client";
 
+import {
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { Buildings, CalendarBlank, Clock, Plus } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
 import {
@@ -15,19 +28,6 @@ import { patchProject, quickCreateProject } from "@/lib/actions/projects";
 import { EntityName, EuroAmount, ProjectName } from "@/lib/demo/components";
 import { formatDate } from "@/lib/format";
 import { type ProjectStatus, projectStatusLabels } from "@/lib/schemas/projects";
-import {
-  DndContext,
-  type DragEndEvent,
-  PointerSensor,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import { Buildings, CalendarBlank, Clock, Plus } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useOptimistic, useState, useTransition } from "react";
-import { toast } from "sonner";
 
 export type PipelineItem = {
   id: string;
@@ -170,15 +170,7 @@ function Column({ status, items }: { status: ProjectStatus; items: PipelineItem[
   );
 }
 
-function ColumnHeader({
-  title,
-  count,
-  total,
-}: {
-  title: string;
-  count: number;
-  total: number;
-}) {
+function ColumnHeader({ title, count, total }: { title: string; count: number; total: number }) {
   return (
     <header className="flex items-center gap-2.5 px-1 pt-0.5">
       <span
@@ -372,6 +364,7 @@ function FollowUpEditor({
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: enveloppe qui arrête la propagation vers le lien et le drag dnd-kit, pas un contrôle
     <span
       onPointerDown={stop}
       onMouseDown={stop}

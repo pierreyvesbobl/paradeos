@@ -1,5 +1,8 @@
 "use client";
 
+import { CaretDown, Check, Plus, X } from "@phosphor-icons/react";
+import { type ReactNode, useState } from "react";
+import { toast } from "sonner";
 import {
   Command,
   CommandEmpty,
@@ -10,9 +13,6 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CaretDown, Check, Plus, X } from "@phosphor-icons/react";
-import { type ReactNode, useState } from "react";
-import { toast } from "sonner";
 
 type Option = {
   id: string;

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_ACOMPTE_PERCENT,
   buildMilestoneDougsLine,
   coworkingInvoiceAmountHt,
   coworkingPeriodFromDate,
+  DEFAULT_ACOMPTE_PERCENT,
   milestoneFromDetectedPercent,
   splitMilestoneAmounts,
   toLocalISODate,

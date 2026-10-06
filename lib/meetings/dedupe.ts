@@ -1,9 +1,9 @@
 import "server-only";
 
+import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { meetings } from "@/db/schema/meetings";
 import { db } from "@/lib/db/server";
 import { meetingTitleKey } from "@/lib/meetings/dedupe-keys";
-import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 
 export { meetingTitleKey, transcriptFingerprint } from "@/lib/meetings/dedupe-keys";
 

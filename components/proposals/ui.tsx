@@ -1,6 +1,5 @@
 "use client";
 
-import { Label } from "@/components/ui/label";
 import {
   ArrowBendUpLeft,
   ArrowCounterClockwise,
@@ -12,6 +11,7 @@ import {
   User,
   X,
 } from "@phosphor-icons/react";
+import { Label } from "@/components/ui/label";
 import type { ProposalKind } from "./types";
 
 // Petites briques présentationnelles partagées par le panneau, ses lignes

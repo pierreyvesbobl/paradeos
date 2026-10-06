@@ -1,10 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { acceptEmailProposal, rejectEmailProposal } from "@/lib/actions/email-proposals";
-import { DemoBlur } from "@/lib/demo/components";
-import { formatDate, formatPersonName } from "@/lib/format";
 import {
   ArrowBendUpLeft,
   ArrowSquareOut,
@@ -19,6 +14,11 @@ import {
 import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { acceptEmailProposal, rejectEmailProposal } from "@/lib/actions/email-proposals";
+import { DemoBlur } from "@/lib/demo/components";
+import { formatDate, formatPersonName } from "@/lib/format";
 
 type ProposalKind =
   | "task"

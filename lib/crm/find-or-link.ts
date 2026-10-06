@@ -2,11 +2,11 @@ import "server-only";
 
 import {
   type ContactIdentity,
-  type Match,
   fuzzyMatchContact,
   fuzzyMatchEntity,
   fuzzyMatchProject,
   fuzzyMatchTaskInProject,
+  type Match,
 } from "@/lib/crm/match";
 
 /**

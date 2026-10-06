@@ -1,7 +1,7 @@
-import { safeNextPath } from "@/lib/auth/safe-next";
-import { createClient } from "@/lib/supabase/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { safeNextPath } from "@/lib/auth/safe-next";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * Confirme un OTP / magic link / recovery côté serveur. Gère les deux

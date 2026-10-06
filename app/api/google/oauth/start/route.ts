@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { requireUser } from "@/lib/auth/server";
-import { buildAuthorizeUrl } from "@/lib/google/oauth";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth/server";
+import { buildAuthorizeUrl } from "@/lib/google/oauth";
 
 const STATE_COOKIE = "g_oauth_state";
 

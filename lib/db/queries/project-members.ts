@@ -1,11 +1,11 @@
 import "server-only";
 
+import { asc, eq } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { projectContacts } from "@/db/schema/project-contacts";
 import { projectMembers } from "@/db/schema/project-members";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
-import { asc, eq } from "drizzle-orm";
 
 export async function getProjectMembers(projectId: string) {
   const conn = await db();

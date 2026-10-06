@@ -1,8 +1,8 @@
+import { eq } from "drizzle-orm";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { generateNextInvoiceForContract } from "@/lib/coworking/generate-invoice";
 import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { db } from "@/lib/db/server";
-import { eq } from "drizzle-orm";
 
 /**
  * Cron mensuel du coworking : **génération seulement**.

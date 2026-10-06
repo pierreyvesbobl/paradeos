@@ -1,11 +1,16 @@
 "use server";
 
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { action } from "@/lib/actions/action";
 import { assertContactIsNew } from "@/lib/crm/assert-new";
 import { findExistingContactId } from "@/lib/crm/find-or-link";
 import { db } from "@/lib/db/server";
+import { formatPersonName } from "@/lib/format";
 import {
   createContactSchema,
   deleteContactSchema,
@@ -13,12 +18,6 @@ import {
   quickCreateContactSchema,
   updateContactSchema,
 } from "@/lib/schemas/contacts";
-import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { z } from "zod";
-
-import { formatPersonName } from "@/lib/format";
 export const createContact = action(createContactSchema, async ({ input, user }) => {
   const conn = await db();
   await assertContactIsNew({

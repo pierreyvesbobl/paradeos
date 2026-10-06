@@ -29,7 +29,7 @@ import {
 } from "../app/api/mcp/_dougs-handlers";
 import { getStdioContext } from "./context";
 import { closeDb } from "./db";
-import { PROMPTS, getPromptMessages } from "./prompts";
+import { getPromptMessages, PROMPTS } from "./prompts";
 import { RESOURCE_TEMPLATES, readResource } from "./resources";
 import {
   addNote,

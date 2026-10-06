@@ -1,6 +1,6 @@
+import { NextResponse } from "next/server";
 import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { refreshAllUsersEvents } from "@/lib/google/calendar-sync";
-import { NextResponse } from "next/server";
 
 /**
  * Cron 15 min : refresh les events des calendriers actifs pour tous

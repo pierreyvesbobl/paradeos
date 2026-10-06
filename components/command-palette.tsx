@@ -1,5 +1,8 @@
 "use client";
 
+import { ArrowRight, Buildings, CheckSquare, Kanban, Plus, User } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -8,11 +11,8 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { type SearchResults, globalSearch } from "@/lib/actions/global-search";
+import { globalSearch, type SearchResults } from "@/lib/actions/global-search";
 import { ContactName, DemoBlur, EntityName, ProjectName } from "@/lib/demo/components";
-import { ArrowRight, Buildings, CheckSquare, Kanban, Plus, User } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 
 const QUICK_ACTIONS = [
   { label: "Nouveau projet / deal", href: "/projets/nouveau" },

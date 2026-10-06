@@ -3,6 +3,7 @@ import type { Database } from "../../../db/client";
 
 /** Connexion top-level ou transaction — même API `select`. */
 type DbOrTx = Pick<Database, "select">;
+
 import { contacts } from "../../../db/schema/contacts";
 import { entities } from "../../../db/schema/entities";
 import { meetingParticipants } from "../../../db/schema/meeting-participants";

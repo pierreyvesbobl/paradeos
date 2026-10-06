@@ -1,5 +1,7 @@
 "use client";
 
+import { Check, Plus, X } from "@phosphor-icons/react";
+import { type ReactNode, useMemo, useState } from "react";
 import { AvatarStack, type StackedAssignee } from "@/components/tasks/avatar-stack";
 import type { TaskContactOption, TaskUserOption } from "@/components/tasks/task-types";
 import {
@@ -14,8 +16,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ContactAvatar } from "@/components/user/contact-avatar";
 import { UserAvatar } from "@/components/user/user-avatar";
 import { cn } from "@/lib/utils";
-import { Check, Plus, X } from "@phosphor-icons/react";
-import { type ReactNode, useMemo, useState } from "react";
 
 export type AssigneeRef =
   | { kind: "user"; id: string; fullName: string | null; avatarUrl: string | null }

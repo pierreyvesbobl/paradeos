@@ -1,6 +1,14 @@
 "use client";
 
 import {
+  ArrowsDownUp,
+  CaretDown,
+  Check,
+  SortAscending,
+  SortDescending,
+} from "@phosphor-icons/react";
+import Link from "next/link";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -11,14 +19,6 @@ import {
 import type { NoteSortField } from "@/lib/db/queries/notes";
 import { NOTE_SORT_GROUPS, NOTE_SORT_OPTIONS } from "@/lib/notes/sort-options";
 import { cn } from "@/lib/utils";
-import {
-  ArrowsDownUp,
-  CaretDown,
-  Check,
-  SortAscending,
-  SortDescending,
-} from "@phosphor-icons/react";
-import Link from "next/link";
 
 type Props = {
   current: { field: NoteSortField; dir: "asc" | "desc" };

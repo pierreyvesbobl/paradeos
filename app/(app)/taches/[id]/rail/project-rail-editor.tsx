@@ -1,5 +1,9 @@
 "use client";
 
+import { Check, X } from "@phosphor-icons/react/dist/ssr";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import {
   Command,
   CommandEmpty,
@@ -11,10 +15,6 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { patchTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils";
-import { Check, X } from "@phosphor-icons/react/dist/ssr";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type Option = { id: string; name: string };
 

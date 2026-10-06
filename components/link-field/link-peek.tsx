@@ -1,6 +1,5 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import {
   ArrowRight,
   Briefcase,
@@ -9,6 +8,7 @@ import {
   type Icon as PhosphorIcon,
 } from "@phosphor-icons/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 import { LinkGlyph, type LinkItem } from "./link-chip";
 
 const FIELD_ICON: Record<string, PhosphorIcon> = {

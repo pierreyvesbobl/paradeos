@@ -1,18 +1,14 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateOpenAiKey } from "@/lib/actions/integrations";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
-export function OpenAiKeyForm({
-  currentKeyPreview,
-}: {
-  currentKeyPreview: string | null;
-}) {
+export function OpenAiKeyForm({ currentKeyPreview }: { currentKeyPreview: string | null }) {
   const router = useRouter();
   const [editing, setEditing] = useState(currentKeyPreview === null);
   const [value, setValue] = useState("");

@@ -1,5 +1,3 @@
-import { formatDate } from "@/lib/format";
-import type { InvoiceDirectionFilter } from "@/lib/gmail/queries";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -11,6 +9,8 @@ import {
   Tray,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { formatDate } from "@/lib/format";
+import type { InvoiceDirectionFilter } from "@/lib/gmail/queries";
 
 export type EmailListRow = {
   id: string;

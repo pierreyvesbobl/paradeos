@@ -1,7 +1,7 @@
 import { getGoogleAccount } from "@/lib/google/account";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
 import { SUGGESTED_MEETINGS_EMAIL_LABEL } from "@/lib/meetings/ingest-from-email";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { EmailTranscriptsForm } from "./email-transcripts-form";
 
 /**

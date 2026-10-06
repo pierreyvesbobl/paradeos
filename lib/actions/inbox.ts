@@ -17,12 +17,12 @@ import { decideProposal, revertProposal, updateAcceptedProposal } from "@/lib/ac
 import { getUser } from "@/lib/auth/server";
 import type { InboxReconciliation } from "@/lib/db/queries/inbox";
 import {
+  getInboxHistory,
   type InboxHistoryData,
   type InboxHistoryFilters,
   type InboxHistorySource,
-  getInboxHistory,
 } from "@/lib/db/queries/inbox-history";
-import { type InboxPreview, getInboxPreview } from "@/lib/db/queries/inbox-preview";
+import { getInboxPreview, type InboxPreview } from "@/lib/db/queries/inbox-preview";
 
 /**
  * Dispatcher unique appelé depuis /inbox : choisit l'action métier

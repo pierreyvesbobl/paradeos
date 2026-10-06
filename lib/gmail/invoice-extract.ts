@@ -1,11 +1,11 @@
 import "server-only";
 
-import { LLM_BUDGET_MS, withLlmTimeout } from "@/lib/llm/timeout";
-import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { LLM_BUDGET_MS, withLlmTimeout } from "@/lib/llm/timeout";
+import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 

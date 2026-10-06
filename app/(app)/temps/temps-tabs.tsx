@@ -1,8 +1,8 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import { CalendarDots, ChartBar } from "@phosphor-icons/react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 type Tab = "planning" | "rapport";
 

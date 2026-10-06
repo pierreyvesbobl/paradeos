@@ -1,4 +1,6 @@
 import "server-only";
+import { eq } from "drizzle-orm";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { contacts as contactsTable } from "@/db/schema/contacts";
 import { entities as entitiesTable } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
@@ -21,8 +23,6 @@ import {
 } from "@/lib/dougs/client";
 import { sendEmail } from "@/lib/email/client";
 import { getUserEmails } from "@/lib/email/users";
-import { eq } from "drizzle-orm";
-import { revalidatePath, revalidateTag } from "next/cache";
 
 export type SendDocumentArgs = {
   userId: string;

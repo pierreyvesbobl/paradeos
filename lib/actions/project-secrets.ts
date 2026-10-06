@@ -1,5 +1,7 @@
 "use server";
 
+import { eq, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { projectSecrets } from "@/db/schema/project-secrets";
 import { action } from "@/lib/actions/action";
 import { requireProjectSensitiveAccess } from "@/lib/auth/project-access";
@@ -11,8 +13,6 @@ import {
   revealProjectSecretSchema,
   updateProjectSecretSchema,
 } from "@/lib/schemas/project-secrets";
-import { eq, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
 function encryptOptional(v: string | undefined): string | null {
   if (v == null) return null;

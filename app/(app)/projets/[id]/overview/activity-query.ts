@@ -1,12 +1,12 @@
 import "server-only";
 
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { auditLog } from "@/db/schema/audit-log";
-import { gmailTags, gmailThreadTags, gmailThreads } from "@/db/schema/gmail";
+import { gmailTags, gmailThreads, gmailThreadTags } from "@/db/schema/gmail";
 import { notes } from "@/db/schema/notes";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 
 export type ActivityKind = "email" | "note" | "task_created" | "status_transition";
 

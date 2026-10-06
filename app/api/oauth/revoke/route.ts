@@ -5,9 +5,10 @@
  * La spec impose de répondre 200 même pour un token inconnu : révéler
  * qu'un token existe serait un oracle.
  */
+
+import type { NextRequest } from "next/server";
 import { corsPreflight, jsonWithCors, oauthError } from "@/lib/oauth/http";
 import { revokeToken } from "@/lib/oauth/store";
-import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

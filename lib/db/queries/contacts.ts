@@ -1,8 +1,8 @@
 import "server-only";
 
+import { sql } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { db } from "@/lib/db/server";
-import { sql } from "drizzle-orm";
 
 /**
  * Cherche un contact par adresse email (insensible à la casse). Utilise

@@ -1,12 +1,12 @@
 "use client";
 
+import { MagnifyingGlass, Plus, PlusCircle, Sparkle, X } from "@phosphor-icons/react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserAvatar } from "@/components/user/user-avatar";
 import { quickCreateContact } from "@/lib/actions/contacts";
 import { cn } from "@/lib/utils";
-import { MagnifyingGlass, Plus, PlusCircle, Sparkle, X } from "@phosphor-icons/react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import { LinkChip, LinkGlyph, type LinkItem } from "../link-field/link-chip";
 import { LinkPeek, type PeekField } from "../link-field/link-peek";
 

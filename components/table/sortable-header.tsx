@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowsDownUp } from "@phosphor-icons/react/dist/ssr";
+import { ArrowDown, ArrowsDownUp, ArrowUp } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
 export type SortDir = "asc" | "desc";

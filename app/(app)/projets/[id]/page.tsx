@@ -1,3 +1,7 @@
+import { and, asc, eq } from "drizzle-orm";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { ActivityFeedCard } from "@/app/(app)/projets/[id]/overview/activity-feed-card";
 import { getProjectActivity } from "@/app/(app)/projets/[id]/overview/activity-query";
 import { DescriptionCard } from "@/app/(app)/projets/[id]/overview/description-card";
@@ -44,10 +48,6 @@ import { formatDays, formatDuration, formatPersonName } from "@/lib/format";
 import { computeDaysWorked, computeEffectiveDailyRate } from "@/lib/profitability-math";
 import { projectBillingTypeLabels } from "@/lib/schemas/projects";
 import { cn } from "@/lib/utils";
-import { and, asc, eq } from "drizzle-orm";
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { Suspense } from "react";
 import { BillingMilestonesSection } from "./billing-milestones-section";
 import { BillingSummary } from "./billing-summary";
 import { DougsQuoteSection } from "./dougs-quote-section";

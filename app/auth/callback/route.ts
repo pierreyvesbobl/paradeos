@@ -1,6 +1,6 @@
+import { NextResponse } from "next/server";
 import { safeNextPath } from "@/lib/auth/safe-next";
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
 
 /**
  * Callback magic link / OAuth Supabase. Échange le `code` contre une

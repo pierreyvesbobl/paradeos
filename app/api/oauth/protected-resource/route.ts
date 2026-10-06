@@ -7,7 +7,7 @@
  * découvre quel serveur d'autorisation utiliser.
  */
 import { getAppUrl } from "@/lib/app-url";
-import { MCP_PATH, SCOPES, resourceUri } from "@/lib/oauth/config";
+import { MCP_PATH, resourceUri, SCOPES } from "@/lib/oauth/config";
 import { corsPreflight, jsonWithCors } from "@/lib/oauth/http";
 
 export const runtime = "nodejs";

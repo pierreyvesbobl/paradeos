@@ -1,11 +1,11 @@
 import "server-only";
 
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, type SQL, sql } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
-import { gmailMessages, gmailTags, gmailThreadTags, gmailThreads } from "@/db/schema/gmail";
+import { gmailMessages, gmailTags, gmailThreads, gmailThreadTags } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
-import { type SQL, and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
 
 export type GmailThreadRow = {
   id: string;

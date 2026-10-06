@@ -1,11 +1,11 @@
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { NextResponse } from "next/server";
 import { meetings } from "@/db/schema/meetings";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
 import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import { transcribeMeetingAudio } from "@/lib/meetings/transcribe";
-import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { NextResponse } from "next/server";
 
 /**
  * Route synchrone qui transcrit l'audio attaché à une réunion via

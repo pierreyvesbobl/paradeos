@@ -1,3 +1,8 @@
+import { Plus } from "@phosphor-icons/react/dist/ssr";
+import { asc, eq } from "drizzle-orm";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { EmailsTab } from "@/components/emails/emails-tab";
@@ -11,11 +16,6 @@ import { deleteEntityAndRedirect } from "@/lib/actions/entities";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { db } from "@/lib/db/server";
 import { ContactName, EntityName } from "@/lib/demo/components";
-import { Plus } from "@phosphor-icons/react/dist/ssr";
-import { asc, eq } from "drizzle-orm";
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { Suspense } from "react";
 import {
   EntAddressField,
   EntAddressStreet,

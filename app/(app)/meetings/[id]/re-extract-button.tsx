@@ -1,10 +1,10 @@
 "use client";
 
-import { extractMeetingProposals } from "@/lib/actions/meetings";
 import { Sparkle } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import { extractMeetingProposals } from "@/lib/actions/meetings";
 
 export function ReExtractButton({ meetingId }: { meetingId: string }) {
   const router = useRouter();

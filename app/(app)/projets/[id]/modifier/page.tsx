@@ -1,3 +1,5 @@
+import { asc, eq } from "drizzle-orm";
+import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
@@ -5,8 +7,6 @@ import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
-import { asc, eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
 import { ProjectForm } from "../../project-form";
 
 type Params = Promise<{ id: string }>;

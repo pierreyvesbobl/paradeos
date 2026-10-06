@@ -1,13 +1,13 @@
 "use client";
 
-import { DateInput } from "@/components/ui/date-input";
-import { patchTask } from "@/lib/actions/tasks";
-import { formatDate } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import { Check, CheckCircle, X } from "@phosphor-icons/react/dist/ssr";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import { DateInput } from "@/components/ui/date-input";
+import { patchTask } from "@/lib/actions/tasks";
+import { formatDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 function toIsoDate(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -25,13 +25,7 @@ function toIsoDate(value: Date | string | null | undefined): string | null {
  * la sémantique « terminée / non terminée » reste cohérente sans que le
  * serveur ait à deviner.
  */
-export function TaskCompletedEditor({
-  id,
-  value,
-}: {
-  id: string;
-  value: Date | string | null;
-}) {
+export function TaskCompletedEditor({ id, value }: { id: string; value: Date | string | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const iso = toIsoDate(value);

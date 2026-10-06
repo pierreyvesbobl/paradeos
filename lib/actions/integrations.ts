@@ -1,12 +1,12 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { action } from "@/lib/actions/action";
 import { requireAdmin } from "@/lib/auth/admin";
 import { uploadDougsInvoicingLogo } from "@/lib/dougs/client";
 import { updateLlmConfigSchema, updateOpenAiKeySchema } from "@/lib/schemas/integrations";
 import { SETTING_KEYS, setSetting } from "@/lib/settings";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 /**
  * Met à jour la config LLM globale (clé OpenRouter + modèle).

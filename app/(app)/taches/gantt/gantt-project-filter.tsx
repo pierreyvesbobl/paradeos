@@ -1,8 +1,8 @@
 "use client";
 
-import { FkCombobox } from "@/components/inline/fk-combobox";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { FkCombobox } from "@/components/inline/fk-combobox";
 
 /**
  * Filtre projet pour le Gantt — combobox avec recherche au lieu de

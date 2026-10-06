@@ -1,13 +1,13 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { createApiToken, revokeApiToken } from "@/lib/actions/api-tokens";
-import { formatDate } from "@/lib/format";
 import { Check, Copy, Key, Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { createApiToken, revokeApiToken } from "@/lib/actions/api-tokens";
+import { formatDate } from "@/lib/format";
 
 type Token = {
   id: string;

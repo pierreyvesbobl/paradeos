@@ -1,8 +1,8 @@
+import { and, count, desc, eq, isNull, ne } from "drizzle-orm";
 import { mentions } from "@/db/schema/mentions";
 import { notes } from "@/db/schema/notes";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
-import { and, count, desc, eq, isNull, ne } from "drizzle-orm";
 
 /** Compte des mentions non lues du user courant (hors self-mentions). */
 export async function getUnreadMentionCount(userId: string): Promise<number> {

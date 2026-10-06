@@ -1,13 +1,3 @@
-import { EmptyState } from "@/components/empty-state";
-import { requireUser } from "@/lib/auth/server";
-import { DemoBlur } from "@/lib/demo/components";
-import { isDemoMode } from "@/lib/demo/server";
-import {
-  type DougsVendorInvoice,
-  buildDougsVendorInvoiceUrl,
-  getDougsCompanyId,
-} from "@/lib/dougs/client";
-import { getDougsVendorInvoicesSafe } from "@/lib/dougs/signals";
 import {
   ArrowSquareOut,
   FileArrowDown,
@@ -17,6 +7,16 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { EmptyState } from "@/components/empty-state";
+import { requireUser } from "@/lib/auth/server";
+import { DemoBlur } from "@/lib/demo/components";
+import { isDemoMode } from "@/lib/demo/server";
+import {
+  buildDougsVendorInvoiceUrl,
+  type DougsVendorInvoice,
+  getDougsCompanyId,
+} from "@/lib/dougs/client";
+import { getDougsVendorInvoicesSafe } from "@/lib/dougs/signals";
 
 /**
  * Factures d'achat (fournisseurs) telles que Dougs les voit.

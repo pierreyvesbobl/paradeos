@@ -1,9 +1,9 @@
 import "server-only";
 
+import { eq } from "drizzle-orm";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
-import { eq } from "drizzle-orm";
 
 /**
  * Cherche un user admin avec un compte Google connecté pour exécuter

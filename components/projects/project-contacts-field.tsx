@@ -1,18 +1,18 @@
 "use client";
 
-import { ContactPreviewDialog } from "@/components/projects/contact-preview-dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { quickCreateContact } from "@/lib/actions/contacts";
-import { addProjectContact, removeProjectContact } from "@/lib/actions/project-members";
-import { cn } from "@/lib/utils";
 import { MagnifyingGlass, Plus, PlusCircle } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { ContactPreviewDialog } from "@/components/projects/contact-preview-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { quickCreateContact } from "@/lib/actions/contacts";
+import { addProjectContact, removeProjectContact } from "@/lib/actions/project-members";
+import { formatPersonName } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { LinkChip, LinkGlyph, type LinkItem } from "../link-field/link-chip";
 import { LinkPeek, type PeekField } from "../link-field/link-peek";
 
-import { formatPersonName } from "@/lib/format";
 type Contact = {
   id: string;
   firstName: string | null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CRON_MAX_DURATION_MS, START_CUTOFF_MS, canStartAnotherItem } from "./run-budget";
+import { CRON_MAX_DURATION_MS, canStartAnotherItem, START_CUTOFF_MS } from "./run-budget";
 
 describe("canStartAnotherItem", () => {
   const t0 = 1_000_000;

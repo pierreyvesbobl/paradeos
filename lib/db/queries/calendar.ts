@@ -1,10 +1,10 @@
 import "server-only";
 
+import { and, asc, between, eq, getTableColumns } from "drizzle-orm";
 import { calendarEvents } from "@/db/schema/calendar-events";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { googleCalendars } from "@/db/schema/google-calendars";
 import { db } from "@/lib/db/server";
-import { and, asc, between, eq, getTableColumns } from "drizzle-orm";
 
 export async function getCalendarsForUser(userId: string) {
   const conn = await db();

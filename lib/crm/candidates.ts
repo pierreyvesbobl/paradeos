@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
@@ -12,7 +13,6 @@ import {
   pickBestMatch,
   pickBestProject,
 } from "@/lib/crm/pick";
-import { sql } from "drizzle-orm";
 
 /**
  * Chargement des candidats pour le rapprochement anti-doublon. La logique

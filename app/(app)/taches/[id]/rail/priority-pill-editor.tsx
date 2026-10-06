@@ -1,13 +1,13 @@
 "use client";
 
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { patchTask } from "@/lib/actions/tasks";
-import { type TaskPriority, taskPriorityEnum, taskPriorityLabels } from "@/lib/schemas/tasks";
-import { cn } from "@/lib/utils";
 import { CaretDown, Check } from "@phosphor-icons/react/dist/ssr";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { patchTask } from "@/lib/actions/tasks";
+import { type TaskPriority, taskPriorityEnum, taskPriorityLabels } from "@/lib/schemas/tasks";
+import { cn } from "@/lib/utils";
 
 const PRIO_TONE: Record<TaskPriority, { bg: string; text: string; dot: string }> = {
   low: { bg: "bg-tint-gray-bg", text: "text-tint-gray-text", dot: "bg-tint-gray-dot" },

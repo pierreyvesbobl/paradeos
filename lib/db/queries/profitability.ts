@@ -1,3 +1,4 @@
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { projects } from "@/db/schema/projects";
 import { timeEntries } from "@/db/schema/time-entries";
 import { users } from "@/db/schema/users";
@@ -9,7 +10,6 @@ import {
   computeRevenue,
 } from "@/lib/profitability-math";
 import type { ProjectBillingType } from "@/lib/schemas/projects";
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 /**
  * Pour une time entry réalisée, le coût est `(durée minutes / 60) × user.cost_rate_hourly`.

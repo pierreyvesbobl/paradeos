@@ -1,13 +1,13 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
-import { linkedinSyncTokens } from "@/db/schema/linkedin";
-import { action } from "@/lib/actions/action";
-import { db } from "@/lib/db/server";
-import { LINKEDIN_SYNC_TOKEN_PREFIX, hashSyncToken } from "@/lib/linkedin/sync-tokens";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { linkedinSyncTokens } from "@/db/schema/linkedin";
+import { action } from "@/lib/actions/action";
+import { db } from "@/lib/db/server";
+import { hashSyncToken, LINKEDIN_SYNC_TOKEN_PREFIX } from "@/lib/linkedin/sync-tokens";
 
 const createSchema = z.object({
   label: z.string().trim().min(1, "Label requis.").max(80),

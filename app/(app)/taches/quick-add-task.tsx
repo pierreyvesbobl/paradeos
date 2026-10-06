@@ -1,5 +1,9 @@
 "use client";
 
+import { CalendarBlank, CaretDown, Check, Plus, X } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { PriorityPill } from "@/components/tasks/priority-pill";
 import type {
   TaskContactOption,
@@ -22,10 +26,6 @@ import { quickCreateTask } from "@/lib/actions/tasks";
 import { formatDate } from "@/lib/format";
 import { type TaskPriority, taskPriorityEnum, taskPriorityLabels } from "@/lib/schemas/tasks";
 import { cn } from "@/lib/utils";
-import { CalendarBlank, CaretDown, Check, Plus, X } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type Assignee =
   | { kind: "user"; id: string; fullName: string | null; avatarUrl: string | null }
@@ -413,13 +413,7 @@ function ProjectPicker({
   );
 }
 
-function DueDateTrigger({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function DueDateTrigger({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <DateInput
       value={value}

@@ -1,11 +1,13 @@
 "use client";
 
+import { CalendarBlank, CaretLeft, CaretRight, X } from "@phosphor-icons/react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  DAY_LABELS,
   addDays,
   addMonths,
   buildMonthDays,
+  DAY_LABELS,
   formatIsoDate,
   isSameDay,
   parseIsoDate,
@@ -15,8 +17,6 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { CalendarBlank, CaretLeft, CaretRight, X } from "@phosphor-icons/react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 const FMT_MONTH_YEAR = new Intl.DateTimeFormat("fr-FR", {
   month: "long",

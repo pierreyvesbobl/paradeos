@@ -1,5 +1,7 @@
 "use client";
 
+import { Buildings, MagnifyingGlass, Warning } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
 import {
   Command,
   CommandEmpty,
@@ -12,8 +14,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { lookupCompanies } from "@/lib/actions/gouv";
 import type { SireneCompany } from "@/lib/gouv/sirene";
 import { cn } from "@/lib/utils";
-import { Buildings, MagnifyingGlass, Warning } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
 
 type Props = {
   /** Appelé avec la fiche INSEE choisie. À charge de l'appelant de préremplir. */

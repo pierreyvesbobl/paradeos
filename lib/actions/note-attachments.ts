@@ -1,5 +1,8 @@
 "use server";
 
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { noteAttachments } from "@/db/schema/note-attachments";
 import { notes } from "@/db/schema/notes";
 import { action } from "@/lib/actions/action";
@@ -9,9 +12,6 @@ import {
   deleteAttachmentSchema,
   signedUrlSchema,
 } from "@/lib/schemas/note-attachments";
-import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
-import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
 const BUCKET = "note-attachments";
 

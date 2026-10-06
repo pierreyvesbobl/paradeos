@@ -1,8 +1,8 @@
+import { Envelope } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/format";
 import { listThreadsForSubject } from "@/lib/gmail/queries";
-import { Envelope } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 
 type Props = {
   linkKind: "project" | "contact" | "entity";

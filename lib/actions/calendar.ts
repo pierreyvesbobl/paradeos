@@ -1,5 +1,8 @@
 "use server";
 
+import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { calendarEvents } from "@/db/schema/calendar-events";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { googleCalendars } from "@/db/schema/google-calendars";
@@ -14,9 +17,6 @@ import {
   toggleCalendarSyncSchema,
   unattributeTimeEntrySchema,
 } from "@/lib/schemas/calendar";
-import { and, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 /**
  * Récupère la liste des calendriers de l'user depuis Google et upsert

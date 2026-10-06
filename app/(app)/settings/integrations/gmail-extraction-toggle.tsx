@@ -1,11 +1,11 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { setGmailExtractionEnabled } from "@/lib/actions/gmail";
 import { Power } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { setGmailExtractionEnabled } from "@/lib/actions/gmail";
 
 export function GmailExtractionToggle({ enabled }: { enabled: boolean }) {
   const router = useRouter();

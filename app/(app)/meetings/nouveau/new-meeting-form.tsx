@@ -1,13 +1,16 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { FkCombobox } from "@/components/inline/fk-combobox";
 import {
   type ParticipantContactOption,
   type ParticipantDraft,
   type ParticipantLabel,
+  ParticipantsPicker,
   type ParticipantTarget,
   type ParticipantUserOption,
-  ParticipantsPicker,
 } from "@/components/meetings/participants-picker";
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
@@ -17,9 +20,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { attachAudio, signedAudioUploadUrl } from "@/lib/actions/meeting-audio";
 import { createMeeting, extractMeetingProposals } from "@/lib/actions/meetings";
 import { AUDIO_MAX_BYTES } from "@/lib/schemas/meeting-audio";
-import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type Props = {
   projects: { id: string; name: string; entityId: string | null }[];

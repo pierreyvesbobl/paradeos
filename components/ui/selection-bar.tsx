@@ -22,7 +22,7 @@ export function SelectionBar({ count, label, onClear, children, ariaLabel }: Pro
   if (count === 0) return null;
   return (
     <div
-      className="-translate-x-1/2 fixed bottom-6 left-1/2 z-50 flex items-center gap-1.5 rounded-[10px] px-2.5 py-2 pl-3.5 text-sm shadow-popover"
+      className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1.5 rounded-[10px] px-2.5 py-2 pl-3.5 text-sm shadow-popover"
       style={{ background: "var(--ds-text)" }}
       role="toolbar"
       aria-label={ariaLabel ?? "Actions sur la sélection"}

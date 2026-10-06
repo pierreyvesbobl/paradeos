@@ -1,5 +1,8 @@
 "use server";
 
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
 import { assertProjectIsNew } from "@/lib/crm/assert-new";
@@ -13,9 +16,6 @@ import {
   quickCreateProjectSchema,
   updateProjectSchema,
 } from "@/lib/schemas/projects";
-import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 export const createProject = action(createProjectSchema, async ({ input, user }) => {
   const conn = await db();

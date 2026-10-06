@@ -1,8 +1,8 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { approveAuthorization, denyAuthorization } from "@/lib/actions/oauth";
-import { useState, useTransition } from "react";
 
 /**
  * Boutons Autoriser / Refuser. Les deux actions redirigent vers le client

@@ -1,5 +1,9 @@
 "use client";
 
+import { Check, Copy, Key, LinkedinLogo, Trash } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -7,10 +11,6 @@ import {
   revokeLinkedinSyncToken,
 } from "@/lib/actions/linkedin-sync-tokens";
 import { formatDate } from "@/lib/format";
-import { Check, Copy, Key, LinkedinLogo, Trash } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type SyncToken = {
   id: string;

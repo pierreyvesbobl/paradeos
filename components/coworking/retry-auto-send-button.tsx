@@ -1,12 +1,12 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { retryCoworkingAutoSend } from "@/lib/actions/coworking";
 import { ArrowClockwise } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { retryCoworkingAutoSend } from "@/lib/actions/coworking";
 
 /** Messages des raisons de non-envoi, côté UI. */
 const REASON_LABELS: Record<string, string> = {

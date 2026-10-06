@@ -1,3 +1,4 @@
+import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages, gmailTags } from "@/db/schema/gmail";
@@ -8,7 +9,6 @@ import { projects } from "@/db/schema/projects";
 import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { formatPersonName } from "@/lib/format";
-import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import type { InboxExtractionKind, InboxItemMeta } from "./inbox";
 
 /**

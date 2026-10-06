@@ -1,3 +1,5 @@
+import { asc, eq } from "drizzle-orm";
+import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { PageHeader } from "@/components/page-header";
 import { contacts as contactsTable } from "@/db/schema/contacts";
@@ -7,11 +9,9 @@ import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
-import { asc, eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { formatPersonName } from "@/lib/format";
 import { TaskForm } from "../../task-form";
 
-import { formatPersonName } from "@/lib/format";
 type Params = Promise<{ id: string }>;
 
 export default async function EditTaskPage({ params }: { params: Params }) {

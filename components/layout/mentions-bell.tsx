@@ -1,5 +1,9 @@
 "use client";
 
+import { Bell } from "@phosphor-icons/react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,10 +14,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { markAllMyMentionsRead } from "@/lib/actions/notes";
-import { Bell } from "@phosphor-icons/react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useTransition } from "react";
 
 const SUBJECT_PATH: Record<string, (id: string) => string> = {
   entity: (id) => `/entites/${id}`,
@@ -56,7 +56,7 @@ export function MentionsBell({
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="size-4" />
           {unreadCount > 0 ? (
-            <span className="-right-0.5 -top-0.5 absolute inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 font-semibold text-[10px] text-destructive-foreground">
+            <span className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 font-semibold text-[10px] text-destructive-foreground">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           ) : null}

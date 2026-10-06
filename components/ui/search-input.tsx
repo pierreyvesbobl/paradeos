@@ -1,10 +1,10 @@
 "use client";
 
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import { X } from "@phosphor-icons/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type Props = {
   name: string;
@@ -99,7 +99,7 @@ export function SearchInputWithClear({
           type="button"
           onClick={clear}
           aria-label="Vider la recherche"
-          className="-translate-y-1/2 absolute top-1/2 right-2 inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="absolute top-1/2 right-2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <X className="size-3.5" />
         </button>

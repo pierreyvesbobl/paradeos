@@ -1,3 +1,7 @@
+import { CaretRight } from "@phosphor-icons/react/dist/ssr";
+import { asc, eq } from "drizzle-orm";
+import Link from "next/link";
+import { notFound } from "next/navigation";
 import { TaskAssigneeRailEditor } from "@/app/(app)/taches/[id]/rail/assignee-rail-editor";
 import { TaskCompletedEditor } from "@/app/(app)/taches/[id]/rail/completed-editor";
 import { TaskPriorityPillEditor } from "@/app/(app)/taches/[id]/rail/priority-pill-editor";
@@ -19,10 +23,6 @@ import { getTaskTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
 import { formatDateTime, formatDuration, formatPersonName } from "@/lib/format";
 import { timeEntryKindLabels } from "@/lib/schemas/time-entries";
-import { CaretRight } from "@phosphor-icons/react/dist/ssr";
-import { asc, eq } from "drizzle-orm";
-import Link from "next/link";
-import { notFound } from "next/navigation";
 
 type Params = Promise<{ id: string }>;
 

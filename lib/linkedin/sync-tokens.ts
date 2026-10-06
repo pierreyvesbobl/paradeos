@@ -1,9 +1,9 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { linkedinSyncTokens } from "@/db/schema/linkedin";
 import { db } from "@/lib/db/server";
-import { and, desc, eq, isNull } from "drizzle-orm";
 
 /**
  * Tokens porteurs de l'auth entre l'extension Chrome et Paradeos.

@@ -1,12 +1,12 @@
 "use server";
 
+import { asc, ilike, or } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
-import { asc, ilike, or } from "drizzle-orm";
 
 export type SearchResults = {
   contacts: { id: string; firstName: string; lastName: string }[];

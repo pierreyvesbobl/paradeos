@@ -1,3 +1,5 @@
+import { Clock } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,8 +17,6 @@ import { getGlobalTimeStats } from "@/lib/db/queries/time-stats";
 import { formatDate, formatDays, formatDuration, formatEuro } from "@/lib/format";
 import { computeDaysWorked, computeEffectiveDailyRate } from "@/lib/profitability-math";
 import { projectKindLabels } from "@/lib/schemas/projects";
-import { Clock } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 
 export type Range = "week" | "month" | "all";
 

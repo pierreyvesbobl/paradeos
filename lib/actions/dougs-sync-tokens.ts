@@ -1,13 +1,13 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
+import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { dougsSyncTokens } from "@/db/schema/dougs";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
 import { DOUGS_SYNC_TOKEN_PREFIX, hashSyncToken } from "@/lib/dougs/sync-tokens";
-import { and, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 const createSchema = z.object({
   label: z.string().trim().min(1, "Label requis.").max(80),

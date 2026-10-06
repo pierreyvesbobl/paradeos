@@ -2,7 +2,6 @@ import "server-only";
 
 import {
   type AnyColumn,
-  type SQL,
   and,
   eq,
   gt,
@@ -16,6 +15,7 @@ import {
   ne,
   notInArray,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 

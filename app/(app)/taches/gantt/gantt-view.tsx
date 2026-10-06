@@ -1,12 +1,13 @@
 "use client";
 
-import { patchTask } from "@/lib/actions/tasks";
-import { DAY_LABELS, addDays, isoDate } from "@/lib/calendar";
-import type { TaskPriority, TaskStatus } from "@/lib/schemas/tasks";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { patchTask } from "@/lib/actions/tasks";
+import { addDays, DAY_LABELS, isoDate } from "@/lib/calendar";
+import type { TaskPriority, TaskStatus } from "@/lib/schemas/tasks";
+
 // `router` est seulement utilisé dans TaskBar — pas besoin dans GanttView lui-même.
 
 const DAY_WIDTH = 36;
@@ -90,13 +91,7 @@ const STATUS_BORDER: Record<TaskStatus, string> = {
   cancelled: "border-l-slate-400",
 };
 
-export function GanttView({
-  tasks,
-  viewStartIso,
-}: {
-  tasks: GanttTask[];
-  viewStartIso: string;
-}) {
+export function GanttView({ tasks, viewStartIso }: { tasks: GanttTask[]; viewStartIso: string }) {
   const viewStart = new Date(`${viewStartIso}T00:00:00`);
   const days = Array.from({ length: VIEW_DAYS }, (_, i) => addDays(viewStart, i));
   const todayIdx = daysBetween(viewStart, new Date());
@@ -380,6 +375,7 @@ function TaskBar({
       </span>
       {!clippedLeft ? (
         // biome-ignore lint/a11y/useKeyWithClickEvents: drag handle, mouse-only par design
+        // biome-ignore lint/a11y/noStaticElementInteractions: drag handle, mouse-only par design
         <span
           onPointerDown={(e) => {
             e.stopPropagation();
@@ -391,6 +387,7 @@ function TaskBar({
       ) : null}
       {!clippedRight ? (
         // biome-ignore lint/a11y/useKeyWithClickEvents: drag handle, mouse-only par design
+        // biome-ignore lint/a11y/noStaticElementInteractions: drag handle, mouse-only par design
         <span
           onPointerDown={(e) => {
             e.stopPropagation();

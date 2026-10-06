@@ -1,5 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { AddressAutocomplete } from "@/components/gouv/address-autocomplete";
 import { CompanySearch } from "@/components/gouv/company-search";
 import { FkCombobox } from "@/components/inline/fk-combobox";
@@ -19,9 +22,6 @@ import { createEntity, updateEntity } from "@/lib/actions/entities";
 import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
 import type { SireneCompany, SireneEstablishment } from "@/lib/gouv/sirene";
 import { type EntityKind, entityKindEnum, entityKindLabels } from "@/lib/schemas/entities";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 type Address = { street?: string; postalCode?: string; city?: string; country?: string };
 

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
+import { eq } from "drizzle-orm";
 import { meetings } from "@/db/schema/meetings";
 import { db } from "@/lib/db/server";
 import { getOrCreateGmailLabel, loadGmailLabelCache } from "@/lib/gmail/links";
@@ -19,12 +21,12 @@ import {
 import { resolveDeclaredProject, saveDeclaredParticipants } from "@/lib/meetings/declared-context";
 import { findDuplicateMeeting, transcriptFingerprint } from "@/lib/meetings/dedupe";
 import {
-  MAX_AUDIO_BYTES,
-  MIN_BODY_CHARS,
-  MIN_TRANSCRIPT_CHARS,
   buildAddressQuery,
   cleanEmailBodyForTranscript,
   htmlToPlainText,
+  MAX_AUDIO_BYTES,
+  MIN_BODY_CHARS,
+  MIN_TRANSCRIPT_CHARS,
   pickTranscriptSource,
   sanitizeAudioFileName,
   titleFromSubject,
@@ -34,9 +36,7 @@ import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import { getIngestionUserIds } from "@/lib/meetings/ingestion-user";
 import { canStartAnotherItem } from "@/lib/meetings/run-budget";
 import { transcribeMeetingAudio } from "@/lib/meetings/transcribe";
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
-import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
-import { eq } from "drizzle-orm";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
 /**
  * Ingestion des réunions envoyées par mail.

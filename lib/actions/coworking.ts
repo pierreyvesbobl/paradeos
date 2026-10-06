@@ -1,5 +1,8 @@
 "use server";
 
+import { and, asc, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { z } from "zod";
 import { contacts as contactsTable } from "@/db/schema/contacts";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { entities as entitiesTable } from "@/db/schema/entities";
@@ -19,9 +22,6 @@ import {
   updateCoworkingContractSchema,
 } from "@/lib/schemas/coworking";
 import { SETTING_KEYS, setSetting } from "@/lib/settings";
-import { and, asc, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
-import { revalidatePath, revalidateTag } from "next/cache";
-import { z } from "zod";
 
 const idSchema = z.object({ id: z.string().uuid() });
 
@@ -140,7 +140,7 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
     .where(eq(invoices.id, input.id))
     .limit(1);
 
-  if (!row || !row.contract) throw new Error("Facture coworking introuvable.");
+  if (!row?.contract) throw new Error("Facture coworking introuvable.");
   const { invoice, contract } = row;
   if (invoice.kind !== "coworking") {
     throw new Error("Cette facture n'est pas de type coworking.");

@@ -1,5 +1,7 @@
 "use server";
 
+import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { projectContacts } from "@/db/schema/project-contacts";
 import { projectMembers } from "@/db/schema/project-members";
 import { action } from "@/lib/actions/action";
@@ -10,8 +12,6 @@ import {
   removeProjectContactSchema,
   removeProjectMemberSchema,
 } from "@/lib/schemas/project-members";
-import { and, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
 export const addProjectMember = action(addProjectMemberSchema, async ({ input, user }) => {
   const conn = await db();

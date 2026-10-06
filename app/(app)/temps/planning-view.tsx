@@ -1,3 +1,6 @@
+import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
+import { and, asc, eq, gte, lt, notInArray } from "drizzle-orm";
+import Link from "next/link";
 import { contacts } from "@/db/schema/contacts";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
@@ -7,9 +10,6 @@ import { addDays, formatWeekRange, startOfIsoWeek } from "@/lib/calendar";
 import { getCalendarEventsForRange } from "@/lib/db/queries/calendar";
 import { db } from "@/lib/db/server";
 import { formatDuration, formatPersonName } from "@/lib/format";
-import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
-import { and, asc, eq, gte, lt, notInArray } from "drizzle-orm";
-import Link from "next/link";
 import { WeekView } from "./week-view";
 
 function parseWeekParam(raw: string | undefined): Date {

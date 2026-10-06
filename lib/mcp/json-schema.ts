@@ -14,9 +14,7 @@ export function toMcpInputSchema(schema: ZodTypeAny): Record<string, unknown> {
     unknown
   >;
   // Drop legacy openApi metadata + force shape minimale attendue par MCP.
-  // biome-ignore lint/performance/noDelete: on veut vraiment supprimer la clé, pas juste undefined
   delete raw.$schema;
-  // biome-ignore lint/performance/noDelete: idem
   delete raw.definitions;
   if (raw.type !== "object") {
     return { type: "object" };

@@ -1,7 +1,7 @@
+import { ChatCircleDots } from "@phosphor-icons/react/dist/ssr";
 import { ProjDate } from "@/app/(app)/projets/[id]/inline-fields";
 import { formatRelativeShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { ChatCircleDots } from "@phosphor-icons/react/dist/ssr";
 
 function fmtDateTimeOrDash(value: Date | string | null | undefined): string {
   if (!value) return "—";

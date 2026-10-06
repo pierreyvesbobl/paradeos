@@ -1,3 +1,4 @@
+import { and, asc, eq, gte, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
@@ -8,7 +9,6 @@ import { db } from "@/lib/db/server";
 import { sendEmail } from "@/lib/email/client";
 import { renderDailyDigestEmail } from "@/lib/email/templates";
 import { getUserEmails } from "@/lib/email/users";
-import { and, asc, eq, gte, isNotNull, lt, ne, sql } from "drizzle-orm";
 
 /**
  * Digest quotidien — 1 e-mail par user contenant :

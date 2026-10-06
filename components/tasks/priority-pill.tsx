@@ -18,13 +18,7 @@ const TINT_CLASS: Record<"gray" | "yellow" | "red", { bg: string; text: string; 
   red: { bg: "bg-tint-red-bg", text: "text-tint-red-text", dot: "bg-tint-red-dot" },
 };
 
-export function PriorityPill({
-  value,
-  className,
-}: {
-  value: TaskPriority;
-  className?: string;
-}) {
+export function PriorityPill({ value, className }: { value: TaskPriority; className?: string }) {
   const tint = PRIORITY_TINT[value];
   const cls = TINT_CLASS[tint];
   return (

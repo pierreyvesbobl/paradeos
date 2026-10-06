@@ -1,9 +1,9 @@
 import "server-only";
 
-import { noteAttachments } from "@/db/schema/note-attachments";
-import { db } from "@/lib/db/server";
 import { createClient } from "@supabase/supabase-js";
 import { inArray } from "drizzle-orm";
+import { noteAttachments } from "@/db/schema/note-attachments";
+import { db } from "@/lib/db/server";
 
 const BUCKET = "note-attachments";
 

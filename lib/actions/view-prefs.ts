@@ -1,8 +1,8 @@
 "use server";
 
+import { z } from "zod";
 import { action } from "@/lib/actions/action";
 import { setViewPref } from "@/lib/db/queries/view-prefs";
-import { z } from "zod";
 
 const PAGE_KEY_RE = /^[a-z0-9/_-]{1,64}$/;
 

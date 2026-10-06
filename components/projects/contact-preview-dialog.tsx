@@ -1,6 +1,15 @@
 "use client";
 
 import {
+  ArrowSquareOut,
+  Buildings,
+  EnvelopeSimple,
+  LinkedinLogo,
+  Phone,
+} from "@phosphor-icons/react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -10,18 +19,9 @@ import {
 import { getContactPreview } from "@/lib/actions/contacts";
 import { ContactName, EntityName } from "@/lib/demo/components";
 import { useDemoMode } from "@/lib/demo/context";
-import {
-  ArrowSquareOut,
-  Buildings,
-  EnvelopeSimple,
-  LinkedinLogo,
-  Phone,
-} from "@phosphor-icons/react";
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { formatPersonName } from "@/lib/format";
 import { LinkGlyph, type LinkItem } from "../link-field/link-chip";
 
-import { formatPersonName } from "@/lib/format";
 type Preview = {
   id: string;
   firstName: string;

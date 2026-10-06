@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  INVOICE_DIRECTION_LABEL,
   buildLabelName,
   collectInvolvedDomains,
   collectInvolvedEmails,
+  INVOICE_DIRECTION_LABEL,
   invoiceDirectionLabelName,
   matchEntityIdsByDomain,
   sanitizeLabelSegment,

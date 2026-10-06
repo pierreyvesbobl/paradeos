@@ -10,13 +10,14 @@
  *
  * CORS : ouvert. Le token Bearer fait l'auth.
  */
+
+import { eq } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { dougsSessions } from "@/db/schema/dougs";
 import { db } from "@/lib/db/server";
 import { encryptCookie } from "@/lib/dougs/crypto";
 import { DOUGS_SYNC_TOKEN_PREFIX, resolveSyncToken } from "@/lib/dougs/sync-tokens";
-import { eq } from "drizzle-orm";
-import { type NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 
 export const runtime = "nodejs";
 
@@ -44,7 +45,7 @@ const bodySchema = z.object({
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("authorization");
   const match = auth?.match(new RegExp(`^Bearer\\s+(${DOUGS_SYNC_TOKEN_PREFIX}[A-Za-z0-9_-]+)$`));
-  if (!match || !match[1]) {
+  if (!match?.[1]) {
     return withCors(
       NextResponse.json({ ok: false, error: "Token manquant ou mal formé." }, { status: 401 }),
     );

@@ -1,15 +1,15 @@
 "use client";
 
+import { DownloadSimple } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
 import { CompanySearch } from "@/components/gouv/company-search";
 import { Button } from "@/components/ui/button";
 import { patchEntity } from "@/lib/actions/entities";
 import { lookupCompanies } from "@/lib/actions/gouv";
 import { useDemoMode } from "@/lib/demo/context";
 import type { SireneCompany } from "@/lib/gouv/sirene";
-import { DownloadSimple } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { toast } from "sonner";
 
 type Address = {
   street?: string | null;

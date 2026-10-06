@@ -1,12 +1,12 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { deleteNote } from "@/lib/actions/notes";
 import { Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { deleteNote } from "@/lib/actions/notes";
 
 export function DeleteNoteButton({ noteId, label }: { noteId: string; label?: string }) {
   const router = useRouter();

@@ -1,7 +1,7 @@
-import { type NoteSubjectType, noteSubjectTypeLabels } from "@/lib/schemas/notes";
-import { cn } from "@/lib/utils";
 import { Buildings, CheckSquare, Kanban, User } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { type NoteSubjectType, noteSubjectTypeLabels } from "@/lib/schemas/notes";
+import { cn } from "@/lib/utils";
 
 const SUBJECT_ICON: Record<NoteSubjectType, React.ComponentType<{ className?: string }>> = {
   project: Kanban,

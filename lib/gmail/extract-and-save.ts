@@ -1,5 +1,6 @@
 import "server-only";
 
+import { and, eq, inArray } from "drizzle-orm";
 import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages, gmailTags, gmailThreads } from "@/db/schema/gmail";
 import { projectContacts } from "@/db/schema/project-contacts";
@@ -15,11 +16,10 @@ import {
 import { compactNameKey } from "@/lib/crm/name-key";
 import { hasPendingProposalElsewhere, proposalDedupeKey } from "@/lib/crm/proposal-dedupe";
 import { db } from "@/lib/db/server";
+import { sanitizeNameInput } from "@/lib/format";
 import { extractEmail } from "@/lib/gmail/extract";
 import { computeThreadLinkSignals, linkThread } from "@/lib/gmail/links";
-import { and, eq, inArray } from "drizzle-orm";
 
-import { sanitizeNameInput } from "@/lib/format";
 type ProposalKind =
   | "task"
   | "project_link"

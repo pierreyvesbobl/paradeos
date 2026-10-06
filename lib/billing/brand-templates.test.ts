@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dueDaysForOption } from "./billing-terms";
-import { INVOICE_BRAND_LABELS, brandForInvoice, brandTemplateFor } from "./brand-templates";
+import { brandForInvoice, brandTemplateFor, INVOICE_BRAND_LABELS } from "./brand-templates";
 
 const COWORKING_CTX = {
   label: "T3 2026",

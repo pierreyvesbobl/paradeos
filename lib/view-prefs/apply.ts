@@ -1,8 +1,8 @@
 import "server-only";
 
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/server";
 import { getViewPref } from "@/lib/db/queries/view-prefs";
-import { redirect } from "next/navigation";
 
 /**
  * À appeler en haut d'un Server Component de page liste, AVANT toute

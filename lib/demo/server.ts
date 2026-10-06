@@ -1,7 +1,7 @@
 import "server-only";
 
-import { SETTING_KEYS, getSetting } from "@/lib/settings";
 import { cache } from "react";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
 /**
  * `true` si le mode démo est activé globalement (clé `app_settings.DEMO_MODE`).

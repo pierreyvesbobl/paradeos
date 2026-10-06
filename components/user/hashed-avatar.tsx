@@ -2,9 +2,9 @@
 
 import { demoCompanyName, demoContactName } from "@/lib/demo/anonymize";
 import { useDemoMode } from "@/lib/demo/context";
+import { formatPersonName } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-import { formatPersonName } from "@/lib/format";
 const TINTS = [
   "gray",
   "brown",
