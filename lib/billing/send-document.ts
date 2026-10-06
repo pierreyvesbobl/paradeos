@@ -1,28 +1,4 @@
 import "server-only";
-
-/**
- * Envoi d'un document au client depuis Parade OS : devis et factures projet.
- *
- * Prend un `userId` **explicite** et non le user de session : ce chemin sert
- * aussi aux outils MCP, dont les requêtes n'ont pas de cookie Supabase. Les
- * server actions de `lib/actions/send-to-client.ts` ne sont que des enveloppes
- * qui passent `user.id`.
- *
- * Mode normal pour les documents client — ils partent en pièce jointe de notre
- * mail de marque, pas par le mail générique de Dougs. Le coworking a déjà ce
- * comportement via son cron ; ces deux actions l'apportent aux documents qu'on
- * envoie à la main.
- *
- * Deux variantes par document :
- *  - **aperçu** : on n'émet rien, on envoie le PDF du brouillon à l'adresse
- *    demandée (en pratique, soi-même) pour vérifier le rendu ;
- *  - **envoi** : on finalise chez Dougs, donc le document reçoit son numéro
- *    définitif, puis il part au client.
- *
- * Ces actions ne finalisent jamais d'elles-mêmes sans que l'appelant l'ait
- * demandé : l'UI confirme explicitement avant.
- */
-
 import { contacts as contactsTable } from "@/db/schema/contacts";
 import { entities as entitiesTable } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
@@ -31,6 +7,7 @@ import { dueDateFrom } from "@/lib/billing/billing-terms";
 import { resolveInvoiceDocument } from "@/lib/billing/brand-documents";
 import { brandTemplateFor } from "@/lib/billing/brand-templates";
 import { deliverDocumentEmail } from "@/lib/billing/deliver-document";
+import { assertPreviewed, messageDigest } from "@/lib/billing/preview-gate";
 import { db } from "@/lib/db/server";
 import {
   canFinalizeDougsSalesInvoice,
@@ -158,6 +135,7 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
     milestonePercent: invoice.milestonePercent,
   };
   const mail = { subject: input.subject, body: input.body };
+  const digest = messageDigest(mail.subject, mail.body);
 
   const isDraft = (invoice.dougsStatus ?? "DRAFT").toUpperCase() === "DRAFT";
 
@@ -174,10 +152,22 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
       attachments: [{ filename: "apercu-facture.pdf", content: pdf.buffer }],
     });
     if (!res.delivered) throw new Error("Aperçu non expédié (EMAIL_DELIVERY ≠ resend).");
+    // Trace l'aperçu : c'est lui qui débloque l'envoi au client.
+    await conn
+      .update(invoices)
+      .set({ previewSentAt: new Date(), previewDigest: digest, updatedAt: new Date() })
+      .where(eq(invoices.id, invoice.id));
     return { previewed: true as const, to: recipient };
   }
 
   // --- Envoi réel. ---
+  assertPreviewed({
+    noun: "facture",
+    previewDigest: invoice.previewDigest,
+    previewSentAt: invoice.previewSentAt,
+    digest,
+  });
+
   let documentId = invoice.dougsInvoiceId;
   let reference = invoice.dougsReference ?? documentId;
 
@@ -258,6 +248,7 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
   // Seul le nom d'expéditeur vient de la marque : le message est rédigé.
   const template = brandTemplateFor(invoice.brand);
   const mail = { subject: input.subject, body: input.body };
+  const digest = messageDigest(mail.subject, mail.body);
   const isDraft = (invoice.dougsStatus ?? "DRAFT").toUpperCase() === "DRAFT";
 
   if (!input.send) {
@@ -272,8 +263,19 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
       attachments: [{ filename: "apercu-devis.pdf", content: pdf.buffer }],
     });
     if (!res.delivered) throw new Error("Aperçu non expédié (EMAIL_DELIVERY ≠ resend).");
+    await conn
+      .update(invoices)
+      .set({ previewSentAt: new Date(), previewDigest: digest, updatedAt: new Date() })
+      .where(eq(invoices.id, invoice.id));
     return { previewed: true as const, to: recipient };
   }
+
+  assertPreviewed({
+    noun: "devis",
+    previewDigest: invoice.previewDigest,
+    previewSentAt: invoice.previewSentAt,
+    digest,
+  });
 
   let reference = invoice.dougsReference ?? invoice.dougsQuoteId;
   if (isDraft) {

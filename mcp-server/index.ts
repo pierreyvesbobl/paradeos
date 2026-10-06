@@ -402,9 +402,10 @@ server.tool(
 server.tool(
   "send_document_to_client",
   "Envoie un devis ou une facture au client : finalise chez Dougs, puis expédie **le message que tu rédiges** (texte brut, pas de gabarit) avec le PDF en pièce jointe, et classe la facture dans le Drive comptable. " +
-    "Rédige toi-même `subject` et `body`, adaptés au client et au document, et fais-les valider avant d'envoyer. " +
-    "Sans confirm=true, se limite à un APERÇU envoyé à l'utilisateur, sans rien émettre. " +
-    "N'utiliser confirm=true que sur instruction explicite : la finalisation d'une facture est irréversible et le mail part à un tiers. " +
+    "DEUX ÉTAPES OBLIGATOIRES. 1) Appelle sans confirm : un aperçu part à l'utilisateur, rien n'est émis. " +
+    "2) Fais-lui valider le message, puis rappelle avec confirm=true et le MÊME subject/body. " +
+    "Le serveur refuse tout envoi qui n'a pas été prévisualisé, et refuse aussi si le message a changé depuis l'aperçu. " +
+    "N'utilise confirm=true que sur accord explicite de l'utilisateur : la finalisation d'une facture est irréversible et le mail part à un tiers. " +
     "Args: invoiceId, subject, body, confirm (optionnel).",
   sendDocumentMcpSchema.shape,
   async (args) => ({

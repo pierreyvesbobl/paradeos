@@ -134,6 +134,13 @@ export const invoices = pgTable(
     autoSentAt: timestamp("auto_sent_at", { withTimezone: true }),
     autoSendError: text("auto_send_error"),
 
+    // Aperçu relu avant envoi au client. `preview_digest` est l'empreinte de
+    // l'objet et du corps : l'envoi exige qu'elle corresponde au message
+    // soumis, sinon personne n'a relu ce que le client recevra.
+    // Cf. migration 0079. Sans objet pour les envois automatiques.
+    previewSentAt: timestamp("preview_sent_at", { withTimezone: true }),
+    previewDigest: text("preview_digest"),
+
     // Classement du PDF dans le Drive comptable. `drive_file_id` non nul
     // signifie « déjà classée » et sert de verrou d'idempotence.
     // Cf. migration 0078.

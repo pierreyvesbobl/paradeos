@@ -507,7 +507,12 @@ export const sendDocumentMcpSchema = z.object({
   subject: z.string().trim().min(1).max(300),
   /** Corps du message, en **texte brut**. Le document voyage en pièce jointe. */
   body: z.string().trim().min(1).max(10000),
-  /** `true` = finalise et envoie au client. Absent ou `false` = aperçu. */
+  /**
+   * `true` = finalise et envoie au client. Absent ou `false` = aperçu.
+   *
+   * Un `confirm: true` ne suffit pas : le serveur exige qu'un aperçu du **même**
+   * message soit parti avant, donc poser ce drapeau du premier coup échoue.
+   */
   confirm: z.boolean().optional(),
 });
 
@@ -544,6 +549,6 @@ export async function sendDocumentMcp(
     ...result,
     note: send
       ? "Document finalisé chez Dougs et envoyé au client, message en texte brut avec le PDF en pièce jointe."
-      : "Aperçu envoyé à l'utilisateur. Rien n'a été émis ; rappeler avec confirm=true pour envoyer au client.",
+      : "Aperçu envoyé à l'utilisateur. Rien n'a été émis. Fais-lui valider le message, puis rappelle avec confirm=true et le même subject/body.",
   };
 }

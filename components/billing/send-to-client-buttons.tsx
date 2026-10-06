@@ -57,10 +57,20 @@ export function SendToClientButtons({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [confirming, setConfirming] = useState(false);
+  /**
+   * Message dont un aperçu a été expédié. L'envoi reste fermé tant que le texte
+   * courant ne correspond pas : c'est la même règle que le serveur applique, et
+   * la refléter ici évite de proposer un bouton qui serait refusé.
+   */
+  const [previewed, setPreviewed] = useState<{ subject: string; body: string } | null>(null);
 
   const act = documentKind === "quote" ? sendProjectQuoteToClient : sendProjectInvoiceToClient;
   const noun = documentKind === "quote" ? "devis" : "facture";
   const ready = subject.trim().length > 0 && body.trim().length > 0;
+  const previewMatches =
+    previewed !== null &&
+    previewed.subject.trim() === subject.trim() &&
+    previewed.body.trim() === body.trim();
 
   function run(send: boolean) {
     startTransition(async () => {
@@ -73,7 +83,8 @@ export function SendToClientButtons({
         toast.success(`${res.data.reference} envoyé à ${res.data.to}.`);
         setOpen(false);
       } else {
-        toast.success(`Aperçu envoyé à ${res.data.to}.`);
+        setPreviewed({ subject, body });
+        toast.success(`Aperçu envoyé à ${res.data.to}. Relis-le, puis envoie au client.`);
       }
       setConfirming(false);
       router.refresh();
@@ -111,7 +122,10 @@ export function SendToClientButtons({
               <Input
                 id="mailSubject"
                 value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                onChange={(e) => {
+                  setSubject(e.target.value);
+                  setConfirming(false);
+                }}
                 placeholder={
                   documentKind === "quote" ? "Notre proposition pour…" : "Votre facture pour…"
                 }
@@ -125,7 +139,10 @@ export function SendToClientButtons({
                 id="mailBody"
                 rows={10}
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
+                onChange={(e) => {
+                  setBody(e.target.value);
+                  setConfirming(false);
+                }}
                 placeholder={"Bonjour,\n\n…\n\nBien à vous,"}
                 disabled={pending}
                 className="font-mono text-xs"
@@ -142,6 +159,14 @@ export function SendToClientButtons({
                 </span>
               )}
               . L'aperçu, lui, part à toi.
+            </p>
+
+            <p className="text-[11px] text-muted-foreground">
+              {previewMatches
+                ? "Aperçu relu : l'envoi au client est ouvert."
+                : previewed
+                  ? "Le message a changé depuis l'aperçu — renvoie-en un avant d'adresser au client."
+                  : "L'envoi au client s'ouvre après un aperçu : on ne diffuse pas un document que personne n'a relu."}
             </p>
 
             {confirming ? (
@@ -174,7 +199,14 @@ export function SendToClientButtons({
 
             <Button
               size="sm"
-              disabled={pending || !ready || !contactEmail}
+              disabled={pending || !ready || !contactEmail || !previewMatches}
+              title={
+                !previewMatches
+                  ? previewed
+                    ? "Le message a changé depuis l'aperçu : renvoie un aperçu."
+                    : "Envoie d'abord un aperçu, pour relire ce que le client recevra."
+                  : undefined
+              }
               onClick={() => (confirming ? run(true) : setConfirming(true))}
             >
               <PaperPlaneTilt className="mr-1.5 size-4" />
