@@ -15,7 +15,10 @@ export type DueRow = {
   frequency: string;
   amountHt: string;
   recipient: string | null;
+  /** Condition actuelle empêchant l'envoi. */
   blocker: string | null;
+  /** Échec de la dernière tentative : informatif, ne bloque pas un nouvel essai. */
+  lastError: string | null;
 };
 
 /**
@@ -93,6 +96,11 @@ export function SendDueInvoices({ rows, enabled }: { rows: DueRow[]; enabled: bo
                 <p className="mt-0.5 flex items-start gap-1 text-[11px] text-amber-700 dark:text-amber-400">
                   <Warning className="mt-0.5 size-3 shrink-0" />
                   {r.blocker}
+                </p>
+              ) : r.lastError ? (
+                <p className="mt-0.5 flex items-start gap-1 text-[11px] text-muted-foreground">
+                  <Warning className="mt-0.5 size-3 shrink-0" />
+                  Dernier essai : {r.lastError} — un nouvel envoi est possible.
                 </p>
               ) : null}
             </div>

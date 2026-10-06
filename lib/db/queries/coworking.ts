@@ -299,7 +299,14 @@ export async function listDueCoworkingInvoices(): Promise<
     frequency: string;
     amountHt: string;
     recipient: string | null;
+    /** Condition **actuelle** qui empêche l'envoi. Désactive le bouton. */
     blocker: string | null;
+    /**
+     * Échec de la dernière tentative. Purement informatif : une erreur passée
+     * ne doit pas interdire une nouvelle tentative, sinon corriger la cause ne
+     * suffirait jamais à débloquer la facture.
+     */
+    lastError: string | null;
   }>
 > {
   const conn = await db();
@@ -337,10 +344,15 @@ export async function listDueCoworkingInvoices(): Promise<
     frequency: r.frequency,
     amountHt: r.amountHt,
     recipient: r.recipient,
+    // Seules des conditions vérifiables maintenant bloquent l'envoi. L'erreur
+    // de la dernière tentative est affichée à part : la traiter comme un
+    // blocage rendait la facture définitivement inenvoyable même après
+    // correction de la cause.
     blocker: !r.recipient
       ? "Pas d'adresse mail sur le coworker."
       : Number(r.amountHt) <= 0
         ? "Montant nul."
-        : r.autoSendError,
+        : null,
+    lastError: r.autoSendError,
   }));
 }
