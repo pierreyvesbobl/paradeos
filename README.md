@@ -69,7 +69,7 @@ lib/
   gmail/ google/ dougs/ linkedin/ meetings/   intégrations
   format.ts               formats fr-FR (€, dates)
 middleware.ts             auth gate global
-mcp-server/               serveur MCP stdio (dev local)
+mcp-server/               serveur MCP stdio (dev local) ; tools/ par domaine, tools.ts les agrège
 chrome-extension/         extension navigateur (synchro cookie Dougs, import LinkedIn)
 scripts/                  seed, magic-link, diagnostics
 scripts/archive/          scripts one-shot déjà joués (ne pas relancer)
