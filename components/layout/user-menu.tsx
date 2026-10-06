@@ -1,5 +1,7 @@
 "use client";
 
+import { Eye, Gear, Plug, SignOut, Users as UsersIcon } from "@phosphor-icons/react";
+import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -10,9 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/lib/actions/auth";
-import { Eye, Gear, Plug, SignOut, Users as UsersIcon } from "@phosphor-icons/react";
-import type { User } from "@supabase/supabase-js";
-import Link from "next/link";
+import type { AuthUser } from "@/lib/auth/server";
 
 function initialsFromEmail(email: string | undefined): string {
   if (!email) return "?";
@@ -25,7 +25,7 @@ export function UserMenu({
   avatarUrl,
   isAdmin,
 }: {
-  user: User;
+  user: AuthUser;
   avatarUrl?: string | null;
   isAdmin?: boolean;
 }) {

@@ -1,10 +1,10 @@
 import "server-only";
 
-import { users } from "@/db/schema/users";
-import { db } from "@/lib/db/server";
-import type { User } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { cache } from "react";
+import { users } from "@/db/schema/users";
+import type { AuthUser } from "@/lib/auth/server";
+import { db } from "@/lib/db/server";
 
 export type AppRole = "admin" | "member" | "viewer";
 
@@ -24,11 +24,11 @@ export const getUserRole = cache(async (userId: string): Promise<AppRole> => {
 });
 
 /** Renvoie le rôle applicatif de l'utilisateur courant. */
-export async function getCurrentUserRole(user: User): Promise<AppRole> {
+export async function getCurrentUserRole(user: AuthUser): Promise<AppRole> {
   return getUserRole(user.id);
 }
 
-export async function requireAdmin(user: User): Promise<void> {
+export async function requireAdmin(user: AuthUser): Promise<void> {
   const role = await getCurrentUserRole(user);
   if (role !== "admin") {
     throw new Error("Accès réservé aux administrateurs.");
@@ -40,7 +40,7 @@ export async function requireAdmin(user: User): Promise<void> {
  * la règle par défaut de `action()` ; les actions personnelles (profil,
  * préférences, mot de passe) passent `allowViewer: true`.
  */
-export async function requireWriter(user: User): Promise<void> {
+export async function requireWriter(user: AuthUser): Promise<void> {
   const role = await getCurrentUserRole(user);
   if (role === "viewer") {
     throw new Error("Compte en lecture seule : modification refusée.");

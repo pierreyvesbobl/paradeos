@@ -1,14 +1,14 @@
+import { eq } from "drizzle-orm";
 import { users } from "@/db/schema/users";
+import type { AuthUser } from "@/lib/auth/server";
 import { getRecentMentions, getUnreadMentionCount } from "@/lib/db/queries/mentions";
 import { db } from "@/lib/db/server";
 import { DemoBanner } from "@/lib/demo/components";
-import type { User } from "@supabase/supabase-js";
-import { eq } from "drizzle-orm";
 import { CommandPalette } from "./command-palette";
 import { MentionsBell } from "./mentions-bell";
 import { UserMenu } from "./user-menu";
 
-export async function Topbar({ user }: { user: User }) {
+export async function Topbar({ user }: { user: AuthUser }) {
   const conn = await db();
   const [unread, recent, [profile]] = await Promise.all([
     getUnreadMentionCount(user.id),

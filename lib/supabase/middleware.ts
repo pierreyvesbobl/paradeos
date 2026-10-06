@@ -60,9 +60,12 @@ export async function updateSession(request: NextRequest) {
   });
 
   // Doit rester juste après createServerClient — sinon la session ne se rafraîchit pas.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // `getClaims()` vérifie le JWT localement (clés asymétriques du projet, JWKS
+  // en cache) et ne contacte le service auth que pour rafraîchir un access
+  // token arrivé à expiration. `getUser()` faisait un aller-retour réseau à
+  // chaque requête, avant même celui du layout.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
 
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_ROUTES.some((route) => pathname.startsWith(route));

@@ -1,7 +1,7 @@
-import { requireWriter } from "@/lib/auth/admin";
-import { getUser } from "@/lib/auth/server";
-import type { User } from "@supabase/supabase-js";
 import type { z } from "zod";
+import { requireWriter } from "@/lib/auth/admin";
+import type { AuthUser } from "@/lib/auth/server";
+import { getUser } from "@/lib/auth/server";
 
 export type ActionError = {
   ok: false;
@@ -17,7 +17,7 @@ export type ActionSuccess<T> = {
 
 export type ActionResult<T> = ActionSuccess<T> | ActionError;
 
-type Handler<TInput, TOutput> = (args: { input: TInput; user: User }) => Promise<TOutput>;
+type Handler<TInput, TOutput> = (args: { input: TInput; user: AuthUser }) => Promise<TOutput>;
 
 type Options = {
   /** Si false, l'action est appelable sans user authentifié. */
@@ -57,7 +57,7 @@ export function action<TSchema extends z.ZodTypeAny, TOutput>(
       };
     }
 
-    let user: User | null = null;
+    let user: AuthUser | null = null;
     if (requireAuth) {
       user = await getUser();
       if (!user) {
@@ -74,7 +74,7 @@ export function action<TSchema extends z.ZodTypeAny, TOutput>(
     }
 
     try {
-      const data = await handler({ input: parsed.data, user: user as User });
+      const data = await handler({ input: parsed.data, user: user as AuthUser });
       return { ok: true, data };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erreur interne.";
