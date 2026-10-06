@@ -557,7 +557,7 @@ server.server.setRequestHandler(
     method: z.literal("prompts/get"),
     params: z.object({
       name: z.string(),
-      arguments: z.record(z.string()).optional(),
+      arguments: z.record(z.string(), z.string()).optional(),
     }),
   }),
   async (req) => getPromptMessages(req.params.name, req.params.arguments ?? {}),

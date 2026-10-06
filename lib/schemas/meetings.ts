@@ -55,7 +55,7 @@ export const decideProposalSchema = z.object({
   proposalId: z.string().uuid(),
   action: z.enum(["accept", "reject"]),
   /** Override partiel du payload, appliqué avant accept (édition humaine). */
-  payloadOverride: z.record(z.unknown()).optional(),
+  payloadOverride: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const revertProposalSchema = z.object({
@@ -66,7 +66,7 @@ export const revertProposalSchema = z.object({
 
 export const updateAcceptedProposalSchema = z.object({
   proposalId: z.string().uuid(),
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
 });
 
 export const updateMeetingSummarySchema = z.object({

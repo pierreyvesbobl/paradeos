@@ -371,10 +371,8 @@ export const createProjectSchema = z.object({
    * échoue.
    */
   confirmed: z.literal(true, {
-    errorMap: () => ({
-      message:
-        "Demande d'abord à l'utilisateur de confirmer la création du projet/opportunité avec tous les champs, puis renseigne confirmed=true.",
-    }),
+    error:
+      "Demande d'abord à l'utilisateur de confirmer la création du projet/opportunité avec tous les champs, puis renseigne confirmed=true.",
   }),
   name: z.string().trim().min(1).max(200),
   kind: projectKindEnum.default("client"),

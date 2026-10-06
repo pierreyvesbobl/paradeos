@@ -80,8 +80,7 @@
     "tailwindcss-animate": "^1.0.7",
     "tiptap-markdown": "^0.9.0",
     "unpdf": "^1.6.2",
-    "zod": "^3.25.76",
-    "zod-to-json-schema": "^3.25.2"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
