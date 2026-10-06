@@ -1,5 +1,6 @@
 "use client";
 
+import { AddressAutocomplete } from "@/components/gouv/address-autocomplete";
 import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
@@ -245,10 +246,15 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="addressStreet">Rue</Label>
-            <Input
+            <AddressAutocomplete
               id="addressStreet"
               value={addressStreet}
-              onChange={(e) => setAddressStreet(e.target.value)}
+              onChange={setAddressStreet}
+              onPick={(address) => {
+                setAddressPostalCode(address.postalCode ?? "");
+                setAddressCity(address.city ?? "");
+                setAddressCountry(address.country ?? "");
+              }}
               placeholder="12 rue de la Paix"
               disabled={pending}
             />

@@ -1,6 +1,7 @@
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { EmailsTab } from "@/components/emails/emails-tab";
+import { EntitySireneFill } from "@/components/gouv/entity-sirene-fill";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -92,7 +93,19 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="space-y-4 rounded-lg border bg-card p-6 lg:col-span-2">
-          <h2 className="font-medium text-sm">Identité</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-medium text-sm">Identité</h2>
+            <EntitySireneFill
+              id={id}
+              current={{
+                siren: entity.siren,
+                siret: entity.siret,
+                vatNumber: entity.vatNumber,
+                legalName: entity.legalName,
+                address,
+              }}
+            />
+          </div>
           <dl className="grid gap-4 sm:grid-cols-2">
             <div>
               <dt className="text-muted-foreground text-xs uppercase tracking-wide">Type</dt>

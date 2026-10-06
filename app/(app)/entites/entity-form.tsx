@@ -1,5 +1,7 @@
 "use client";
 
+import { AddressAutocomplete } from "@/components/gouv/address-autocomplete";
+import { CompanySearch } from "@/components/gouv/company-search";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
@@ -14,6 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { createEntity, updateEntity } from "@/lib/actions/entities";
 import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
+import type { SireneCompany } from "@/lib/gouv/sirene";
 import { type EntityKind, entityKindEnum, entityKindLabels } from "@/lib/schemas/entities";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -61,6 +64,31 @@ export function EntityForm({ mode, defaultValues }: Props) {
   const [delCity, setDelCity] = useState(defaultValues.deliveryAddress.city ?? "");
   const [delCountry, setDelCountry] = useState(defaultValues.deliveryAddress.country ?? "");
   const [notes, setNotes] = useState(defaultValues.notes);
+
+  /**
+   * Prérempli depuis l'annuaire des entreprises. Le nom d'usage n'est
+   * écrasé que s'il est vide : en édition, c'est celui que Parade a choisi
+   * qui compte, pas celui de l'INSEE. Le SIRET proposé est celui du siège —
+   * à corriger à la main si la facture vise un autre établissement.
+   */
+  function applyCompany(company: SireneCompany) {
+    setSiren(company.siren);
+    if (company.siret) setSiret(company.siret);
+    if (company.vatNumber) setVatNumber(company.vatNumber);
+    if (company.legalName) setLegalName(company.legalName);
+    if (!name.trim()) setName(company.legalName ?? company.name);
+    if (company.address) {
+      setStreet(company.address.street ?? "");
+      setPostalCode(company.address.postalCode ?? "");
+      setCity(company.address.city ?? "");
+      setCountry(company.address.country ?? "");
+    }
+    toast.success(
+      company.address
+        ? "Fiche INSEE reprise : identifiants et adresse."
+        : "Fiche INSEE reprise. L'INSEE ne diffuse pas l'adresse de cette entreprise.",
+    );
+  }
 
   function buildPayload() {
     const address = {
@@ -168,6 +196,14 @@ export function EntityForm({ mode, defaultValues }: Props) {
         <h2 className="border-b pb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
           Identifiants légaux
         </h2>
+        <div className="space-y-1.5">
+          <CompanySearch onPick={applyCompany} disabled={pending} />
+          <p className="text-[11px] text-muted-foreground">
+            Source INSEE (Sirene + RNE) : préremplit la dénomination sociale, le SIREN, le SIRET du
+            siège, la TVA intracommunautaire et l'adresse. Le nom d'usage déjà saisi n'est pas
+            touché.
+          </p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="siren">SIREN</Label>
@@ -230,10 +266,15 @@ export function EntityForm({ mode, defaultValues }: Props) {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="street">Rue</Label>
-            <Input
+            <AddressAutocomplete
               id="street"
               value={street}
-              onChange={(e) => setStreet(e.target.value)}
+              onChange={setStreet}
+              onPick={(address) => {
+                setPostalCode(address.postalCode ?? "");
+                setCity(address.city ?? "");
+                setCountry(address.country ?? "");
+              }}
               disabled={pending}
             />
           </div>
@@ -279,10 +320,15 @@ export function EntityForm({ mode, defaultValues }: Props) {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="delStreet">Rue</Label>
-            <Input
+            <AddressAutocomplete
               id="delStreet"
               value={delStreet}
-              onChange={(e) => setDelStreet(e.target.value)}
+              onChange={setDelStreet}
+              onPick={(address) => {
+                setDelPostalCode(address.postalCode ?? "");
+                setDelCity(address.city ?? "");
+                setDelCountry(address.country ?? "");
+              }}
               disabled={pending}
             />
           </div>
