@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { experimental_transcribe as transcribe } from "ai";
+import { transcribe } from "ai";
 import { eq } from "drizzle-orm";
 import { meetings } from "@/db/schema/meetings";
 import { db } from "@/lib/db/server";

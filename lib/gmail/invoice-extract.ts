@@ -1,8 +1,8 @@
 import "server-only";
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateObject } from "ai";
 import { z } from "zod";
+import { generateStructured } from "@/lib/llm/structured";
 import { LLM_BUDGET_MS, withLlmTimeout } from "@/lib/llm/timeout";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
@@ -224,14 +224,14 @@ export async function extractInvoiceMetadata(args: {
     args.pdfText,
   ].join("\n");
 
-  const { object } = await withLlmTimeout(
+  const object = await withLlmTimeout(
     { budgetMs: LLM_BUDGET_MS.invoiceExtraction, modelId, label: "la lecture de la facture" },
     (signal) =>
-      generateObject({
+      generateStructured({
         abortSignal: signal,
         model: openrouter(modelId),
         schema: invoiceSchema,
-        system: SYSTEM_PROMPT,
+        instructions: SYSTEM_PROMPT,
         prompt: userPrompt,
         temperature: 0.1,
       }),

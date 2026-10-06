@@ -1,9 +1,9 @@
 import "server-only";
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateObject } from "ai";
 import { z } from "zod";
 import { parseEmailThread } from "@/lib/gmail/thread-parse";
+import { generateStructured } from "@/lib/llm/structured";
 import { LLM_BUDGET_MS, withLlmTimeout } from "@/lib/llm/timeout";
 import { formatVocabulary, getKnownVocabulary } from "@/lib/meetings/extract";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
@@ -251,14 +251,14 @@ export async function extractEmail(input: EmailInput): Promise<EmailExtraction> 
     },
   });
 
-  const { object } = await withLlmTimeout(
+  const object = await withLlmTimeout(
     { budgetMs: LLM_BUDGET_MS.emailExtraction, modelId, label: "l'extraction de l'email" },
     (signal) =>
-      generateObject({
+      generateStructured({
         abortSignal: signal,
         model: openrouter(modelId),
         schema: extractionSchema,
-        system: buildSystemPrompt({ vocab }),
+        instructions: buildSystemPrompt({ vocab }),
         prompt: buildUserPrompt(input),
         temperature: 0.2,
       }),
