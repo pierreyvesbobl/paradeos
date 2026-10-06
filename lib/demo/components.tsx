@@ -141,7 +141,7 @@ export function DemoBlur({
   const demo = useDemoMode();
   if (!demo) return <>{children}</>;
   return (
-    <span className={cn("select-none blur-sm", className)} aria-hidden="true">
+    <span className={cn("select-none blur-xs", className)} aria-hidden="true">
       {children}
     </span>
   );

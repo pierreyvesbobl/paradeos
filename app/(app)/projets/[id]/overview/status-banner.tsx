@@ -29,7 +29,7 @@ export function StatusBanner({ projectId, status }: { projectId: string; status:
 
   return (
     <section>
-      <div className="mb-2 flex items-center gap-1.5 font-semibold text-[11px] text-muted-foreground uppercase tracking-[0.05em]">
+      <div className="mb-2 flex items-center gap-1.5 font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
         <FlowArrow size={13} weight="duotone" />
         <span>Statut</span>
       </div>

@@ -304,7 +304,7 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
         />
       </section>
 
-      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/90 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/90 py-3 backdrop-blur-sm supports-backdrop-filter:bg-background/70">
         <Button type="button" variant="ghost" onClick={() => router.back()} disabled={pending}>
           Annuler
         </Button>

@@ -46,13 +46,13 @@ export function StakeholdersCard({
 }) {
   return (
     <section className="space-y-4 rounded-[10px] border border-ds-border bg-ds-surface p-5">
-      <header className="flex items-center gap-2 font-semibold text-[11px] text-muted-foreground uppercase tracking-[0.05em]">
+      <header className="flex items-center gap-2 font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
         <UsersThree size={13} weight="duotone" />
         <span>Parties prenantes</span>
       </header>
 
       <div className="space-y-2">
-        <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.05em]">
+        <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
           Interne
         </p>
         <ProjectMembersField
@@ -64,7 +64,7 @@ export function StakeholdersCard({
       </div>
 
       <div className="space-y-2">
-        <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.05em]">
+        <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
           Externe
           {entityName ? <span className="normal-case tracking-normal"> · {entityName}</span> : null}
           <span className="text-ds-text-tertiary normal-case tracking-normal">

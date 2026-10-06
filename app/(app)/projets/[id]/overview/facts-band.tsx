@@ -61,7 +61,7 @@ export function FactsBand({
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5 bg-ds-app px-4 py-3">
-      <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-[0.05em]">
+      <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
         {label}
       </p>
       {children}

@@ -358,7 +358,7 @@ function TaskBar({
         }
         router.push(`/taches/${task.id}`);
       }}
-      className={`absolute top-1 bottom-1 cursor-grab overflow-hidden rounded border-l-4 text-left text-[11px] shadow-sm transition-shadow active:cursor-grabbing ${STATUS_BORDER[task.status]} ${
+      className={`absolute top-1 bottom-1 cursor-grab overflow-hidden rounded border-l-4 text-left text-[11px] shadow-xs transition-shadow active:cursor-grabbing ${STATUS_BORDER[task.status]} ${
         task.status === "done" || task.status === "cancelled" ? "opacity-50" : ""
       } ${
         isDragging ? "opacity-90 shadow-lg ring-2 ring-foreground/30" : "hover:shadow-md"

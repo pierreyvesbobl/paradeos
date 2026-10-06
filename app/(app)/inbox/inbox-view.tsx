@@ -452,7 +452,7 @@ function InboxRow({
             <button
               type="button"
               onClick={onOpenPreview}
-              className="min-w-0 truncate text-left font-medium text-ds-text text-sm hover:underline focus:outline-none focus-visible:underline"
+              className="min-w-0 truncate text-left font-medium text-ds-text text-sm hover:underline focus:outline-hidden focus-visible:underline"
             >
               {item.title}
             </button>
@@ -556,7 +556,7 @@ function InboxRow({
             <button
               type="button"
               onClick={onOpenPreview}
-              className="truncate text-left hover:underline focus:outline-none focus-visible:underline"
+              className="truncate text-left hover:underline focus:outline-hidden focus-visible:underline"
             >
               {item.sourceLabel}
             </button>
@@ -740,14 +740,14 @@ function PreviewSheet({ item, onClose }: { item: InboxItem | null; onClose: () =
                   {data.meta.map((m) => (
                     <div key={m.label} className="contents">
                       <dt className="text-ds-text-tertiary">{m.label}</dt>
-                      <dd className="min-w-0 break-words text-ds-text">{m.value}</dd>
+                      <dd className="wrap-break-word min-w-0 text-ds-text">{m.value}</dd>
                     </div>
                   ))}
                 </dl>
               ) : null}
 
               {data.bodyText ? (
-                <pre className="whitespace-pre-wrap break-words border-ds-border border-t pt-3 font-sans text-[13px] text-ds-text leading-relaxed">
+                <pre className="wrap-break-word whitespace-pre-wrap border-ds-border border-t pt-3 font-sans text-[13px] text-ds-text leading-relaxed">
                   {data.bodyText}
                 </pre>
               ) : (

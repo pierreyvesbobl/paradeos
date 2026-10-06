@@ -1,6 +1,151 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@utility container {
+  margin-inline: auto;
+  padding-inline: 2rem;
+  @media (width >= --theme(--breakpoint-sm)) {
+    max-width: none;
+  }
+  @media (width >= 1400px) {
+    max-width: 1400px;
+  }
+}
+
+@theme {
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
+  --font-brand: var(--font-brand), Georgia, Times New Roman, serif;
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary-50: var(--ds-primary-50);
+  --color-primary-100: var(--ds-primary-100);
+  --color-primary-200: var(--ds-primary-200);
+  --color-primary-300: var(--ds-primary-300);
+  --color-primary-400: var(--ds-primary-400);
+  --color-primary-500: var(--ds-primary-500);
+  --color-primary-600: var(--ds-primary-600);
+  --color-primary-700: var(--ds-primary-700);
+  --color-primary-800: var(--ds-primary-800);
+  --color-primary-900: var(--ds-primary-900);
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-ds-app: var(--ds-bg-app);
+  --color-ds-surface: var(--ds-bg-surface);
+  --color-ds-sidebar: var(--ds-bg-sidebar);
+  --color-ds-hover: var(--ds-bg-hover);
+  --color-ds-press: var(--ds-bg-press);
+  --color-ds-border: var(--ds-border);
+  --color-ds-border-strong: var(--ds-border-strong);
+  --color-ds-text: var(--ds-text);
+  --color-ds-text-muted: var(--ds-text-muted);
+  --color-ds-text-tertiary: var(--ds-text-tertiary);
+
+  --color-tint-gray-bg: var(--ds-tint-gray-bg);
+  --color-tint-gray-text: var(--ds-tint-gray-text);
+  --color-tint-gray-dot: var(--ds-tint-gray-dot);
+
+  --color-tint-brown-bg: var(--ds-tint-brown-bg);
+  --color-tint-brown-text: var(--ds-tint-brown-text);
+  --color-tint-brown-dot: var(--ds-tint-brown-dot);
+
+  --color-tint-orange-bg: var(--ds-tint-orange-bg);
+  --color-tint-orange-text: var(--ds-tint-orange-text);
+  --color-tint-orange-dot: var(--ds-tint-orange-dot);
+
+  --color-tint-yellow-bg: var(--ds-tint-yellow-bg);
+  --color-tint-yellow-text: var(--ds-tint-yellow-text);
+  --color-tint-yellow-dot: var(--ds-tint-yellow-dot);
+
+  --color-tint-green-bg: var(--ds-tint-green-bg);
+  --color-tint-green-text: var(--ds-tint-green-text);
+  --color-tint-green-dot: var(--ds-tint-green-dot);
+
+  --color-tint-blue-bg: var(--ds-tint-blue-bg);
+  --color-tint-blue-text: var(--ds-tint-blue-text);
+  --color-tint-blue-dot: var(--ds-tint-blue-dot);
+
+  --color-tint-mauve-bg: var(--ds-tint-mauve-bg);
+  --color-tint-mauve-text: var(--ds-tint-mauve-text);
+  --color-tint-mauve-dot: var(--ds-tint-mauve-dot);
+
+  --color-tint-pink-bg: var(--ds-tint-pink-bg);
+  --color-tint-pink-text: var(--ds-tint-pink-text);
+  --color-tint-pink-dot: var(--ds-tint-pink-dot);
+
+  --color-tint-red-bg: var(--ds-tint-red-bg);
+  --color-tint-red-text: var(--ds-tint-red-text);
+  --color-tint-red-dot: var(--ds-tint-red-dot);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
 
 /*
  * Paradeos Design System — Foundations V1.
@@ -162,6 +307,12 @@
 @layer base {
   * {
     @apply border-border;
+  }
+  /* Tailwind 4 ne met plus `cursor: pointer` sur les boutons (preflight) ;
+     on le remet, comme le recommande shadcn. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
   }
   body {
     @apply bg-background text-foreground antialiased;

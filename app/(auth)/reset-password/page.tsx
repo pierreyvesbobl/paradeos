@@ -15,7 +15,7 @@ export default async function ResetPasswordPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
-      <div className="w-full max-w-sm space-y-8 rounded-lg border bg-card p-8 shadow-sm">
+      <div className="w-full max-w-sm space-y-8 rounded-lg border bg-card p-8 shadow-xs">
         <div className="space-y-2 text-center">
           <Link href="/" className="inline-block font-medium font-mono text-sm tracking-tight">
             Parade OS

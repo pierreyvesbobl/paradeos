@@ -49,7 +49,7 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
 
   if (!detail) {
     return (
-      <div className="flex h-full items-center justify-center p-10 text-[var(--ds-text-tertiary)] text-sm">
+      <div className="flex h-full items-center justify-center p-10 text-(--ds-text-tertiary) text-sm">
         Thread introuvable.
       </div>
     );
@@ -190,7 +190,7 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
           href={`https://mail.google.com/mail/u/0/#inbox/${detail.thread.gmailThreadId}`}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-[13px] text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg-hover)]"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-(--ds-text-muted) text-[13px] hover:bg-(--ds-bg-hover)"
           style={{ borderColor: "var(--ds-border)" }}
         >
           Ouvrir sur Gmail
@@ -301,9 +301,9 @@ function InvoiceFilingsCard({ filings }: { filings: FilingRow[] }) {
                     {meta.label}
                   </span>
                 ) : (
-                  <span className="text-[11px] text-[var(--ds-text-tertiary)]">Non classée</span>
+                  <span className="text-(--ds-text-tertiary) text-[11px]">Non classée</span>
                 )}
-                <span className="min-w-0 truncate text-[12px] text-[var(--ds-text-muted)]">
+                <span className="min-w-0 truncate text-(--ds-text-muted) text-[12px]">
                   {f.generatedFilename ?? f.originalFilename ?? "(sans nom)"}
                 </span>
                 {f.driveFileId ? (
@@ -311,14 +311,14 @@ function InvoiceFilingsCard({ filings }: { filings: FilingRow[] }) {
                     href={`https://drive.google.com/file/d/${f.driveFileId}/view`}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] text-[var(--ds-text-tertiary)] hover:underline"
+                    className="inline-flex items-center gap-1 text-(--ds-text-tertiary) text-[11px] hover:underline"
                   >
                     Drive
                     <ArrowSquareOut size={10} weight="bold" />
                   </a>
                 ) : null}
               </div>
-              <p className="text-[11px] text-[var(--ds-text-tertiary)]">
+              <p className="text-(--ds-text-tertiary) text-[11px]">
                 {counterparty ? <span>{counterparty}</span> : null}
                 {f.prestationType ? ` · ${f.prestationType}` : ""}
                 {f.invoiceDate ? ` · ${f.invoiceDate}` : ""}

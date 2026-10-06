@@ -46,7 +46,7 @@ export function SortableHeader({ label, field, current, buildHref, align = "left
   return (
     <Link
       href={buildHref(nextState)}
-      className={`inline-flex items-center gap-1 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${
+      className={`inline-flex items-center gap-1 outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${
         align === "right" ? "flex-row-reverse" : ""
       } ${isActive ? "text-foreground" : "text-muted-foreground"}`}
     >

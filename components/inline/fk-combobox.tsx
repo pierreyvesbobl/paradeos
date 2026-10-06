@@ -110,7 +110,7 @@ export function FkCombobox({
           disabled={disabled || creating}
           aria-expanded={open}
           className={cn(
-            "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs ring-offset-background focus:outline-hidden focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
             className,
           )}
         >
@@ -125,7 +125,7 @@ export function FkCombobox({
           <CaretDown className="ml-2 size-4 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[--radix-popover-trigger-width] min-w-72 p-0">
+      <PopoverContent align="start" className="w-(--radix-popover-trigger-width) min-w-72 p-0">
         <Command
           filter={(value, q) => {
             // cmdk par défaut est case-insensitive mais accent-sensitive.

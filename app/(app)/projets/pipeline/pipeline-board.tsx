@@ -155,7 +155,7 @@ function Column({ status, items }: { status: ProjectStatus; items: PipelineItem[
     <section
       ref={setNodeRef}
       style={tintVars(tint)}
-      className={`flex w-[300px] shrink-0 flex-col gap-2.5 rounded-xl p-2.5 transition-[box-shadow] ${
+      className={`flex w-[300px] shrink-0 flex-col gap-2.5 rounded-xl p-2.5 transition-shadow ${
         isOver ? "shadow-[inset_0_0_0_2px_var(--tint-dot)]" : ""
       }`}
     >
@@ -174,7 +174,7 @@ function ColumnHeader({ title, count, total }: { title: string; count: number; t
   return (
     <header className="flex items-center gap-2.5 px-1 pt-0.5">
       <span
-        className="inline-flex size-6 flex-none items-center justify-center rounded-full bg-[var(--ds-bg-app)] font-bold text-[12px] shadow-sm"
+        className="inline-flex size-6 flex-none items-center justify-center rounded-full bg-(--ds-bg-app) font-bold text-[12px] shadow-xs"
         style={{ color: "inherit" }}
       >
         {count}
@@ -229,10 +229,10 @@ function Card({ item }: { item: PipelineItem }) {
       style={style}
       {...listeners}
       {...attributes}
-      className={`group cursor-grab rounded-[10px] border border-border/70 bg-[var(--ds-bg-app)] shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition-shadow active:cursor-grabbing ${
+      className={`group cursor-grab rounded-[10px] border border-border/70 bg-(--ds-bg-app) shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition-shadow active:cursor-grabbing ${
         isDragging
           ? "opacity-70 shadow-lg ring-2 ring-foreground/20"
-          : "hover:-translate-y-px hover:shadow-sm"
+          : "hover:-translate-y-px hover:shadow-xs"
       }`}
     >
       {/** biome-ignore lint/a11y/useSemanticElements: <a> imbriquerait <button>
@@ -253,11 +253,7 @@ function Card({ item }: { item: PipelineItem }) {
 
         <div className="flex items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px] text-muted-foreground">
-            <Buildings
-              size={14}
-              weight="duotone"
-              className="flex-none text-[var(--ds-text-tertiary)]"
-            />
+            <Buildings size={14} weight="duotone" className="flex-none text-(--ds-text-tertiary)" />
             <EntityName
               entity={item.entityId ? { id: item.entityId, name: item.entityName } : null}
               className="truncate"
@@ -293,7 +289,7 @@ function Card({ item }: { item: PipelineItem }) {
               {item.valueSource === "dougs" ? " ⓘ" : ""}
             </span>
           ) : (
-            <span className="text-[12px] text-[var(--ds-text-tertiary)]">Montant à définir</span>
+            <span className="text-(--ds-text-tertiary) text-[12px]">Montant à définir</span>
           )}
 
           <span className="flex-1" />
@@ -302,13 +298,13 @@ function Card({ item }: { item: PipelineItem }) {
 
           {probability != null ? (
             <span className="inline-flex flex-none items-center gap-1.5">
-              <span className="relative h-[5px] w-10 overflow-hidden rounded-full bg-[var(--ds-bg-press)]">
+              <span className="relative h-[5px] w-10 overflow-hidden rounded-full bg-(--ds-bg-press)">
                 <span
-                  className="absolute inset-y-0 left-0 rounded-full bg-[var(--ds-primary-400)]"
+                  className="absolute inset-y-0 left-0 rounded-full bg-(--ds-primary-400)"
                   style={{ width: `${probability}%` }}
                 />
               </span>
-              <span className="font-semibold text-[11px] text-[var(--ds-text-tertiary)] tabular-nums">
+              <span className="font-semibold text-(--ds-text-tertiary) text-[11px] tabular-nums">
                 {probability}%
               </span>
             </span>
@@ -396,7 +392,7 @@ function FollowUpEditor({
               type="button"
               disabled={pending}
               title={`Relance prévue le ${formatDate(optimistic)}`}
-              className="inline-flex items-center gap-1 rounded-full bg-[var(--ds-bg-hover)] px-2 py-0.5 font-medium text-[11px] text-muted-foreground transition-opacity hover:opacity-80"
+              className="inline-flex items-center gap-1 rounded-full bg-(--ds-bg-hover) px-2 py-0.5 font-medium text-[11px] text-muted-foreground transition-opacity hover:opacity-80"
             >
               <CalendarBlank size={12} weight="duotone" />
               {formatDate(optimistic)}
@@ -406,7 +402,7 @@ function FollowUpEditor({
               type="button"
               disabled={pending}
               title="Définir une date de relance"
-              className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium text-[11px] text-[var(--ds-text-tertiary)] opacity-0 transition-opacity hover:bg-[var(--ds-bg-hover)] group-hover:opacity-100"
+              className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium text-(--ds-text-tertiary) text-[11px] opacity-0 transition-opacity hover:bg-(--ds-bg-hover) group-hover:opacity-100"
             >
               <CalendarBlank size={12} weight="duotone" />
               Relance
@@ -454,7 +450,7 @@ function StaticBoard({ items }: { items: PipelineItem[] }) {
                 {colItems.map((it) => (
                   <li
                     key={it.id}
-                    className="rounded-[10px] border border-border/70 bg-[var(--ds-bg-app)] px-3 py-3 shadow-[0_1px_2px_rgba(15,15,15,0.04)]"
+                    className="rounded-[10px] border border-border/70 bg-(--ds-bg-app) px-3 py-3 shadow-[0_1px_2px_rgba(15,15,15,0.04)]"
                   >
                     <ProjectName
                       project={it}
@@ -465,7 +461,7 @@ function StaticBoard({ items }: { items: PipelineItem[] }) {
                         <Buildings
                           size={14}
                           weight="duotone"
-                          className="text-[var(--ds-text-tertiary)]"
+                          className="text-(--ds-text-tertiary)"
                         />
                         <EntityName
                           entity={{ id: it.entityId, name: it.entityName }}
@@ -526,7 +522,7 @@ function ColumnAddForm({ status }: { status: ProjectStatus }) {
         e.preventDefault();
         submit();
       }}
-      className="space-y-1.5 rounded-[10px] border border-border/70 bg-[var(--ds-bg-app)] p-2"
+      className="space-y-1.5 rounded-[10px] border border-border/70 bg-(--ds-bg-app) p-2"
     >
       <input
         type="text"
@@ -545,7 +541,7 @@ function ColumnAddForm({ status }: { status: ProjectStatus }) {
         }}
         placeholder="Titre du deal…"
         disabled={pending}
-        className="w-full rounded-sm bg-transparent px-1.5 py-0.5 text-foreground text-sm outline-none focus-visible:bg-muted/50"
+        className="w-full rounded-sm bg-transparent px-1.5 py-0.5 text-foreground text-sm outline-hidden focus-visible:bg-muted/50"
       />
       <div className="flex items-center justify-end gap-1">
         <button

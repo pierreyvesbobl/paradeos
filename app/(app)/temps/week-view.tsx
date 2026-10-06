@@ -310,7 +310,7 @@ export function WeekView({
             setCreateDrag(null);
           }}
         >
-          <div className="border-r border-b bg-[var(--ds-bg-surface)]" />
+          <div className="border-r border-b bg-(--ds-bg-surface)" />
           {days.map((d, i) => {
             const today = isSameDay(d, new Date());
             const minutes = dayActualMinutes(d, optimistic);
@@ -328,7 +328,7 @@ export function WeekView({
                 >
                   {DAY_LABELS[i]}
                 </p>
-                <p className="text-[12px] text-[var(--ds-text-tertiary)]">
+                <p className="text-(--ds-text-tertiary) text-[12px]">
                   {d.getDate()}/{String(d.getMonth() + 1).padStart(2, "0")}
                 </p>
                 <p
@@ -501,7 +501,7 @@ function DayColumn({
 
       {showNowLine ? (
         <div
-          className="pointer-events-none absolute right-0 left-0 z-[5]"
+          className="pointer-events-none absolute right-0 left-0 z-5"
           style={{ top: nowTop, borderTop: "2px solid var(--ds-tint-red-dot)" }}
         >
           <span
@@ -575,7 +575,7 @@ function DayColumn({
                     e.stopPropagation();
                     onGoogleEventClick(g);
                   }}
-                  className="absolute z-[1] cursor-pointer overflow-hidden rounded border-l-4 px-1.5 py-1 text-left text-[10px] leading-tight opacity-80 transition-opacity hover:opacity-100"
+                  className="absolute z-1 cursor-pointer overflow-hidden rounded border-l-4 px-1.5 py-1 text-left text-[10px] leading-tight opacity-80 transition-opacity hover:opacity-100"
                   style={{
                     top,
                     height,
@@ -621,7 +621,7 @@ function DayColumn({
               return (
                 <div
                   key={e.id}
-                  className={`absolute z-[1] overflow-hidden rounded-md text-left text-[11px] leading-tight shadow-[0_1px_2px_rgba(15,15,15,0.04)] ${
+                  className={`absolute z-1 overflow-hidden rounded-md text-left text-[11px] leading-tight shadow-[0_1px_2px_rgba(15,15,15,0.04)] ${
                     isDragging ? "z-10 opacity-90 shadow-lg ring-2 ring-primary/50" : ""
                   }`}
                   style={{
@@ -690,7 +690,7 @@ function CategoryLegend() {
   ];
   return (
     <div className="flex flex-wrap items-center gap-4 text-[12px] text-muted-foreground">
-      <span className="text-[var(--ds-text-tertiary)]">Catégories</span>
+      <span className="text-(--ds-text-tertiary)">Catégories</span>
       {items.map((it) => (
         <span key={it.tint} className="inline-flex items-center gap-1.5">
           <span

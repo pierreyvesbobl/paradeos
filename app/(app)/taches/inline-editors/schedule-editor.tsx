@@ -77,7 +77,7 @@ export function TaskScheduleEditor({
           <button
             type="button"
             disabled={pending}
-            className="rounded-sm px-1.5 py-0.5 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded-sm px-1.5 py-0.5 text-left text-sm outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
           >
             {label ? <span>{label}</span> : <span className="text-muted-foreground">—</span>}
           </button>

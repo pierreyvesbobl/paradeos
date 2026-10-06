@@ -79,7 +79,7 @@ export function ProjectStatusSelect({
           disabled={pending}
           aria-label="Changer le statut du projet"
           className={cn(
-            "inline-flex items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-60",
+            "inline-flex items-center gap-2 rounded-md outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-60",
             appearance === "pill"
               ? cn("px-2.5 py-1.5 font-medium text-[13px]", tone.bg, tone.text)
               : cn(

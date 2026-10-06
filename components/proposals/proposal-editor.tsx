@@ -403,11 +403,11 @@ function TaskAssigneesField({
         value.map((a) => (
           <span
             key={`${a.kind}:${a.id}`}
-            className="inline-flex items-center gap-1.5 rounded-full border bg-[var(--ds-bg-app)] py-0.5 pr-2 pl-2 text-[12px]"
+            className="inline-flex items-center gap-1.5 rounded-full border bg-(--ds-bg-app) py-0.5 pr-2 pl-2 text-[12px]"
           >
             {a.fullName ?? "(sans nom)"}
             {a.kind === "contact" ? (
-              <span className="text-[10px] text-[var(--ds-text-tertiary)]">externe</span>
+              <span className="text-(--ds-text-tertiary) text-[10px]">externe</span>
             ) : null}
           </span>
         ))

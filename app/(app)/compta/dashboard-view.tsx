@@ -260,7 +260,7 @@ export async function DashboardView({
         <PeriodSelector current={period} />
         <ComptaSegmentSwitcher current={segment} />
         <span className="flex-1" />
-        <p className="text-[11px] text-[var(--ds-text-tertiary)]">
+        <p className="text-(--ds-text-tertiary) text-[11px]">
           Sur la période · restes en temps réel
         </p>
       </div>
@@ -389,12 +389,12 @@ function SignedFlowCard({
       <div className="mb-3 flex items-baseline gap-3">
         <h2 className="font-semibold text-[14px] text-foreground">Du signé à l'encaissé</h2>
         <span className="flex-1" />
-        <span className="text-[12px] text-[var(--ds-text-tertiary)]">
+        <span className="text-(--ds-text-tertiary) text-[12px]">
           Reste à facturer{" "}
           <b className="font-semibold text-muted-foreground tabular-nums">{formatEur(toBill)}</b>
         </span>
       </div>
-      <div className="relative h-3 overflow-hidden rounded-full bg-[var(--ds-bg-press)]">
+      <div className="relative h-3 overflow-hidden rounded-full bg-(--ds-bg-press)">
         <div
           className="absolute inset-y-0 left-0 rounded-full"
           style={{
@@ -447,7 +447,7 @@ function Legend({
         style={{ background: dotColor }}
       />
       {label} <b className="font-semibold text-foreground tabular-nums">{value}</b>
-      {pct ? <span className="text-[var(--ds-text-tertiary)]">{pct}</span> : null}
+      {pct ? <span className="text-(--ds-text-tertiary)">{pct}</span> : null}
     </span>
   );
 }
@@ -457,7 +457,7 @@ function ProjectDetailCard({ rows }: { rows: ProjectDetailRow[] }) {
     <section className="rounded-xl border bg-card px-4 pb-3 sm:px-5">
       <header className="flex items-baseline gap-3 px-1 pt-4 pb-1.5">
         <h2 className="font-semibold text-[15px] text-foreground">Détail par projet</h2>
-        <span className="text-[12px] text-[var(--ds-text-tertiary)]">
+        <span className="text-(--ds-text-tertiary) text-[12px]">
           Prestations · par montant signé décroissant
         </span>
       </header>
@@ -470,25 +470,25 @@ function ProjectDetailCard({ rows }: { rows: ProjectDetailRow[] }) {
           <Link
             key={r.projectId}
             href={`/projets/${r.projectId}?tab=billing`}
-            className="block border-t px-1 py-3.5 transition-colors hover:bg-[var(--ds-bg-hover)]"
+            className="block border-t px-1 py-3.5 transition-colors hover:bg-(--ds-bg-hover)"
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="font-medium text-foreground text-sm">{r.projectName}</span>
               {r.entityName ? (
-                <span className="text-[12px] text-[var(--ds-text-tertiary)]">{r.entityName}</span>
+                <span className="text-(--ds-text-tertiary) text-[12px]">{r.entityName}</span>
               ) : null}
               {r.quoteReference ? (
-                <span className="rounded border bg-[var(--ds-bg-surface)] px-1.5 py-0 text-[11px] text-[var(--ds-text-tertiary)] tabular-nums">
+                <span className="rounded border bg-(--ds-bg-surface) px-1.5 py-0 text-(--ds-text-tertiary) text-[11px] tabular-nums">
                   {r.quoteReference}
                 </span>
               ) : null}
               <span className="flex-1" />
-              <span className="text-[12px] text-[var(--ds-text-tertiary)]">Reste à facturer</span>
+              <span className="text-(--ds-text-tertiary) text-[12px]">Reste à facturer</span>
               <span className="font-semibold text-[13px] text-foreground tabular-nums">
                 {formatEur(r.remainingHt)}
               </span>
             </div>
-            <div className="relative my-2.5 h-2 overflow-hidden rounded-full bg-[var(--ds-bg-press)]">
+            <div className="relative my-2.5 h-2 overflow-hidden rounded-full bg-(--ds-bg-press)">
               <div
                 className="absolute inset-y-0 left-0 rounded-full"
                 style={{
@@ -535,7 +535,7 @@ function PendingCard({ items, total }: { items: PendingItem[]; total: number }) 
     <section className="rounded-xl border bg-card px-4 pb-3 sm:px-5">
       <header className="flex items-baseline gap-3 px-1 pt-4 pb-1.5">
         <h2 className="font-semibold text-[15px] text-foreground">En attente</h2>
-        <span className="text-[13px] text-[var(--ds-text-tertiary)]">
+        <span className="text-(--ds-text-tertiary) text-[13px]">
           {items.length}{" "}
           {items.length > 1 ? "factures à émettre ou encaisser" : "facture à émettre ou encaisser"}
         </span>
@@ -591,7 +591,7 @@ function PendingRow({ item }: { item: PendingItem }) {
         <div className="truncate font-medium text-foreground text-sm">
           {item.projectName ?? item.contractName ?? item.label}
         </div>
-        <div className="truncate text-[12px] text-[var(--ds-text-tertiary)]">
+        <div className="truncate text-(--ds-text-tertiary) text-[12px]">
           {item.label}
           {item.entityName ? ` · ${item.entityName}` : ""}
         </div>
@@ -615,7 +615,7 @@ function PendingRow({ item }: { item: PendingItem }) {
       <ArrowRight
         size={13}
         weight="bold"
-        className={targetLink ? "text-[var(--ds-text-tertiary)]" : "invisible"}
+        className={targetLink ? "text-(--ds-text-tertiary)" : "invisible"}
       />
     </>
   );
@@ -624,7 +624,7 @@ function PendingRow({ item }: { item: PendingItem }) {
     return (
       <Link
         href={targetLink}
-        className="flex items-center gap-3.5 border-t px-1 py-3 transition-colors hover:bg-[var(--ds-bg-hover)]"
+        className="flex items-center gap-3.5 border-t px-1 py-3 transition-colors hover:bg-(--ds-bg-hover)"
       >
         {body}
       </Link>

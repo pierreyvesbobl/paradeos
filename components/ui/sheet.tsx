@@ -71,13 +71,13 @@ const SheetHeader = ({
   >
     <DialogPrimitive.Close
       onClick={onClose}
-      className="inline-flex size-7 items-center justify-center rounded-md text-[var(--ds-text-tertiary)] hover:bg-[var(--ds-bg-hover)] hover:text-[var(--ds-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+      className="inline-flex size-7 items-center justify-center rounded-md text-(--ds-text-tertiary) hover:bg-(--ds-bg-hover) hover:text-(--ds-text) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
       aria-label="Fermer"
     >
       <X weight="bold" className="size-3.5" />
     </DialogPrimitive.Close>
     {kind ? (
-      <span className="font-semibold text-[11px] text-[var(--ds-text-tertiary)] uppercase tracking-[0.1em]">
+      <span className="font-semibold text-(--ds-text-tertiary) text-[11px] uppercase tracking-widest">
         {kind}
       </span>
     ) : (
@@ -95,7 +95,7 @@ const SheetTitle = React.forwardRef<
   <DialogPrimitive.Title
     ref={ref}
     className={cn(
-      "font-semibold text-[19px] text-[var(--ds-text)] leading-tight tracking-tight",
+      "font-semibold text-(--ds-text) text-[19px] leading-tight tracking-tight",
       className,
     )}
     {...props}
@@ -109,7 +109,7 @@ const SheetDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-[14px] text-[var(--ds-text-tertiary)]", className)}
+    className={cn("text-(--ds-text-tertiary) text-[14px]", className)}
     {...props}
   />
 ));

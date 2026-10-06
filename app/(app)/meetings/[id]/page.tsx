@@ -137,11 +137,11 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-5">
-          <section className="rounded-xl border bg-[var(--ds-bg-surface)] p-5">
+          <section className="rounded-xl border bg-(--ds-bg-surface) p-5">
             <header className="mb-3 flex items-center justify-between">
               <h2 className="font-semibold text-[15px] text-foreground">Résumé</h2>
               {meeting.summary == null ? (
-                <span className="text-[12px] text-[var(--ds-text-tertiary)]">
+                <span className="text-(--ds-text-tertiary) text-[12px]">
                   Pas encore d'extraction. Lance « Ré-extraire ».
                 </span>
               ) : null}
@@ -182,18 +182,18 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
           />
 
           {meeting.transcript ? (
-            <details className="group rounded-xl border bg-[var(--ds-bg-surface)]">
+            <details className="group rounded-xl border bg-(--ds-bg-surface)">
               <summary className="flex cursor-pointer items-center gap-3 px-4 py-3.5 text-sm">
                 <FileText size={18} weight="duotone" className="text-muted-foreground" />
                 <span className="font-medium text-foreground">Transcript brut</span>
-                <span className="text-[12px] text-[var(--ds-text-tertiary)]">
+                <span className="text-(--ds-text-tertiary) text-[12px]">
                   {meeting.transcript.length.toLocaleString("fr-FR")} caractères
                 </span>
                 <span className="flex-1" />
                 <CopyTranscriptButton transcript={meeting.transcript} />
               </summary>
               <DemoBlur className="block">
-                <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap border-t bg-[var(--ds-bg-app)] p-5 text-xs leading-relaxed">
+                <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap border-t bg-(--ds-bg-app) p-5 text-xs leading-relaxed">
                   {meeting.transcript}
                 </pre>
               </DemoBlur>
@@ -202,9 +202,9 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
         </div>
 
         <aside className="flex w-full flex-col gap-4 lg:w-[300px] lg:flex-none">
-          <section className="rounded-xl border bg-[var(--ds-bg-surface)] p-4 sm:p-5">
+          <section className="rounded-xl border bg-(--ds-bg-surface) p-4 sm:p-5">
             <h2 className="font-semibold text-[14px] text-foreground">Participants</h2>
-            <p className="mt-0.5 mb-3 text-[12px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
+            <p className="mt-0.5 mb-3 text-(--ds-text-tertiary) text-[12px] uppercase tracking-wider">
               Qui était là — repris dans l'extraction
             </p>
             <MeetingParticipantsField
@@ -220,9 +220,9 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
             />
           </section>
 
-          <section className="rounded-xl border bg-[var(--ds-bg-surface)] p-4 sm:p-5">
+          <section className="rounded-xl border bg-(--ds-bg-surface) p-4 sm:p-5">
             <h2 className="font-semibold text-[14px] text-foreground">Lié à</h2>
-            <p className="mt-0.5 mb-3 text-[12px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
+            <p className="mt-0.5 mb-3 text-(--ds-text-tertiary) text-[12px] uppercase tracking-wider">
               Projet — phases commerciales & delivery
             </p>
             <MeetingSubjectEditor
@@ -232,7 +232,7 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
             />
           </section>
 
-          <section className="rounded-xl border bg-[var(--ds-bg-surface)] p-4 sm:p-5">
+          <section className="rounded-xl border bg-(--ds-bg-surface) p-4 sm:p-5">
             <h2 className="mb-3 font-semibold text-[14px] text-foreground">État</h2>
             <dl className="flex flex-col gap-2.5 text-sm">
               <div className="flex items-center">
@@ -271,7 +271,7 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
             id={meeting.id}
             label="Supprimer la réunion"
             confirmTitle="Supprimer cette réunion ?"
-            className="w-full justify-center bg-[var(--ds-tint-red-bg)] py-2.5 font-medium text-[var(--ds-tint-red-text)] hover:bg-[var(--ds-tint-red-bg)] hover:text-[var(--ds-tint-red-text)] hover:brightness-95"
+            className="w-full justify-center bg-(--ds-tint-red-bg) py-2.5 font-medium text-(--ds-tint-red-text) hover:bg-(--ds-tint-red-bg) hover:text-(--ds-tint-red-text) hover:brightness-95"
           />
         </aside>
       </div>

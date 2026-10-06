@@ -161,7 +161,7 @@ export function ContactPreviewDialog({
                   <PeekField icon={<EnvelopeSimple weight="regular" size={14} />} label="E-mail">
                     <a href={`mailto:${data.email}`} className="hover:underline">
                       {demo ? (
-                        <span className="select-none blur-sm">{data.email}</span>
+                        <span className="select-none blur-xs">{data.email}</span>
                       ) : (
                         data.email
                       )}
@@ -173,7 +173,7 @@ export function ContactPreviewDialog({
                   <PeekField icon={<Phone weight="regular" size={14} />} label="Téléphone">
                     <a href={`tel:${data.phone}`} className="hover:underline">
                       {demo ? (
-                        <span className="select-none blur-sm">{data.phone}</span>
+                        <span className="select-none blur-xs">{data.phone}</span>
                       ) : (
                         data.phone
                       )}
@@ -196,12 +196,12 @@ export function ContactPreviewDialog({
 
                 {data.notes ? (
                   <div>
-                    <p className="font-semibold text-[11px] text-ds-text-tertiary uppercase tracking-[0.1em]">
+                    <p className="font-semibold text-[11px] text-ds-text-tertiary uppercase tracking-widest">
                       Notes
                     </p>
                     <p className="mt-1 whitespace-pre-wrap text-[14px] text-ds-text">
                       {demo ? (
-                        <span className="select-none blur-sm">{data.notes}</span>
+                        <span className="select-none blur-xs">{data.notes}</span>
                       ) : (
                         data.notes
                       )}
@@ -235,7 +235,7 @@ function PeekField({
 }) {
   return (
     <div>
-      <dt className="inline-flex items-center gap-1.5 font-semibold text-[11px] text-ds-text-tertiary uppercase tracking-[0.1em]">
+      <dt className="inline-flex items-center gap-1.5 font-semibold text-[11px] text-ds-text-tertiary uppercase tracking-widest">
         <span className="shrink-0">{icon}</span>
         {label}
       </dt>

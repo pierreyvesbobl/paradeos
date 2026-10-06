@@ -139,7 +139,7 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
           ))}
           {sortRaw ? <input type="hidden" name="sort" value={sortRaw} /> : null}
         </form>
-        <span className="ml-auto text-[var(--ds-text-tertiary)] text-sm">
+        <span className="ml-auto text-(--ds-text-tertiary) text-sm">
           {rows.length} entité{rows.length > 1 ? "s" : ""}
         </span>
       </div>
@@ -165,7 +165,7 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
           <Table>
             <TableHeader>
               <TableRow className="border-border/70 border-b">
-                <TableHead className="h-9 px-3 font-semibold text-[11px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
+                <TableHead className="h-9 px-3 font-semibold text-(--ds-text-tertiary) text-[11px] uppercase tracking-wider">
                   <SortableHeader
                     label="Nom"
                     field="name"
@@ -173,7 +173,7 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
                     buildHref={(next) => buildSortHref("/crm/entites", params, next)}
                   />
                 </TableHead>
-                <TableHead className="h-9 w-[200px] px-3 font-semibold text-[11px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
+                <TableHead className="h-9 w-[200px] px-3 font-semibold text-(--ds-text-tertiary) text-[11px] uppercase tracking-wider">
                   <SortableHeader
                     label="Type"
                     field="kind"
@@ -181,7 +181,7 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
                     buildHref={(next) => buildSortHref("/crm/entites", params, next)}
                   />
                 </TableHead>
-                <TableHead className="h-9 w-[290px] px-3 font-semibold text-[11px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
+                <TableHead className="h-9 w-[290px] px-3 font-semibold text-(--ds-text-tertiary) text-[11px] uppercase tracking-wider">
                   <SortableHeader
                     label="Site web"
                     field="website"
@@ -196,7 +196,7 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
               {rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  className="group border-border/70 border-b transition-colors hover:bg-[var(--ds-bg-hover)]"
+                  className="group border-border/70 border-b transition-colors hover:bg-(--ds-bg-hover)"
                 >
                   <TableCell className="min-h-[58px] px-3 py-2.5">
                     <div className="flex items-center gap-3">
@@ -216,7 +216,7 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
                       <Buildings
                         size={14}
                         weight="duotone"
-                        className="flex-none text-[var(--ds-text-tertiary)]"
+                        className="flex-none text-(--ds-text-tertiary)"
                       />
                       <EntKind id={row.id} value={row.kind} />
                     </div>
@@ -227,7 +227,7 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
                         <Globe
                           size={14}
                           weight="duotone"
-                          className="flex-none text-[var(--ds-text-tertiary)]"
+                          className="flex-none text-(--ds-text-tertiary)"
                         />
                       ) : null}
                       <EntWebsite id={row.id} value={row.website} placeholder="" />
@@ -237,7 +237,7 @@ export default async function CrmEntitesPage({ searchParams }: { searchParams: S
                     <Link
                       href={`/entites/${row.id}`}
                       aria-label="Ouvrir la fiche"
-                      className="inline-flex size-7 items-center justify-center rounded-md text-[var(--ds-text-tertiary)] opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                      className="inline-flex size-7 items-center justify-center rounded-md text-(--ds-text-tertiary) opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
                     >
                       <ArrowRight size={15} weight="bold" />
                     </Link>

@@ -337,7 +337,7 @@ export function NoteDialog({ subjectType, subjectId, initial, trigger }: Props) 
             <FieldError messages={errors.content} />
           </div>
 
-          <DialogFooter className="!justify-between">
+          <DialogFooter className="justify-between!">
             {isEdit ? (
               <Button
                 type="button"

@@ -66,7 +66,7 @@ export default async function OAuthAuthorizePage({
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
-      <div className="w-full max-w-md space-y-6 rounded-lg border bg-card p-8 shadow-sm">
+      <div className="w-full max-w-md space-y-6 rounded-lg border bg-card p-8 shadow-xs">
         <div className="space-y-2">
           <p className="font-medium font-mono text-muted-foreground text-sm tracking-tight">
             Parade OS
@@ -104,7 +104,7 @@ export default async function OAuthAuthorizePage({
 function AuthorizeError({ title, detail }: { title: string; detail: string }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
-      <div className="w-full max-w-md space-y-3 rounded-lg border bg-card p-8 shadow-sm">
+      <div className="w-full max-w-md space-y-3 rounded-lg border bg-card p-8 shadow-xs">
         <h1 className="font-semibold text-lg tracking-tight">{title}</h1>
         <p className="text-muted-foreground text-sm">{detail}</p>
       </div>

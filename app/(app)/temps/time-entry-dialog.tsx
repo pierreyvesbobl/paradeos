@@ -244,7 +244,7 @@ export function TimeEntryDialog({
             />
           </div>
 
-          <DialogFooter className="!justify-between">
+          <DialogFooter className="justify-between!">
             {mode === "edit" ? (
               <Button
                 type="button"

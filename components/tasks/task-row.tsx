@@ -93,7 +93,7 @@ export function TaskRow({
       onKeyDown={handleRowKeyDown}
       aria-selected={selected}
       className={cn(
-        "group/row relative flex min-h-[42px] cursor-pointer select-none items-center border-ds-border border-b px-2 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+        "group/row relative flex min-h-[42px] cursor-pointer select-none items-center border-ds-border border-b px-2 outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring",
         selected ? "bg-primary-50" : "hover:bg-ds-hover/60",
       )}
       style={

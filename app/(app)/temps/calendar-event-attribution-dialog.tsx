@@ -83,7 +83,7 @@ export function CalendarEventAttributionDialog({
               placeholder="Rechercher un projet…"
               autoFocus
               disabled={pending}
-              className="w-full rounded-md border bg-background py-1.5 pr-2 pl-7 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-md border bg-background py-1.5 pr-2 pl-7 text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
           <ul className="max-h-64 space-y-0.5 overflow-y-auto">

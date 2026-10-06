@@ -118,7 +118,7 @@ export function ProjectMembersField({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Rechercher un membre…"
             disabled={pending}
-            className="w-full rounded-sm bg-transparent px-1.5 py-0.5 text-xs outline-none focus-visible:bg-muted/50"
+            className="w-full rounded-sm bg-transparent px-1.5 py-0.5 text-xs outline-hidden focus-visible:bg-muted/50"
           />
           <ul className="max-h-48 space-y-0.5 overflow-y-auto">
             {filtered.length === 0 ? (

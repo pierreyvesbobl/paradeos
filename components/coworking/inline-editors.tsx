@@ -372,7 +372,7 @@ function InlineEnum<T extends string>({
         <button
           type="button"
           disabled={pending}
-          className="cursor-pointer rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="cursor-pointer rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Badge variant={variantOf?.(value) ?? "default"} className="cursor-pointer">
             {labels[value]}

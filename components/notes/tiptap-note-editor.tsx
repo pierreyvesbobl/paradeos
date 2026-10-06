@@ -111,7 +111,8 @@ export function TiptapNoteEditor({ note }: Props) {
     content: attachmentToWebUrl(note.content),
     editorProps: {
       attributes: {
-        class: "prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[200px] py-2",
+        class:
+          "prose prose-sm dark:prose-invert max-w-none focus:outline-hidden min-h-[200px] py-2",
       },
       handlePaste: (_view, event) => {
         const files = Array.from(event.clipboardData?.files ?? []);

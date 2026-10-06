@@ -62,7 +62,7 @@ export function InlineMultiline({
           setDraft(value ?? "");
           setEditing(true);
         }}
-        className={`block w-full rounded-md px-2 py-1.5 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring ${className ?? ""}`}
+        className={`block w-full rounded-md px-2 py-1.5 text-left outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring ${className ?? ""}`}
       >
         {value ? (
           <p className="whitespace-pre-wrap text-sm">{value}</p>

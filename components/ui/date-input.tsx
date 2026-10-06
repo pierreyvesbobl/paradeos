@@ -132,7 +132,7 @@ export function DateInput({
               type="button"
               key={p.label}
               onClick={() => pick(p.offset())}
-              className="rounded px-2 py-1 text-left text-sm hover:bg-background hover:shadow-sm"
+              className="rounded px-2 py-1 text-left text-sm hover:bg-background hover:shadow-xs"
             >
               {p.label}
             </button>

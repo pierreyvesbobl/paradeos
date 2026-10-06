@@ -345,7 +345,7 @@ export function NewMeetingForm({ projects, users, contacts }: Props) {
                 placeholder="Colle le transcript ici…"
                 required
                 disabled={formDisabled}
-                className="block w-full rounded-md border bg-background p-3 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="block w-full rounded-md border bg-background p-3 font-mono text-xs leading-relaxed outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               />
               <p className="text-muted-foreground text-xs">
                 {transcript.length.toLocaleString("fr-FR")} caractères

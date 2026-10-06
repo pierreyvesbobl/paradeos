@@ -471,7 +471,7 @@ function SecretDialog({ open, onOpenChange, projectId, initial }: DialogProps) {
               <button
                 type="button"
                 onClick={() => setShowValue((v) => !v)}
-                className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute inset-e-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 aria-label={showValue ? "Masquer" : "Afficher"}
                 tabIndex={-1}
               >

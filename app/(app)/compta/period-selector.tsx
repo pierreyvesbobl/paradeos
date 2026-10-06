@@ -58,13 +58,13 @@ export function PeriodSelector({ current }: { current: ComptaPeriod }) {
           type="button"
           disabled={pending}
           className={cn(
-            "inline-flex items-center gap-2 rounded-lg border bg-[var(--ds-bg-app)] px-3 py-1.5 text-foreground text-sm transition-colors hover:bg-[var(--ds-bg-hover)]",
+            "inline-flex items-center gap-2 rounded-lg border bg-(--ds-bg-app) px-3 py-1.5 text-foreground text-sm transition-colors hover:bg-(--ds-bg-hover)",
             pending && "opacity-60",
           )}
         >
           <CalendarBlank size={15} weight="duotone" className="text-muted-foreground" />
           {currentLabel}
-          <CaretDown size={11} weight="bold" className="ml-0.5 text-[var(--ds-text-tertiary)]" />
+          <CaretDown size={11} weight="bold" className="ml-0.5 text-(--ds-text-tertiary)" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[210px]">

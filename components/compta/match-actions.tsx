@@ -64,7 +64,7 @@ export function MatchActions({ matchId }: { matchId: string }) {
         type="button"
         onClick={dismiss}
         disabled={pending}
-        className={`${BUTTON} text-[var(--ds-text-tertiary)] hover:bg-muted/40 hover:text-foreground`}
+        className={`${BUTTON} text-(--ds-text-tertiary) hover:bg-muted/40 hover:text-foreground`}
         title="Ne plus proposer ce rapprochement"
       >
         <X size={13} weight="bold" />
@@ -97,7 +97,7 @@ export function DetachAction({ matchId }: { matchId: string }) {
           router.refresh();
         })
       }
-      className={`${BUTTON} text-[var(--ds-text-tertiary)] hover:bg-muted/40 hover:text-foreground`}
+      className={`${BUTTON} text-(--ds-text-tertiary) hover:bg-muted/40 hover:text-foreground`}
       title="Retirer cette pièce de l'opération Dougs"
     >
       <LinkBreak size={13} weight="bold" />
@@ -126,7 +126,7 @@ export function RestoreAction({ matchId }: { matchId: string }) {
           router.refresh();
         })
       }
-      className={`${BUTTON} text-[var(--ds-text-tertiary)] hover:bg-muted/40 hover:text-foreground`}
+      className={`${BUTTON} text-(--ds-text-tertiary) hover:bg-muted/40 hover:text-foreground`}
     >
       Remettre
     </button>

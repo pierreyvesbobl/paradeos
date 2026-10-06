@@ -87,7 +87,7 @@ export function ThreadLinks({ threadId, links }: { threadId: string; links: Thre
                 type="button"
                 onClick={() => detach(l.labelId, l.name)}
                 disabled={pending}
-                className="rounded p-0.5 text-[var(--ds-text-tertiary)] hover:bg-[var(--ds-bg-hover)] hover:text-[var(--ds-text)] disabled:opacity-50"
+                className="rounded p-0.5 text-(--ds-text-tertiary) hover:bg-(--ds-bg-hover) hover:text-(--ds-text) disabled:opacity-50"
                 aria-label={`Détacher ${l.name}`}
                 title="Détacher — le libellé Gmail sera retiré et ne reviendra pas"
               >

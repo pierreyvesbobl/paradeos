@@ -273,7 +273,7 @@ export function EmailsListPane({
               );
             })}
             {directionCounts.unclassified > 0 ? (
-              <span className="text-[10.5px] text-[var(--ds-text-tertiary)]">
+              <span className="text-(--ds-text-tertiary) text-[10.5px]">
                 {directionCounts.unclassified} non classée
                 {directionCounts.unclassified > 1 ? "s" : ""}
               </span>
@@ -284,14 +284,14 @@ export function EmailsListPane({
         <form method="GET" action="/emails" className="relative">
           <MagnifyingGlass
             size={13}
-            className="absolute top-[9px] left-2.5 text-[var(--ds-text-tertiary)]"
+            className="absolute top-[9px] left-2.5 text-(--ds-text-tertiary)"
           />
           <input
             type="text"
             name="q"
             defaultValue={query}
             placeholder={`Filtrer dans « ${BUCKET_META[activeBucket].label} »…`}
-            className="h-8 w-full rounded-lg pr-2.5 pl-7 text-[12px] placeholder:text-[var(--ds-text-tertiary)]"
+            className="h-8 w-full rounded-lg pr-2.5 pl-7 text-[12px] placeholder:text-(--ds-text-tertiary)"
             style={{
               background: "var(--ds-bg-app)",
               color: "var(--ds-text)",
@@ -309,7 +309,7 @@ export function EmailsListPane({
 
       <ul className="flex-1 overflow-y-auto">
         {threads.length === 0 ? (
-          <li className="px-4 py-10 text-center text-[12px] text-[var(--ds-text-tertiary)] italic">
+          <li className="px-4 py-10 text-center text-(--ds-text-tertiary) text-[12px] italic">
             {query ? "Aucun résultat." : "Aucun mail."}
           </li>
         ) : null}

@@ -46,7 +46,7 @@ export function SummaryEditor({
         {current ? (
           <pre
             className={`whitespace-pre-wrap font-sans text-sm leading-relaxed ${
-              demo ? "select-none blur-sm" : ""
+              demo ? "select-none blur-xs" : ""
             }`}
           >
             {current}
@@ -77,7 +77,7 @@ export function SummaryEditor({
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         disabled={pending}
-        className="block w-full rounded-md border bg-background p-3 text-sm leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="block w-full rounded-md border bg-background p-3 text-sm leading-relaxed outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       />
       <div className="flex gap-2">
         <Button size="sm" onClick={save} disabled={pending}>

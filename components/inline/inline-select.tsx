@@ -55,7 +55,7 @@ export function InlineSelect<T extends string>({ value, options, onSave, trigger
         <button
           type="button"
           disabled={pending}
-          className="-mx-1.5 cursor-pointer rounded-sm px-1.5 py-0.5 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          className="-mx-1.5 cursor-pointer rounded-sm px-1.5 py-0.5 text-left outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
         >
           {trigger ? trigger(current) : <span>{current?.label ?? "—"}</span>}
         </button>

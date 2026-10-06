@@ -67,13 +67,9 @@ export function TaskCompletedEditor({ id, value }: { id: string; value: Date | s
             <button
               type="button"
               disabled={pending}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 text-foreground text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 text-foreground text-sm outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40"
             >
-              <CheckCircle
-                size={16}
-                weight="duotone"
-                className="text-[color:var(--ds-tint-green-dot)]"
-              />
+              <CheckCircle size={16} weight="duotone" className="text-(--ds-tint-green-dot)" />
               <span>{formatDate(iso)}</span>
             </button>
           ) : (
@@ -81,7 +77,7 @@ export function TaskCompletedEditor({ id, value }: { id: string; value: Date | s
               type="button"
               disabled={pending}
               className={cn(
-                "inline-flex items-center gap-2 rounded-lg border border-[color:var(--ds-border-strong)] border-dashed px-3 py-1.5 text-muted-foreground text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40",
+                "inline-flex items-center gap-2 rounded-lg border border-(--ds-border-strong) border-dashed px-3 py-1.5 text-muted-foreground text-sm outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40",
               )}
             >
               <Check size={15} weight="duotone" />
@@ -96,7 +92,7 @@ export function TaskCompletedEditor({ id, value }: { id: string; value: Date | s
           onClick={clear}
           disabled={pending}
           aria-label="Retirer la date de complétion"
-          className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40"
+          className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           <X size={11} weight="bold" />
         </button>

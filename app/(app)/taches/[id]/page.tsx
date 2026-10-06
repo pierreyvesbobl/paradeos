@@ -113,7 +113,7 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
         </span>
       </nav>
 
-      <article className="flex overflow-visible rounded-xl border border-ds-border bg-ds-app shadow-sm">
+      <article className="flex overflow-visible rounded-xl border border-ds-border bg-ds-app shadow-xs">
         {/* colonne principale */}
         <div className="min-w-0 flex-1 space-y-8 px-10 py-8">
           <TaskTitleEditor id={id} value={task.title} />

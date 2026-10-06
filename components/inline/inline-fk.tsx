@@ -136,7 +136,7 @@ export function InlineFk({
           type="button"
           disabled={pending}
           className={cn(
-            "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+            "outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
             triggerVariant === "leading-only"
               ? "rounded-full hover:opacity-80"
               : "-mx-1.5 rounded-sm px-1.5 py-0.5 text-left hover:bg-muted",

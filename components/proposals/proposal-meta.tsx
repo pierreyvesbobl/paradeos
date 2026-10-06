@@ -34,11 +34,11 @@ export function ProposalMetaTags({
       return (
         <div className="flex flex-wrap items-center gap-1.5">
           {assigneeName ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border bg-[var(--ds-bg-app)] py-0.5 pr-2 pl-0.5 text-[12px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 rounded-full border bg-(--ds-bg-app) py-0.5 pr-2 pl-0.5 text-[12px] text-muted-foreground">
               <HashedAvatar name={assigneeName} seed={assigneeName} size="xs" />
               {assigneeName}
               {isExternal ? (
-                <span className="text-[10px] text-[var(--ds-text-tertiary)]">externe</span>
+                <span className="text-(--ds-text-tertiary) text-[10px]">externe</span>
               ) : null}
             </span>
           ) : null}
@@ -71,11 +71,11 @@ export function ProposalMetaTags({
           ) : null}
           {dueDate ? (
             <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground">
-              <Calendar size={13} weight="duotone" className="text-[var(--ds-text-tertiary)]" />
+              <Calendar size={13} weight="duotone" className="text-(--ds-text-tertiary)" />
               {formatDueDate(dueDate)}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-[12px] text-[var(--ds-text-tertiary)]">
+            <span className="inline-flex items-center gap-1 text-(--ds-text-tertiary) text-[12px]">
               <CalendarX size={13} weight="duotone" />
               Pas d'échéance
             </span>
@@ -97,7 +97,7 @@ export function ProposalMetaTags({
           ) : null}
           {entityName ? (
             <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-              <Buildings size={13} weight="duotone" className="text-[var(--ds-text-tertiary)]" />
+              <Buildings size={13} weight="duotone" className="text-(--ds-text-tertiary)" />
               pour {entityName}
             </span>
           ) : null}
@@ -120,29 +120,25 @@ export function ProposalMetaTags({
               <IdentificationBadge
                 size={13}
                 weight="duotone"
-                className="text-[var(--ds-text-tertiary)]"
+                className="text-(--ds-text-tertiary)"
               />
               {jobTitle}
             </span>
           ) : null}
           {entityName ? (
             <>
-              <span className="text-[var(--ds-text-tertiary)]">·</span>
+              <span className="text-(--ds-text-tertiary)">·</span>
               <span className="inline-flex items-center gap-1.5">
-                <Buildings size={13} weight="duotone" className="text-[var(--ds-text-tertiary)]" />
+                <Buildings size={13} weight="duotone" className="text-(--ds-text-tertiary)" />
                 {entityName}
               </span>
             </>
           ) : null}
           {email ? (
             <>
-              <span className="text-[var(--ds-text-tertiary)]">·</span>
+              <span className="text-(--ds-text-tertiary)">·</span>
               <span className="inline-flex items-center gap-1.5">
-                <EnvelopeSimple
-                  size={13}
-                  weight="duotone"
-                  className="text-[var(--ds-text-tertiary)]"
-                />
+                <EnvelopeSimple size={13} weight="duotone" className="text-(--ds-text-tertiary)" />
                 {email}
               </span>
             </>

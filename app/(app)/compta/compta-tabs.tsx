@@ -41,7 +41,7 @@ export function ComptaTabs({
   relancesCount?: number;
 }) {
   return (
-    <nav className="-mb-px flex gap-6 border-b">
+    <nav className="flex gap-6 border-b">
       {TABS.map(({ key, href, label, icon: Icon }) => {
         const active = key === current;
         const showBadge = key === "relances" && relancesCount && relancesCount > 0;
@@ -53,7 +53,7 @@ export function ComptaTabs({
               "flex items-center gap-1.5 border-b-2 px-0.5 pb-3 text-sm transition-colors",
               active
                 ? "border-foreground font-semibold text-foreground"
-                : "border-transparent font-medium text-[var(--ds-text-tertiary)] hover:text-foreground",
+                : "border-transparent font-medium text-(--ds-text-tertiary) hover:text-foreground",
             )}
           >
             <Icon size={16} weight="duotone" />

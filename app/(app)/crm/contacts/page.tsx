@@ -189,7 +189,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
           ))}
           {sortRaw ? <input type="hidden" name="sort" value={sortRaw} /> : null}
         </form>
-        <span className="ml-auto text-[var(--ds-text-tertiary)] text-sm">
+        <span className="ml-auto text-(--ds-text-tertiary) text-sm">
           {rows.length} contact{rows.length > 1 ? "s" : ""}
         </span>
       </div>
@@ -215,7 +215,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
           <Table>
             <TableHeader>
               <TableRow className="border-border/70 border-b">
-                <TableHead className="h-9 px-3 font-semibold text-[11px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
+                <TableHead className="h-9 px-3 font-semibold text-(--ds-text-tertiary) text-[11px] uppercase tracking-wider">
                   <SortableHeader
                     label="Nom"
                     field="lastName"
@@ -223,7 +223,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                     buildHref={(next) => buildSortHref("/crm/contacts", params, next)}
                   />
                 </TableHead>
-                <TableHead className="h-9 w-[230px] px-3 font-semibold text-[11px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
+                <TableHead className="h-9 w-[230px] px-3 font-semibold text-(--ds-text-tertiary) text-[11px] uppercase tracking-wider">
                   <SortableHeader
                     label="Entité"
                     field="entity"
@@ -231,7 +231,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                     buildHref={(next) => buildSortHref("/crm/contacts", params, next)}
                   />
                 </TableHead>
-                <TableHead className="h-9 w-[290px] px-3 font-semibold text-[11px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
+                <TableHead className="h-9 w-[290px] px-3 font-semibold text-(--ds-text-tertiary) text-[11px] uppercase tracking-wider">
                   <SortableHeader
                     label="E-mail"
                     field="email"
@@ -239,7 +239,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                     buildHref={(next) => buildSortHref("/crm/contacts", params, next)}
                   />
                 </TableHead>
-                <TableHead className="h-9 w-[170px] px-3 font-semibold text-[11px] text-[var(--ds-text-tertiary)] uppercase tracking-wider">
+                <TableHead className="h-9 w-[170px] px-3 font-semibold text-(--ds-text-tertiary) text-[11px] uppercase tracking-wider">
                   Téléphone
                 </TableHead>
                 <TableHead className="h-9 w-10 px-2" />
@@ -251,7 +251,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                 return (
                   <TableRow
                     key={row.id}
-                    className="group border-border/70 border-b transition-colors hover:bg-[var(--ds-bg-hover)]"
+                    className="group border-border/70 border-b transition-colors hover:bg-(--ds-bg-hover)"
                   >
                     <TableCell className="min-h-[58px] px-3 py-2.5">
                       <div className="flex items-center gap-3">
@@ -280,7 +280,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                           <ContJobTitle
                             id={row.id}
                             value={row.jobTitle}
-                            className="text-[12px] text-[var(--ds-text-tertiary)]"
+                            className="text-(--ds-text-tertiary) text-[12px]"
                             placeholder="+ Ajouter un poste"
                           />
                         </div>
@@ -292,7 +292,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                           <Buildings
                             size={14}
                             weight="duotone"
-                            className="flex-none text-[var(--ds-text-tertiary)]"
+                            className="flex-none text-(--ds-text-tertiary)"
                           />
                         ) : null}
                         <ContEntity
@@ -311,7 +311,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                           <EnvelopeSimple
                             size={14}
                             weight="duotone"
-                            className="flex-none text-[var(--ds-text-tertiary)]"
+                            className="flex-none text-(--ds-text-tertiary)"
                           />
                         ) : null}
                         <ContEmail
@@ -328,7 +328,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                           <Phone
                             size={14}
                             weight="duotone"
-                            className="flex-none text-[var(--ds-text-tertiary)]"
+                            className="flex-none text-(--ds-text-tertiary)"
                           />
                         ) : null}
                         <ContPhone id={row.id} value={row.phone} placeholder="" />
@@ -338,7 +338,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                       <Link
                         href={`/contacts/${row.id}`}
                         aria-label="Ouvrir la fiche"
-                        className="inline-flex size-7 items-center justify-center rounded-md text-[var(--ds-text-tertiary)] opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                        className="inline-flex size-7 items-center justify-center rounded-md text-(--ds-text-tertiary) opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
                       >
                         <ArrowRight size={15} weight="bold" />
                       </Link>

@@ -62,7 +62,7 @@ export function TaskAssigneeRailEditor({
             <button
               type="button"
               className={cn(
-                "inline-flex w-fit items-center gap-1.5 rounded-lg border border-[color:var(--ds-border-strong)] border-dashed px-3 py-1.5 text-muted-foreground text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40",
+                "inline-flex w-fit items-center gap-1.5 rounded-lg border border-(--ds-border-strong) border-dashed px-3 py-1.5 text-muted-foreground text-sm outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40",
               )}
             >
               <Plus size={13} weight="bold" />
@@ -96,7 +96,7 @@ export function TaskAssigneeRailEditor({
             trigger={
               <button
                 type="button"
-                className="inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-1 text-muted-foreground text-xs outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-1 text-muted-foreground text-xs outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <Plus size={11} weight="bold" />
                 <span>Modifier</span>

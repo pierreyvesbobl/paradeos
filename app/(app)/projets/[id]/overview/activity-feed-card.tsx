@@ -28,7 +28,7 @@ const KIND_STYLE: Record<
 export function ActivityFeedCard({ items }: { items: ActivityItem[] }) {
   return (
     <section className="flex flex-1 flex-col gap-3 rounded-[10px] border border-ds-border bg-ds-surface p-5">
-      <header className="flex items-center gap-2 font-semibold text-[11px] text-muted-foreground uppercase tracking-[0.05em]">
+      <header className="flex items-center gap-2 font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
         <FlowArrow size={13} weight="duotone" />
         <span>Activité</span>
         <span className="mx-2 h-px flex-1 bg-ds-border" />

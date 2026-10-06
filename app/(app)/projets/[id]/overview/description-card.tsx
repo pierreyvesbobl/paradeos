@@ -9,7 +9,7 @@ import { ProjDescription } from "@/app/(app)/projets/[id]/inline-fields";
 export function DescriptionCard({ projectId, value }: { projectId: string; value: string | null }) {
   return (
     <section className="space-y-3 rounded-[10px] border border-ds-border bg-ds-surface p-5">
-      <header className="flex items-center gap-2 font-semibold text-[11px] text-muted-foreground uppercase tracking-[0.05em]">
+      <header className="flex items-center gap-2 font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
         <TextT size={13} weight="duotone" />
         <span>Description</span>
       </header>

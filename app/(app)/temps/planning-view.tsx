@@ -91,10 +91,10 @@ export async function PlanningView({ week }: { week?: string }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3.5">
-        <div className="inline-flex items-center overflow-hidden rounded-lg border bg-[var(--ds-bg-app)]">
+        <div className="inline-flex items-center overflow-hidden rounded-lg border bg-(--ds-bg-app)">
           <Link
             href={`/temps?tab=planning&week=${isoDateLocal(prevWeek)}`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-[var(--ds-bg-hover)]"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-(--ds-bg-hover)"
           >
             <CaretLeft size={12} weight="bold" />
             Sem. préc.
@@ -102,14 +102,14 @@ export async function PlanningView({ week }: { week?: string }) {
           <span className="h-5 w-px self-stretch bg-border" />
           <Link
             href="/temps?tab=planning"
-            className="px-3 py-1.5 font-medium text-[13px] text-foreground transition-colors hover:bg-[var(--ds-bg-hover)]"
+            className="px-3 py-1.5 font-medium text-[13px] text-foreground transition-colors hover:bg-(--ds-bg-hover)"
           >
             Aujourd'hui
           </Link>
           <span className="h-5 w-px self-stretch bg-border" />
           <Link
             href={`/temps?tab=planning&week=${isoDateLocal(nextWeek)}`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-[var(--ds-bg-hover)]"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-(--ds-bg-hover)"
           >
             Sem. suiv.
             <CaretRight size={12} weight="bold" />
@@ -130,7 +130,7 @@ export async function PlanningView({ week }: { week?: string }) {
             />
             Réalisé · {formatDuration(actualMinutes)}
           </span>
-          <span className="inline-flex items-center gap-2 rounded-full border bg-[var(--ds-bg-surface)] px-3 py-1 font-medium text-[13px] text-muted-foreground">
+          <span className="inline-flex items-center gap-2 rounded-full border bg-(--ds-bg-surface) px-3 py-1 font-medium text-[13px] text-muted-foreground">
             <span
               className="inline-block size-1.5 rounded-full"
               style={{ background: "var(--ds-text-tertiary)" }}

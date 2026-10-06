@@ -98,7 +98,7 @@ export function NoteCard({ note, attachments, subjectType, subjectId, subjectPil
       <DialogTrigger asChild>
         <button
           type="button"
-          className="group block w-full rounded-lg border bg-card p-4 text-left transition-all hover:border-foreground/20 hover:shadow-sm"
+          className="group block w-full rounded-lg border bg-card p-4 text-left transition-all hover:border-foreground/20 hover:shadow-xs"
         >
           <div className="mb-1.5 flex flex-wrap items-center gap-2">
             <span

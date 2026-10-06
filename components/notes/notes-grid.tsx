@@ -127,7 +127,7 @@ export function NotesGrid({ items, columns = 3 }: Props) {
               {item.canDelete ? (
                 <span
                   className={cn(
-                    "absolute -top-2 -left-2 z-10 rounded-[5px] border bg-background p-0.5 shadow-sm transition-opacity",
+                    "absolute -top-2 -left-2 z-10 rounded-[5px] border bg-background p-0.5 shadow-xs transition-opacity",
                     isSelected || hasSelection
                       ? "opacity-100"
                       : "opacity-0 focus-within:opacity-100 group-hover/note:opacity-100",

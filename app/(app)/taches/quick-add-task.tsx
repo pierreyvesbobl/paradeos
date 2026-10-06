@@ -133,9 +133,9 @@ export function QuickAddTask({
           type="button"
           onClick={() => inputRef.current?.focus()}
           aria-label="Ajouter une tâche"
-          className="mr-3 inline-flex size-[18px] shrink-0 items-center justify-center rounded-[4px] border-[1.5px] border-primary-300 border-dashed text-primary-500 outline-none transition-colors hover:border-primary-500 focus-visible:ring-2 focus-visible:ring-ring"
+          className="mr-3 inline-flex size-[18px] shrink-0 items-center justify-center rounded-[4px] border-[1.5px] border-primary-300 border-dashed text-primary-500 outline-hidden transition-colors hover:border-primary-500 focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Plus className="size-[10px] stroke-[3]" />
+          <Plus className="size-[10px] stroke-3" />
         </button>
 
         <input
@@ -147,7 +147,7 @@ export function QuickAddTask({
           placeholder={placeholder}
           disabled={pending}
           maxLength={300}
-          className="min-w-0 flex-1 bg-transparent pr-3 text-ds-text text-sm caret-primary-500 outline-none placeholder:text-ds-text-tertiary disabled:opacity-50"
+          className="min-w-0 flex-1 bg-transparent pr-3 text-ds-text text-sm caret-primary-500 outline-hidden placeholder:text-ds-text-tertiary disabled:opacity-50"
         />
 
         <span className="w-[60px] shrink-0" />
@@ -191,9 +191,9 @@ export function QuickAddTask({
           type="button"
           onClick={() => submit()}
           disabled={!canSubmit}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary-500 px-3 py-[5px] font-medium text-white text-xs outline-none transition-colors hover:bg-primary-700 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary-500 px-3 py-[5px] font-medium text-white text-xs outline-hidden transition-colors hover:bg-primary-700 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <Plus className="size-3 stroke-[3]" />
+          <Plus className="size-3 stroke-3" />
           {pending ? "…" : "Ajouter"}
         </button>
       </div>
@@ -214,7 +214,7 @@ function PriorityPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex items-center gap-1 rounded-md outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Priorité"
         >
           <PriorityPill value={value} />
@@ -273,14 +273,14 @@ function AssigneePicker({
           type="button"
           aria-label="Assigner"
           className={cn(
-            "inline-flex size-6 items-center justify-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+            "inline-flex size-6 items-center justify-center rounded-full outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring",
             value === null
               ? "border-[1.5px] border-ds-border-strong border-dashed text-ds-text-tertiary hover:border-ds-text-muted"
               : "hover:opacity-80",
           )}
         >
           {value === null ? (
-            <Plus className="size-[10px] stroke-[3]" />
+            <Plus className="size-[10px] stroke-3" />
           ) : value.kind === "user" ? (
             <UserAvatar size="sm" name={value.fullName} avatarUrl={value.avatarUrl} />
           ) : (
@@ -366,7 +366,7 @@ function ProjectPicker({
         <button
           type="button"
           aria-label="Projet"
-          className="inline-flex w-full items-center gap-1 truncate rounded-sm px-1.5 py-0.5 text-left text-sm outline-none hover:bg-ds-hover focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex w-full items-center gap-1 truncate rounded-sm px-1.5 py-0.5 text-left text-sm outline-hidden hover:bg-ds-hover focus-visible:ring-2 focus-visible:ring-ring"
         >
           {value ? (
             <span className="truncate text-ds-text">{value.name}</span>
@@ -422,7 +422,7 @@ function DueDateTrigger({ value, onChange }: { value: string; onChange: (v: stri
         <button
           type="button"
           aria-label="Échéance"
-          className="inline-flex items-center gap-1 rounded-sm px-1 py-0.5 text-ds-text-tertiary text-xs outline-none hover:bg-ds-hover focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex items-center gap-1 rounded-sm px-1 py-0.5 text-ds-text-tertiary text-xs outline-hidden hover:bg-ds-hover focus-visible:ring-2 focus-visible:ring-ring"
         >
           <CalendarBlank className="size-[14px]" />
           {value ? formatDate(value) : "Échéance"}

@@ -21,7 +21,7 @@ export function KindIcon({ kind }: { kind: ProposalKind }) {
   const props = {
     size: 16,
     weight: "duotone" as const,
-    className: "flex-none text-[var(--ds-primary-500)]",
+    className: "flex-none text-(--ds-primary-500)",
   };
   switch (kind) {
     case "task":
@@ -196,7 +196,7 @@ export function IconButton({
       disabled={disabled}
       title={title}
       aria-label={title}
-      className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[var(--ds-bg-hover)] hover:text-foreground disabled:opacity-50"
+      className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-(--ds-bg-hover) hover:text-foreground disabled:opacity-50"
     >
       {children}
     </button>
@@ -222,7 +222,7 @@ export function RestoreButton({
       disabled={disabled}
       title={title}
       aria-label={title}
-      className="inline-flex size-8 flex-none items-center justify-center rounded-md border bg-[var(--ds-bg-app)] transition-colors hover:bg-[var(--ds-bg-hover)] disabled:opacity-50"
+      className="inline-flex size-8 flex-none items-center justify-center rounded-md border bg-(--ds-bg-app) transition-colors hover:bg-(--ds-bg-hover) disabled:opacity-50"
       style={{
         borderColor: `var(--ds-tint-${tint}-dot)`,
         color: `var(--ds-tint-${tint}-text)`,

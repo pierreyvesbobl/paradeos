@@ -48,7 +48,7 @@ export function TaskPriorityEditor({ id, value }: { id: string; value: TaskPrior
         <button
           type="button"
           disabled={pending}
-          className="cursor-pointer rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="cursor-pointer rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Badge variant={priorityVariant[displayValue]} className="cursor-pointer">
             {taskPriorityLabels[displayValue]}

@@ -34,7 +34,7 @@ export function ComptaSegmentSwitcher({ current }: { current: ComptaSegment }) {
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-lg border bg-[var(--ds-bg-surface)] p-0.5",
+        "inline-flex items-center gap-0.5 rounded-lg border bg-(--ds-bg-surface) p-0.5",
         pending && "opacity-60",
       )}
     >
@@ -49,7 +49,7 @@ export function ComptaSegmentSwitcher({ current }: { current: ComptaSegment }) {
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-[13px] transition-colors",
               active
-                ? "bg-[var(--ds-bg-app)] font-medium text-foreground shadow-sm"
+                ? "bg-(--ds-bg-app) font-medium text-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >

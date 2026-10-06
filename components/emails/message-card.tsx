@@ -131,7 +131,7 @@ export function MessageCard({ m }: { m: MessageCardProps }) {
           />
         ) : textAsHtml ? (
           <div
-            className="whitespace-pre-wrap break-words text-foreground/90 text-sm leading-relaxed"
+            className="wrap-break-word whitespace-pre-wrap text-foreground/90 text-sm leading-relaxed"
             // biome-ignore lint/security/noDangerouslySetInnerHtml: linkify only escapes + wraps URLs.
             dangerouslySetInnerHTML={{ __html: textAsHtml }}
           />
@@ -157,7 +157,7 @@ export function MessageCard({ m }: { m: MessageCardProps }) {
                   {q.header ? (
                     <p className="mb-1 font-medium text-[11px] text-muted-foreground">{q.header}</p>
                   ) : null}
-                  <pre className="whitespace-pre-wrap break-words font-sans text-[12px] text-foreground/80">
+                  <pre className="wrap-break-word whitespace-pre-wrap font-sans text-[12px] text-foreground/80">
                     {q.body}
                   </pre>
                 </div>

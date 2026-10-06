@@ -6,7 +6,7 @@ Outil interne de Parade SAS (Lyon). Modélisation unifiée :
 ## Stack
 
 Next.js 16 (App Router, Turbopack) · TypeScript strict · Supabase (Auth, Postgres,
-Storage) · Drizzle ORM · Tailwind + shadcn/ui · Zod ·
+Storage) · Drizzle ORM · Tailwind 4 + shadcn/ui · Zod ·
 Server Actions · pnpm · Biome · Vercel.
 
 Région Supabase : `eu-central-1` (Frankfurt).

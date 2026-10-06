@@ -190,7 +190,7 @@ export function RelanceRow({
         <div className="truncate font-medium text-foreground">
           {item.projectName ?? item.contractName ?? item.label}
         </div>
-        <div className="truncate text-[12px] text-[var(--ds-text-tertiary)]">
+        <div className="truncate text-(--ds-text-tertiary) text-[12px]">
           {item.label}
           {item.entityName ? ` · ${item.entityName}` : ""}
         </div>
@@ -224,7 +224,7 @@ export function RelanceRow({
           <button
             type="button"
             onClick={() => setEditingDate(true)}
-            className="group inline-flex items-center gap-1 rounded px-1 py-0.5 text-[12px] text-[var(--ds-text-tertiary)] hover:bg-muted/40 hover:text-foreground"
+            className="group inline-flex items-center gap-1 rounded px-1 py-0.5 text-(--ds-text-tertiary) text-[12px] hover:bg-muted/40 hover:text-foreground"
             aria-label="Modifier l'échéance"
           >
             <span className="tabular-nums">Éch. {formatDateFR(item.dueDate)}</span>
@@ -282,7 +282,7 @@ export function RelanceRow({
                 avatarUrl={item.assignedAvatarUrl}
               />
             ) : (
-              <UserCircle size={18} className="text-[var(--ds-text-tertiary)]" weight="duotone" />
+              <UserCircle size={18} className="text-(--ds-text-tertiary)" weight="duotone" />
             )}
             <span className="max-w-[100px] truncate text-[12px] text-foreground">
               {item.assignedFullName ?? "Assigner"}
@@ -333,7 +333,7 @@ export function RelanceRow({
           href={DOUGS_INV_URL(item.dougsInvoiceId, false)}
           target="_blank"
           rel="noreferrer"
-          className="flex-none rounded p-1 text-[var(--ds-text-tertiary)] hover:bg-muted/40 hover:text-foreground"
+          className="flex-none rounded p-1 text-(--ds-text-tertiary) hover:bg-muted/40 hover:text-foreground"
           aria-label="Ouvrir dans Dougs"
         >
           <ArrowSquareOut size={14} weight="bold" />
@@ -344,7 +344,7 @@ export function RelanceRow({
       {targetLink ? (
         <Link
           href={targetLink}
-          className="flex-none rounded p-1 text-[var(--ds-text-tertiary)] hover:bg-muted/40 hover:text-foreground"
+          className="flex-none rounded p-1 text-(--ds-text-tertiary) hover:bg-muted/40 hover:text-foreground"
           aria-label="Ouvrir la facture"
         >
           <ArrowRight size={13} weight="bold" />

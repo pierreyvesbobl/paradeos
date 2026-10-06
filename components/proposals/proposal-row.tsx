@@ -208,7 +208,7 @@ export function ProposalRow({ proposal, options, adapter, onChange }: RowProps) 
           <X size={17} weight="bold" />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <span className="font-medium text-[var(--ds-text-tertiary)] text-sm leading-snug line-through">
+          <span className="font-medium text-(--ds-text-tertiary) text-sm leading-snug line-through">
             {summaryFor(proposal, payload)}
           </span>
           <ProposalMetaTags proposal={proposal} payload={payload} />
@@ -321,12 +321,12 @@ export function AlreadyInDbRow({ proposal, adapter, onChange }: Omit<RowProps, "
     <li className="group/qrow flex items-center gap-3 px-4 py-2.5">
       <KindIcon kind={proposal.kind} />
       <span className="truncate font-medium text-foreground text-sm">{title}</span>
-      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--ds-bg-hover)] px-2 py-0.5 font-semibold text-[11px] text-muted-foreground">
+      <span className="inline-flex items-center gap-1 rounded-full bg-(--ds-bg-hover) px-2 py-0.5 font-semibold text-[11px] text-muted-foreground">
         <LinkSimple size={11} weight="bold" />
         Fiche existante
       </span>
       {subtitle ? (
-        <span className="truncate text-[12px] text-[var(--ds-text-tertiary)]">· {subtitle}</span>
+        <span className="truncate text-(--ds-text-tertiary) text-[12px]">· {subtitle}</span>
       ) : null}
       <span className="flex-1" />
       {action === "detach" ? (

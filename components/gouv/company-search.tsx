@@ -79,7 +79,7 @@ export function CompanySearch({ onPick, disabled = false, className }: Props) {
           disabled={disabled}
           aria-expanded={open}
           className={cn(
-            "flex h-9 w-full items-center gap-2 rounded-md border border-input border-dashed bg-transparent px-3 py-2 text-left text-muted-foreground text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-9 w-full items-center gap-2 rounded-md border border-input border-dashed bg-transparent px-3 py-2 text-left text-muted-foreground text-sm shadow-xs ring-offset-background focus:outline-hidden focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
             className,
           )}
         >
@@ -87,7 +87,7 @@ export function CompanySearch({ onPick, disabled = false, className }: Props) {
           <span className="truncate">Chercher dans l'annuaire des entreprises…</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[--radix-popover-trigger-width] min-w-80 p-0">
+      <PopoverContent align="start" className="w-(--radix-popover-trigger-width) min-w-80 p-0">
         <Command shouldFilter={false}>
           <CommandInput placeholder="Nom, SIREN ou SIRET…" value={query} onValueChange={setQuery} />
           <CommandList>

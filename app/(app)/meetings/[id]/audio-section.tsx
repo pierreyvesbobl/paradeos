@@ -82,7 +82,7 @@ export function AudioSection({ meetingId, hasTranscript, audio, status, errorMes
   // Pas d'audio attaché → CTA d'upload
   if (!audio?.fileName) {
     return (
-      <section className="rounded-xl border bg-[var(--ds-bg-surface)] p-5">
+      <section className="rounded-xl border bg-(--ds-bg-surface) p-5">
         <header className="mb-3 flex items-center gap-3">
           <MicrophoneStage size={18} weight="duotone" className="text-muted-foreground" />
           <h2 className="font-semibold text-[15px] text-foreground">Audio source</h2>
@@ -100,7 +100,7 @@ export function AudioSection({ meetingId, hasTranscript, audio, status, errorMes
 
   // Audio attaché → afficher infos + état
   return (
-    <section className="rounded-xl border bg-[var(--ds-bg-surface)] p-5">
+    <section className="rounded-xl border bg-(--ds-bg-surface) p-5">
       <header className="mb-3 flex items-center gap-3">
         <MicrophoneStage size={18} weight="duotone" className="text-muted-foreground" />
         <h2 className="font-semibold text-[15px] text-foreground">Audio source</h2>
@@ -153,7 +153,7 @@ export function AudioSection({ meetingId, hasTranscript, audio, status, errorMes
       </div>
 
       {status === "error" && errorMessage ? (
-        <p className="mt-3 flex items-start gap-2 rounded-md border border-[var(--ds-tint-red-bg)] bg-[var(--ds-tint-red-bg)] px-3 py-2 text-[12px] text-[var(--ds-tint-red-text)]">
+        <p className="mt-3 flex items-start gap-2 rounded-md border border-(--ds-tint-red-bg) bg-(--ds-tint-red-bg) px-3 py-2 text-(--ds-tint-red-text) text-[12px]">
           <WarningCircle size={14} weight="duotone" className="mt-0.5 shrink-0" />
           <span>{errorMessage}</span>
         </p>

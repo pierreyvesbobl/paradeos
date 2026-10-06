@@ -86,7 +86,7 @@ export default async function EmailsPage({ searchParams }: { searchParams: Searc
             <EmailThreadDetail threadId={activeThreadId} />
           </Suspense>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 px-10 text-center text-[var(--ds-text-tertiary)]">
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-10 text-center text-(--ds-text-tertiary)">
             <EnvelopeOpen size={48} weight="duotone" />
             <p className="text-[14px]">Sélectionne un mail dans la liste.</p>
             <p className="text-[12px]">Le triage IA s'affichera ici.</p>

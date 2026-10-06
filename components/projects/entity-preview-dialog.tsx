@@ -194,12 +194,12 @@ function EntityPreviewSheet({ entityId, open }: { entityId: string; open: boolea
 
               {data.entity.notes ? (
                 <div>
-                  <p className="font-semibold text-[11px] text-ds-text-tertiary uppercase tracking-[0.1em]">
+                  <p className="font-semibold text-[11px] text-ds-text-tertiary uppercase tracking-widest">
                     Notes
                   </p>
                   <p className="mt-1 whitespace-pre-wrap text-[14px] text-ds-text">
                     {demo ? (
-                      <span className="select-none blur-sm">{data.entity.notes}</span>
+                      <span className="select-none blur-xs">{data.entity.notes}</span>
                     ) : (
                       data.entity.notes
                     )}
@@ -208,7 +208,7 @@ function EntityPreviewSheet({ entityId, open }: { entityId: string; open: boolea
               ) : null}
 
               <div>
-                <p className="font-semibold text-[11px] text-ds-text-tertiary uppercase tracking-[0.1em]">
+                <p className="font-semibold text-[11px] text-ds-text-tertiary uppercase tracking-widest">
                   Contacts ({data.contactsCount})
                 </p>
                 {data.previewContacts.length === 0 ? (
@@ -257,7 +257,7 @@ function PeekField({
 }) {
   return (
     <div>
-      <dt className="inline-flex items-center gap-1.5 font-semibold text-[11px] text-ds-text-tertiary uppercase tracking-[0.1em]">
+      <dt className="inline-flex items-center gap-1.5 font-semibold text-[11px] text-ds-text-tertiary uppercase tracking-widest">
         <span className="shrink-0">{icon}</span>
         {label}
       </dt>

@@ -538,7 +538,7 @@ function ResultsBar({
           aria-label={`Retirer le filtre ${chip.label}`}
         >
           {chip.label}
-          <span className="ml-0.5 inline-flex size-4 items-center justify-center rounded-sm hover:bg-[var(--ds-primary-100)]">
+          <span className="ml-0.5 inline-flex size-4 items-center justify-center rounded-sm hover:bg-(--ds-primary-100)">
             <X size={10} weight="bold" color="var(--ds-primary-700)" />
           </span>
         </Link>

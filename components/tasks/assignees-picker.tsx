@@ -75,12 +75,12 @@ export function AssigneesPicker({
       disabled={disabled}
       aria-label="Assignés"
       className={cn(
-        "inline-flex items-center gap-1 rounded-md p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+        "inline-flex items-center gap-1 rounded-md p-0.5 outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
       )}
     >
       {value.length === 0 ? (
         <span className="inline-flex size-6 items-center justify-center rounded-full border-[1.5px] border-ds-border-strong border-dashed text-ds-text-tertiary">
-          <Plus className="size-[10px] stroke-[3]" />
+          <Plus className="size-[10px] stroke-3" />
         </span>
       ) : (
         <AvatarStack assignees={value as StackedAssignee[]} max={triggerMax} />

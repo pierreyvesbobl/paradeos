@@ -99,7 +99,7 @@ export const LinkChip = forwardRef<
         onClick={onClick}
         disabled={disabled}
         aria-label={`Ouvrir la fiche — ${item.name}`}
-        className="inline-flex min-w-0 items-center gap-[7px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+        className="inline-flex min-w-0 items-center gap-[7px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
       >
         <LeadingGlyph item={item} />
         <span className="truncate">{item.name}</span>
@@ -113,7 +113,7 @@ export const LinkChip = forwardRef<
           }}
           disabled={disabled}
           aria-label={`Retirer ${item.name}`}
-          className="inline-flex size-[17px] shrink-0 items-center justify-center rounded text-ds-text-tertiary opacity-0 transition-opacity duration-150 hover:bg-background hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 group-hover:opacity-100"
+          className="inline-flex size-[17px] shrink-0 items-center justify-center rounded text-ds-text-tertiary opacity-0 transition-opacity duration-150 hover:bg-background hover:text-destructive focus-visible:opacity-100 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 group-hover:opacity-100"
         >
           <X weight="bold" size={10} />
         </button>

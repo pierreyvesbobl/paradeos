@@ -100,10 +100,10 @@ export async function AchatsView() {
                 <p className="truncate font-medium text-foreground">
                   <DemoBlur>{demo ? "Fournisseur" : supplier}</DemoBlur>
                   {r.isRefund ? (
-                    <span className="ml-2 text-[11px] text-[var(--ds-text-tertiary)]">avoir</span>
+                    <span className="ml-2 text-(--ds-text-tertiary) text-[11px]">avoir</span>
                   ) : null}
                 </p>
-                <p className="truncate text-[12px] text-[var(--ds-text-tertiary)]">
+                <p className="truncate text-(--ds-text-tertiary) text-[12px]">
                   {formatDateFR(r.date ?? r.createdAt)}
                   {r.reference ? ` · ${r.reference}` : ""}
                   {r.memo ? ` · ${r.memo}` : ""}
@@ -122,7 +122,7 @@ export async function AchatsView() {
                     href={`/api/dougs/file/${r.fileId}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded p-1 text-[var(--ds-text-tertiary)] hover:bg-muted/40 hover:text-foreground"
+                    className="rounded p-1 text-(--ds-text-tertiary) hover:bg-muted/40 hover:text-foreground"
                     title={r.fileName ?? "Ouvrir le justificatif"}
                   >
                     <FileArrowDown size={15} weight="duotone" />
@@ -133,7 +133,7 @@ export async function AchatsView() {
                     href={buildDougsVendorInvoiceUrl(companyId, r.id)}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded p-1 text-[var(--ds-text-tertiary)] hover:bg-muted/40 hover:text-foreground"
+                    className="rounded p-1 text-(--ds-text-tertiary) hover:bg-muted/40 hover:text-foreground"
                     title="Ouvrir dans Dougs"
                   >
                     <ArrowSquareOut size={15} />
@@ -231,7 +231,7 @@ function Kpi({
         {label.toUpperCase()}
       </div>
       <div className="mt-2 font-semibold text-[22px] text-foreground tabular-nums">{value}</div>
-      <div className="text-[12px] text-[var(--ds-text-tertiary)]">{sub}</div>
+      <div className="text-(--ds-text-tertiary) text-[12px]">{sub}</div>
     </div>
   );
 }

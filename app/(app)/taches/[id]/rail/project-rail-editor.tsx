@@ -58,7 +58,7 @@ export function TaskProjectRailEditor({
           type="button"
           disabled={pending}
           className={cn(
-            "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-left text-foreground text-sm outline-none hover:border-[color:var(--ds-border-strong)] focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20",
+            "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-left text-foreground text-sm outline-hidden hover:border-(--ds-border-strong) focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20",
             !value && "text-muted-foreground",
           )}
         >

@@ -162,7 +162,7 @@ export function ProjectEntityField({
                   setOpen(false);
                 }
               }}
-              className="flex-1 bg-transparent text-[14px] text-ds-text outline-none placeholder:text-ds-text-tertiary"
+              className="flex-1 bg-transparent text-[14px] text-ds-text outline-hidden placeholder:text-ds-text-tertiary"
             />
             <kbd className="inline-flex h-[18px] items-center justify-center rounded border px-1.5 font-mono text-[10px] text-ds-text-tertiary">
               Esc

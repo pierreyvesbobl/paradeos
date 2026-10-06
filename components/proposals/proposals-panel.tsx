@@ -128,14 +128,14 @@ export function ProposalsPanel({
         <section className="space-y-3">
           <header className="flex flex-wrap items-baseline gap-2">
             <h2 className="font-semibold text-[16px] text-muted-foreground">Déjà en base</h2>
-            <span className="text-[12px] text-[var(--ds-text-tertiary)]">
+            <span className="text-(--ds-text-tertiary) text-[12px]">
               {alreadyInDb.length} élément{alreadyInDb.length > 1 ? "s" : ""} · rattaché
               {alreadyInDb.length > 1 ? "s" : ""} automatiquement
             </span>
           </header>
-          <div className="overflow-hidden rounded-xl border bg-[var(--ds-bg-surface)]">
+          <div className="overflow-hidden rounded-xl border bg-(--ds-bg-surface)">
             <div className="flex items-center gap-2 border-b px-4 py-2.5 text-[12px] text-muted-foreground">
-              <CheckCircle size={15} weight="duotone" className="text-[var(--ds-tint-green-dot)]" />
+              <CheckCircle size={15} weight="duotone" className="text-(--ds-tint-green-dot)" />
               {adapter.labels.alreadyInDbHint}
             </div>
             <ul className="divide-y">

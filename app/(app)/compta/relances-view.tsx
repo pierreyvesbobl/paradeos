@@ -263,7 +263,7 @@ function PaymentHintBanner({ count, total }: { count: number; total: number }) {
             : `${count} factures semblent déjà encaissées`}{" "}
           — {formatEur(total)} HT
         </p>
-        <p className="text-[var(--ds-text-tertiary)]">
+        <p className="text-(--ds-text-tertiary)">
           Dougs a détecté le virement correspondant sur le compte, mais le rapprochement n'est pas
           encore validé. Vérifie avant de relancer.
         </p>
@@ -307,7 +307,7 @@ function AgingCrossCheck({
       <dl className="mt-2.5 flex flex-wrap gap-x-6 gap-y-1.5">
         {aging.buckets.map((b) => (
           <div key={b.label} className="flex items-baseline gap-1.5">
-            <dt className="text-[12px] text-[var(--ds-text-tertiary)]">{b.label}</dt>
+            <dt className="text-(--ds-text-tertiary) text-[12px]">{b.label}</dt>
             <dd className="font-medium text-[13px] text-foreground tabular-nums">
               {formatEur(b.amount)}
             </dd>
@@ -316,7 +316,7 @@ function AgingCrossCheck({
       </dl>
 
       {significant ? (
-        <p className="mt-2.5 text-[12px] text-[var(--ds-text-tertiary)]">
+        <p className="mt-2.5 text-(--ds-text-tertiary) text-[12px]">
           Dougs voit {formatEur(gap)} d'impayé de plus que Paradeos ({formatEur(paradeosOverdue)} en
           retard ci-dessus) — probablement une facture émise depuis Dougs et jamais rapatriée. À
           vérifier dans l'onglet Rapprochement.
@@ -329,7 +329,7 @@ function AgingCrossCheck({
 function AssigneeFilterBar({ current }: { current: "all" | "me" }) {
   return (
     <div className="flex items-center gap-2 text-sm">
-      <span className="text-[var(--ds-text-tertiary)]">Filtrer :</span>
+      <span className="text-(--ds-text-tertiary)">Filtrer :</span>
       <FilterPill href="/compta?tab=relances" label="Toutes" active={current === "all"} />
       <FilterPill
         href="/compta?tab=relances&assignee=me"
@@ -370,7 +370,7 @@ function Section({
     <section className="rounded-xl border bg-card px-4 pb-3 sm:px-5">
       <header className="flex items-baseline gap-3 px-1 pt-4 pb-1.5">
         <h2 className="font-semibold text-[15px] text-foreground">{title}</h2>
-        <span className="text-[13px] text-[var(--ds-text-tertiary)]">
+        <span className="text-(--ds-text-tertiary) text-[13px]">
           {count} {count > 1 ? "factures" : "facture"}
         </span>
         <span className="flex-1" />
@@ -409,7 +409,7 @@ function KpiCard({
         {label.toUpperCase()}
       </div>
       <div className="mt-2 font-semibold text-[22px] text-foreground tabular-nums">{value}</div>
-      <div className="text-[12px] text-[var(--ds-text-tertiary)]">{sub}</div>
+      <div className="text-(--ds-text-tertiary) text-[12px]">{sub}</div>
     </div>
   );
 }

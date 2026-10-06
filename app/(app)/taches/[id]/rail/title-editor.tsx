@@ -53,7 +53,7 @@ export function TaskTitleEditor({ id, value }: { id: string; value: string }) {
           ref.current?.blur();
         }
       }}
-      className="-mx-2 -my-1 cursor-text rounded-md px-2 py-1 font-brand font-semibold text-[32px] text-foreground leading-[1.16] outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/40"
+      className="-mx-2 -my-1 cursor-text rounded-md px-2 py-1 font-brand font-semibold text-[32px] text-foreground leading-[1.16] outline-hidden hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/40"
     >
       {display}
     </h1>

@@ -34,7 +34,7 @@ export function UserMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring">
+      <DropdownMenuTrigger className="rounded-full outline-hidden ring-offset-background focus-visible:ring-2 focus-visible:ring-ring">
         <Avatar className="size-8">
           {resolvedAvatar ? <AvatarImage src={resolvedAvatar} alt="" /> : null}
           <AvatarFallback className="text-xs">{initials}</AvatarFallback>

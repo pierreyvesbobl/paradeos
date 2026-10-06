@@ -347,7 +347,7 @@ export function ProjProbability({ id, value }: { id: string; value: number | nul
         <button
           type="button"
           disabled={pending}
-          className="-mx-1.5 inline-flex items-center gap-2 rounded-sm px-1.5 py-0.5 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          className="-mx-1.5 inline-flex items-center gap-2 rounded-sm px-1.5 py-0.5 text-left outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
           title="Probabilité de gain"
         >
           {value != null ? (
@@ -465,7 +465,7 @@ export function ProjDescription({ id, value }: { id: string; value: string | nul
   const demo = useDemoMode();
   if (demo) {
     return value ? (
-      <span className="select-none blur-sm">{value}</span>
+      <span className="select-none blur-xs">{value}</span>
     ) : (
       <span className="text-muted-foreground text-sm">—</span>
     );
@@ -523,7 +523,7 @@ export function ProjColor({ id, value }: { id: string; value: string | null }) {
           disabled={pending}
           aria-label="Couleur du projet"
           title={value ?? "Aucune couleur"}
-          className="inline-flex size-5 items-center justify-center rounded-full outline-none ring-1 ring-border hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          className="inline-flex size-5 items-center justify-center rounded-full outline-hidden ring-1 ring-border hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           style={value ? { backgroundColor: value } : undefined}
         >
           {!value ? (
@@ -596,7 +596,7 @@ export function ProjIcon({ id, value }: { id: string; value: string | null }) {
           type="button"
           disabled={pending}
           aria-label="Icône du projet"
-          className="inline-flex size-7 items-center justify-center rounded-md text-lg outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          className="inline-flex size-7 items-center justify-center rounded-md text-lg outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         >
           {value ? <span>{value}</span> : <span className="text-muted-foreground">＋</span>}
         </button>

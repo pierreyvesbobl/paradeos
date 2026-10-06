@@ -39,7 +39,7 @@ export function RecentExchangesCard({
 }) {
   return (
     <section className="space-y-3 rounded-[10px] border border-ds-border bg-ds-surface p-5">
-      <header className="flex items-center gap-2 font-semibold text-[11px] text-muted-foreground uppercase tracking-[0.05em]">
+      <header className="flex items-center gap-2 font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
         <ChatCircleDots size={13} weight="duotone" />
         <span>Derniers échanges</span>
       </header>
@@ -66,7 +66,7 @@ export function RecentExchangesCard({
 function EditableCell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1 rounded-lg border border-ds-border bg-ds-app px-3 py-2.5">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-[0.05em]">{label}</p>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
       <div className="text-[13px]">{children}</div>
     </div>
   );
@@ -75,7 +75,7 @@ function EditableCell({ label, children }: { label: string; children: React.Reac
 function ReadonlyCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1 rounded-lg border border-ds-border bg-ds-app px-3 py-2.5">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-[0.05em]">{label}</p>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
       <p className={cn("text-[13px]", value === "—" ? "text-ds-text-tertiary" : "text-foreground")}>
         {value}
       </p>

@@ -21,7 +21,7 @@ export async function Topbar({ user }: { user: AuthUser }) {
   ]);
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
+    <header className="flex h-14 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm">
       <CommandPalette />
       <div className="ml-auto flex items-center gap-2">
         <DemoBanner />

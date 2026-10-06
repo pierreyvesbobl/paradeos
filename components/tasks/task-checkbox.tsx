@@ -50,14 +50,14 @@ export function TaskCheckbox({
       aria-label={optimistic ? "Marquer comme à faire" : "Marquer comme terminée"}
       aria-pressed={optimistic}
       className={cn(
-        "donebox inline-flex size-[18px] shrink-0 items-center justify-center rounded-[4px] border-[1.5px] border-ds-border-strong bg-ds-app outline-none transition-colors hover:border-ds-text-muted focus-visible:ring-2 focus-visible:ring-ring",
+        "donebox inline-flex size-[18px] shrink-0 items-center justify-center rounded-[4px] border-[1.5px] border-ds-border-strong bg-ds-app outline-hidden transition-colors hover:border-ds-text-muted focus-visible:ring-2 focus-visible:ring-ring",
         optimistic && "border-primary-500 bg-primary-500",
         className,
       )}
     >
       <Check
         className={cn(
-          "size-[11px] stroke-[3] transition-opacity",
+          "size-[11px] stroke-3 transition-opacity",
           optimistic
             ? "text-white opacity-100"
             : "text-ds-text-muted opacity-0 group-hover/row:opacity-[0.32]",

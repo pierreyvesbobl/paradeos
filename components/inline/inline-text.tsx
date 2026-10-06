@@ -95,7 +95,7 @@ export function InlineText({
           setDraft(displayValue ?? "");
           setEditing(true);
         }}
-        className={`-mx-1.5 rounded-sm px-1.5 py-0.5 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring ${
+        className={`-mx-1.5 rounded-sm px-1.5 py-0.5 text-left outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring ${
           displayValue ? "" : "text-muted-foreground"
         } ${className ?? ""}`}
       >

@@ -13,7 +13,7 @@ const TABS: { key: Tab; href: string; label: string; icon: typeof CalendarDots }
 
 export function TempsTabs({ current }: { current: Tab }) {
   return (
-    <nav className="-mb-px flex gap-6 border-b">
+    <nav className="flex gap-6 border-b">
       {TABS.map(({ key, href, label, icon: Icon }) => {
         const active = key === current;
         return (
@@ -24,7 +24,7 @@ export function TempsTabs({ current }: { current: Tab }) {
               "flex items-center gap-1.5 border-b-2 px-0.5 pb-3 text-sm transition-colors",
               active
                 ? "border-foreground font-semibold text-foreground"
-                : "border-transparent font-medium text-[var(--ds-text-tertiary)] hover:text-foreground",
+                : "border-transparent font-medium text-(--ds-text-tertiary) hover:text-foreground",
             )}
           >
             <Icon size={16} weight="duotone" />

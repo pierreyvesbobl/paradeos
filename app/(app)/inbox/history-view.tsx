@@ -191,7 +191,7 @@ export function InboxHistoryView({ initial }: { initial: InboxHistoryData }) {
             onChange={(e) => setRawQuery(e.target.value)}
             placeholder="Rechercher dans l'historique (titre, projet, expéditeur…)"
             aria-label="Rechercher dans l'historique"
-            className="w-full rounded-md border border-ds-border bg-ds-app py-1.5 pr-2.5 pl-8 text-[12px] text-ds-text outline-none placeholder:text-ds-text-tertiary focus:border-primary-500"
+            className="w-full rounded-md border border-ds-border bg-ds-app py-1.5 pr-2.5 pl-8 text-[12px] text-ds-text outline-hidden placeholder:text-ds-text-tertiary focus:border-primary-500"
           />
         </label>
         {statusTabs.map((t) => {

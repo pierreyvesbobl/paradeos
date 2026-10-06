@@ -268,7 +268,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
 
         {/* Entité — pas dans le handoff mais utile pour changer d'entité rattachée */}
         <section className="space-y-2 rounded-[10px] border border-ds-border bg-ds-surface p-5">
-          <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-[0.05em]">
+          <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
             Entité
           </p>
           <ProjectEntityField

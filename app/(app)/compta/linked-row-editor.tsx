@@ -346,7 +346,7 @@ export function LinkedInvoiceRow({
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="Label"
                 disabled={pending}
-                className="h-8 rounded-md border bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+                className="h-8 rounded-md border bg-background px-2 text-sm outline-hidden focus:ring-1 focus:ring-ring"
               />
               <input
                 type="text"
@@ -355,13 +355,13 @@ export function LinkedInvoiceRow({
                 onChange={(e) => setAmountStr(e.target.value)}
                 placeholder="Montant HT"
                 disabled={pending}
-                className="h-8 rounded-md border bg-background px-2 text-sm tabular-nums outline-none focus:ring-1 focus:ring-ring"
+                className="h-8 rounded-md border bg-background px-2 text-sm tabular-nums outline-hidden focus:ring-1 focus:ring-ring"
               />
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as "draft" | "sent" | "paid")}
                 disabled={pending}
-                className="h-8 rounded-md border bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+                className="h-8 rounded-md border bg-background px-2 text-sm outline-hidden focus:ring-1 focus:ring-ring"
               >
                 <option value="draft">À facturer</option>
                 <option value="sent">Émis</option>

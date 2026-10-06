@@ -60,7 +60,7 @@ export function InlineDate({ value, onSave, placeholder = "—" }: Props) {
         <button
           type="button"
           disabled={pending}
-          className="-mx-1.5 rounded-sm px-1.5 py-0.5 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          className="-mx-1.5 rounded-sm px-1.5 py-0.5 text-left outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
         >
           {displayValue ? (
             <span className="text-sm">{formatDate(displayValue)}</span>

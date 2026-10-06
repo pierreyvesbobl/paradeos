@@ -176,7 +176,7 @@ export async function JustificatifsView() {
                       {demo ? "Dépense" : (operation.wording ?? "(sans libellé)")}
                     </DemoBlur>
                   </p>
-                  <p className="text-[12px] text-[var(--ds-text-tertiary)]">
+                  <p className="text-(--ds-text-tertiary) text-[12px]">
                     {formatDateFR(operation.operationDate)}
                   </p>
                 </div>
@@ -238,7 +238,7 @@ function Section({
     <section className="space-y-2">
       <div>
         <h2 className="font-semibold text-[15px] text-foreground">{title}</h2>
-        <p className="text-[12px] text-[var(--ds-text-tertiary)]">{description}</p>
+        <p className="text-(--ds-text-tertiary) text-[12px]">{description}</p>
       </div>
       <div className="space-y-2">{children}</div>
     </section>
@@ -289,7 +289,7 @@ function OperationCard({
           <p className="truncate font-medium text-foreground">
             <DemoBlur>{demo ? "Dépense" : (operation.wording ?? "(sans libellé)")}</DemoBlur>
           </p>
-          <p className="text-[12px] text-[var(--ds-text-tertiary)]">
+          <p className="text-(--ds-text-tertiary) text-[12px]">
             {formatDateFR(operation.operationDate)} · opération {operation.dougsOperationId}
           </p>
         </div>
@@ -308,7 +308,7 @@ function OperationCard({
                     {demo ? "Facture" : (candidate.supplierLabel ?? candidate.driveFileName)}
                   </DemoBlur>
                 </p>
-                <p className="truncate text-[12px] text-[var(--ds-text-tertiary)]">
+                <p className="truncate text-(--ds-text-tertiary) text-[12px]">
                   {formatDateFR(candidate.invoiceDate)} · {candidate.driveFileName}
                 </p>
                 {candidate.errorMessage ? (
@@ -337,7 +337,7 @@ function OperationCard({
                   href={candidate.webViewLink}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex-none rounded p-1 text-[var(--ds-text-tertiary)] hover:bg-muted/40 hover:text-foreground"
+                  className="flex-none rounded p-1 text-(--ds-text-tertiary) hover:bg-muted/40 hover:text-foreground"
                   title="Ouvrir la facture dans Drive"
                 >
                   <FileArrowDown size={15} weight="duotone" />
@@ -446,7 +446,7 @@ function Kpi({
         {label.toUpperCase()}
       </div>
       <div className="mt-2 font-semibold text-[22px] text-foreground tabular-nums">{value}</div>
-      <div className="text-[12px] text-[var(--ds-text-tertiary)]">{sub}</div>
+      <div className="text-(--ds-text-tertiary) text-[12px]">{sub}</div>
     </div>
   );
 }

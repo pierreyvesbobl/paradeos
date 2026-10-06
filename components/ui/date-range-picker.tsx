@@ -300,7 +300,7 @@ export function DateRangePicker({
                 type="button"
                 key={p.label}
                 onClick={() => pickPreset(p)}
-                className="rounded px-2 py-1 text-left text-sm hover:bg-background hover:shadow-sm"
+                className="rounded px-2 py-1 text-left text-sm hover:bg-background hover:shadow-xs"
               >
                 {p.label}
               </button>
@@ -325,7 +325,7 @@ export function DateRangePicker({
                   }
                 }}
                 className={cn(
-                  "h-7 w-full rounded-md border bg-background px-2 text-sm tabular-nums outline-none focus:ring-1 focus:ring-ring",
+                  "h-7 w-full rounded-md border bg-background px-2 text-sm tabular-nums outline-hidden focus:ring-1 focus:ring-ring",
                   startInvalid && "border-destructive focus:ring-destructive",
                 )}
               />
@@ -346,7 +346,7 @@ export function DateRangePicker({
                   }
                 }}
                 className={cn(
-                  "h-7 w-full rounded-md border bg-background px-2 text-sm tabular-nums outline-none focus:ring-1 focus:ring-ring",
+                  "h-7 w-full rounded-md border bg-background px-2 text-sm tabular-nums outline-hidden focus:ring-1 focus:ring-ring",
                   endInvalid && "border-destructive focus:ring-destructive",
                 )}
               />

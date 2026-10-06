@@ -119,7 +119,7 @@ function ExtractionMetaCard({
   return (
     <section className="space-y-3 rounded-xl border bg-card p-4">
       <header className="flex items-center gap-2">
-        <Sparkle size={16} weight="duotone" className="text-[var(--ds-primary-500)]" />
+        <Sparkle size={16} weight="duotone" className="text-(--ds-primary-500)" />
         <h3 className="font-semibold text-[15px]">Extraction IA</h3>
       </header>
       <p className="text-[14px] leading-relaxed">{meta.summary}</p>
@@ -213,9 +213,9 @@ function DraftReplySection({
 
   return (
     <section className="overflow-hidden rounded-xl border bg-card">
-      <header className="flex items-center gap-2 border-b bg-[var(--ds-tint-blue-bg)] px-4 py-3">
-        <ArrowBendUpLeft size={16} weight="duotone" className="text-[var(--ds-tint-blue-text)]" />
-        <h3 className="font-semibold text-[14px] text-[var(--ds-tint-blue-text)]">
+      <header className="flex items-center gap-2 border-b bg-(--ds-tint-blue-bg) px-4 py-3">
+        <ArrowBendUpLeft size={16} weight="duotone" className="text-(--ds-tint-blue-text)" />
+        <h3 className="font-semibold text-(--ds-tint-blue-text) text-[14px]">
           Brouillon de réponse suggéré
         </h3>
       </header>

@@ -91,7 +91,7 @@ export function TaskStatusPillEditor({ id, value }: { id: string; value: TaskSta
           type="button"
           disabled={pending}
           className={cn(
-            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 font-medium text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 font-medium text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40",
             tone.bg,
             !tone.solid && tone.text,
           )}

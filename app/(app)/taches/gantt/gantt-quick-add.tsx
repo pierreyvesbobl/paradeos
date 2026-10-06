@@ -59,7 +59,7 @@ export function GanttQuickAdd({ projectId }: { projectId: string | null }) {
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Nouvelle tâche — apparaît dans le Gantt à partir d'aujourd'hui (1 semaine)"
         disabled={pending}
-        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+        className="flex-1 bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/60"
       />
       <Button type="submit" size="sm" disabled={pending || !title.trim()}>
         {pending ? "…" : "Ajouter"}

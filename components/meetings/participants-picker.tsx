@@ -244,7 +244,7 @@ export function ParticipantsPicker({
                     close();
                   }
                 }}
-                className="flex-1 bg-transparent text-[14px] text-ds-text outline-none placeholder:text-ds-text-tertiary"
+                className="flex-1 bg-transparent text-[14px] text-ds-text outline-hidden placeholder:text-ds-text-tertiary"
               />
               <kbd className="inline-flex h-[18px] items-center justify-center rounded border px-1.5 font-mono text-[10px] text-ds-text-tertiary">
                 Esc
@@ -351,7 +351,7 @@ function TeamChip({
         onClick={onRemove}
         disabled={disabled}
         aria-label={`Retirer ${name}`}
-        className="inline-flex size-[17px] shrink-0 items-center justify-center rounded text-ds-text-tertiary opacity-0 transition-opacity duration-150 hover:bg-background hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 group-hover:opacity-100"
+        className="inline-flex size-[17px] shrink-0 items-center justify-center rounded text-ds-text-tertiary opacity-0 transition-opacity duration-150 hover:bg-background hover:text-destructive focus-visible:opacity-100 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 group-hover:opacity-100"
       >
         <X weight="bold" size={10} />
       </button>

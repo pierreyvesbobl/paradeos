@@ -231,7 +231,7 @@ function AddFilterButton({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filtrer par…"
-              className="h-8 flex-1 bg-transparent text-sm outline-none"
+              className="h-8 flex-1 bg-transparent text-sm outline-hidden"
             />
           </div>
         </div>
