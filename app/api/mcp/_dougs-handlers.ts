@@ -503,6 +503,10 @@ export async function pushCoworkingInvoiceMcp(
  */
 export const sendDocumentMcpSchema = z.object({
   invoiceId: z.string().uuid(),
+  /** Objet du message. */
+  subject: z.string().trim().min(1).max(300),
+  /** Corps du message, en **texte brut**. Le document voyage en pièce jointe. */
+  body: z.string().trim().min(1).max(10000),
   /** `true` = finalise et envoie au client. Absent ou `false` = aperçu. */
   confirm: z.boolean().optional(),
 });
@@ -526,14 +530,20 @@ export async function sendDocumentMcp(
     "../../../lib/billing/send-document"
   );
   const core = row.kind === "quote" ? sendProjectQuoteCore : sendProjectInvoiceCore;
-  const result = await core({ userId: ctx.userId, invoiceId: args.invoiceId, send });
+  const result = await core({
+    userId: ctx.userId,
+    invoiceId: args.invoiceId,
+    send,
+    subject: args.subject,
+    body: args.body,
+  });
 
   return {
     document: row.label,
     kind: row.kind,
     ...result,
     note: send
-      ? "Document finalisé chez Dougs et envoyé au client."
+      ? "Document finalisé chez Dougs et envoyé au client, message en texte brut avec le PDF en pièce jointe."
       : "Aperçu envoyé à l'utilisateur. Rien n'a été émis ; rappeler avec confirm=true pour envoyer au client.",
   };
 }

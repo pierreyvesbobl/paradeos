@@ -53,6 +53,17 @@ export type SendDocumentArgs = {
   send: boolean;
   /** Destinataire de l'aperçu. Ignoré lors d'un envoi réel. */
   previewTo?: string;
+  /**
+   * Objet et corps du message, **rédigés à la main** (ou par un agent via MCP).
+   *
+   * Les documents client ne suivent pas de gabarit : on écrit un vrai message
+   * et le document voyage en pièce jointe. Le corps part en **texte brut** —
+   * c'est ce qui lui donne l'allure d'un message écrit plutôt que d'un
+   * publipostage. Le gabarit HTML reste réservé aux envois automatiques, où
+   * personne n'est là pour rédiger.
+   */
+  subject: string;
+  body: string;
 };
 
 export type SendDocumentResult =
@@ -146,7 +157,7 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
     projectName: project.name,
     milestonePercent: invoice.milestonePercent,
   };
-  const mail = template.email(ctx);
+  const mail = { subject: input.subject, body: input.body };
 
   const isDraft = (invoice.dougsStatus ?? "DRAFT").toUpperCase() === "DRAFT";
 
@@ -157,7 +168,6 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
     const res = await sendEmail({
       to: recipient,
       subject: `[Aperçu] ${mail.subject}`,
-      html: mail.html,
       text: mail.body,
       fromName: template.senderName,
       tags: [{ name: "type", value: "invoice-preview" }],
@@ -230,8 +240,10 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
  */
 export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<SendDocumentResult> {
   const user = { id: input.userId };
-  const { conn, invoice, project, entityName, entityLegalName, contactEmail } =
-    await loadProjectDocument(input.invoiceId);
+  // Ni le nom du client ni celui du projet ne servent plus ici : le message
+  // est rédigé à la main, et la confirmation qui nomme le destinataire se fait
+  // côté UI.
+  const { conn, invoice, project, contactEmail } = await loadProjectDocument(input.invoiceId);
 
   if (invoice.kind !== "quote") throw new Error("Cette facture n'est pas un devis.");
   if (!invoice.dougsQuoteId) throw new Error("Pousser le devis sur Dougs avant de l'envoyer.");
@@ -243,15 +255,9 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
     userId: user.id,
   });
 
+  // Seul le nom d'expéditeur vient de la marque : le message est rédigé.
   const template = brandTemplateFor(invoice.brand);
-  const ctx = {
-    label: invoice.label,
-    amountHt: Number(invoice.amountHt),
-    vatRate: Number(invoice.vatRate),
-    clientName: entityLegalName ?? entityName ?? project.name,
-    projectName: project.name,
-  };
-  const mail = template.quoteEmail(ctx);
+  const mail = { subject: input.subject, body: input.body };
   const isDraft = (invoice.dougsStatus ?? "DRAFT").toUpperCase() === "DRAFT";
 
   if (!input.send) {
@@ -260,7 +266,6 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
     const res = await sendEmail({
       to: recipient,
       subject: `[Aperçu] ${mail.subject}`,
-      html: mail.html,
       text: mail.body,
       fromName: template.senderName,
       tags: [{ name: "type", value: "quote-preview" }],

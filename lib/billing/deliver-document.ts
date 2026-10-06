@@ -48,7 +48,11 @@ export async function deliverDocumentEmail(args: {
   recipient: string;
   reference: string;
   brand: InvoiceBrand;
-  mail: { subject: string; body: string; html: string };
+  /**
+   * `html` absent = mail en texte brut, ce qui est le cas des documents client
+   * rédigés à la main. Les envois automatiques fournissent les deux.
+   */
+  mail: { subject: string; body: string; html?: string };
   /**
    * Facture Paradeos à classer dans le Drive comptable une fois le mail parti.
    * Omis pour un devis : « Factures Ventes » n'est pas sa place.
@@ -75,7 +79,7 @@ export async function deliverDocumentEmail(args: {
     const res = await sendEmail({
       to: args.recipient,
       subject: args.mail.subject,
-      html: args.mail.html,
+      ...(args.mail.html ? { html: args.mail.html } : {}),
       text: args.mail.body,
       fromName: template.senderName,
       tags: [{ name: "type", value: "invoice" }],

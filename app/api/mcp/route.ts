@@ -320,10 +320,11 @@ const TOOL_REGISTRY: Record<
   send_document_to_client: {
     write: true,
     description:
-      "Envoie un devis ou une facture au client : finalise chez Dougs puis expédie notre mail de marque avec le PDF en pièce jointe, et classe la facture dans le Drive comptable. " +
+      "Envoie un devis ou une facture au client : finalise chez Dougs, puis expédie **le message que tu rédiges** (texte brut, pas de gabarit) avec le PDF en pièce jointe, et classe la facture dans le Drive comptable. " +
+      "Rédige toi-même `subject` et `body`, adaptés au client et au document, et fais-les valider avant d'envoyer. " +
       "Sans confirm=true, se limite à un APERÇU envoyé à l'utilisateur, sans rien émettre. " +
       "N'utiliser confirm=true que sur instruction explicite : la finalisation d'une facture est irréversible et le mail part à un tiers. " +
-      "Args: invoiceId, confirm (optionnel).",
+      "Args: invoiceId, subject, body, confirm (optionnel).",
     schema: sendDocumentMcpSchema,
     handler: (a, ctx) => sendDocumentMcp(a as never, ctx as never),
   },

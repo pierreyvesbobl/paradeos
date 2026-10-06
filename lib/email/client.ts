@@ -4,8 +4,14 @@ import { Resend } from "resend";
 type SendInput = {
   to: string | string[];
   subject: string;
-  html: string;
-  /** Texte brut pour les clients qui ne rendent pas l'HTML. Optionnel. */
+  /**
+   * Corps HTML. Optionnel : les mails rédigés à la main pour un client
+   * (devis, facture projet) partent en **texte brut**, pour qu'ils aient
+   * l'allure d'un message écrit et non d'un gabarit. Au moins l'un de `html`
+   * ou `text` est requis.
+   */
+  html?: string;
+  /** Texte brut. Seul corps des mails rédigés à la main. */
   text?: string;
   /** Adresse de réponse, si différente de EMAIL_FROM. */
   replyTo?: string | string[];
@@ -68,9 +74,14 @@ export async function sendEmail(
       to: input.to,
       subject: input.subject,
       attachments: input.attachments?.map((a) => `${a.filename} (${a.content.length} o)`),
-      preview: input.html.slice(0, 200),
+      preview: (input.html ?? input.text ?? "").slice(0, 200),
     });
     return { ok: true, delivered: false };
+  }
+
+  if (!input.html && !input.text) {
+    console.warn("[email] ni html ni text : rien à envoyer.");
+    return { ok: false, delivered: false };
   }
 
   const apiKey = process.env.RESEND_API_KEY;
@@ -81,19 +92,25 @@ export async function sendEmail(
 
   try {
     const resend = new Resend(apiKey);
-    const { data, error } = await resend.emails.send({
+    // Resend type son payload comme une union « html ou text » : passer les
+    // deux en optionnels ne satisfait aucune branche. On ne pose donc que les
+    // clés réellement fournies, et la garde ci-dessus a déjà vérifié qu'il y
+    // en a au moins une — d'où le cast, que TypeScript ne peut pas déduire.
+    const payload = {
       from,
       to: input.to,
       subject: input.subject,
-      html: input.html,
-      text: input.text,
       replyTo: input.replyTo,
       tags: input.tags,
       attachments: input.attachments?.map((a) => ({
         filename: a.filename,
         content: a.content,
       })),
-    });
+      ...(input.html ? { html: input.html } : {}),
+      ...(input.text ? { text: input.text } : {}),
+    } as Parameters<typeof resend.emails.send>[0];
+
+    const { data, error } = await resend.emails.send(payload);
     if (error) {
       console.error("[email] Resend error:", error);
       return { ok: false, delivered: false };

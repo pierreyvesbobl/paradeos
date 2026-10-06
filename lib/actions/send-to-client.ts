@@ -18,6 +18,9 @@ const schema = z.object({
   /** `true` = finalise et envoie au client. `false` = aperçu, rien n'est émis. */
   send: z.boolean().default(false),
   previewTo: z.string().email().optional(),
+  /** Objet et corps rédigés par l'utilisateur. Le document part en pièce jointe. */
+  subject: z.string().trim().min(1, "Objet requis.").max(300),
+  body: z.string().trim().min(1, "Message requis.").max(10000),
 });
 
 // `async` obligatoire : Next refuse une server action synchrone, même quand
