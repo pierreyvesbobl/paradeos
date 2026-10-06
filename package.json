@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install --with-deps chromium",
     "db:generate": "drizzle-kit generate",
@@ -87,6 +88,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
+    "@electric-sql/pglite": "^0.5.8",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^22.10.1",

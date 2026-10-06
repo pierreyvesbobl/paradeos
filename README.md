@@ -89,6 +89,18 @@ RLS**. Toute la sécurité repose donc sur le code applicatif :
   calendrier, crons) ne doivent jamais y vivre : les mettre dans
   `lib/<domaine>/` (ex. `lib/google/calendar-sync.ts`).
 
+## Tests
+
+- `pnpm test` : unitaires (Vitest), fonctions pures de `lib/`, ~1 s.
+- `pnpm test:integration` : Server Actions et crons contre une base Postgres
+  embarquée (PGlite, `tests/integration/`). Le schéma Drizzle y est poussé
+  tel quel, sans Docker ni Supabase local ; `db()`, `getUser()` et
+  `next/cache` sont remplacés dans `tests/integration/setup.ts`, tout le
+  reste tourne en vrai. Les appels sortants (Dougs, mail) se simulent par
+  `vi.mock` dans le fichier de test. Non couvert, volontairement : RLS,
+  triggers SQL et schéma `auth`.
+- `pnpm test:e2e` : Playwright, smoke non connecté.
+
 ## Conventions
 
 - Fichiers `kebab-case`, composants React `PascalCase`.
