@@ -1,5 +1,5 @@
 import "server-only";
-import { createClient } from "@supabase/supabase-js";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Récupère les emails depuis auth.users via l'API admin Supabase.
@@ -11,16 +11,11 @@ import { createClient } from "@supabase/supabase-js";
 export async function getUserEmails(userIds: string[]): Promise<Record<string, string>> {
   if (userIds.length === 0) return {};
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
+  const admin = tryCreateAdminClient();
+  if (!admin) {
     console.warn("[email:users] Supabase admin credentials manquants.");
     return {};
   }
-
-  const admin = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
 
   const out: Record<string, string> = {};
   await Promise.all(

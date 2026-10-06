@@ -1,9 +1,9 @@
-import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { noteAttachments } from "@/db/schema/note-attachments";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Sert une pièce jointe de note : redirige (302) vers une URL signée
@@ -36,14 +36,8 @@ export async function GET(_request: Request, context: { params: Promise<{ path: 
     return new NextResponse("Not found", { status: 404 });
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    return new NextResponse("Storage not configured", { status: 500 });
-  }
-  const sb = createSupabaseAdmin(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const sb = tryCreateAdminClient();
+  if (!sb) return new NextResponse("Storage not configured", { status: 500 });
 
   const { data, error } = await sb.storage
     .from(BUCKET)

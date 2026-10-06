@@ -1,12 +1,12 @@
 import "server-only";
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { experimental_transcribe as transcribe } from "ai";
 import { eq } from "drizzle-orm";
 import { meetings } from "@/db/schema/meetings";
 import { db } from "@/lib/db/server";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET = "meeting-audio";
 const MODEL_ID = "whisper-1";
@@ -90,12 +90,7 @@ export async function transcribeMeetingAudio(meetingId: string): Promise<{ lengt
 }
 
 async function downloadAudio(path: string): Promise<Uint8Array> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) throw new Error("Supabase admin credentials missing.");
-  const sb = createSupabaseAdmin(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const sb = createAdminClient();
   const { data, error } = await sb.storage.from(BUCKET).download(path);
   if (error || !data) throw new Error(error?.message ?? "Téléchargement audio échoué.");
   const buffer = await data.arrayBuffer();

@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { meetings } from "@/db/schema/meetings";
 import { db } from "@/lib/db/server";
@@ -37,6 +36,7 @@ import { getIngestionUserIds } from "@/lib/meetings/ingestion-user";
 import { canStartAnotherItem } from "@/lib/meetings/run-budget";
 import { transcribeMeetingAudio } from "@/lib/meetings/transcribe";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Ingestion des réunions envoyées par mail.
@@ -592,12 +592,7 @@ async function markProcessed(
 }
 
 async function uploadAudio(path: string, data: Buffer, contentType: string): Promise<void> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) throw new Error("Supabase admin credentials missing.");
-  const sb = createSupabaseAdmin(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const sb = createAdminClient();
   const { error } = await sb.storage.from(AUDIO_BUCKET).upload(path, data, {
     contentType: contentType || "application/octet-stream",
     upsert: false,

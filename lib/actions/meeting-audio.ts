@@ -1,6 +1,5 @@
 "use server";
 
-import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { meetings } from "@/db/schema/meetings";
@@ -11,26 +10,16 @@ import {
   deleteAudioSchema,
   signedAudioUrlSchema,
 } from "@/lib/schemas/meeting-audio";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET = "meeting-audio";
-
-function admin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    throw new Error("Supabase admin credentials missing.");
-  }
-  return createSupabaseAdmin(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 /**
  * Mint une URL signée pour upload direct browser → Storage (PUT).
  * Pattern miroir de `lib/actions/note-attachments.ts:signedUploadUrl`.
  */
 export const signedAudioUploadUrl = action(signedAudioUrlSchema, async ({ input }) => {
-  const sb = admin();
+  const sb = createAdminClient();
   const path = `${input.meetingId}/${crypto.randomUUID()}-${sanitizeFileName(input.fileName)}`;
 
   const { data, error } = await sb.storage.from(BUCKET).createSignedUploadUrl(path);
@@ -74,7 +63,7 @@ export const attachAudio = action(attachAudioSchema, async ({ input }) => {
   // pour ne pas laisser d'orphelins. La row meeting elle-même est juste
   // mise à jour (pas supprimée).
   if (meeting.prevPath && meeting.prevPath !== input.storagePath) {
-    const sb = admin();
+    const sb = createAdminClient();
     const { error } = await sb.storage.from(BUCKET).remove([meeting.prevPath]);
     if (error) console.error("[meeting-audio] cleanup prev audio:", error);
   }
@@ -110,7 +99,7 @@ export const deleteAudio = action(deleteAudioSchema, async ({ input }) => {
   if (!meeting) throw new Error("Meeting introuvable.");
 
   if (meeting.path) {
-    const sb = admin();
+    const sb = createAdminClient();
     const { error } = await sb.storage.from(BUCKET).remove([meeting.path]);
     if (error) console.error("[meeting-audio] storage remove error:", error);
   }

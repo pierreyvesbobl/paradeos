@@ -1,24 +1,15 @@
 "use server";
 
-import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET = "avatars";
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
-
-function admin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) throw new Error("Supabase admin credentials missing.");
-  return createSupabaseAdmin(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 function publicUrl(path: string): string {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -52,7 +43,7 @@ export async function uploadAvatar(
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "png";
   const path = `${user.id}/${Date.now()}.${ext}`;
 
-  const sb = admin();
+  const sb = createAdminClient();
   const arrayBuffer = await file.arrayBuffer();
 
   const { error: uploadError } = await sb.storage.from(BUCKET).upload(path, arrayBuffer, {
@@ -102,7 +93,7 @@ export async function removeAvatar(): Promise<{ ok: true } | { ok: false; messag
   if (previous?.avatarUrl?.includes(`/storage/v1/object/public/${BUCKET}/`)) {
     const oldPath = previous.avatarUrl.split(`/${BUCKET}/`)[1];
     if (oldPath?.startsWith(`${user.id}/`)) {
-      const sb = admin();
+      const sb = createAdminClient();
       await sb.storage.from(BUCKET).remove([oldPath]);
     }
   }

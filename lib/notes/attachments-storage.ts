@@ -1,9 +1,9 @@
 import "server-only";
 
-import { createClient } from "@supabase/supabase-js";
 import { inArray } from "drizzle-orm";
 import { noteAttachments } from "@/db/schema/note-attachments";
 import { db } from "@/lib/db/server";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET = "note-attachments";
 
@@ -26,15 +26,11 @@ export async function removeNoteAttachmentObjects(noteIds: string[]): Promise<vo
       .where(inArray(noteAttachments.noteId, noteIds));
     if (rows.length === 0) return;
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !serviceKey) {
+    const sb = tryCreateAdminClient();
+    if (!sb) {
       console.error("[notes] pièces jointes non purgées : credentials Supabase admin absents.");
       return;
     }
-    const sb = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
     const { error } = await sb.storage.from(BUCKET).remove(rows.map((r) => r.storagePath));
     if (error) console.error("[notes] storage remove error:", error);
   } catch (err) {

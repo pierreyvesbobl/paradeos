@@ -1,6 +1,5 @@
 "use server";
 
-import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { noteAttachments } from "@/db/schema/note-attachments";
@@ -12,19 +11,9 @@ import {
   deleteAttachmentSchema,
   signedUrlSchema,
 } from "@/lib/schemas/note-attachments";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET = "note-attachments";
-
-function admin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    throw new Error("Supabase admin credentials missing.");
-  }
-  return createSupabaseAdmin(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 /**
  * Enregistre la métadonnée d'une pièce jointe après upload côté client.
@@ -70,7 +59,7 @@ export const attachToNote = action(attachToNoteSchema, async ({ input, user }) =
  * Génère une URL signée pour upload côté client (POST direct vers Storage).
  */
 export const signedUploadUrl = action(signedUrlSchema, async ({ input }) => {
-  const sb = admin();
+  const sb = createAdminClient();
   const path = `${input.noteId}/${crypto.randomUUID()}-${sanitizeFileName(input.fileName)}`;
 
   const { data, error } = await sb.storage.from(BUCKET).createSignedUploadUrl(path);
@@ -99,7 +88,7 @@ export const deleteAttachment = action(deleteAttachmentSchema, async ({ input })
 
   if (!att) throw new Error("Pièce jointe introuvable.");
 
-  const sb = admin();
+  const sb = createAdminClient();
   const { error } = await sb.storage.from(BUCKET).remove([att.storagePath]);
   if (error) console.error("[note-attachments] storage remove error:", error);
 

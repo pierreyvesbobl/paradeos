@@ -1,6 +1,5 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { users } from "@/db/schema/users";
@@ -10,17 +9,7 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { db } from "@/lib/db/server";
 import { emailLayout, sendEmail } from "@/lib/email/client";
 import { deleteUserSchema, inviteUserSchema, updateUserSchema } from "@/lib/schemas/users";
-
-function adminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    throw new Error("Configuration Supabase admin manquante.");
-  }
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Invite un nouvel utilisateur :
@@ -32,7 +21,7 @@ function adminClient() {
 export const inviteUser = action(inviteUserSchema, async ({ input, user }) => {
   await requireAdmin(user);
 
-  const admin = adminClient();
+  const admin = createAdminClient();
   const conn = await db();
 
   // 1. Créer le user (ou récupérer l'existant si l'email est déjà connu).
@@ -126,7 +115,7 @@ export const deleteUser = action(deleteUserSchema, async ({ input, user }) => {
     throw new Error("Tu ne peux pas supprimer ton propre compte.");
   }
 
-  const admin = adminClient();
+  const admin = createAdminClient();
   const { error } = await admin.auth.admin.deleteUser(input.id);
   if (error) throw new Error(error.message);
 
