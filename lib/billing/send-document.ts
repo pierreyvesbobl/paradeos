@@ -251,7 +251,7 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
     clientName: entityLegalName ?? entityName ?? project.name,
     projectName: project.name,
   };
-  const mail = template.email(ctx);
+  const mail = template.quoteEmail(ctx);
   const isDraft = (invoice.dougsStatus ?? "DRAFT").toUpperCase() === "DRAFT";
 
   if (!input.send) {
@@ -259,7 +259,7 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
     const pdf = await downloadDougsQuoteDraftPdf(user.id, invoice.dougsQuoteId);
     const res = await sendEmail({
       to: recipient,
-      subject: `[Aperçu] Devis ${project.name}`,
+      subject: `[Aperçu] ${mail.subject}`,
       html: mail.html,
       text: mail.body,
       fromName: template.senderName,

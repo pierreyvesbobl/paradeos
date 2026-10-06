@@ -111,6 +111,15 @@ export type BrandTemplate = {
    *    texte brut.
    */
   email: (ctx: InvoiceContext) => { subject: string; body: string; html: string };
+  /**
+   * Mail d'accompagnement d'un **devis**, distinct de celui d'une facture.
+   *
+   * Un devis n'est pas dû : il n'y a ni « règlement attendu », ni échéance, et
+   * on ne l'appelle pas une facture. Réutiliser le mail de facture produisait
+   * « la facture Devis X » et annonçait un délai de paiement sur un document
+   * qui n'est pas encore exigible.
+   */
+  quoteEmail: (ctx: InvoiceContext) => { subject: string; body: string; html: string };
   /** Nom affiché de l'expéditeur du mail client. */
   senderName: string;
   /** Jours après l'échéance où une relance est attendue. */
@@ -133,6 +142,8 @@ function clientEmailLayout(args: {
   rows: [string, string][];
   outro: string[];
   signature: string;
+  /** Nom du document joint : « La facture », « Le devis »… */
+  attachmentNoun: string;
 }): string {
   const rows = args.rows
     .map(
@@ -159,7 +170,7 @@ function clientEmailLayout(args: {
       <p style="margin:16px 0 0 0;color:#6b7280;font-size:13px;">${escapeHtml(args.signature)}</p>
     </td></tr>
     <tr><td style="padding:20px 24px 24px 24px;">
-      <p style="margin:0;color:#9ca3af;font-size:11px;">La facture est jointe à ce message au format PDF.</p>
+      <p style="margin:0;color:#9ca3af;font-size:11px;">${escapeHtml(args.attachmentNoun)} est joint à ce message au format PDF.</p>
     </td></tr>
   </table>
 </body></html>`;
@@ -182,6 +193,53 @@ function formatFrDate(iso: string | null | undefined): string {
   if (!iso) return "";
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
+/**
+ * Mail d'un devis. Factorisé : d'une marque à l'autre seuls le nom affiché et
+ * la signature changent, le propos est le même — voici notre proposition,
+ * retournez-la signée pour l'accepter.
+ */
+function buildQuoteEmail(args: {
+  brandLabel: string;
+  signature: string;
+  ctx: InvoiceContext;
+}): { subject: string; body: string; html: string } {
+  const { brandLabel, signature, ctx } = args;
+  const projet = ctx.projectName ?? ctx.label;
+  const ttc = formatEur(ctx.amountHt * (1 + ctx.vatRate));
+  const subject = ctx.projectName
+    ? `Notre devis — ${ctx.projectName}`
+    : `Notre devis — ${ctx.label}`;
+
+  return {
+    subject,
+    html: clientEmailLayout({
+      brandLabel,
+      intro: `Bonjour, vous trouverez ci-joint notre devis pour « ${projet} ».`,
+      rows: [
+        ...(ctx.projectName ? ([["Objet", ctx.projectName]] as [string, string][]) : []),
+        ["Montant HT", formatEur(ctx.amountHt)],
+        ["Total TTC", ttc],
+      ],
+      outro: [
+        "Pour l'accepter, il vous suffit de nous retourner ce document signé.",
+        "Nous restons à votre disposition pour en discuter ou l'ajuster.",
+      ],
+      signature,
+      attachmentNoun: "Le devis",
+    }),
+    body: [
+      "Bonjour,",
+      "",
+      `Vous trouverez ci-joint notre devis pour « ${projet} », d'un montant de ${ttc} TTC.`,
+      "",
+      "Pour l'accepter, il vous suffit de nous retourner ce document signé. Nous restons à votre disposition pour en discuter ou l'ajuster.",
+      "",
+      "Bien à vous,",
+      signature,
+    ].join("\n"),
+  };
 }
 
 const COWORKING: BrandTemplate = {
@@ -207,6 +265,8 @@ const COWORKING: BrandTemplate = {
   paymentTerms: "Paiement à 15 jours à réception de facture, par virement bancaire.",
   footerNote: null,
   senderName: "La Cachette",
+  quoteEmail: (ctx) =>
+    buildQuoteEmail({ brandLabel: "La Cachette", signature: "L'équipe La Cachette", ctx }),
   email: (ctx) => ({
     subject: `Votre facture d'hébergement — ${ctx.label}`,
     html: clientEmailLayout({
@@ -226,6 +286,7 @@ const COWORKING: BrandTemplate = {
         "Pour toute question, répondez simplement à ce message.",
       ],
       signature: "L'équipe La Cachette",
+      attachmentNoun: "La facture",
     }),
     body: [
       "Bonjour,",
@@ -275,6 +336,8 @@ const AUTOMATO: BrandTemplate = {
   paymentTerms: "Paiement à 30 jours date de facture, par virement bancaire.",
   footerNote: null,
   senderName: "Automato",
+  quoteEmail: (ctx) =>
+    buildQuoteEmail({ brandLabel: "Automato", signature: "L'équipe Automato", ctx }),
   email: (ctx) => ({
     subject: ctx.projectName ? `Facture ${ctx.label} — ${ctx.projectName}` : `Facture ${ctx.label}`,
     html: clientEmailLayout({
@@ -292,6 +355,7 @@ const AUTOMATO: BrandTemplate = {
       ],
       outro: ["Le règlement est attendu sous 30 jours par virement bancaire."],
       signature: "L'équipe Automato",
+      attachmentNoun: "La facture",
     }),
     body: [
       "Bonjour,",
@@ -336,6 +400,7 @@ const PARADE: BrandTemplate = {
   paymentTerms: "Paiement à 30 jours date de facture, par virement bancaire.",
   footerNote: null,
   senderName: "Parade",
+  quoteEmail: (ctx) => buildQuoteEmail({ brandLabel: "Parade", signature: "L'équipe Parade", ctx }),
   email: (ctx) => ({
     subject: `Facture ${ctx.label}`,
     html: clientEmailLayout({
@@ -347,6 +412,7 @@ const PARADE: BrandTemplate = {
       ],
       outro: ["Le règlement est attendu sous 30 jours par virement bancaire."],
       signature: "L'équipe Parade",
+      attachmentNoun: "La facture",
     }),
     body: [
       "Bonjour,",
