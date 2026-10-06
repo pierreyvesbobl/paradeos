@@ -13,7 +13,7 @@ import {
   linkProjectQuoteToDougs,
   refreshAllDougsLinks,
   unlinkDougsCreditNote,
-} from "@/lib/actions/invoices";
+} from "@/lib/actions/invoice-dougs-links";
 
 export function RefreshAllButton() {
   const router = useRouter();

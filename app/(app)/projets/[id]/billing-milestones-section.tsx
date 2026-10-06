@@ -18,10 +18,9 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Invoice } from "@/db/schema/invoices";
+import { linkInvoiceToDougs, refreshInvoiceDougs } from "@/lib/actions/invoice-dougs-links";
 import {
   deleteInvoice,
-  linkInvoiceToDougs,
-  refreshInvoiceDougs,
   seedProjectMilestones,
   setInvoiceStatus,
   upsertInvoice,

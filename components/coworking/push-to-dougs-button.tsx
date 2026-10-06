@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { pushCoworkingInvoiceToDougs } from "@/lib/actions/coworking";
-import { linkInvoiceToDougs, refreshInvoiceDougs } from "@/lib/actions/invoices";
+import { linkInvoiceToDougs, refreshInvoiceDougs } from "@/lib/actions/invoice-dougs-links";
 
 type Props = {
   invoiceId: string;

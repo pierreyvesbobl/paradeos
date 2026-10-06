@@ -9,13 +9,11 @@ import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
 import { unlinkProjectDougsQuote } from "@/lib/actions/dougs-quotes";
 import {
-  deleteInvoice,
   linkProjectQuoteToDougs,
   moveInvoiceDougsLink,
-  setInvoiceStatus,
   unlinkInvoiceDougs,
-  upsertInvoice,
-} from "@/lib/actions/invoices";
+} from "@/lib/actions/invoice-dougs-links";
+import { deleteInvoice, setInvoiceStatus, upsertInvoice } from "@/lib/actions/invoices";
 import { cn } from "@/lib/utils";
 
 function formatEur(n: number | null | undefined): string {

@@ -14,11 +14,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { unlinkProjectDougsQuote } from "@/lib/actions/dougs-quotes";
-import {
-  linkProjectQuoteToDougs,
-  refreshInvoiceDougs,
-  setInvoiceStatus,
-} from "@/lib/actions/invoices";
+import { linkProjectQuoteToDougs, refreshInvoiceDougs } from "@/lib/actions/invoice-dougs-links";
+import { setInvoiceStatus } from "@/lib/actions/invoices";
 
 type Props = {
   projectId: string;

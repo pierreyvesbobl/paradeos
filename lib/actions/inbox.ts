@@ -6,12 +6,12 @@ import {
   revertEmailProposal,
   updateAcceptedEmailProposal,
 } from "@/lib/actions/email-proposals";
-import { rejectInvoiceFiling, retryInvoiceFiling } from "@/lib/actions/invoice-filings";
 import {
   linkInvoiceToDougs,
   linkProjectAsNewMilestone,
   linkProjectQuoteToDougs,
-} from "@/lib/actions/invoices";
+} from "@/lib/actions/invoice-dougs-links";
+import { rejectInvoiceFiling, retryInvoiceFiling } from "@/lib/actions/invoice-filings";
 import { decideLinkedinConnection, revertLinkedinConnection } from "@/lib/actions/linkedin";
 import { decideProposal, revertProposal, updateAcceptedProposal } from "@/lib/actions/meetings";
 import { getUser } from "@/lib/auth/server";
