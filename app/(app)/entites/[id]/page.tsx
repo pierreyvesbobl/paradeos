@@ -18,7 +18,9 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import {
   EntAddressField,
+  EntAddressStreet,
   EntDeliveryAddressField,
+  EntDeliveryAddressStreet,
   EntKind,
   EntLegalName,
   EntName,
@@ -150,7 +152,7 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
             <p className="text-muted-foreground text-xs uppercase tracking-wide">Adresse</p>
             <div className="mt-1 grid gap-2 text-sm sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <EntAddressField id={id} field="street" current={address} placeholder="Rue" />
+                <EntAddressStreet id={id} current={address} />
               </div>
               <EntAddressField
                 id={id}
@@ -173,12 +175,7 @@ export default async function EntityDetailPage({ params }: { params: Params }) {
             </p>
             <div className="mt-1 grid gap-2 text-sm sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <EntDeliveryAddressField
-                  id={id}
-                  field="street"
-                  current={deliveryAddress}
-                  placeholder="Rue"
-                />
+                <EntDeliveryAddressStreet id={id} current={deliveryAddress} />
               </div>
               <EntDeliveryAddressField
                 id={id}

@@ -2,6 +2,7 @@
 
 import { AddressAutocomplete } from "@/components/gouv/address-autocomplete";
 import { CompanySearch } from "@/components/gouv/company-search";
+import { FkCombobox } from "@/components/inline/fk-combobox";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
@@ -16,13 +17,21 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { createEntity, updateEntity } from "@/lib/actions/entities";
 import { scrollToFirstError } from "@/lib/forms/scroll-to-error";
-import type { SireneCompany } from "@/lib/gouv/sirene";
+import type { SireneCompany, SireneEstablishment } from "@/lib/gouv/sirene";
 import { type EntityKind, entityKindEnum, entityKindLabels } from "@/lib/schemas/entities";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 type Address = { street?: string; postalCode?: string; city?: string; country?: string };
+
+/** « Siège — 4 Boulevard de Mons, 59650 Villeneuve-d'Ascq » */
+function establishmentLabel(e: SireneEstablishment): string {
+  const head = e.isHeadOffice ? "Siège" : (e.label ?? "Établissement");
+  const parts = [head, e.addressLabel ?? e.siret];
+  if (!e.active) parts.push("(cessé)");
+  return parts.join(" — ");
+}
 
 type Props = {
   mode: "create" | "edit";
@@ -64,6 +73,9 @@ export function EntityForm({ mode, defaultValues }: Props) {
   const [delCity, setDelCity] = useState(defaultValues.deliveryAddress.city ?? "");
   const [delCountry, setDelCountry] = useState(defaultValues.deliveryAddress.country ?? "");
   const [notes, setNotes] = useState(defaultValues.notes);
+  // Établissements de la dernière entreprise reprise de l'INSEE. Un seul
+  // (le siège) la plupart du temps : le sélecteur ne s'affiche qu'au-delà.
+  const [establishments, setEstablishments] = useState<SireneEstablishment[]>([]);
 
   /**
    * Prérempli depuis l'annuaire des entreprises. Le nom d'usage n'est
@@ -73,6 +85,7 @@ export function EntityForm({ mode, defaultValues }: Props) {
    */
   function applyCompany(company: SireneCompany) {
     setSiren(company.siren);
+    setEstablishments(company.establishments);
     if (company.siret) setSiret(company.siret);
     if (company.vatNumber) setVatNumber(company.vatNumber);
     if (company.legalName) setLegalName(company.legalName);
@@ -229,6 +242,38 @@ export function EntityForm({ mode, defaultValues }: Props) {
               Requis pour la facture électronique : le SIREN seul ne suffit pas à identifier
               l'établissement destinataire.
             </p>
+            {establishments.length > 1 ? (
+              <div className="space-y-1.5 pt-1">
+                <Label htmlFor="establishment">Établissement à facturer</Label>
+                <FkCombobox
+                  id="establishment"
+                  value={siret || null}
+                  onValueChange={(next) => {
+                    const chosen = establishments.find((e) => e.siret === next);
+                    if (!chosen) return;
+                    setSiret(chosen.siret);
+                    if (chosen.address) {
+                      setStreet(chosen.address.street ?? "");
+                      setPostalCode(chosen.address.postalCode ?? "");
+                      setCity(chosen.address.city ?? "");
+                      setCountry(chosen.address.country ?? "");
+                    }
+                  }}
+                  clearLabel={null}
+                  searchPlaceholder="Filtrer par adresse ou SIRET…"
+                  options={establishments.map((e) => ({
+                    id: e.siret,
+                    label: establishmentLabel(e),
+                    searchValue: [e.siret, e.label, e.addressLabel].filter(Boolean).join(" "),
+                  }))}
+                  disabled={pending}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  L'INSEE connaît {establishments.length} établissements pour cette recherche.
+                  Choisir celui que la facture doit viser remplace aussi l'adresse.
+                </p>
+              </div>
+            ) : null}
             <FieldError messages={errors.siret} />
           </div>
           <div className="space-y-2">

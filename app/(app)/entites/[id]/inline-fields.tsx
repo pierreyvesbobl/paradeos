@@ -1,5 +1,7 @@
 "use client";
 
+import { InlineAddressStreet } from "@/components/gouv/inline-address-street";
+
 import { InlineMultiline } from "@/components/inline/inline-multiline";
 import { InlineSelect } from "@/components/inline/inline-select";
 import { InlineText } from "@/components/inline/inline-text";
@@ -210,6 +212,58 @@ export function EntNotes({ id, value }: { id: string; value: string | null }) {
       placeholder="Cliquer pour ajouter des notes…"
     />
   );
+}
+
+/**
+ * Rue de l'adresse de facturation, avec les suggestions de la Base Adresse
+ * Nationale. Choisir une suggestion écrit l'adresse entière ; une saisie
+ * libre n'écrit que la rue, comme les trois autres champs.
+ */
+export function EntAddressStreet({ id, current }: { id: string; current: Address }) {
+  return (
+    <InlineAddressStreet
+      value={(current?.street as string | null) ?? null}
+      onSaveStreet={async (street) => {
+        const next = { ...addressOf(current), street };
+        const allEmpty = Object.values(next).every((v) => v === null);
+        const res = await patchEntity({ id, address: allEmpty ? null : next });
+        return res.ok ? { ok: true } : { ok: false, message: res.message };
+      }}
+      onSaveAddress={async (address) => {
+        const res = await patchEntity({ id, address });
+        return res.ok ? { ok: true } : { ok: false, message: res.message };
+      }}
+    />
+  );
+}
+
+/** Idem sur `delivery_address`. */
+export function EntDeliveryAddressStreet({ id, current }: { id: string; current: Address }) {
+  return (
+    <InlineAddressStreet
+      value={(current?.street as string | null) ?? null}
+      onSaveStreet={async (street) => {
+        const next = { ...addressOf(current), street };
+        const allEmpty = Object.values(next).every((v) => v === null);
+        const res = await patchEntity({ id, deliveryAddress: allEmpty ? null : next });
+        return res.ok ? { ok: true } : { ok: false, message: res.message };
+      }}
+      onSaveAddress={async (address) => {
+        const res = await patchEntity({ id, deliveryAddress: address });
+        return res.ok ? { ok: true } : { ok: false, message: res.message };
+      }}
+    />
+  );
+}
+
+/** Les quatre champs à plat, `null` quand vide — forme attendue par `patchEntity`. */
+function addressOf(current: Address): Record<AddressField, string | null> {
+  return {
+    street: (current?.street as string | null) ?? null,
+    postalCode: (current?.postalCode as string | null) ?? null,
+    city: (current?.city as string | null) ?? null,
+    country: (current?.country as string | null) ?? null,
+  };
 }
 
 type Address = {

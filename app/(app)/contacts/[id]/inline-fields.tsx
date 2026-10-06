@@ -1,5 +1,7 @@
 "use client";
 
+import { AddressAutocomplete } from "@/components/gouv/address-autocomplete";
+
 import { InlineFk } from "@/components/inline/inline-fk";
 import { InlineMultiline } from "@/components/inline/inline-multiline";
 import { InlineText } from "@/components/inline/inline-text";
@@ -300,13 +302,17 @@ export function ContAddress({ id, value }: { id: string; value: Address }) {
           <Label htmlFor="addr-street" className="text-xs">
             Rue
           </Label>
-          <Input
+          <AddressAutocomplete
             id="addr-street"
             value={street}
-            onChange={(e) => setStreet(e.target.value)}
+            onChange={setStreet}
+            onPick={(address) => {
+              setPostalCode(address.postalCode ?? "");
+              setCity(address.city ?? "");
+              setCountry(address.country ?? "");
+            }}
             placeholder="12 rue de la Paix"
             disabled={pending}
-            className="h-8"
           />
         </div>
         <div className="grid grid-cols-2 gap-2">

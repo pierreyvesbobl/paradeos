@@ -17,6 +17,14 @@ type Props = {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** Édition inline : le champ prend le focus à l'ouverture. */
+  autoFocus?: boolean;
+  /** Entrée sans suggestion survolée — l'appelant valide sa saisie. */
+  onCommit?: () => void;
+  /** Échap une fois la liste fermée — l'appelant annule son édition. */
+  onCancel?: () => void;
+  /** Perte de focus, après fermeture de la liste. */
+  onBlur?: () => void;
 };
 
 /**
@@ -36,6 +44,10 @@ export function AddressAutocomplete({
   placeholder,
   disabled = false,
   className,
+  autoFocus = false,
+  onCommit,
+  onCancel,
+  onBlur,
 }: Props) {
   const listId = useId();
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
@@ -97,27 +109,43 @@ export function AddressAutocomplete({
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (!open || suggestions.length === 0) return;
-    if (e.key === "ArrowDown") {
+    // Tant que la liste est ouverte, elle capte les touches. Une fois
+    // fermée, elles reviennent à l'appelant : c'est ce qui permet au
+    // premier Échap de fermer les suggestions et au second d'annuler
+    // l'édition inline.
+    if (open && suggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActive((i) => (i + 1) % suggestions.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActive((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+        return;
+      }
+      if (e.key === "Enter" && active >= 0) {
+        // Ne pas soumettre le formulaire : l'Entrée valide la suggestion.
+        e.preventDefault();
+        const picked = suggestions[active];
+        if (picked) choose(picked);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        setActive(-1);
+        return;
+      }
+    }
+    if (e.key === "Enter" && onCommit) {
       e.preventDefault();
-      setActive((i) => (i + 1) % suggestions.length);
+      onCommit();
       return;
     }
-    if (e.key === "ArrowUp") {
+    if (e.key === "Escape" && onCancel) {
       e.preventDefault();
-      setActive((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
-      return;
-    }
-    if (e.key === "Enter" && active >= 0) {
-      // Ne pas soumettre le formulaire : l'Enter valide la suggestion.
-      e.preventDefault();
-      const picked = suggestions[active];
-      if (picked) choose(picked);
-      return;
-    }
-    if (e.key === "Escape") {
-      setOpen(false);
-      setActive(-1);
+      onCancel();
     }
   }
 
@@ -128,11 +156,19 @@ export function AddressAutocomplete({
         value={value}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={onKeyDown}
-        // Laisser le temps au clic sur une suggestion d'aboutir.
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        // Laisser le temps au clic sur une suggestion d'aboutir. Le clic
+        // lui-même passe par `mousedown` + `preventDefault`, donc il ne
+        // déclenche pas ce blur.
+        onBlur={() => {
+          setTimeout(() => setOpen(false), 120);
+          onBlur?.();
+        }}
         onFocus={() => setOpen(suggestions.length > 0)}
         placeholder={placeholder}
         disabled={disabled}
+        // Focus à l'ouverture en édition inline : le clic sur la valeur
+        // vaut intention d'éditer, le champ doit être prêt à recevoir.
+        autoFocus={autoFocus}
         role="combobox"
         aria-expanded={open}
         aria-controls={listId}

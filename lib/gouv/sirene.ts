@@ -13,6 +13,22 @@ import { fetchWithRetry } from "@/lib/net/fetch-with-retry";
  */
 const SEARCH_URL = "https://recherche-entreprises.api.gouv.fr/search";
 
+/**
+ * Un établissement de l'entreprise. La facture électronique route sur le
+ * SIRET du destinataire : facturer le siège quand la prestation concerne
+ * une agence est une erreur d'adressage, pas un détail cosmétique.
+ */
+export type SireneEstablishment = {
+  siret: string;
+  /** Le siège, qu'on propose en premier et par défaut. */
+  isHeadOffice: boolean;
+  /** Enseigne ou nom commercial, quand l'établissement en porte un. */
+  label: string | null;
+  address: EntityAddress | null;
+  addressLabel: string | null;
+  active: boolean;
+};
+
 export type SireneCompany = {
   siren: string;
   /** SIRET du siège. */
@@ -32,6 +48,12 @@ export type SireneCompany = {
    * L'INSEE masque alors l'adresse : on le dit plutôt que d'afficher du vide.
    */
   undisclosed: boolean;
+  /**
+   * Siège en tête, puis les établissements que l'INSEE juge correspondre à
+   * la recherche. Toujours au moins un élément quand le SIRET du siège est
+   * connu — l'appelant ne propose un choix qu'au-delà de un.
+   */
+  establishments: SireneEstablishment[];
 };
 
 /** Forme partielle de la réponse : on ne déclare que ce qu'on lit. */
@@ -49,6 +71,11 @@ type ApiEtablissement = {
   libelle_cedex?: string | null;
   cedex?: string | null;
   libelle_pays_etranger?: string | null;
+  /** Présents sur `matching_etablissements` uniquement. */
+  adresse?: string | null;
+  est_siege?: boolean | null;
+  liste_enseignes?: string[] | null;
+  nom_commercial?: string | null;
 };
 
 type ApiResult = {
@@ -57,11 +84,21 @@ type ApiResult = {
   nom_raison_sociale?: string | null;
   tva?: string[] | null;
   siege?: ApiEtablissement | null;
+  matching_etablissements?: ApiEtablissement[] | null;
 };
+
+/**
+ * Les entreprises qui refusent la diffusion ne voient pas leurs champs
+ * vidés : l'INSEE y met le littéral « [NON-DIFFUSIBLE] ». Le recopier
+ * tel quel inscrirait « [Non-Diffusible] » en dénomination sociale et en
+ * adresse. On le traite comme une absence de valeur, partout.
+ */
+const UNDISCLOSED_MARKERS = new Set(["[non-diffusible]", "[nd]"]);
 
 function cleanText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
+  if (!trimmed) return null;
+  return UNDISCLOSED_MARKERS.has(trimmed.toLowerCase()) ? null : trimmed;
 }
 
 /** "17" + "B" + "RUE" + "DES CERISIERS" → "17 B Rue des Cerisiers". */
@@ -98,6 +135,82 @@ function buildAddress(siege: ApiEtablissement | null | undefined): EntityAddress
   return street || postalCode || city ? address : null;
 }
 
+function addressLabelOf(address: EntityAddress | null): string | null {
+  if (!address) return null;
+  const locality = [address.postalCode, address.city].filter(Boolean).join(" ");
+  return [address.street, locality].filter(Boolean).join(", ") || null;
+}
+
+/**
+ * `matching_etablissements` ne porte pas les champs de voie décomposés,
+ * seulement l'adresse à plat ("17 RUE DOCTEUR BOUCHUT 69003 LYON"). On
+ * retranche le suffixe "<code postal> <commune>" pour retrouver la voie,
+ * et on garde l'adresse entière si le suffixe ne s'y trouve pas.
+ */
+function streetFromFlatAddress(etab: ApiEtablissement): string | null {
+  const flat = cleanText(etab.adresse);
+  if (!flat) return null;
+  const suffix = [cleanText(etab.code_postal), cleanText(etab.libelle_commune)]
+    .filter(Boolean)
+    .join(" ");
+  const street = suffix && flat.endsWith(suffix) ? flat.slice(0, -suffix.length) : flat;
+  const trimmed = street.trim();
+  return trimmed ? toFrenchTitleCase(trimmed) : null;
+}
+
+function matchingAddress(etab: ApiEtablissement): EntityAddress | null {
+  const street = streetFromFlatAddress(etab);
+  const postalCode = cleanText(etab.code_postal);
+  const cityRaw = cleanText(etab.libelle_commune);
+  const city = cityRaw ? toFrenchTitleCase(cityRaw) : null;
+  if (!(street || postalCode || city)) return null;
+  return {
+    ...(street ? { street } : {}),
+    ...(postalCode ? { postalCode } : {}),
+    ...(city ? { city } : {}),
+    country: "France",
+  };
+}
+
+/** Siège d'abord, puis les établissements correspondants, sans doublon de SIRET. */
+function buildEstablishments(
+  result: ApiResult,
+  siegeAddress: EntityAddress | null,
+): SireneEstablishment[] {
+  const list: SireneEstablishment[] = [];
+  const seen = new Set<string>();
+
+  const siegeSiret = cleanText(result.siege?.siret);
+  if (siegeSiret) {
+    seen.add(siegeSiret);
+    list.push({
+      siret: siegeSiret,
+      isHeadOffice: true,
+      label:
+        cleanText(result.siege?.nom_commercial) ?? cleanText(result.siege?.liste_enseignes?.[0]),
+      address: siegeAddress,
+      addressLabel: addressLabelOf(siegeAddress),
+      active: (result.siege?.etat_administratif ?? "A") === "A",
+    });
+  }
+
+  for (const etab of result.matching_etablissements ?? []) {
+    const siret = cleanText(etab.siret);
+    if (!siret || seen.has(siret)) continue;
+    seen.add(siret);
+    const address = matchingAddress(etab);
+    list.push({
+      siret,
+      isHeadOffice: etab.est_siege === true,
+      label: cleanText(etab.nom_commercial) ?? cleanText(etab.liste_enseignes?.[0]),
+      address,
+      addressLabel: addressLabelOf(address),
+      active: (etab.etat_administratif ?? "A") === "A",
+    });
+  }
+  return list;
+}
+
 function normalize(result: ApiResult): SireneCompany | null {
   const siren = cleanText(result.siren);
   if (!siren) return null;
@@ -117,13 +230,10 @@ function normalize(result: ApiResult): SireneCompany | null {
     legalName,
     vatNumber: cleanText(result.tva?.[0]),
     address,
-    addressLabel: address
-      ? [address.street, [address.postalCode, address.city].filter(Boolean).join(" ")]
-          .filter(Boolean)
-          .join(", ")
-      : null,
+    addressLabel: addressLabelOf(address),
     active: (siege?.etat_administratif ?? "A") === "A",
     undisclosed: (siege?.statut_diffusion_etablissement ?? "O") !== "O",
+    establishments: buildEstablishments(result, address),
   };
 }
 
