@@ -1,8 +1,8 @@
 "use client";
 
 import { CalendarDots, ListChecks, Plus, SunHorizon, WarningCircle } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useState } from "react";
+import Link from "@/components/link";
 import { AvatarStack, type StackedAssignee } from "@/components/tasks/avatar-stack";
 import { PriorityPill } from "@/components/tasks/priority-pill";
 import { TaskCheckbox } from "@/components/tasks/task-checkbox";

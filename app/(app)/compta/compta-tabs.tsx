@@ -8,7 +8,7 @@ import {
   Paperclip,
   Receipt,
 } from "@phosphor-icons/react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { cn } from "@/lib/utils";
 
 type Tab = "dashboard" | "rapprochement" | "factures" | "achats" | "justificatifs" | "relances";

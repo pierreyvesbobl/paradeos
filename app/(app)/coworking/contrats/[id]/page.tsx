@@ -1,6 +1,5 @@
 import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
 import { asc } from "drizzle-orm";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { BillingTermsForm } from "@/components/billing/billing-terms-form";
 import { Breadcrumbs } from "@/components/breadcrumbs";
@@ -10,6 +9,7 @@ import { NewInvoiceButton } from "@/components/coworking/new-invoice-button";
 import { NextInvoiceButton } from "@/components/coworking/next-invoice-button";
 import { DeleteButton } from "@/components/delete-button";
 import { EmptyState } from "@/components/empty-state";
+import Link from "@/components/link";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import {

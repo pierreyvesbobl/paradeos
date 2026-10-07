@@ -1,7 +1,7 @@
 import { Note } from "@phosphor-icons/react/dist/ssr";
 import { asc } from "drizzle-orm";
-import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
+import Link from "@/components/link";
 import { NoteSortMenu } from "@/components/notes/note-sort-menu";
 import { NotesGrid } from "@/components/notes/notes-grid";
 import { SubjectPill } from "@/components/notes/subject-pill";

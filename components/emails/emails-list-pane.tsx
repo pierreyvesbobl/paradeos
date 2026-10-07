@@ -8,7 +8,7 @@ import {
   SpeakerSimpleSlash,
   Tray,
 } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
+import Link from "@/components/link";
 import { formatDate } from "@/lib/format";
 import type { InvoiceDirectionFilter } from "@/lib/gmail/queries";
 

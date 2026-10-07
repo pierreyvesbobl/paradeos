@@ -1,5 +1,4 @@
 import { and, asc, eq } from "drizzle-orm";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ActivityFeedCard } from "@/app/(app)/projets/[id]/overview/activity-feed-card";
@@ -17,6 +16,7 @@ import { DeleteButton } from "@/components/delete-button";
 import { DriveFolderSection } from "@/components/drive/drive-folder-section";
 import { EmailsTab } from "@/components/emails/emails-tab";
 import { EmptyState } from "@/components/empty-state";
+import Link from "@/components/link";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { ProjectEntityField } from "@/components/projects/project-entity-field";

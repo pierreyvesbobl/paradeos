@@ -8,7 +8,7 @@ import {
   Signature,
 } from "@phosphor-icons/react/dist/ssr";
 import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
-import Link from "next/link";
+import Link from "@/components/link";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";

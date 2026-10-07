@@ -1,8 +1,8 @@
 "use client";
 
 import { ArrowSquareOut, Globe, IdentificationCard, MapPin } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import Link from "@/components/link";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getEntityPreview } from "@/lib/actions/entities";
 import { ContactName } from "@/lib/demo/components";

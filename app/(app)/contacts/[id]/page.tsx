@@ -1,11 +1,11 @@
 import { ArrowSquareOut, Envelope, MapPin, Phone } from "@phosphor-icons/react/dist/ssr";
 import { asc, eq } from "drizzle-orm";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DeleteButton } from "@/components/delete-button";
 import { EmailsTab } from "@/components/emails/emails-tab";
+import Link from "@/components/link";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";

@@ -11,10 +11,10 @@ import {
   UserCircle,
 } from "@phosphor-icons/react";
 import { ArrowSquareOut } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import Link from "@/components/link";
 import { UserAvatar } from "@/components/user/user-avatar";
 import { markInvoiceReminded, setInvoiceAssignee, setInvoiceDueDate } from "@/lib/actions/invoices";
 import type { DougsPaymentHint } from "@/lib/dougs/client";

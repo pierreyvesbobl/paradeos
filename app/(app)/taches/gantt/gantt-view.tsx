@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import Link from "@/components/link";
 import { patchTask } from "@/lib/actions/tasks";
 import { addDays, DAY_LABELS, isoDate } from "@/lib/calendar";
 import type { TaskPriority, TaskStatus } from "@/lib/schemas/tasks";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { requireUser } from "@/lib/auth/server";
 import { getDriveFolderForSubject } from "@/lib/db/queries/drive-folders";
 import { getGoogleAccount, getValidAccessToken } from "@/lib/google/account";

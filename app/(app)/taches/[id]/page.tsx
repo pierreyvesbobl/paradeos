@@ -1,6 +1,5 @@
 import { CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { asc, eq } from "drizzle-orm";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TaskAssigneeRailEditor } from "@/app/(app)/taches/[id]/rail/assignee-rail-editor";
 import { TaskCompletedEditor } from "@/app/(app)/taches/[id]/rail/completed-editor";
@@ -10,6 +9,7 @@ import { TaskStatusPillEditor } from "@/app/(app)/taches/[id]/rail/status-pill-e
 import { TaskTitleEditor } from "@/app/(app)/taches/[id]/rail/title-editor";
 import { TaskScheduleEditor } from "@/app/(app)/taches/inline-editors/schedule-editor";
 import { DeleteButton } from "@/components/delete-button";
+import Link from "@/components/link";
 import { NoteList } from "@/components/notes/note-list";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";

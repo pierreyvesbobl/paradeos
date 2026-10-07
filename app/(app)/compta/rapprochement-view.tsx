@@ -1,6 +1,6 @@
 import { ArrowSquareOut, FileText, Receipt } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
-import Link from "next/link";
+import Link from "@/components/link";
 import { contacts } from "@/db/schema/contacts";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";

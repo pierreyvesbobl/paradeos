@@ -1,6 +1,6 @@
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
+import Link from "@/components/link";
 import { Button } from "@/components/ui/button";
 
 /**

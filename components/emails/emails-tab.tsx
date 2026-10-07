@@ -1,5 +1,5 @@
 import { Envelope } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
+import Link from "@/components/link";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/format";
 import { listThreadsForSubject } from "@/lib/gmail/queries";

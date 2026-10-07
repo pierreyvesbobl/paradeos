@@ -1,9 +1,9 @@
 "use client";
 
 import { WarningCircle } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useEffect } from "react";
 import { EmptyState } from "@/components/empty-state";
+import Link from "@/components/link";
 import { Button } from "@/components/ui/button";
 
 /**

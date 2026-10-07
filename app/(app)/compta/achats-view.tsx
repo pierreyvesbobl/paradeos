@@ -6,8 +6,8 @@ import {
   Receipt,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
+import Link from "@/components/link";
 import { requireUser } from "@/lib/auth/server";
 import { DemoBlur } from "@/lib/demo/components";
 import { isDemoMode } from "@/lib/demo/server";

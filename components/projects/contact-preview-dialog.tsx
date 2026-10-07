@@ -7,8 +7,8 @@ import {
   LinkedinLogo,
   Phone,
 } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import Link from "@/components/link";
 import {
   Sheet,
   SheetContent,

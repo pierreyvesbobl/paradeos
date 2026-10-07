@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { Suspense } from "react";
+import Link from "@/components/link";
 import { LoginForm } from "./login-form";
 
 export default function LoginPage() {

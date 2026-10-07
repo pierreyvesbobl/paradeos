@@ -7,9 +7,9 @@ import {
   Question,
 } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
-import Link from "next/link";
 import { DetachAction, MatchActions, RunMatchingButton } from "@/components/compta/match-actions";
 import { EmptyState } from "@/components/empty-state";
+import Link from "@/components/link";
 import {
   dougsOperationMatches,
   dougsOperations,

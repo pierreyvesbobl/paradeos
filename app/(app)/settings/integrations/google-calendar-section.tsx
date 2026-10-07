@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { getCalendarsForUser } from "@/lib/db/queries/calendar";
 import { formatDate } from "@/lib/format";
 import { getGoogleAccount } from "@/lib/google/account";

@@ -1,8 +1,8 @@
 import { Plus, Sparkle } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import Link from "next/link";
 import { PipelineBoard, type PipelineItem } from "@/app/(app)/projets/pipeline/pipeline-board";
 import { EmptyState } from "@/components/empty-state";
+import Link from "@/components/link";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { entities } from "@/db/schema/entities";

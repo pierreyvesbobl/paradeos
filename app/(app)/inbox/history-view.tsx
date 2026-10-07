@@ -15,10 +15,10 @@ import {
   Warning,
   X,
 } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import Link from "@/components/link";
 import { loadInboxHistory, revertInboxItem, updateInboxHistoryItem } from "@/lib/actions/inbox";
 import type { InboxExtractionKind } from "@/lib/db/queries/inbox";
 import type {

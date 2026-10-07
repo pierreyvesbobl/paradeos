@@ -1,5 +1,5 @@
 import { and, asc, eq, isNotNull } from "drizzle-orm";
-import Link from "next/link";
+import Link from "@/components/link";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { projects } from "@/db/schema/projects";

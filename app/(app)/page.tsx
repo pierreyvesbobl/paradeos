@@ -1,7 +1,7 @@
 import { Plus } from "@phosphor-icons/react/dist/ssr";
 import { eq } from "drizzle-orm";
-import Link from "next/link";
 import { Suspense } from "react";
+import Link from "@/components/link";
 import { users } from "@/db/schema/users";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db/server";

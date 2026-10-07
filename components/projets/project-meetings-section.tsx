@@ -1,5 +1,5 @@
 import { ArrowSquareOut, FileText } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
+import Link from "@/components/link";
 import { Badge } from "@/components/ui/badge";
 import { getMeetingsForProject } from "@/lib/db/queries/meetings";
 import { formatDate } from "@/lib/format";

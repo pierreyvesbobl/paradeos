@@ -1,9 +1,9 @@
 "use client";
 
 import { Bell } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
+import Link from "@/components/link";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

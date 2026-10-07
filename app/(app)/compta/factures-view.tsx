@@ -1,8 +1,8 @@
 import { ArrowSquareOut, FileText } from "@phosphor-icons/react/dist/ssr";
 import { desc, eq } from "drizzle-orm";
-import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { FilingActions } from "@/components/factures/filing-actions";
+import Link from "@/components/link";
 import { Badge } from "@/components/ui/badge";
 import { gmailMessages } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";

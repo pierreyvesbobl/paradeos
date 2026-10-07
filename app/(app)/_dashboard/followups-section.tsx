@@ -1,6 +1,6 @@
 import { BellRinging } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq, gte, isNotNull, lte, ne } from "drizzle-orm";
-import Link from "next/link";
+import Link from "@/components/link";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { requireUser } from "@/lib/auth/server";

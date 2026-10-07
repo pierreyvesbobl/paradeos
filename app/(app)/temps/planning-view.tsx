@@ -1,6 +1,6 @@
 import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq, gte, lt, notInArray } from "drizzle-orm";
-import Link from "next/link";
+import Link from "@/components/link";
 import { contacts } from "@/db/schema/contacts";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";

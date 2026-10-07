@@ -1,12 +1,12 @@
 import { Warning } from "@phosphor-icons/react/dist/ssr";
 import { eq } from "drizzle-orm";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { InvoiceForm } from "@/components/coworking/invoice-form";
 import { PushToDougsButton } from "@/components/coworking/push-to-dougs-button";
 import { RetryAutoSendButton } from "@/components/coworking/retry-auto-send-button";
 import { DeleteButton } from "@/components/delete-button";
+import Link from "@/components/link";
 import { PageHeader } from "@/components/page-header";
 import { dougsSessions } from "@/db/schema/dougs";
 import { deleteInvoice } from "@/lib/actions/invoices";

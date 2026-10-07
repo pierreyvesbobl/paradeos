@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { getUser } from "@/lib/auth/server";
 import { getInboxTotalCount } from "@/lib/db/queries/inbox";
 import { SidebarNav } from "./sidebar-nav";

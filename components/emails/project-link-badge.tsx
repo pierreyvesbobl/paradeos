@@ -1,10 +1,10 @@
 "use client";
 
 import { Briefcase, Check, Envelope, Hand, Sparkle, X } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { FkCombobox } from "@/components/inline/fk-combobox";
+import Link from "@/components/link";
 import { setThreadProject } from "@/lib/actions/gmail";
 
 type ProjectOption = { id: string; name: string };

@@ -1,9 +1,9 @@
 "use client";
 
 import { Buildings, Sparkle, User, X } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import Link from "@/components/link";
 import { dismissThreadLink } from "@/lib/actions/gmail";
 
 export type ThreadLinkItem = {

@@ -1,5 +1,5 @@
 import { Buildings, CheckSquare, Kanban, User } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
+import Link from "@/components/link";
 import { type NoteSubjectType, noteSubjectTypeLabels } from "@/lib/schemas/notes";
 import { cn } from "@/lib/utils";
 

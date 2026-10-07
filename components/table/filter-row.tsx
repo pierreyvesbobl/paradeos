@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 
 type Item = { value: string | undefined; label: string; active: boolean };
 

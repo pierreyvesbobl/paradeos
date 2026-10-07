@@ -11,9 +11,9 @@ import {
   UserPlus,
   X,
 } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import Link from "@/components/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { acceptEmailProposal, rejectEmailProposal } from "@/lib/actions/email-proposals";

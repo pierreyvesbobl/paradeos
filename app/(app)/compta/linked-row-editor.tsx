@@ -1,11 +1,11 @@
 "use client";
 
 import { ArrowSquareOut, PencilSimple, X } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { FkCombobox } from "@/components/inline/fk-combobox";
+import Link from "@/components/link";
 import { Button } from "@/components/ui/button";
 import { unlinkProjectDougsQuote } from "@/lib/actions/dougs-quotes";
 import {

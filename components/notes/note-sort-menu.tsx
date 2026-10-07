@@ -7,7 +7,7 @@ import {
   SortAscending,
   SortDescending,
 } from "@phosphor-icons/react";
-import Link from "next/link";
+import Link from "@/components/link";
 import {
   DropdownMenu,
   DropdownMenuContent,

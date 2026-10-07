@@ -1,7 +1,7 @@
 import { Briefcase, Plus, X } from "@phosphor-icons/react/dist/ssr";
 import { asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
-import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
+import Link from "@/components/link";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { SearchInputWithClear } from "@/components/ui/search-input";

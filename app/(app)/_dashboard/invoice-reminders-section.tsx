@@ -1,6 +1,6 @@
 import { Receipt } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
-import Link from "next/link";
+import Link from "@/components/link";
 import { coworkingContracts } from "@/db/schema/coworking";
 import { entities } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";

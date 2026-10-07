@@ -5,7 +5,7 @@ import {
   CheckSquare,
 } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import Link from "next/link";
+import Link from "@/components/link";
 import { AvatarStack, type StackedAssignee } from "@/components/tasks/avatar-stack";
 import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";

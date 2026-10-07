@@ -8,7 +8,6 @@ import {
   TrendUp,
   Users,
 } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 import { CoworkingTabs } from "@/components/coworking/coworking-tabs";
 import {
   ContractDesksEditor,
@@ -23,6 +22,7 @@ import {
 } from "@/components/coworking/inline-editors";
 import { SendDueInvoices } from "@/components/coworking/send-due-invoices";
 import { EmptyState } from "@/components/empty-state";
+import Link from "@/components/link";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {

@@ -5,8 +5,8 @@ import {
   ListChecks,
   Note as NoteIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 import type { ActivityItem, ActivityKind } from "@/app/(app)/projets/[id]/overview/activity-query";
+import Link from "@/components/link";
 import { formatRelativeShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

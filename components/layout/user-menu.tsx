@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, Gear, Plug, SignOut, Users as UsersIcon } from "@phosphor-icons/react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,

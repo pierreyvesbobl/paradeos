@@ -14,11 +14,11 @@ import {
   User,
   X,
 } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { FkCombobox } from "@/components/inline/fk-combobox";
+import Link from "@/components/link";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { decideInboxItem, loadInboxPreview } from "@/lib/actions/inbox";
 import type {

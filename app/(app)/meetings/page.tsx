@@ -1,7 +1,7 @@
 import { Kanban, Microphone, Plus } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, desc, eq, ilike, type SQL, sql } from "drizzle-orm";
-import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
+import Link from "@/components/link";
 import { PageHeader } from "@/components/page-header";
 import { NotionFilters } from "@/components/table/notion-filters";
 import { parseSort, SortableHeader, type SortState } from "@/components/table/sortable-header";

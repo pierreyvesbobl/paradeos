@@ -1,7 +1,7 @@
 "use client";
 
 import { ClockCounterClockwise, ListChecks } from "@phosphor-icons/react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { cn } from "@/lib/utils";
 
 export type InboxTab = "a-traiter" | "historique";

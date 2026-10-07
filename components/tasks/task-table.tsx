@@ -1,11 +1,11 @@
 "use client";
 
 import { ArrowDown, ArrowsDownUp, ArrowUp, CaretDown, CaretRight } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { QuickAddTask } from "@/app/(app)/taches/quick-add-task";
+import Link from "@/components/link";
 import type { SortState } from "@/components/table/sortable-header";
 import { FloatingActionBar } from "@/components/tasks/floating-action-bar";
 import { TaskRow } from "@/components/tasks/task-row";

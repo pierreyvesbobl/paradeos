@@ -10,7 +10,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import { and, eq, gte, isNotNull, lte, ne, or, sql } from "drizzle-orm";
-import Link from "next/link";
+import Link from "@/components/link";
 import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { timeEntries } from "@/db/schema/time-entries";
