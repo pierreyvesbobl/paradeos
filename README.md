@@ -125,8 +125,9 @@ le même build. Mesures en place : pool à 20 (`db/client.ts`), prefetch coupé
 le blocage persistait sous 22). Le pooler **session** (port 5432) a été essayé
 et écarté : il plafonne à 15 clients (`EMAXCONNSESSION`), un pool de 20 par
 instance Vercel le dépasse. On reste donc sur le pooler transaction (6543)
-avec `max: 20`. `scripts/kill-db-zombies.ts` libère les backends bloqués si
-ça revient.
+avec `max: 20`. Attention : `.env.local` (dev) est en **5432**, la prod en
+**6543** — ne jamais copier la valeur locale telle quelle dans Vercel.
+`scripts/kill-db-zombies.ts` libère les backends bloqués si ça revient.
 
 ## Conventions
 
