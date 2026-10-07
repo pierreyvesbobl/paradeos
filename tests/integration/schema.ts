@@ -3,6 +3,7 @@
 export * from "@/db/schema/app-settings";
 export * from "@/db/schema/audit-log";
 export * from "@/db/schema/calendar-events";
+export * from "@/db/schema/contact-emails";
 export * from "@/db/schema/contacts";
 export * from "@/db/schema/coworking";
 export * from "@/db/schema/dougs";

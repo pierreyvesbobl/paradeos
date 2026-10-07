@@ -6,6 +6,7 @@ import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { requireUser } from "@/lib/auth/server";
+import { contactEmailIlike } from "@/lib/crm/contact-emails";
 import { db } from "@/lib/db/server";
 
 export type SearchResults = {
@@ -44,7 +45,7 @@ export async function globalSearch(query: string): Promise<SearchResults> {
         or(
           ilike(contacts.firstName, pattern),
           ilike(contacts.lastName, pattern),
-          ilike(contacts.email, pattern),
+          contactEmailIlike(pattern),
         ),
       )
       .orderBy(asc(contacts.lastName))

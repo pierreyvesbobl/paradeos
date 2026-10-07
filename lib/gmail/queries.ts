@@ -1,11 +1,27 @@
 import "server-only";
 
 import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, type SQL, sql } from "drizzle-orm";
-import { contacts } from "@/db/schema/contacts";
 import { gmailMessages, gmailTags, gmailThreads, gmailThreadTags } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { projects } from "@/db/schema/projects";
+import { allEmailsOfContact } from "@/lib/crm/contact-emails";
 import { db } from "@/lib/db/server";
+
+/**
+ * Condition « un message implique une de ces adresses » (expéditeur, To ou
+ * Cc). Les adresses sont déjà normalisées en minuscules.
+ */
+function messageInvolvesAnyEmail(emails: string[]): SQL {
+  const list = sql.join(
+    emails.map((e) => sql`${e}`),
+    sql`, `,
+  );
+  return sql`(
+    lower(${gmailMessages.fromEmail}) in (${list})
+    or exists (select 1 from unnest(${gmailMessages.toEmails}) t(e) where lower(t.e) in (${list}))
+    or exists (select 1 from unnest(${gmailMessages.ccEmails}) c(e) where lower(c.e) in (${list}))
+  )`;
+}
 
 export type GmailThreadRow = {
   id: string;
@@ -33,15 +49,11 @@ export async function listThreadsForSubject(
   const conn = await db();
 
   if (linkKind === "contact") {
-    // Récupère l'email du contact puis cherche les threads dont au moins
-    // un message a ce contact en sender ou recipient (via DISTINCT thread).
-    const [contact] = await conn
-      .select({ email: contacts.email })
-      .from(contacts)
-      .where(eq(contacts.id, linkId))
-      .limit(1);
-    if (!contact?.email) return [];
-    const email = contact.email.toLowerCase();
+    // Récupère les adresses du contact (principale + secondaires) puis
+    // cherche les threads dont au moins un message a ce contact en sender
+    // ou recipient (via DISTINCT thread).
+    const emails = await allEmailsOfContact(conn, linkId);
+    if (emails.length === 0) return [];
     return conn
       .selectDistinct({
         id: gmailThreads.id,
@@ -55,13 +67,7 @@ export async function listThreadsForSubject(
       })
       .from(gmailThreads)
       .innerJoin(gmailMessages, eq(gmailMessages.threadId, gmailThreads.id))
-      .where(
-        sql`(
-          lower(${gmailMessages.fromEmail}) = ${email}
-          or ${email} = any(${gmailMessages.toEmails})
-          or ${email} = any(${gmailMessages.ccEmails})
-        )`,
-      )
+      .where(messageInvolvesAnyEmail(emails))
       .orderBy(desc(gmailThreads.lastMessageAt))
       .limit(opts.limit ?? 20)
       .offset(opts.offset ?? 0);
@@ -475,23 +481,12 @@ export async function countThreadsForSubject(
   const conn = await db();
 
   if (linkKind === "contact") {
-    const [contact] = await conn
-      .select({ email: contacts.email })
-      .from(contacts)
-      .where(eq(contacts.id, linkId))
-      .limit(1);
-    if (!contact?.email) return 0;
-    const email = contact.email.toLowerCase();
+    const emails = await allEmailsOfContact(conn, linkId);
+    if (emails.length === 0) return 0;
     const [row] = await conn
       .select({ n: sql<number>`count(distinct ${gmailMessages.threadId})::int` })
       .from(gmailMessages)
-      .where(
-        sql`(
-          lower(${gmailMessages.fromEmail}) = ${email}
-          or ${email} = any(${gmailMessages.toEmails})
-          or ${email} = any(${gmailMessages.ccEmails})
-        )`,
-      );
+      .where(messageInvolvesAnyEmail(emails));
     return row?.n ?? 0;
   }
 

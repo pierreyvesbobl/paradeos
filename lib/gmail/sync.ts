@@ -1,10 +1,10 @@
 import "server-only";
 
 import { and, eq, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
-import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { gmailMessages, gmailSyncState, gmailThreads } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
+import { allKnownContactEmails } from "@/lib/crm/contact-emails";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import {
@@ -107,19 +107,16 @@ export type GmailSyncResult = {
  * Charge l'ensemble des emails CRM connus pour décider si un message
  * mérite qu'on télécharge son body + l'extraction LLM downstream.
  *
- * Retourne deux Sets : emails normalisés en lowercase, domaines des
- * entités (filtrés des domaines génériques tels que gmail.com).
+ * Retourne deux Sets : emails normalisés en lowercase (adresses principales
+ * et secondaires des contacts), domaines des entités (filtrés des domaines
+ * génériques tels que gmail.com).
  */
 async function loadCrmMatchers(): Promise<{ emails: Set<string>; domains: Set<string> }> {
   const conn = await db();
-  const [contactRows, entityRows] = await Promise.all([
-    conn.select({ email: contacts.email }).from(contacts).where(isNotNull(contacts.email)),
+  const [emails, entityRows] = await Promise.all([
+    allKnownContactEmails(conn),
     conn.select({ website: entities.website }).from(entities).where(isNotNull(entities.website)),
   ]);
-  const emails = new Set<string>();
-  for (const r of contactRows) {
-    if (r.email) emails.add(r.email.trim().toLowerCase());
-  }
   const domains = new Set<string>();
   for (const r of entityRows) {
     const d = extractDomain(r.website);

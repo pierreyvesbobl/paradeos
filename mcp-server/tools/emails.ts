@@ -4,6 +4,7 @@ import { contacts } from "../../db/schema/contacts";
 import { gmailMessages, gmailTags, gmailThreads, gmailThreadTags } from "../../db/schema/gmail";
 import { projectContacts } from "../../db/schema/project-contacts";
 import { projects } from "../../db/schema/projects";
+import { allEmailsOfContact, secondaryEmailsByContact } from "../../lib/crm/contact-emails";
 import type { UserContext } from "../context";
 import { db } from "../db";
 import { DEFAULT_LIMIT } from "./shared";
@@ -104,13 +105,9 @@ export async function listEmails(args: z.infer<typeof listEmailsSchema>, ctx: Us
   const limit = args.limit ?? DEFAULT_LIMIT;
 
   if (args.subjectType === "contact") {
-    const [contact] = await conn
-      .select({ email: contacts.email })
-      .from(contacts)
-      .where(eq(contacts.id, args.subjectId))
-      .limit(1);
-    if (!contact?.email) return [];
-    return listThreadsByEmailParticipants(ctx, [contact.email.toLowerCase()], args.since, limit);
+    const emails = await allEmailsOfContact(conn, args.subjectId);
+    if (emails.length === 0) return [];
+    return listThreadsByEmailParticipants(ctx, emails, args.since, limit);
   }
 
   // project / entity : on résout d'abord les IDs "sujet" (le projet ou
@@ -134,7 +131,7 @@ export async function listEmails(args: z.infer<typeof listEmailsSchema>, ctx: Us
   // Emails des contacts rattachés : contacts liés au projet (M2M) +
   // contacts de son entité (ou contacts de l'entité pour subject=entity).
   const contactEmailRows = await conn
-    .selectDistinct({ email: contacts.email })
+    .selectDistinct({ id: contacts.id, email: contacts.email })
     .from(contacts)
     .leftJoin(projectContacts, eq(projectContacts.contactId, contacts.id))
     .where(
@@ -143,9 +140,20 @@ export async function listEmails(args: z.infer<typeof listEmailsSchema>, ctx: Us
         entityIds.length > 0 ? inArray(contacts.entityId, entityIds) : sql`false`,
       ),
     );
-  const participantEmails = contactEmailRows
-    .map((r) => r.email?.toLowerCase())
-    .filter((e): e is string => !!e);
+  // Adresses principales + secondaires : un client qui répond depuis sa
+  // boîte perso reste sur le fil du projet.
+  const secondary = await secondaryEmailsByContact(
+    conn,
+    contactEmailRows.map((r) => r.id),
+  );
+  const participantEmails = [
+    ...new Set(
+      contactEmailRows.flatMap((r) => [
+        ...(r.email ? [r.email.toLowerCase()] : []),
+        ...(secondary.get(r.id) ?? []),
+      ]),
+    ),
+  ];
 
   const [byProjectTag, byEntityTag, byParticipant] = await Promise.all([
     args.subjectType === "project"

@@ -1,8 +1,8 @@
 import "server-only";
 
-import { sql } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { meetingParticipants } from "@/db/schema/meeting-participants";
+import { contactHasEmail } from "@/lib/crm/contact-emails";
 import { fuzzyMatchContact, fuzzyMatchUser } from "@/lib/crm/match";
 import { getMeetingParticipants } from "@/lib/db/queries/meeting-participants";
 import { db } from "@/lib/db/server";
@@ -109,7 +109,7 @@ async function resolveAttendee(name: string, email: string | null): Promise<Atte
     const [row] = await conn
       .select({ id: contacts.id })
       .from(contacts)
-      .where(sql`lower(${contacts.email}) = lower(${email.trim()})`)
+      .where(contactHasEmail(email))
       .limit(1);
     if (row) return { kind: "contact", id: row.id };
   }

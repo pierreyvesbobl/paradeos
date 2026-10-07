@@ -27,6 +27,7 @@ export const contacts = pgTable(
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     firstName: text("first_name").notNull(),
     lastName: text("last_name").notNull(),
+    /** Adresse principale. Les secondaires vivent dans `contact_emails`. */
     email: text("email"),
     phone: text("phone"),
     jobTitle: text("job_title"),

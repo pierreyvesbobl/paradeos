@@ -6,6 +6,7 @@ import { entities } from "@/db/schema/entities";
 import { gmailMessages, gmailTags, gmailThreads, gmailThreadTags } from "@/db/schema/gmail";
 import { projectContacts } from "@/db/schema/project-contacts";
 import { projects } from "@/db/schema/projects";
+import { contactHasAnyEmail } from "@/lib/crm/contact-emails";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import { createLabel, listLabels, modifyThreadLabels, updateLabel } from "@/lib/google/gmail-api";
@@ -340,7 +341,7 @@ export async function computeThreadLinkSignals(
       : await conn
           .select({ id: contacts.id, entityId: contacts.entityId })
           .from(contacts)
-          .where(inArray(contacts.email, involvedEmails));
+          .where(contactHasAnyEmail(involvedEmails));
   const matchedContactIds = matchedContacts.map((c) => c.id);
   // L'entité rattachée au contact matché est aussi un signal fort (couvre
   // le cas où entities.website est null → le match par domaine ne

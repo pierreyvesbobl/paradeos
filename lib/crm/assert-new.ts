@@ -68,6 +68,24 @@ export async function assertContactIsNew(identity: ContactIdentity): Promise<voi
 }
 
 /**
+ * Lève si l'adresse est déjà portée par **un autre** contact (en principale
+ * ou en secondaire). Une adresse n'identifie qu'une personne : la laisser
+ * sur deux fiches rendrait le rapprochement Gmail ambigu.
+ */
+export async function assertEmailFree(
+  email: string,
+  opts: { exceptContactId?: string } = {},
+): Promise<void> {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return;
+  const owner = await findContactByEmail(normalized);
+  if (!owner || owner.id === opts.exceptContactId) return;
+  throw new Error(
+    `${formatPersonName(owner.firstName, owner.lastName)} utilise déjà ${normalized}. Une adresse n'appartient qu'à une fiche.`,
+  );
+}
+
+/**
  * Lève si un projet équivalent existe déjà. Scopé sur l'entité quand elle
  * est connue : deux clients peuvent avoir chacun leur projet « Refonte
  * site », ce ne sont pas des doublons.

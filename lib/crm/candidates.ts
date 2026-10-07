@@ -5,6 +5,7 @@ import { entities } from "@/db/schema/entities";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
+import { secondaryEmailsByContact } from "@/lib/crm/contact-emails";
 import { normalizeEmail, normalizeNameKey, personNameKey } from "@/lib/crm/name-key";
 import {
   MATCH_THRESHOLD,
@@ -48,7 +49,8 @@ export async function matchEntity(
 
 /**
  * Match d'un contact. Passe `opts.email` dès qu'une adresse est connue :
- * c'est le seul discriminant fort dont on dispose sur une personne.
+ * c'est le seul discriminant fort dont on dispose sur une personne. Les
+ * candidats portent toutes leurs adresses, secondaires comprises.
  */
 export async function matchContact(
   conn: Database,
@@ -59,16 +61,20 @@ export async function matchContact(
   const threshold = opts?.threshold ?? MATCH_THRESHOLD.contact;
   const email = opts?.email ?? null;
   if (!personNameKey(firstName, lastName) && !normalizeEmail(email)) return null;
-  const rows = await conn
-    .select({
-      id: contacts.id,
-      firstName: contacts.firstName,
-      lastName: contacts.lastName,
-      email: contacts.email,
-    })
-    .from(contacts)
-    .limit(CANDIDATE_SCAN_LIMIT);
-  return pickBestContact(rows, { firstName, lastName, email }, threshold);
+  const [rows, secondary] = await Promise.all([
+    conn
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        email: contacts.email,
+      })
+      .from(contacts)
+      .limit(CANDIDATE_SCAN_LIMIT),
+    secondaryEmailsByContact(conn),
+  ]);
+  const candidates = rows.map((r) => ({ ...r, emails: secondary.get(r.id) ?? [] }));
+  return pickBestContact(candidates, { firstName, lastName, email }, threshold);
 }
 
 /**

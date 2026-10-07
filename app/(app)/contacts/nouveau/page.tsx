@@ -30,6 +30,7 @@ export default async function NewContactPage({ searchParams }: { searchParams: S
           firstName: "",
           lastName: "",
           email: "",
+          otherEmails: [],
           phone: "",
           jobTitle: "",
           linkedinUrl: "",

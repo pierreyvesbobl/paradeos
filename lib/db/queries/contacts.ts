@@ -1,12 +1,13 @@
 import "server-only";
 
-import { sql } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
+import { contactHasEmail } from "@/lib/crm/contact-emails";
 import { db } from "@/lib/db/server";
 
 /**
- * Cherche un contact par adresse email (insensible à la casse). Utilise
- * l'index `contacts_email_lower_idx`.
+ * Cherche un contact par adresse email (insensible à la casse), principale
+ * **ou** secondaire (cf. `lib/crm/contact-emails.ts`). Utilise les index
+ * `contacts_email_lower_idx` et `contact_emails_email_lower_unique`.
  *
  * Préféré au fuzzy match par nom pour les pipelines email : un email
  * exact est une preuve d'identité bien plus solide qu'un match
@@ -26,7 +27,7 @@ export async function findContactByEmail(
       email: contacts.email,
     })
     .from(contacts)
-    .where(sql`lower(${contacts.email}) = ${trimmed}`)
+    .where(contactHasEmail(trimmed))
     .limit(1);
   return row ?? null;
 }

@@ -251,7 +251,25 @@ export function pickBestProject(
  */
 const CERTAIN_PROJECT_TRIGRAM = 0.7;
 
-type ContactCandidate = { id: string; firstName: string; lastName: string; email: string | null };
+type ContactCandidate = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  /** Adresse principale (`contacts.email`). */
+  email: string | null;
+  /** Adresses secondaires (`contact_emails`), facultatives. */
+  emails?: string[];
+};
+
+/** Toutes les adresses d'un candidat, normalisées, sans vide ni doublon. */
+function candidateEmails(c: ContactCandidate): string[] {
+  const out = new Set<string>();
+  for (const raw of [c.email, ...(c.emails ?? [])]) {
+    const email = normalizeEmail(raw);
+    if (email) out.add(email);
+  }
+  return [...out];
+}
 
 export type ContactIdentity = {
   firstName: string | null | undefined;
@@ -268,6 +286,9 @@ export type ContactIdentity = {
  * puis le score trigram. Un nom identique avec des emails qui se
  * contredisent reste un match mais descend à 0.9 — l'UI le montre comme
  * « déjà en base » et l'humain peut le dissocier.
+ *
+ * Un candidat porte toutes ses adresses (principale + secondaires) : une
+ * personne qui écrit depuis sa boîte perso est reconnue au même titre.
  */
 export function pickBestContact(
   candidates: ContactCandidate[],
@@ -282,7 +303,7 @@ export function pickBestContact(
   const label = (c: ContactCandidate) => formatPersonName(c.firstName, c.lastName);
 
   if (email) {
-    const exact = candidates.find((c) => normalizeEmail(c.email) === email);
+    const exact = candidates.find((c) => candidateEmails(c).includes(email));
     if (exact) return { id: exact.id, name: label(exact), confidence: 1 };
   }
 
@@ -295,13 +316,20 @@ export function pickBestContact(
       // Emails renseignés des deux côtés et différents → même nom, preuve
       // d'identité affaiblie : on lie quand même (c'est presque toujours
       // un changement d'adresse) mais on le signale par la confiance.
-      const contradicted = email !== "" && sameName.every((c) => c.email && c.email !== email);
+      const contradicted =
+        email !== "" &&
+        sameName.every((c) => {
+          const known = candidateEmails(c);
+          return known.length > 0 && !known.includes(email);
+        });
       return { id: first.id, name: label(first), confidence: contradicted ? 0.9 : 1 };
     }
   }
 
   if (local) {
-    const sameLocal = candidates.find((c) => emailLocalPart(c.email) === local);
+    const sameLocal = candidates.find((c) =>
+      candidateEmails(c).some((e) => emailLocalPart(e) === local),
+    );
     if (sameLocal) return { id: sameLocal.id, name: label(sameLocal), confidence: 0.95 };
   }
 

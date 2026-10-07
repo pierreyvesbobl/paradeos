@@ -47,10 +47,23 @@ const addressSchema = z
   .nullable()
   .optional();
 
+const emailSchema = z.string().trim().toLowerCase().email("E-mail invalide.").max(200);
+
+/**
+ * Adresses secondaires (cf. `db/schema/contact-emails.ts`). Les vides sont
+ * ignorées : le formulaire laisse une ligne en cours de saisie.
+ */
+const otherEmailsSchema = z
+  .array(z.union([emailSchema, z.literal("").transform(() => undefined)]))
+  .max(10, "Dix adresses secondaires au plus.")
+  .transform((list) => [...new Set(list.filter((e): e is string => !!e))])
+  .optional();
+
 export const contactBaseSchema = z.object({
   firstName: z.string().trim().min(1, "Le prénom est requis.").max(120),
   lastName: z.string().trim().min(1, "Le nom est requis.").max(120),
   email: optionalEmail,
+  otherEmails: otherEmailsSchema,
   phone: optionalText(40),
   jobTitle: optionalText(160),
   linkedinUrl: optionalUrl,
@@ -103,6 +116,22 @@ export const quickCreateContactSchema = z.object({
   fullName: z.string().trim().min(1, "Le nom est requis.").max(200),
   entityId: z.string().uuid().optional(),
 });
+
+/** Ajout d'une adresse secondaire depuis la fiche. */
+export const addContactEmailSchema = z.object({
+  contactId: z.string().uuid(),
+  email: emailSchema,
+  label: optionalText(60),
+});
+
+/** Retrait d'une adresse secondaire. */
+export const removeContactEmailSchema = z.object({
+  contactId: z.string().uuid(),
+  email: emailSchema,
+});
+
+/** Promotion d'une adresse secondaire en principale (l'ancienne devient secondaire). */
+export const setPrimaryContactEmailSchema = removeContactEmailSchema;
 
 export type CreateContactInput = z.infer<typeof createContactSchema>;
 export type UpdateContactInput = z.infer<typeof updateContactSchema>;

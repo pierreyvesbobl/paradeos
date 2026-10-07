@@ -34,6 +34,7 @@ import { HashedAvatar } from "@/components/user/hashed-avatar";
 import { PersistViewParams } from "@/components/view-prefs/persist-view-params";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
+import { contactEmailIlike, secondaryEmailCountSql } from "@/lib/crm/contact-emails";
 import { db } from "@/lib/db/server";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
@@ -130,7 +131,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
     const like = or(
       sql`unaccent(${contacts.firstName}) ilike unaccent(${pattern})`,
       sql`unaccent(${contacts.lastName}) ilike unaccent(${pattern})`,
-      sql`unaccent(coalesce(${contacts.email}, '')) ilike unaccent(${pattern})`,
+      contactEmailIlike(pattern, { unaccent: true }),
       sql`unaccent(coalesce(${entities.name}, '')) ilike unaccent(${pattern})`,
     );
     if (like) conditions.push(like);
@@ -142,6 +143,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
       firstName: contacts.firstName,
       lastName: contacts.lastName,
       email: contacts.email,
+      otherEmailCount: secondaryEmailCountSql,
       phone: contacts.phone,
       jobTitle: contacts.jobTitle,
       entityId: entities.id,
@@ -320,6 +322,14 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                           className="truncate"
                           placeholder=""
                         />
+                        {row.otherEmailCount > 0 ? (
+                          <span
+                            className="flex-none text-(--ds-text-tertiary) text-[11px]"
+                            title={`${row.otherEmailCount} autre${row.otherEmailCount > 1 ? "s" : ""} adresse${row.otherEmailCount > 1 ? "s" : ""}`}
+                          >
+                            +{row.otherEmailCount}
+                          </span>
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell className="px-3 py-2.5 text-sm">

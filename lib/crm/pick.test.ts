@@ -112,6 +112,45 @@ describe("pickBestContact", () => {
   it("ne confond pas deux personnes distinctes", () => {
     expect(pickBestContact(CONTACTS, { firstName: "Bastien", lastName: "Georges" })).toBeNull();
   });
+
+  describe("adresses secondaires", () => {
+    const WITH_SECONDARY = [
+      {
+        id: "c1",
+        firstName: "Julien",
+        lastName: "Lacoëntre",
+        email: "julien@cephalopode.com",
+        emails: ["julien.perso@gmail.com"],
+      },
+    ];
+
+    it("prime une adresse secondaire exacte comme une principale", () => {
+      const m = pickBestContact(WITH_SECONDARY, {
+        firstName: "J.",
+        lastName: "L.",
+        email: "Julien.Perso@gmail.com",
+      });
+      expect(m).toEqual({ id: "c1", name: "Julien Lacoëntre", confidence: 1 });
+    });
+
+    it("un nom identique n'est plus contredit si l'email est une secondaire", () => {
+      const m = pickBestContact(WITH_SECONDARY, {
+        firstName: "Julien",
+        lastName: "Lacoentre",
+        email: "julien.perso@gmail.com",
+      });
+      expect(m?.confidence).toBe(1);
+    });
+
+    it("reconnaît la partie locale d'une adresse secondaire", () => {
+      const m = pickBestContact(WITH_SECONDARY, {
+        firstName: "J.",
+        lastName: "L.",
+        email: "julien.perso@outlook.fr",
+      });
+      expect(m?.confidence).toBe(0.95);
+    });
+  });
 });
 
 describe("pickBestProject — ré-mention vs nouveau projet", () => {

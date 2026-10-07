@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { z } from "zod";
+import { contactEmails } from "../../db/schema/contact-emails";
 import { contacts } from "../../db/schema/contacts";
 import { entities } from "../../db/schema/entities";
 import { meetings } from "../../db/schema/meetings";
@@ -7,6 +8,7 @@ import { notes } from "../../db/schema/notes";
 import { projects } from "../../db/schema/projects";
 import { tasks } from "../../db/schema/tasks";
 import { matchContact, matchEntity } from "../../lib/crm/candidates";
+import { contactEmailIlike, contactHasEmail } from "../../lib/crm/contact-emails";
 import { isCertainMatch } from "../../lib/crm/pick";
 import type { UserContext } from "../context";
 import { db } from "../db";
@@ -27,7 +29,7 @@ export async function listContacts(args: z.infer<typeof listContactsSchema>) {
     const o = or(
       ilike(contacts.firstName, like),
       ilike(contacts.lastName, like),
-      ilike(contacts.email, like),
+      contactEmailIlike(like),
     );
     if (o) conds.push(o);
   }
@@ -106,7 +108,7 @@ export async function searchAll(args: z.infer<typeof searchAllSchema>) {
           or(
             ilike(contacts.firstName, like),
             ilike(contacts.lastName, like),
-            ilike(contacts.email, like),
+            contactEmailIlike(like),
           ),
         )
         .limit(limit),
@@ -148,10 +150,42 @@ export async function searchAll(args: z.infer<typeof searchAllSchema>) {
 
 // ---------- WRITE : Contacts ----------
 
+const otherEmailsSchema = z
+  .array(z.string().trim().toLowerCase().email())
+  .max(10)
+  .describe("Adresses secondaires (perso, ancienne boîte). L'adresse principale reste `email`.");
+
+/**
+ * Adresses secondaires à écrire : sans doublon, sans la principale, et
+ * libres chez les autres fiches (une adresse n'identifie qu'une personne).
+ */
+async function prepareOtherEmails(
+  conn: ReturnType<typeof db>,
+  contactId: string,
+  raw: string[],
+  primary: string | null | undefined,
+): Promise<string[]> {
+  const list = [...new Set(raw)].filter((e) => e !== (primary ?? "").toLowerCase());
+  for (const email of list) {
+    const [owner] = await conn
+      .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
+      .from(contacts)
+      .where(contactHasEmail(email))
+      .limit(1);
+    if (owner && owner.id !== contactId) {
+      throw new Error(
+        `${owner.firstName} ${owner.lastName} utilise déjà ${email}. Une adresse n'appartient qu'à une fiche.`,
+      );
+    }
+  }
+  return list;
+}
+
 export const createContactSchema = z.object({
   firstName: z.string().trim().min(1).max(120),
   lastName: z.string().trim().min(1).max(120),
   email: z.string().email().optional(),
+  otherEmails: otherEmailsSchema.optional(),
   phone: z.string().max(40).optional(),
   jobTitle: z.string().max(160).optional(),
   linkedinUrl: z.string().url().optional(),
@@ -198,6 +232,14 @@ export async function createContact(args: z.infer<typeof createContactSchema>, c
       firstName: contacts.firstName,
       lastName: contacts.lastName,
     });
+  if (row && args.otherEmails?.length) {
+    const emails = await prepareOtherEmails(conn, row.id, args.otherEmails, args.email);
+    if (emails.length > 0) {
+      await conn
+        .insert(contactEmails)
+        .values(emails.map((email) => ({ contactId: row.id, email })));
+    }
+  }
   return { ...row, alreadyExisted: false as const };
 }
 
@@ -206,6 +248,8 @@ export const updateContactSchema = z.object({
   firstName: z.string().trim().min(1).max(120).optional(),
   lastName: z.string().trim().min(1).max(120).optional(),
   email: z.string().email().nullable().optional(),
+  /** Remplace la liste complète des adresses secondaires. Omis = inchangé. */
+  otherEmails: otherEmailsSchema.optional(),
   phone: z.string().max(40).nullable().optional(),
   jobTitle: z.string().max(160).nullable().optional(),
   linkedinUrl: z.string().url().nullable().optional(),
@@ -219,6 +263,21 @@ export const updateContactSchema = z.object({
 
 export async function updateContact(args: z.infer<typeof updateContactSchema>) {
   const conn = db();
+  if (args.otherEmails !== undefined) {
+    const [current] = await conn
+      .select({ email: contacts.email })
+      .from(contacts)
+      .where(eq(contacts.id, args.id))
+      .limit(1);
+    const primary = args.email !== undefined ? args.email : (current?.email ?? null);
+    const emails = await prepareOtherEmails(conn, args.id, args.otherEmails, primary);
+    await conn.delete(contactEmails).where(eq(contactEmails.contactId, args.id));
+    if (emails.length > 0) {
+      await conn
+        .insert(contactEmails)
+        .values(emails.map((email) => ({ contactId: args.id, email })));
+    }
+  }
   const update: Record<string, unknown> = { updatedAt: new Date() };
   if (args.firstName !== undefined) update.firstName = args.firstName;
   if (args.lastName !== undefined) update.lastName = args.lastName;

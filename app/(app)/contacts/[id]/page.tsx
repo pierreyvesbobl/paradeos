@@ -11,12 +11,13 @@ import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { deleteContactAndRedirect } from "@/lib/actions/contacts";
+import { listContactEmailRows } from "@/lib/db/queries/contact-emails";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { db } from "@/lib/db/server";
 import { formatPersonName } from "@/lib/format";
+import { ContactEmails } from "./contact-emails";
 import {
   ContAddress,
-  ContEmail,
   ContEntity,
   ContFirstName,
   ContJobTitle,
@@ -45,13 +46,14 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
   if (!row) notFound();
   const { contact, entity } = row;
 
-  // Requêtes en parallèle (3 round-trips → 1).
-  const [entityList, notesList] = await Promise.all([
+  // Requêtes en parallèle (4 round-trips → 1).
+  const [entityList, notesList, emailRows] = await Promise.all([
     conn
       .select({ id: entities.id, name: entities.name })
       .from(entities)
       .orderBy(asc(entities.name)),
     getNotesForSubject("contact", id),
+    listContactEmailRows(id),
   ]);
   const attachmentRows = await getAttachmentsForNotes(notesList.map((n) => n.id));
   const attachmentsByNote: Record<string, typeof attachmentRows> = {};
@@ -114,7 +116,7 @@ export default async function ContactDetailPage({ params }: { params: Params }) 
                 </span>
               </dt>
               <dd className="mt-1 text-sm">
-                <ContEmail id={id} value={contact.email} />
+                <ContactEmails contactId={id} primary={contact.email} others={emailRows} />
               </dd>
             </div>
             <div>

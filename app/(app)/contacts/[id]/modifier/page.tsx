@@ -4,6 +4,7 @@ import { Breadcrumbs } from "@/components/breadcrumbs";
 import { PageHeader } from "@/components/page-header";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
+import { listContactEmailRows } from "@/lib/db/queries/contact-emails";
 import { db } from "@/lib/db/server";
 import { formatPersonName } from "@/lib/format";
 import { ContactForm } from "../../contact-form";
@@ -16,10 +17,13 @@ export default async function EditContactPage({ params }: { params: Params }) {
   const [contact] = await conn.select().from(contacts).where(eq(contacts.id, id)).limit(1);
   if (!contact) notFound();
 
-  const entityList = await conn
-    .select({ id: entities.id, name: entities.name })
-    .from(entities)
-    .orderBy(asc(entities.name));
+  const [entityList, emailRows] = await Promise.all([
+    conn
+      .select({ id: entities.id, name: entities.name })
+      .from(entities)
+      .orderBy(asc(entities.name)),
+    listContactEmailRows(id),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -46,6 +50,7 @@ export default async function EditContactPage({ params }: { params: Params }) {
           firstName: contact.firstName,
           lastName: contact.lastName,
           email: contact.email ?? "",
+          otherEmails: emailRows.map((r) => r.email),
           phone: contact.phone ?? "",
           jobTitle: contact.jobTitle ?? "",
           linkedinUrl: contact.linkedinUrl ?? "",

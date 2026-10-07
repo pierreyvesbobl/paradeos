@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus, X } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -35,6 +36,8 @@ type Props = {
     firstName: string;
     lastName: string;
     email: string;
+    /** Adresses secondaires (cf. `contact_emails`). */
+    otherEmails: string[];
     phone: string;
     jobTitle: string;
     linkedinUrl: string;
@@ -56,6 +59,7 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
   const [firstName, setFirstName] = useState(defaultValues.firstName);
   const [lastName, setLastName] = useState(defaultValues.lastName);
   const [email, setEmail] = useState(defaultValues.email);
+  const [otherEmails, setOtherEmails] = useState<string[]>(defaultValues.otherEmails);
   const [phone, setPhone] = useState(defaultValues.phone);
   const [jobTitle, setJobTitle] = useState(defaultValues.jobTitle);
   const [linkedinUrl, setLinkedinUrl] = useState(defaultValues.linkedinUrl);
@@ -79,6 +83,7 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
       firstName,
       lastName,
       email: email || undefined,
+      otherEmails,
       phone: phone || undefined,
       jobTitle: jobTitle || undefined,
       linkedinUrl: linkedinUrl || undefined,
@@ -209,6 +214,52 @@ export function ContactForm({ mode, entities, defaultValues }: Props) {
               disabled={pending}
             />
             <FieldError messages={errors.email} />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="otherEmail-0">Autres adresses</Label>
+            <p className="text-muted-foreground text-xs">
+              Boîte perso, ancienne société… Les mails reçus depuis ces adresses sont rattachés à ce
+              contact.
+            </p>
+            {otherEmails.map((value, index) => (
+              <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: liste ordonnée sans identité propre
+                key={index}
+                className="flex items-center gap-2"
+              >
+                <Input
+                  id={`otherEmail-${index}`}
+                  type="email"
+                  value={value}
+                  onChange={(e) =>
+                    setOtherEmails((list) => list.map((v, i) => (i === index ? e.target.value : v)))
+                  }
+                  placeholder="autre@adresse.fr"
+                  disabled={pending}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Retirer cette adresse"
+                  disabled={pending}
+                  onClick={() => setOtherEmails((list) => list.filter((_, i) => i !== index))}
+                >
+                  <X size={14} />
+                </Button>
+              </div>
+            ))}
+            <FieldError messages={errors.otherEmails} />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={pending || otherEmails.length >= 10}
+              onClick={() => setOtherEmails((list) => [...list, ""])}
+            >
+              <Plus size={14} weight="bold" />
+              Ajouter une adresse
+            </Button>
           </div>
           <div className="space-y-2">
             <Label htmlFor="phone">Téléphone</Label>
