@@ -122,10 +122,11 @@ restaient bloquées côté Postgres en « active, ClientRead » jusqu'au
 le même build. Mesures en place : pool à 20 (`db/client.ts`), prefetch coupé
 (`components/link.tsx`), `statement_timeout` du rôle `postgres` à 30 s,
 `engines.node` épinglé à `22.x` pendant l'enquête (ce n'était pas la cause :
-le blocage persistait sous 22). Remède durable, à faire côté Vercel :
-`DATABASE_URL` de production sur le **pooler session** (même URL, port `5432`
-au lieu de `6543`), puis redéployer. `scripts/kill-db-zombies.ts` libère les
-backends bloqués si ça revient.
+le blocage persistait sous 22). Le pooler **session** (port 5432) a été essayé
+et écarté : il plafonne à 15 clients (`EMAXCONNSESSION`), un pool de 20 par
+instance Vercel le dépasse. On reste donc sur le pooler transaction (6543)
+avec `max: 20`. `scripts/kill-db-zombies.ts` libère les backends bloqués si
+ça revient.
 
 ## Conventions
 
