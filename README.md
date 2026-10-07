@@ -113,15 +113,19 @@ BYPASSRLS). Il est créé `NOLOGIN` : pour basculer la prod dessus,
 3. garder l'URL `postgres` en local pour les migrations (drizzle-kit et les
    scripts SQL font du DDL).
 
-### Node 22 sur Vercel, volontairement
+### Pooler et pool de connexions (incident du 07/10/2026)
 
-`engines.node` est épinglé à `22.x` et Vercel le lit (il prime sur le réglage
-du projet). Sous Node 24 en prod, les pages à fort parallélisme SQL (fiche
-projet, dashboard) voyaient leurs requêtes rester « active, ClientRead » côté
-Postgres — les écritures du client n'arrivaient pas en entier — jusqu'au
-`statement_timeout`, et la page partait en 500. Même build en local sous 22 :
-rien. Avant de repasser en 24 : reproduire sur un déploiement de preview et
-surveiller `pg_stat_activity` (`scripts/kill-db-zombies.ts` libère les backends).
+En prod, les requêtes **mises en file** derrière le pool postgres-js saturé
+(10 connexions, pages à ~15 requêtes parallèles : fiche projet, dashboard)
+restaient bloquées côté Postgres en « active, ClientRead » jusqu'au
+`statement_timeout`, et la page partait en 500. Jamais reproduit en local sur
+le même build. Mesures en place : pool à 20 (`db/client.ts`), prefetch coupé
+(`components/link.tsx`), `statement_timeout` du rôle `postgres` à 30 s,
+`engines.node` épinglé à `22.x` pendant l'enquête (ce n'était pas la cause :
+le blocage persistait sous 22). Remède durable, à faire côté Vercel :
+`DATABASE_URL` de production sur le **pooler session** (même URL, port `5432`
+au lieu de `6543`), puis redéployer. `scripts/kill-db-zombies.ts` libère les
+backends bloqués si ça revient.
 
 ## Conventions
 
