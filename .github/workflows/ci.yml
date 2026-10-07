@@ -34,11 +34,11 @@ jobs:
         # Version résolue via `packageManager` dans package.json
         uses: pnpm/action-setup@v4
 
-      # 24 = version du projet Vercel ; `engines` reste à >=22 pour les postes locaux.
+      # 22 = version épinglée dans `engines` (Vercel la lit) : sous Node 24 les requêtes SQL restaient bloquées côté Postgres.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies

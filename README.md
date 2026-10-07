@@ -113,6 +113,16 @@ BYPASSRLS). Il est créé `NOLOGIN` : pour basculer la prod dessus,
 3. garder l'URL `postgres` en local pour les migrations (drizzle-kit et les
    scripts SQL font du DDL).
 
+### Node 22 sur Vercel, volontairement
+
+`engines.node` est épinglé à `22.x` et Vercel le lit (il prime sur le réglage
+du projet). Sous Node 24 en prod, les pages à fort parallélisme SQL (fiche
+projet, dashboard) voyaient leurs requêtes rester « active, ClientRead » côté
+Postgres — les écritures du client n'arrivaient pas en entier — jusqu'au
+`statement_timeout`, et la page partait en 500. Même build en local sous 22 :
+rien. Avant de repasser en 24 : reproduire sur un déploiement de preview et
+surveiller `pg_stat_activity` (`scripts/kill-db-zombies.ts` libère les backends).
+
 ## Conventions
 
 - Fichiers `kebab-case`, composants React `PascalCase`.
