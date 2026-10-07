@@ -31,7 +31,13 @@ function getPgClient(): PgClient {
   // pour postgres-js on s'appuie sur les patterns Promise.race si besoin).
   const client = postgres(url, {
     prepare: false,
-    max: 10,
+    // 20 et non 10 : en prod (pooler en mode transaction, port 6543), les
+    // requêtes mises en file derrière un pool saturé restaient bloquées côté
+    // Postgres en « active, ClientRead » ; les pages à ~15 requêtes parallèles
+    // (fiche projet, dashboard) ne rendaient plus. Avec 20, aucune page ne
+    // fait la queue. Le remède durable est le pooler session (port 5432),
+    // cf. README « Pooler ».
+    max: 20,
     // 20 s, et pas plus : on a essayé 120 s (le pool chaud économise ~200 ms
     // par navigation après une pause), et en prod les connexions gardées
     // ouvertes finissaient à moitié mortes côté Supavisor — requête « active »
