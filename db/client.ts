@@ -32,13 +32,13 @@ function getPgClient(): PgClient {
   const client = postgres(url, {
     prepare: false,
     max: 10,
-    // Un slot inactif reste ouvert 2 min (avant : 20 s). Sur Vercel l'instance
-    // survit entre deux requêtes, mais à 20 s le pool était presque toujours
-    // vide à la navigation suivante : chaque page repayait ~300 ms de
-    // handshake TLS + auth Supavisor, jusqu'à dix fois en parallèle pour le
-    // dashboard. Mesuré : vague de 12 requêtes à 300 ms pool froid, 70-120 ms
-    // pool chaud.
-    idle_timeout: 120,
+    // 20 s, et pas plus : on a essayé 120 s (le pool chaud économise ~200 ms
+    // par navigation après une pause), et en prod les connexions gardées
+    // ouvertes finissaient à moitié mortes côté Supavisor — requête « active »
+    // en attente du client pendant 40 s, puis `canceling statement due to
+    // statement timeout` et page en 500. Jeter les slots inactifs vite est ce
+    // qui évite de réutiliser une connexion que le pooler a déjà coupée.
+    idle_timeout: 20,
     connect_timeout: 10,
     // TCP keepalive : déclenche un probe après 15 s d'inactivité (default 60 s).
     // Quand Supavisor coupe sa connexion backend en cours de query (cf. erreur
