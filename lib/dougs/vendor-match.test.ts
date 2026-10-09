@@ -171,25 +171,58 @@ describe("rankMatchesForOperation — quand peut-on attacher sans demander", () 
     expect(ranked[0]?.confidence).toBe("certain");
   });
 
-  it("renvoie en validation deux top-ups en dollars à une semaine d'écart", () => {
-    // OpenRouter recharge 25,43 $ le 8 et le 16 : le change brouille le
-    // centime, la date ne tranche pas à huit jours. À l'humain.
+  it("départage deux top-ups en dollars à une semaine d'écart par la date du jour", () => {
+    // Cas réel : OpenRouter recharge 25,43 $ le 8 et le 16, Qonto débite
+    // le 16. Le change brouille le centime, mais la facture du jour même
+    // l'emporte sur celle d'il y a huit jours — c'est la recharge d'avant.
+    const topUp = (invoiceDate: string) =>
+      doc({ supplierKey: "openrouter", amountTtc: 25.43, currency: "USD", invoiceDate });
     const ranked = rankMatchesForOperation(
       op({ wording: "OPENROUTER, INC", amount: -22.07, date: "2026-09-16" }),
-      [
-        doc({
-          supplierKey: "openrouter",
-          amountTtc: 25.43,
-          currency: "USD",
-          invoiceDate: "2026-09-08",
-        }),
-        doc({
-          supplierKey: "openrouter",
-          amountTtc: 25.43,
-          currency: "USD",
-          invoiceDate: "2026-09-16",
-        }),
-      ],
+      [topUp("2026-09-08"), topUp("2026-09-16")],
+      read,
+    );
+    expect(ranked[0]?.document.invoiceDate).toBe("2026-09-16");
+    expect(ranked[0]?.confidence).toBe("certain");
+    expect(ranked[1]?.confidence).toBe("probable");
+  });
+
+  it("départage aussi quand la jumelle est la recharge suivante", () => {
+    // Débit du 28/09 : factures du 28/09 et du 05/10. La seconde est à
+    // sept jours, dans la fenêtre de paiement, mais la première est du jour.
+    const topUp = (invoiceDate: string) =>
+      doc({ supplierKey: "openrouter", amountTtc: 25.43, currency: "USD", invoiceDate });
+    const ranked = rankMatchesForOperation(
+      op({ wording: "OPENROUTER, INC", amount: -22.39, date: "2026-09-28" }),
+      [topUp("2026-10-05"), topUp("2026-09-28")],
+      read,
+    );
+    expect(ranked[0]?.document.invoiceDate).toBe("2026-09-28");
+    expect(ranked[0]?.confidence).toBe("certain");
+  });
+
+  it("ne départage pas deux jumelles à moins de cinq jours l'une de l'autre", () => {
+    // Facture du 15 et du 16 pour un débit du 16 : la première est à un
+    // jour, donc une alternative crédible. À l'humain.
+    const topUp = (invoiceDate: string) =>
+      doc({ supplierKey: "openrouter", amountTtc: 25.43, currency: "USD", invoiceDate });
+    const ranked = rankMatchesForOperation(
+      op({ wording: "OPENROUTER, INC", amount: -22.07, date: "2026-09-16" }),
+      [topUp("2026-09-15"), topUp("2026-09-16")],
+      read,
+    );
+    expect(ranked.every((r) => r.confidence === "probable")).toBe(true);
+  });
+
+  it("ne départage pas quand le meilleur candidat n'est pas du jour du débit", () => {
+    // Factures du 10 et du 20 pour un débit du 16 : la plus proche est à
+    // quatre jours, pas « du jour » — le prélèvement différé ne désigne
+    // pas une facture plutôt que l'autre.
+    const topUp = (invoiceDate: string) =>
+      doc({ supplierKey: "openrouter", amountTtc: 25.43, currency: "USD", invoiceDate });
+    const ranked = rankMatchesForOperation(
+      op({ wording: "OPENROUTER, INC", amount: -22.07, date: "2026-09-16" }),
+      [topUp("2026-09-10"), topUp("2026-09-20")],
       read,
     );
     expect(ranked.every((r) => r.confidence === "probable")).toBe(true);

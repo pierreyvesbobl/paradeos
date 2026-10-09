@@ -75,6 +75,19 @@ const CERTAIN_DATE_MIN = 0.5;
  */
 const TWIN_DATE_MIN = 0.5;
 
+/**
+ * Départage de deux jumelles par la proximité de date. Pour un paiement
+ * par carte (OpenRouter, ElevenLabs), le débit tombe le jour de la facture
+ * ou le lendemain : une facture datée du jour du débit est la bonne, et
+ * une jumelle à cinq jours ou plus n'est pas une alternative crédible —
+ * c'est la recharge précédente ou la suivante. En deçà, les deux restent
+ * plausibles et la file de validation tranche. Sans ce départage, quatre
+ * recharges à une semaine d'écart se bloquent mutuellement : chacune a une
+ * voisine dans la fenêtre, aucune ne devient certaine.
+ */
+const TIE_BREAK_BEST_MAX_DAYS = 1;
+const TIE_BREAK_TWIN_MIN_DAYS = 5;
+
 // ---------------------------------------------------------------------
 // Libellés bancaires
 // ---------------------------------------------------------------------
@@ -186,6 +199,11 @@ export type VendorMatchScore = {
   amount: number;
   supplier: number;
   date: number;
+  /**
+   * Jours entre la facture et le débit, signé : positif quand la facture
+   * précède le paiement. `null` sans date d'un côté ou de l'autre.
+   */
+  dateDeltaDays: number | null;
   /** Les deux montants coïncident au centime — le signal le plus fort. */
   amountExact: boolean;
   /**
@@ -217,14 +235,19 @@ export function similarityInvoiceToPaymentDate(
   invoiceDate: string | null,
   operationDate: string | null,
 ): number {
-  const invoice = parseDay(invoiceDate);
-  const operation = parseDay(operationDate);
-  if (invoice === null || operation === null) return 0;
-
-  const delta = operation - invoice;
+  const delta = daysInvoiceToPayment(invoiceDate, operationDate);
+  if (delta === null) return 0;
   if (delta >= -7 && delta <= 10) return 1;
   if (delta > 10) return delta >= 28 ? 0 : 1 - (delta - 10) / 18;
   return delta <= -14 ? 0 : 1 - (-delta - 7) / 7;
+}
+
+/** Jours entre la facture et le débit, positif quand la facture précède. */
+function daysInvoiceToPayment(invoiceDate: string | null, operationDate: string | null) {
+  const invoice = parseDay(invoiceDate);
+  const operation = parseDay(operationDate);
+  if (invoice === null || operation === null) return null;
+  return operation - invoice;
 }
 
 /**
@@ -276,6 +299,7 @@ export function scoreOperationDocument(op: OperationSide, doc: DocumentSide): Ve
 
   const { amount, amountExact, amountFx } = compareAmounts(opAmount, docAmount, doc.currency);
   const date = similarityInvoiceToPaymentDate(doc.invoiceDate, op.date);
+  const dateDeltaDays = daysInvoiceToPayment(doc.invoiceDate, op.date);
 
   const opKey = wordingToSupplierKey(op.wording);
   const supplier = opKey && doc.supplierKey ? similarityName(opKey, doc.supplierKey) : 0;
@@ -288,6 +312,7 @@ export function scoreOperationDocument(op: OperationSide, doc: DocumentSide): Ve
       amount: round(amount),
       supplier: round(supplier),
       date: round(date),
+      dateDeltaDays,
       amountExact,
       amountFx,
       rejectedOnSupplier: true,
@@ -300,6 +325,7 @@ export function scoreOperationDocument(op: OperationSide, doc: DocumentSide): Ve
     amount: round(amount),
     supplier: round(supplier),
     date: round(date),
+    dateDeltaDays,
     amountExact,
     amountFx,
   };
@@ -308,6 +334,21 @@ export function scoreOperationDocument(op: OperationSide, doc: DocumentSide): Ve
 /** Le montant désigne la même dépense : au centime, ou dans la bande de change. */
 function amountMatches(score: VendorMatchScore): boolean {
   return score.amountExact || score.amountFx;
+}
+
+/** Écart de date absolu, infini sans date : trié en dernier, jamais « du jour ». */
+function dateDistance(score: VendorMatchScore): number {
+  return score.dateDeltaDays === null ? Number.POSITIVE_INFINITY : Math.abs(score.dateDeltaDays);
+}
+
+/**
+ * La jumelle est-elle nettement plus loin du débit que le meilleur
+ * candidat ? Alors elle ne bloque pas : voir `TIE_BREAK_*`.
+ */
+function outdistanced(best: VendorMatchScore, twin: VendorMatchScore): boolean {
+  return (
+    dateDistance(best) <= TIE_BREAK_BEST_MAX_DAYS && dateDistance(twin) >= TIE_BREAK_TWIN_MIN_DAYS
+  );
 }
 
 // ---------------------------------------------------------------------
@@ -334,6 +375,10 @@ export type RankedMatch<T> = {
  * se neutralisent et repartent en validation ; la facture du mois
  * précédent, elle, ne compte pas. Un candidat à un autre montant n'est
  * jamais une alternative : le montant est le signal le plus fiable.
+ *
+ * Entre deux jumelles, la date départage quand elle est nette : une
+ * facture datée du jour du débit l'emporte sur une jumelle à cinq jours
+ * ou plus. À score égal, le classement met d'abord la plus proche du débit.
  */
 export function rankMatchesForOperation<T>(
   op: OperationSide,
@@ -344,13 +389,18 @@ export function rankMatchesForOperation<T>(
   const scored = documents
     .map((document) => ({ document, score: scoreOperationDocument(op, read(document)) }))
     .filter((c) => c.score.total >= PROBABLE_THRESHOLD)
-    .sort((a, b) => b.score.total - a.score.total);
+    .sort((a, b) => b.score.total - a.score.total || dateDistance(a.score) - dateDistance(b.score));
 
   const best = scored[0];
   if (!best) return [];
   const hasTwin = scored
     .slice(1)
-    .some((c) => amountMatches(c.score) && c.score.date >= TWIN_DATE_MIN);
+    .some(
+      (c) =>
+        amountMatches(c.score) &&
+        c.score.date >= TWIN_DATE_MIN &&
+        !outdistanced(best.score, c.score),
+    );
 
   const certain =
     amountMatches(best.score) &&
