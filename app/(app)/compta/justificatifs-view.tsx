@@ -7,7 +7,12 @@ import {
   Question,
 } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
-import { DetachAction, MatchActions, RunMatchingButton } from "@/components/compta/match-actions";
+import {
+  AutoAttachToggle,
+  DetachAction,
+  MatchActions,
+  RunMatchingButton,
+} from "@/components/compta/match-actions";
 import { EmptyState } from "@/components/empty-state";
 import Link from "@/components/link";
 import {
@@ -20,6 +25,7 @@ import { db } from "@/lib/db/server";
 import { DemoBlur } from "@/lib/demo/components";
 import { isDemoMode } from "@/lib/demo/server";
 import { buildDougsOperationsUrl, getDougsCompanyId } from "@/lib/dougs/client";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
 /**
  * Les justificatifs manquants côté Dougs, et ce que le Drive propose
@@ -38,7 +44,7 @@ export async function JustificatifsView() {
   const demo = await isDemoMode();
   const conn = await db();
 
-  const [operations, matches, companyId] = await Promise.all([
+  const [operations, matches, companyId, autoAttachSetting] = await Promise.all([
     conn
       .select()
       .from(dougsOperations)
@@ -69,12 +75,14 @@ export async function JustificatifsView() {
       )
       .orderBy(desc(dougsOperationMatches.score), asc(purchaseDocuments.invoiceDate)),
     getDougsCompanyId(user.id).catch(() => null),
+    getSetting(SETTING_KEYS.PURCHASE_AUTO_ATTACH_ENABLED),
   ]);
+  const autoAttach = autoAttachSetting === "true";
 
   if (operations.length === 0) {
     return (
       <div className="space-y-4">
-        <Toolbar />
+        <Toolbar autoAttach={autoAttach} />
         <EmptyState
           icon={Question}
           title="Aucune opération connue"
@@ -100,7 +108,10 @@ export async function JustificatifsView() {
 
   return (
     <div className="space-y-6">
-      <Toolbar dougsUrl={companyId ? buildDougsOperationsUrl(companyId) : null} />
+      <Toolbar
+        dougsUrl={companyId ? buildDougsOperationsUrl(companyId) : null}
+        autoAttach={autoAttach}
+      />
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Kpi
@@ -200,14 +211,19 @@ export async function JustificatifsView() {
   );
 }
 
-function Toolbar({ dougsUrl }: { dougsUrl?: string | null }) {
+function Toolbar({ dougsUrl, autoAttach }: { dougsUrl?: string | null; autoAttach: boolean }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-muted-foreground text-sm">
         Opérations Dougs à valider sans justificatif, et les factures du Drive qui leur
-        correspondent. Attacher une pièce ne valide jamais l'opération.
+        correspondent.{" "}
+        {autoAttach
+          ? "Les rapprochements certains sont attachés tout seuls, les probables attendent ton choix."
+          : "Rien ne part chez Dougs sans un clic sur « Attacher »."}{" "}
+        Attacher une pièce ne valide jamais l'opération.
       </p>
       <div className="flex flex-none items-center gap-2">
+        <AutoAttachToggle enabled={autoAttach} />
         {dougsUrl ? (
           <Link
             href={dougsUrl}

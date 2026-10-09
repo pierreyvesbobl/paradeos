@@ -19,7 +19,7 @@ import {
 import { getValidAccessToken } from "@/lib/google/account";
 import { backfillPurchaseAmounts } from "@/lib/purchase/extract-amounts";
 import { syncPurchaseInventory } from "@/lib/purchase/inventory";
-import { SETTING_KEYS, setSetting } from "@/lib/settings";
+import { getSetting, SETTING_KEYS, setSetting } from "@/lib/settings";
 import { action } from "./action";
 
 /**
@@ -147,9 +147,10 @@ export const restoreMatch = action(
  * bouton sert à voir tout de suite l'effet d'une facture qui vient
  * d'arriver, ou d'une session Dougs qu'on vient de rafraîchir.
  *
- * N'attache jamais automatiquement, même si le réglage global est
- * ouvert : une relance manuelle doit rendre la main sur des propositions,
- * pas poser des pièces dans le dos de celui qui a cliqué.
+ * Attache les rapprochements certains si, et seulement si, l'attachement
+ * automatique est ouvert : celui qui a cliqué a choisi ce régime, et
+ * attendre le cron du lendemain n'apporterait qu'un délai. Réglage fermé,
+ * la relance rend la main sur des propositions, rien de plus.
  */
 export const runPurchaseMatchingNow = action(
   z.object({ withBackfill: z.boolean().optional() }),
@@ -162,7 +163,8 @@ export const runPurchaseMatchingNow = action(
 
     try {
       const operations = await syncDougsOperations(user.id);
-      const reconciled = await reconcilePurchaseInvoices(user.id, { autoAttach: false });
+      const autoAttach = (await getSetting(SETTING_KEYS.PURCHASE_AUTO_ATTACH_ENABLED)) === "true";
+      const reconciled = await reconcilePurchaseInvoices(user.id, { autoAttach });
       revalidatePath("/compta");
       return {
         ok: true as const,
@@ -171,6 +173,9 @@ export const runPurchaseMatchingNow = action(
         operations: operations.fetched,
         suggestions: reconciled.suggestionsWritten,
         withoutCandidate: reconciled.withoutCandidate,
+        autoAttached: reconciled.autoAttached,
+        attachFailed: reconciled.attachFailed,
+        errors: reconciled.errors,
       };
     } catch (err) {
       revalidatePath("/compta");

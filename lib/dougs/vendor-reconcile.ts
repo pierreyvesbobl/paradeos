@@ -211,11 +211,21 @@ export async function reconcilePurchaseInvoices(
         return result;
       }
       result.attachFailed += 1;
+      const message = err instanceof Error ? err.message : String(err);
       result.errors.push(
-        `${best.document.driveFileName} → opération ${operation.dougsOperationId} : ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `${best.document.driveFileName} → opération ${operation.dougsOperationId} : ${message}`,
       );
+      // L'échec se lit sur la ligne, comme pour un attachement manuel ;
+      // la proposition reste dans la file et sera retentée au prochain run.
+      await conn
+        .update(dougsOperationMatches)
+        .set({ status: "failed", errorMessage: message.slice(0, 500) })
+        .where(
+          and(
+            eq(dougsOperationMatches.operationId, operation.id),
+            eq(dougsOperationMatches.documentId, best.document.id),
+          ),
+        );
     }
   }
 

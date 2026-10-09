@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowClockwise, LinkBreak, Paperclip, X } from "@phosphor-icons/react";
+import { ArrowClockwise, Lightning, LinkBreak, Paperclip, X } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import {
   rejectMatch,
   restoreMatch,
   runPurchaseMatchingNow,
+  setPurchaseAutoAttach,
 } from "@/lib/actions/purchase-matching";
 
 const BUTTON =
@@ -157,10 +158,18 @@ export function RunMatchingButton() {
             toast.error(res.data.message);
             return;
           }
-          const { operations, suggestions, withoutCandidate } = res.data;
-          toast.success(
-            `${operations} opération(s) relues, ${suggestions} proposition(s), ${withoutCandidate} sans candidat.`,
-          );
+          const { operations, suggestions, withoutCandidate, autoAttached, attachFailed } =
+            res.data;
+          const parts = [
+            `${operations} opération(s) relues`,
+            `${suggestions} proposition(s)`,
+            `${withoutCandidate} sans candidat`,
+          ];
+          if (autoAttached > 0) parts.push(`${autoAttached} pièce(s) attachée(s) chez Dougs`);
+          toast.success(`${parts.join(", ")}.`);
+          if (attachFailed > 0) {
+            toast.error(`${attachFailed} attachement(s) en échec — détail sur la ligne.`);
+          }
           router.refresh();
         })
       }
@@ -168,6 +177,54 @@ export function RunMatchingButton() {
     >
       <ArrowClockwise size={13} weight="bold" className={pending ? "animate-spin" : undefined} />
       {pending ? "Rapprochement…" : "Lancer le rapprochement"}
+    </button>
+  );
+}
+
+/**
+ * Ouvre ou ferme l'attachement automatique : les rapprochements certains
+ * partent chez Dougs sans geste humain, au cron du matin comme au bouton
+ * « Lancer le rapprochement ». Les probables restent à trancher ici, et
+ * aucune opération n'est jamais validée.
+ */
+export function AutoAttachToggle({ enabled }: { enabled: boolean }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      disabled={pending}
+      onClick={() =>
+        startTransition(async () => {
+          const res = await setPurchaseAutoAttach({ enabled: !enabled });
+          if (!res.ok) {
+            toast.error(res.message);
+            return;
+          }
+          toast.success(
+            enabled
+              ? "Attachement automatique fermé : tout repasse en proposition."
+              : "Attachement automatique ouvert : les rapprochements certains partent chez Dougs.",
+          );
+          router.refresh();
+        })
+      }
+      title={
+        enabled
+          ? "Les rapprochements certains sont attachés chez Dougs sans confirmation"
+          : "Les rapprochements certains attendent un clic sur « Attacher »"
+      }
+      className={`${BUTTON} ${
+        enabled
+          ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+          : "hover:bg-muted/40"
+      }`}
+    >
+      <Lightning size={13} weight={enabled ? "fill" : "bold"} />
+      {enabled ? "Attachement auto : ouvert" : "Attachement auto : fermé"}
     </button>
   );
 }
