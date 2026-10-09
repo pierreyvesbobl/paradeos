@@ -50,6 +50,7 @@ type DocumentRow = {
   amountTtc: string | null;
   invoiceDate: string | null;
   supplierKey: string | null;
+  currency: string | null;
 };
 
 function documentSideOf(doc: DocumentRow): DocumentSide {
@@ -57,6 +58,7 @@ function documentSideOf(doc: DocumentRow): DocumentSide {
     amountTtc: doc.amountTtc === null ? null : Number(doc.amountTtc),
     invoiceDate: doc.invoiceDate,
     supplierKey: doc.supplierKey,
+    currency: doc.currency,
   };
 }
 
@@ -101,6 +103,7 @@ export async function reconcilePurchaseInvoices(
       amountTtc: purchaseDocuments.amountTtc,
       invoiceDate: purchaseDocuments.invoiceDate,
       supplierKey: purchaseDocuments.supplierKey,
+      currency: purchaseDocuments.currency,
     })
     .from(purchaseDocuments)
     .where(isNotNull(purchaseDocuments.amountTtc));
@@ -121,6 +124,12 @@ export async function reconcilePurchaseInvoices(
   const attachedDocuments = new Set(
     decided.filter((d) => d.status === "attached").map((d) => d.documentId),
   );
+  // Une pièce déjà posée sur une opération sort du jeu : elle ne doit ni
+  // revenir en suggestion ailleurs, ni faire « jumelle » à la facture
+  // suivante du même abonnement — deux top-ups OpenRouter à une semaine
+  // d'écart se débloquent l'un après l'autre. Le rattachement multiple
+  // (loyer trimestriel) reste un geste manuel.
+  const candidates = documents.filter((d) => !attachedDocuments.has(d.id));
 
   const accessToken = autoAttach ? await getValidAccessToken(userId) : null;
   if (autoAttach && !accessToken) {
@@ -134,7 +143,7 @@ export async function reconcilePurchaseInvoices(
         date: operation.operationDate,
         wording: operation.wording,
       },
-      documents,
+      candidates,
       documentSideOf,
       { limit: CANDIDATES_PER_OPERATION },
     );

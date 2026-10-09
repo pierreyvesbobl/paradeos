@@ -20,6 +20,28 @@ const WEIGHT_DATE = 0.15;
 const AMOUNT_EXACT_EPSILON = 0.01;
 
 /**
+ * Valeur approximative d'une unité de devise en euros. Pas un taux de
+ * conversion : une bande de plausibilité. Une facture en dollars n'est
+ * jamais débitée au centime — la banque convertit au cours du jour — mais
+ * le débit tombe toujours à quelques pour cent de la facture convertie.
+ * Les abonnements de Parade en dollars (OpenRouter, ElevenLabs, Supabase,
+ * X) sont ainsi reconnus par le montant comme ceux en euros.
+ */
+const FX_REFERENCE_TO_EUR: Record<string, number> = {
+  USD: 0.88,
+  GBP: 1.16,
+  CHF: 1.06,
+};
+
+/**
+ * Écart relatif toléré autour de la référence. Observé sur les débits
+ * Qonto d'un mois : 0,86 à 0,90 € pour 1 $. Assez large pour encaisser
+ * la dérive du cours sur un an ou deux, assez étroit pour qu'un montant
+ * voisin à 15 % ne passe pas pour le même.
+ */
+const FX_TOLERANCE = 0.08;
+
+/**
  * Plancher de similarité fournisseur, même rôle que `NAME_MATCH_FLOOR`
  * côté ventes : sans lui, un montant parfait suffirait à rapprocher
  * n'importe quel abonnement de n'importe quel autre au même prix. Or le
@@ -152,6 +174,8 @@ export type DocumentSide = {
   /** Date d'émission de la facture, `YYYY-MM-DD`. */
   invoiceDate: string | null;
   supplierKey: string | null;
+  /** Devise ISO 4217 de la facture. `null` ou `EUR` : comparaison au centime. */
+  currency?: string | null;
 };
 
 export type VendorMatchScore = {
@@ -161,6 +185,11 @@ export type VendorMatchScore = {
   date: number;
   /** Les deux montants coïncident au centime — le signal le plus fort. */
   amountExact: boolean;
+  /**
+   * Facture en devise : le débit en euros tombe dans la bande de change
+   * de la facture convertie. Vaut un montant exact pour le verdict.
+   */
+  amountFx: boolean;
   /** Score écrasé par le plancher fournisseur ; sous-scores gardés pour le debug. */
   rejectedOnSupplier?: boolean;
 };
@@ -195,17 +224,54 @@ export function similarityInvoiceToPaymentDate(
   return delta <= -14 ? 0 : 1 - (-delta - 7) / 7;
 }
 
+/**
+ * Compare le débit (en euros) au total de la facture, dans sa devise.
+ *   - facture en euros : exact au centime, ou similarité dégressive ;
+ *   - facture en devise connue : plausible si le débit est à quelques
+ *     pour cent de la facture convertie à la référence ;
+ *   - devise inconnue : similarité brute, sans prétendre à l'exactitude.
+ */
+function compareAmounts(
+  opAmount: number | null,
+  docAmount: number | null,
+  currency: string | null | undefined,
+): { amount: number; amountExact: boolean; amountFx: boolean } {
+  if (opAmount === null || docAmount === null || opAmount <= 0 || docAmount <= 0) {
+    return { amount: 0, amountExact: false, amountFx: false };
+  }
+
+  const code = currency?.trim().toUpperCase() || "EUR";
+  if (code === "EUR") {
+    const amountExact = Math.abs(opAmount - docAmount) <= AMOUNT_EXACT_EPSILON;
+    return {
+      amount: amountExact ? 1 : similarityAmount(opAmount, docAmount),
+      amountExact,
+      amountFx: false,
+    };
+  }
+
+  const reference = FX_REFERENCE_TO_EUR[code];
+  if (reference === undefined) {
+    return { amount: similarityAmount(opAmount, docAmount), amountExact: false, amountFx: false };
+  }
+
+  const converted = docAmount * reference;
+  const deviation = Math.abs(opAmount / converted - 1);
+  const amountFx = deviation <= FX_TOLERANCE;
+  // Légèrement sous 1 : à montant égal, une facture en euros au centime
+  // passe devant une facture en devise « à peu près ».
+  return {
+    amount: amountFx ? 1 - deviation : similarityAmount(opAmount, converted),
+    amountExact: false,
+    amountFx,
+  };
+}
+
 export function scoreOperationDocument(op: OperationSide, doc: DocumentSide): VendorMatchScore {
   const opAmount = typeof op.amount === "number" ? Math.abs(op.amount) : null;
   const docAmount = typeof doc.amountTtc === "number" ? doc.amountTtc : null;
 
-  const amountExact =
-    opAmount !== null &&
-    docAmount !== null &&
-    opAmount > 0 &&
-    Math.abs(opAmount - docAmount) <= AMOUNT_EXACT_EPSILON;
-
-  const amount = amountExact ? 1 : similarityAmount(opAmount ?? 0, docAmount ?? 0);
+  const { amount, amountExact, amountFx } = compareAmounts(opAmount, docAmount, doc.currency);
   const date = similarityInvoiceToPaymentDate(doc.invoiceDate, op.date);
 
   const opKey = wordingToSupplierKey(op.wording);
@@ -220,6 +286,7 @@ export function scoreOperationDocument(op: OperationSide, doc: DocumentSide): Ve
       supplier: round(supplier),
       date: round(date),
       amountExact,
+      amountFx,
       rejectedOnSupplier: true,
     };
   }
@@ -231,7 +298,13 @@ export function scoreOperationDocument(op: OperationSide, doc: DocumentSide): Ve
     supplier: round(supplier),
     date: round(date),
     amountExact,
+    amountFx,
   };
+}
+
+/** Le montant désigne la même dépense : au centime, ou dans la bande de change. */
+function amountMatches(score: VendorMatchScore): boolean {
+  return score.amountExact || score.amountFx;
 }
 
 // ---------------------------------------------------------------------
@@ -251,7 +324,8 @@ export type RankedMatch<T> = {
  * sont attachables sans demander.
  *
  * Un seul candidat peut être `certain`, et seulement si tout concorde :
- * montant au centime, fournisseur reconnu, date à quelques jours, **et**
+ * montant au centime (ou dans la bande de change pour une facture en
+ * devise), fournisseur reconnu, date à quelques jours, **et**
  * aucune jumelle — un autre document au même montant, lui aussi dans la
  * fenêtre de paiement. Deux factures ElevenLabs à 5 $ dans le même mois
  * se neutralisent et repartent en validation ; la facture du mois
@@ -271,10 +345,12 @@ export function rankMatchesForOperation<T>(
 
   const best = scored[0];
   if (!best) return [];
-  const hasTwin = scored.slice(1).some((c) => c.score.amountExact && c.score.date >= TWIN_DATE_MIN);
+  const hasTwin = scored
+    .slice(1)
+    .some((c) => amountMatches(c.score) && c.score.date >= TWIN_DATE_MIN);
 
   const certain =
-    best.score.amountExact &&
+    amountMatches(best.score) &&
     best.score.supplier >= CERTAIN_SUPPLIER_MIN &&
     best.score.date >= CERTAIN_DATE_MIN &&
     !hasTwin;

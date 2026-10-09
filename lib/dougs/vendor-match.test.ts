@@ -102,8 +102,110 @@ describe("scoreOperationDocument", () => {
   });
 });
 
+describe("scoreOperationDocument — factures en devise", () => {
+  it("reconnaît un débit en euros d'une facture en dollars dans la bande de change", () => {
+    // Cas réel : OpenRouter facture 25,43 $, Qonto débite 22,39 €.
+    const score = scoreOperationDocument(
+      op({ wording: "OPENROUTER, INC", amount: -22.39 }),
+      doc({ supplierKey: "openrouter", amountTtc: 25.43, currency: "USD" }),
+    );
+    expect(score.amountExact).toBe(false);
+    expect(score.amountFx).toBe(true);
+    expect(score.amount).toBeGreaterThan(0.95);
+  });
+
+  it("refuse un montant en dollars trop éloigné du débit", () => {
+    // 25,43 $ ne font pas 18 € : autre facture, autre top-up.
+    const score = scoreOperationDocument(
+      op({ wording: "OPENROUTER, INC", amount: -18 }),
+      doc({ supplierKey: "openrouter", amountTtc: 25.43, currency: "USD" }),
+    );
+    expect(score.amountFx).toBe(false);
+    expect(score.amount).toBeLessThan(0.7);
+  });
+
+  it("ne tient pas 25,43 $ pour 25,43 € au centime", () => {
+    const score = scoreOperationDocument(
+      op({ wording: "OPENROUTER, INC", amount: -25.43 }),
+      doc({ supplierKey: "openrouter", amountTtc: 25.43, currency: "USD" }),
+    );
+    expect(score.amountExact).toBe(false);
+    expect(score.amountFx).toBe(false);
+  });
+
+  it("traite une devise absente comme des euros", () => {
+    const score = scoreOperationDocument(op(), doc({ currency: null }));
+    expect(score.amountExact).toBe(true);
+  });
+
+  it("ne devine rien pour une devise inconnue", () => {
+    const score = scoreOperationDocument(op(), doc({ currency: "JPY" }));
+    expect(score.amountExact).toBe(false);
+    expect(score.amountFx).toBe(false);
+  });
+});
+
 describe("rankMatchesForOperation — quand peut-on attacher sans demander", () => {
   const read = (d: DocumentSide) => d;
+
+  it("attache tout seul une facture en dollars quand le change et la date concordent", () => {
+    const ranked = rankMatchesForOperation(
+      op({ wording: "ELEVENLABS.IO", amount: -19.71, date: "2026-10-07" }),
+      [
+        doc({
+          supplierKey: "elevenlabs",
+          amountTtc: 22,
+          currency: "USD",
+          invoiceDate: "2026-08-02",
+        }),
+        doc({
+          supplierKey: "elevenlabs",
+          amountTtc: 22,
+          currency: "USD",
+          invoiceDate: "2026-10-06",
+        }),
+      ],
+      read,
+    );
+    expect(ranked[0]?.document.invoiceDate).toBe("2026-10-06");
+    expect(ranked[0]?.confidence).toBe("certain");
+  });
+
+  it("renvoie en validation deux top-ups en dollars à une semaine d'écart", () => {
+    // OpenRouter recharge 25,43 $ le 8 et le 16 : le change brouille le
+    // centime, la date ne tranche pas à huit jours. À l'humain.
+    const ranked = rankMatchesForOperation(
+      op({ wording: "OPENROUTER, INC", amount: -22.07, date: "2026-09-16" }),
+      [
+        doc({
+          supplierKey: "openrouter",
+          amountTtc: 25.43,
+          currency: "USD",
+          invoiceDate: "2026-09-08",
+        }),
+        doc({
+          supplierKey: "openrouter",
+          amountTtc: 25.43,
+          currency: "USD",
+          invoiceDate: "2026-09-16",
+        }),
+      ],
+      read,
+    );
+    expect(ranked.every((r) => r.confidence === "probable")).toBe(true);
+  });
+
+  it("préfère la facture en euros au centime à une facture en devise approchante", () => {
+    const ranked = rankMatchesForOperation(
+      op({ wording: "PRLV SEPA OVH", amount: -12, date: "2026-03-10" }),
+      [
+        doc({ amountTtc: 13.5, currency: "USD", invoiceDate: "2026-03-08" }),
+        doc({ amountTtc: 12, currency: "EUR", invoiceDate: "2026-03-08" }),
+      ],
+      read,
+    );
+    expect(ranked[0]?.document.currency).toBe("EUR");
+  });
 
   it("attache tout seul quand un seul document concorde", () => {
     const ranked = rankMatchesForOperation(op(), [doc()], read);
