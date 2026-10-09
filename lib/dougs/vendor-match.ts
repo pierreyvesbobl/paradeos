@@ -56,11 +56,14 @@ export const PROBABLE_THRESHOLD = 0.45;
 const CERTAIN_SUPPLIER_MIN = 0.6;
 
 /**
- * Proximité de date minimale pour attacher sans demander : la facture et
- * le débit sont à quelques jours l'un de l'autre (cf. la fenêtre de
- * `similarityInvoiceToPaymentDate`).
+ * Proximité de date minimale pour attacher sans demander : la facture est
+ * dans la fenêtre de paiement de `similarityInvoiceToPaymentDate`, jusqu'à
+ * une vingtaine de jours avant le débit. Même seuil que la jumelle, et ce
+ * n'est pas un hasard : un candidat dans la fenêtre est soit le seul,
+ * donc attaché, soit accompagné d'une jumelle, donc renvoyé à l'humain.
+ * La facture du mois précédent, à trente jours, est hors fenêtre.
  */
-const CERTAIN_DATE_MIN = 0.9;
+const CERTAIN_DATE_MIN = 0.5;
 
 /**
  * Un second candidat ne bloque l'attachement que s'il est une vraie

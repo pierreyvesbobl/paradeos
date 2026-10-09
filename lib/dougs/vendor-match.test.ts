@@ -282,6 +282,21 @@ describe("rankMatchesForOperation — quand peut-on attacher sans demander", () 
     expect(local[0]?.confidence).toBe("certain");
   });
 
+  it("attache tout seul une facture réglée à quinze jours quand elle est seule dans la fenêtre", () => {
+    // Fournisseur à 15 jours : la facture du mois précédent est à 45 jours,
+    // hors fenêtre, donc pas une jumelle.
+    const ranked = rankMatchesForOperation(
+      op({ wording: "PRLV SEPA OVH", amount: -17.99, date: "2026-10-02" }),
+      [
+        doc({ amountTtc: 17.99, invoiceDate: "2026-08-18" }),
+        doc({ amountTtc: 17.99, invoiceDate: "2026-09-17" }),
+      ],
+      read,
+    );
+    expect(ranked[0]?.document.invoiceDate).toBe("2026-09-17");
+    expect(ranked[0]?.confidence).toBe("certain");
+  });
+
   it("n'attache pas tout seul un loyer trimestriel sur un prélèvement mensuel", () => {
     // Une facture de loyer de 3 600 € couvre trois débits de 1 200 €.
     // Les montants ne coïncident pas : à l'humain de rattacher.
