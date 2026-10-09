@@ -37,21 +37,24 @@ describe("wordingToSupplierKey — décrasser un libellé bancaire", () => {
   );
 });
 
-describe("similarityInvoiceToPaymentDate — la facture précède le paiement", () => {
-  it("donne le plein score sur la fenêtre normale de prélèvement", () => {
+describe("similarityInvoiceToPaymentDate — quelques jours autour du débit", () => {
+  it("donne le plein score à quelques jours de part et d'autre", () => {
     expect(similarityInvoiceToPaymentDate("2026-03-01", "2026-03-01")).toBe(1);
-    expect(similarityInvoiceToPaymentDate("2026-03-01", "2026-03-31")).toBe(1);
-    expect(similarityInvoiceToPaymentDate("2026-03-01", "2026-04-15")).toBe(1);
+    expect(similarityInvoiceToPaymentDate("2026-03-01", "2026-03-11")).toBe(1);
+    // Quittance d'assurance datée une semaine après le prélèvement.
+    expect(similarityInvoiceToPaymentDate("2026-10-09", "2026-10-02")).toBe(1);
   });
 
-  it("décroît quand le paiement s'éloigne, et s'annule à 120 jours", () => {
-    const at60 = similarityInvoiceToPaymentDate("2026-01-01", "2026-03-02");
-    expect(at60).toBeGreaterThan(0);
-    expect(at60).toBeLessThan(1);
+  it("décroît quand le paiement s'éloigne, et s'annule avant un mois", () => {
+    const at20 = similarityInvoiceToPaymentDate("2026-03-01", "2026-03-21");
+    expect(at20).toBeGreaterThan(0);
+    expect(at20).toBeLessThan(1);
+    // La facture du mois précédent d'un abonnement mensuel ne compte plus.
+    expect(similarityInvoiceToPaymentDate("2026-03-01", "2026-03-31")).toBe(0);
     expect(similarityInvoiceToPaymentDate("2026-01-01", "2026-06-01")).toBe(0);
   });
 
-  it("est sévère quand la facture est postérieure au débit", () => {
+  it("est sévère quand la facture est bien postérieure au débit", () => {
     // Facture datée 20 jours APRÈS le paiement : ce n'est pas la bonne.
     expect(similarityInvoiceToPaymentDate("2026-03-20", "2026-02-28")).toBe(0);
   });
@@ -121,6 +124,60 @@ describe("rankMatchesForOperation — quand peut-on attacher sans demander", () 
     );
     expect(ranked).toHaveLength(2);
     expect(ranked.every((r) => r.confidence === "probable")).toBe(true);
+  });
+
+  it("départage un abonnement mensuel par la date : la facture du mois courant l'emporte", () => {
+    // Cas réel : OpenRouter, Supabase, Stello… même montant chaque mois.
+    // Le montant ne distingue pas les mois, la proximité de date si.
+    const ranked = rankMatchesForOperation(
+      op({ wording: "OPENROUTER, INC", amount: -22.07, date: "2026-09-16" }),
+      [
+        doc({ supplierKey: "openrouter", amountTtc: 22.07, invoiceDate: "2026-07-07" }),
+        doc({ supplierKey: "openrouter", amountTtc: 22.07, invoiceDate: "2026-08-16" }),
+        doc({ supplierKey: "openrouter", amountTtc: 22.07, invoiceDate: "2026-09-16" }),
+      ],
+      read,
+    );
+    expect(ranked[0]?.document.invoiceDate).toBe("2026-09-16");
+    expect(ranked[0]?.confidence).toBe("certain");
+    expect(ranked.slice(1).every((r) => r.confidence === "probable")).toBe(true);
+  });
+
+  it("attache une quittance datée quelques jours après le prélèvement", () => {
+    const ranked = rankMatchesForOperation(
+      op({ wording: "EASYBEE SAS - STELLO Assurances", amount: -17.9, date: "2026-10-02" }),
+      [
+        doc({ supplierKey: "stello", amountTtc: 17.9, invoiceDate: "2026-09-09" }),
+        doc({ supplierKey: "stello", amountTtc: 17.9, invoiceDate: "2026-10-09" }),
+      ],
+      read,
+    );
+    expect(ranked[0]?.document.invoiceDate).toBe("2026-10-09");
+    expect(ranked[0]?.confidence).toBe("certain");
+  });
+
+  it("sépare deux contrats du même assureur prélevés le même jour par le montant", () => {
+    // Stello : RC Pro à 17,90 € et assurance du local à 40,26 €, même
+    // libellé bancaire, même date. Un candidat à un autre montant n'est
+    // pas une alternative — chaque débit trouve sa quittance.
+    const docs = [
+      doc({ supplierKey: "stello", amountTtc: 17.9, invoiceDate: "2026-10-09" }),
+      doc({ supplierKey: "stello", amountTtc: 40.26, invoiceDate: "2026-10-09" }),
+    ];
+    const rcPro = rankMatchesForOperation(
+      op({ wording: "EASYBEE SAS - STELLO Assurances", amount: -17.9, date: "2026-10-02" }),
+      docs,
+      read,
+    );
+    const local = rankMatchesForOperation(
+      op({ wording: "EASYBEE SAS - STELLO Assurances", amount: -40.26, date: "2026-10-02" }),
+      docs,
+      read,
+    );
+    expect(rcPro[0]?.document.amountTtc).toBe(17.9);
+    expect(rcPro[0]?.confidence).toBe("certain");
+    expect(local[0]?.document.amountTtc).toBe(40.26);
+    expect(local[0]?.confidence).toBe("certain");
   });
 
   it("n'attache pas tout seul un loyer trimestriel sur un prélèvement mensuel", () => {

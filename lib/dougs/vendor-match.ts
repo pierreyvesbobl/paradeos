@@ -34,11 +34,21 @@ export const PROBABLE_THRESHOLD = 0.45;
 const CERTAIN_SUPPLIER_MIN = 0.6;
 
 /**
- * Écart minimal entre le meilleur candidat et le suivant pour attacher
- * sans demander. Deux factures ElevenLabs à 5 $ le même mois doivent
- * atterrir dans la file de validation, jamais sur une opération au hasard.
+ * Proximité de date minimale pour attacher sans demander : la facture et
+ * le débit sont à quelques jours l'un de l'autre (cf. la fenêtre de
+ * `similarityInvoiceToPaymentDate`).
  */
-const CERTAIN_LEAD_MIN = 0.15;
+const CERTAIN_DATE_MIN = 0.9;
+
+/**
+ * Un second candidat ne bloque l'attachement que s'il est une vraie
+ * « jumelle » : même montant au centime ET lui aussi dans la fenêtre de
+ * paiement. Deux factures ElevenLabs à 5 $ le même mois doivent atterrir
+ * dans la file de validation, jamais sur une opération au hasard. Mais la
+ * facture du mois précédent, au même prix et à trente jours, n'est pas
+ * une alternative crédible : c'est la proximité de date qui tranche.
+ */
+const TWIN_DATE_MIN = 0.5;
 
 // ---------------------------------------------------------------------
 // Libellés bancaires
@@ -162,9 +172,14 @@ function parseDay(value: string | null): number | null {
 }
 
 /**
- * Proximité des dates, volontairement asymétrique : une facture précède
- * son paiement. On tolère largement après (prélèvement à 30 jours, relance),
- * très peu avant (un paiement d'avance existe, mais reste l'exception).
+ * Proximité des dates. Les dépenses de Parade sont presque toutes des
+ * abonnements mensuels au même prix : le montant ne départage pas deux
+ * factures consécutives, seule la date le fait. La fenêtre pleine est
+ * donc courte — quelques jours de part et d'autre du débit — et le score
+ * tombe à zéro avant trente jours, pour que la facture du mois précédent
+ * ne compte plus. Légèrement asymétrique : une facture précède en général
+ * son paiement, mais une quittance d'assurance arrive aussi quelques
+ * jours après le prélèvement.
  */
 export function similarityInvoiceToPaymentDate(
   invoiceDate: string | null,
@@ -175,9 +190,9 @@ export function similarityInvoiceToPaymentDate(
   if (invoice === null || operation === null) return 0;
 
   const delta = operation - invoice;
-  if (delta >= -3 && delta <= 45) return 1;
-  if (delta > 45) return delta >= 120 ? 0 : 1 - (delta - 45) / 75;
-  return delta <= -15 ? 0 : 1 - (-delta - 3) / 12;
+  if (delta >= -7 && delta <= 10) return 1;
+  if (delta > 10) return delta >= 28 ? 0 : 1 - (delta - 10) / 18;
+  return delta <= -14 ? 0 : 1 - (-delta - 7) / 7;
 }
 
 export function scoreOperationDocument(op: OperationSide, doc: DocumentSide): VendorMatchScore {
@@ -236,10 +251,12 @@ export type RankedMatch<T> = {
  * sont attachables sans demander.
  *
  * Un seul candidat peut être `certain`, et seulement si tout concorde :
- * montant au centime, fournisseur reconnu, date cohérente, **et** aucun
- * second candidat qui se tienne. C'est ce dernier point qui protège des
- * abonnements récurrents au même prix — deux factures ElevenLabs à 5 $
- * dans le même mois se neutralisent et repartent en validation.
+ * montant au centime, fournisseur reconnu, date à quelques jours, **et**
+ * aucune jumelle — un autre document au même montant, lui aussi dans la
+ * fenêtre de paiement. Deux factures ElevenLabs à 5 $ dans le même mois
+ * se neutralisent et repartent en validation ; la facture du mois
+ * précédent, elle, ne compte pas. Un candidat à un autre montant n'est
+ * jamais une alternative : le montant est le signal le plus fiable.
  */
 export function rankMatchesForOperation<T>(
   op: OperationSide,
@@ -254,13 +271,13 @@ export function rankMatchesForOperation<T>(
 
   const best = scored[0];
   if (!best) return [];
-  const runnerUp = scored[1];
+  const hasTwin = scored.slice(1).some((c) => c.score.amountExact && c.score.date >= TWIN_DATE_MIN);
 
   const certain =
     best.score.amountExact &&
     best.score.supplier >= CERTAIN_SUPPLIER_MIN &&
-    best.score.date >= 0.9 &&
-    (runnerUp === undefined || best.score.total - runnerUp.score.total >= CERTAIN_LEAD_MIN);
+    best.score.date >= CERTAIN_DATE_MIN &&
+    !hasTwin;
 
   return scored.slice(0, limit).map((candidate, index) => ({
     ...candidate,
