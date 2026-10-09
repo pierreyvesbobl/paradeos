@@ -158,7 +158,7 @@ export function RunMatchingButton() {
             toast.error(res.data.message);
             return;
           }
-          const { operations, suggestions, withoutCandidate, autoAttached, attachFailed } =
+          const { operations, suggestions, withoutCandidate, autoAttached, attachFailed, errors } =
             res.data;
           const parts = [
             `${operations} opération(s) relues`,
@@ -170,6 +170,10 @@ export function RunMatchingButton() {
           if (attachFailed > 0) {
             toast.error(`${attachFailed} attachement(s) en échec — détail sur la ligne.`);
           }
+          // Session Dougs morte ou Google déconnecté : rien n'est attaché et
+          // rien ne se voit sur les lignes. Le premier message dit pourquoi.
+          const firstError = errors[0];
+          if (firstError && attachFailed === 0) toast.error(firstError);
           router.refresh();
         })
       }
