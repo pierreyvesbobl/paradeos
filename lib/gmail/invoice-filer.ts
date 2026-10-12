@@ -10,6 +10,7 @@ import { findOrCreateFolder, findOrCreateSupplierFolder, uploadFile } from "@/li
 import { type GmailAttachmentRef, getAttachment } from "@/lib/google/gmail-api";
 import { normalizeCurrency, normalizeInvoiceNumber, toAmountColumn } from "@/lib/purchase/amounts";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import { archiveThread } from "./archive";
 import { pickInvoicePdfs } from "./invoice-detect";
 import {
   buildInvoiceFilename,
@@ -22,6 +23,19 @@ import { markThreadInvoiceDirection } from "./links";
 import { extractPdfText } from "./pdf";
 
 const PDF_MIME = "application/pdf";
+
+/**
+ * Une facture traitée n'a plus rien à faire dans la boîte de réception :
+ * le mail est archivé, jamais supprimé. L'archivage ne doit pas faire
+ * échouer un classement réussi — la pièce est déjà dans le Drive.
+ */
+async function archiveProcessedThread(accessToken: string, threadIdLocal: string): Promise<void> {
+  try {
+    await archiveThread({ accessToken, threadIdLocal });
+  } catch (err) {
+    console.warn("[invoice filer] archive thread failed", err);
+  }
+}
 
 /**
  * Enregistre les PJ candidates en base avec status='pending'. Idempotent
@@ -178,6 +192,7 @@ export async function processInvoiceFiling(filingId: string): Promise<{
         console.warn("[invoice filer] label direction failed", err);
       }
     }
+    await archiveProcessedThread(accessToken, msg.threadId);
     return {
       status: "rejected",
       direction: alreadyFiled.direction,
@@ -396,6 +411,9 @@ export async function processInvoiceFiling(filingId: string): Promise<{
       errorMessage: null,
     })
     .where(eq(invoiceFilings.id, filing.id));
+
+  // 8. Le mail quitte la boîte de réception : la facture est rangée.
+  await archiveProcessedThread(accessToken, msg.threadId);
 
   return { status: "filed", direction, driveFileId, generatedFilename: filename };
 }
