@@ -1,53 +1,51 @@
 /**
  * Mod Claude Code « paradeos-temps » : compte le temps d'attention passé
- * dans une session et le pousse dans Parade OS comme créneaux réalisés
- * (source `claude_code`), imputés au projet rattaché au dépôt git.
+ * dans une session et le pousse dans Parade OS comme **signal** d'activité
+ * (`claude_code_activity`), rattaché au projet du dépôt git.
+ *
+ * Ce n'est pas un créneau réalisé : rien n'entre dans le temps compté ni
+ * dans la marge. Le signal dit où est parti l'effort ; l'humain l'arbitre
+ * dans /temps avec les autres sources (réunions, mails, calendrier) avant
+ * de saisir un vrai créneau. D'où un mod qui ne demande jamais rien en
+ * pleine session : il envoie le remote, Parade OS en déduit le projet
+ * d'après les dépôts rattachés à la fiche projet.
  *
  * Ce qui part de la machine : des horodatages, le remote git, le numéro
  * de segment. Jamais le contenu des échanges.
  *
  * Les règles de comptage vivent dans tracker.ts (pur, testé). Ici : le
- * branchement sur les événements du moteur, la résolution du dépôt, les
- * appels MCP et l'état persistant. Les helpers qui reçoivent `$` sont des
- * fonctions de premier niveau : c'est ce que le validateur du moteur exige.
+ * branchement sur les événements du moteur, la cadence des envois et
+ * l'état persistant. Les helpers qui reçoivent `$` sont des fonctions de
+ * premier niveau : c'est ce que le validateur du moteur exige.
  */
 import type { EngineInterface, Register } from "claude-code";
 import { Tracker, type TrackerState } from "./tracker";
 
 const SERVER = "paradeos";
-const MAX_CANDIDATES = 3;
-const NO_PROJECT = "Aucun projet";
+/** Un segment ouvert n'est renvoyé que s'il a grandi d'au moins ça. */
+const PUSH_EVERY_MS = 5 * 60_000;
+/** Garde-fou : au-delà, la file de rattrapage jette le plus ancien. */
+const MAX_OUTBOX = 200;
+const OUTBOX_KEY = "outbox";
 
-type RepoLink = { projectId: string | null; projectName: string | null; decidedAt: number };
-type Candidate = { id: string; name: string };
-
-type ResolveResult = {
+/** Un envoi en attente, indépendant de la session qui l'a produit. */
+type Push = {
+  sourceRef: string;
+  startAt: string;
+  endAt: string;
   remote: string | null;
-  linked: boolean;
-  project: { id: string; name: string } | null;
-  candidates: Candidate[];
 };
 
-/** État mutable de la session, partagé entre les hooks et les helpers. */
 type Ctx = {
   enabled: boolean;
   sessionId: string;
   tracker: Tracker | null;
-  link: RepoLink | null;
-  remoteKey: string | null;
-  askedThisSession: boolean;
-  warnedOffline: boolean;
+  remote: string | null;
   server: string | null;
+  warnedOffline: boolean;
+  /** `end` du segment au dernier envoi réussi, par numéro de segment. */
+  pushedEnd: Map<number, number>;
 };
-
-function parseJson<T>(text: string | undefined): T | null {
-  if (!text) return null;
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return null;
-  }
-}
 
 function fmtMs(ms: number): string {
   const min = Math.round(ms / 60_000);
@@ -58,10 +56,6 @@ function fmtMs(ms: number): string {
 
 function stateKey(ctx: Ctx): string {
   return `session:${ctx.sessionId}`;
-}
-
-function repoKey(remote: string): string {
-  return `repo:${remote}`;
 }
 
 async function connect($: EngineInterface, ctx: Ctx): Promise<string | null> {
@@ -78,108 +72,101 @@ async function connect($: EngineInterface, ctx: Ctx): Promise<string | null> {
   return null;
 }
 
-async function call<T>(
-  $: EngineInterface,
-  ctx: Ctx,
-  tool: string,
-  args: Record<string, unknown>,
-): Promise<T | null> {
+/** Un envoi. `false` = à réessayer plus tard (hors ligne, erreur serveur). */
+async function send($: EngineInterface, ctx: Ctx, push: Push): Promise<boolean> {
   const srv = await connect($, ctx);
-  if (!srv) return null;
-  const res = await $.mcp.call(srv, tool, args);
+  if (!srv) return false;
+  const res = await $.mcp.call(srv, "track_claude_time", push);
+  if (!res.isError) return true;
   const block = res.content.find((b) => b.type === "text");
-  const text = block && "text" in block ? String(block.text) : undefined;
-  if (res.isError) {
-    $.ui.log(`paradeos-temps: ${tool} a échoué${text ? ` : ${text}` : ""}`, { to: "debug" });
-    return null;
-  }
-  return parseJson<T>(text);
-}
-
-/** Dépôt de la session → projet, via Parade OS, le cache local, puis l'humain. */
-async function resolveProject($: EngineInterface, ctx: Ctx): Promise<RepoLink | null> {
-  const repo = await $.session.repo();
-  if (!repo?.remote) return null;
-
-  const resolved = await call<ResolveResult>($, ctx, "resolve_repo", { remote: repo.remote });
-  if (!resolved?.remote) return null;
-  ctx.remoteKey = resolved.remote;
-
-  if (resolved.linked && resolved.project) {
-    const fresh: RepoLink = {
-      projectId: resolved.project.id,
-      projectName: resolved.project.name,
-      decidedAt: await $.clock.now(),
-    };
-    await $.store.set(repoKey(ctx.remoteKey), fresh);
-    return fresh;
-  }
-
-  const cached = (await $.store.get(repoKey(ctx.remoteKey))) as RepoLink | undefined;
-  if (cached) return cached; // « Aucun projet » déjà répondu sur cette machine
-
-  if (ctx.askedThisSession) return null;
-  ctx.askedThisSession = true;
-
-  const candidates = resolved.candidates.slice(0, MAX_CANDIDATES);
-  let answer: string;
-  try {
-    answer = await $.ui.ask(`Dépôt ${ctx.remoteKey} : à quel projet Parade OS imputer le temps ?`, {
-      options: [...candidates.map((c) => c.name), NO_PROJECT],
-      header: "Parade OS",
-    });
-  } catch {
-    return null; // fermé sans répondre : on redemandera à la prochaine session
-  }
-
-  if (answer === NO_PROJECT) {
-    const none: RepoLink = { projectId: null, projectName: null, decidedAt: await $.clock.now() };
-    await $.store.set(repoKey(ctx.remoteKey), none);
-    return none;
-  }
-
-  const picked = candidates.find((c) => c.name === answer);
-  const linked = await call<{ project: { id: string; name: string } | null }>($, ctx, "link_repo", {
-    remote: ctx.remoteKey,
-    ...(picked ? { projectId: picked.id } : { projectName: answer }),
+  const text = block && "text" in block ? String(block.text) : "";
+  $.ui.log(`paradeos-temps: track_claude_time a échoué${text ? ` : ${text}` : ""}`, {
+    to: "debug",
   });
-  if (!linked?.project) {
-    $.ui.toast(`Parade OS : projet « ${answer} » introuvable, temps non imputé.`);
-    return null;
-  }
-  const fresh: RepoLink = {
-    projectId: linked.project.id,
-    projectName: linked.project.name,
-    decidedAt: await $.clock.now(),
-  };
-  await $.store.set(repoKey(ctx.remoteKey), fresh);
-  $.ui.toast(`Parade OS : ${ctx.remoteKey} → ${fresh.projectName}`);
-  return fresh;
+  return false;
 }
 
-async function flush($: EngineInterface, ctx: Ctx): Promise<void> {
+/**
+ * File de rattrapage, partagée par toutes les sessions de la machine.
+ *
+ * Sans elle, un segment qu'on n'arrive pas à pousser est perdu pour de
+ * bon : `flush` ne regarde que la session courante, donc plus personne ne
+ * repasse sur celui d'une session déjà fermée. C'est ce qui est arrivé au
+ * premier segment écrit par ce mod. On y dépose chaque envoi avant de
+ * l'essayer, on l'en retire quand il est passé, et on vide la file au
+ * démarrage de la session suivante.
+ */
+async function enqueue($: EngineInterface, pushes: readonly Push[]): Promise<void> {
+  if (pushes.length === 0) return;
+  const queued = ((await $.store.get(OUTBOX_KEY)) as Push[] | undefined) ?? [];
+  const byRef = new Map(queued.map((p) => [p.sourceRef, p]));
+  for (const p of pushes) byRef.set(p.sourceRef, p);
+  const next = [...byRef.values()].slice(-MAX_OUTBOX);
+  await $.store.set(OUTBOX_KEY, next);
+}
+
+async function dequeue($: EngineInterface, refs: readonly string[]): Promise<void> {
+  if (refs.length === 0) return;
+  const queued = ((await $.store.get(OUTBOX_KEY)) as Push[] | undefined) ?? [];
+  const drop = new Set(refs);
+  await $.store.set(
+    OUTBOX_KEY,
+    queued.filter((p) => !drop.has(p.sourceRef)),
+  );
+}
+
+/** Rejoue ce qui n'est jamais passé, y compris d'une session précédente. */
+async function drainOutbox($: EngineInterface, ctx: Ctx): Promise<void> {
+  const queued = ((await $.store.get(OUTBOX_KEY)) as Push[] | undefined) ?? [];
+  if (queued.length === 0) return;
+  const done: string[] = [];
+  for (const push of queued) {
+    if (!(await send($, ctx, push))) break; // hors ligne : on garde le reste
+    done.push(push.sourceRef);
+  }
+  await dequeue($, done);
+}
+
+/**
+ * Envoie les segments qui le méritent. Un segment fermé part tout de
+ * suite ; le segment en cours attend d'avoir grandi de `PUSH_EVERY_MS`,
+ * sauf en fin de session (`force`). L'écriture est un upsert par
+ * `sourceRef` : le dernier envoi porte la durée finale, donc espacer les
+ * envois ne change rien au résultat, seulement le nombre d'appels.
+ */
+async function flush($: EngineInterface, ctx: Ctx, force: boolean): Promise<void> {
   const tracker = ctx.tracker;
   if (!tracker) return;
-  const pending = tracker.pending();
-  if (pending.length === 0) return;
+  const currentNo = tracker.currentNo();
 
-  if (!ctx.link) ctx.link = await resolveProject($, ctx);
-  const repoName = ctx.remoteKey?.split("/").pop() ?? "session";
+  const due = tracker.pending().filter((seg) => {
+    if (force || seg.no !== currentNo) return true;
+    const since = seg.end - (ctx.pushedEnd.get(seg.no) ?? seg.start);
+    return since >= PUSH_EVERY_MS;
+  });
+  if (due.length === 0) return;
 
-  for (const seg of pending) {
-    const ok = await call<{ id: string }>($, ctx, "track_claude_time", {
-      sourceRef: `${ctx.sessionId}:${seg.no}`,
-      startAt: new Date(seg.start).toISOString(),
-      endAt: new Date(seg.end).toISOString(),
-      projectId: ctx.link?.projectId ?? null,
-      title: `Claude Code · ${repoName}`,
-    });
-    if (ok) tracker.markFlushed(seg.no);
+  const pushes: Push[] = due.map((seg) => ({
+    sourceRef: `${ctx.sessionId}:${seg.no}`,
+    startAt: new Date(seg.start).toISOString(),
+    endAt: new Date(seg.end).toISOString(),
+    remote: ctx.remote,
+  }));
+  await enqueue($, pushes);
+
+  const done: string[] = [];
+  for (const [i, push] of pushes.entries()) {
+    const seg = due[i];
+    if (!seg) continue;
+    if (!(await send($, ctx, push))) break;
+    tracker.markFlushed(seg.no);
+    ctx.pushedEnd.set(seg.no, seg.end);
+    done.push(push.sourceRef);
   }
+  await dequeue($, done);
   await $.store.set(stateKey(ctx), tracker.state());
 
-  const target = ctx.link?.projectName ?? "sans projet";
-  $.ui.status(`Parade OS · ${target} · ${fmtMs(tracker.totalMs())}`);
+  $.ui.status(`Parade OS · activité ${fmtMs(tracker.totalMs())}`);
 }
 
 export const register: Register = (on, options) => {
@@ -190,19 +177,24 @@ export const register: Register = (on, options) => {
     enabled: false,
     sessionId: "",
     tracker: null,
-    link: null,
-    remoteKey: null,
-    askedThisSession: false,
-    warnedOffline: false,
+    remote: null,
     server: null,
+    warnedOffline: false,
+    pushedEnd: new Map(),
   };
 
   on("session.start", async ($, e, next) => {
     ctx.enabled = e.isInteractive;
     if (ctx.enabled) {
-      ctx.sessionId = await $.session.id();
-      const saved = (await $.store.get(stateKey(ctx))) as TrackerState | undefined;
-      ctx.tracker = new Tracker({ pauseMs, capMs }, saved ?? null);
+      try {
+        ctx.sessionId = await $.session.id();
+        ctx.remote = (await $.session.repo())?.remote ?? null;
+        const saved = (await $.store.get(stateKey(ctx))) as TrackerState | undefined;
+        ctx.tracker = new Tracker({ pauseMs, capMs }, saved ?? null);
+        await drainOutbox($, ctx);
+      } catch (err) {
+        $.ui.log(`paradeos-temps: session.start ${String(err)}`, { to: "debug" });
+      }
     }
     return next(e);
   });
@@ -228,7 +220,7 @@ export const register: Register = (on, options) => {
     try {
       ctx.tracker.onTurnComplete(await $.clock.now());
       await $.store.set(stateKey(ctx), ctx.tracker.state());
-      await flush($, ctx);
+      await flush($, ctx, false);
     } catch (err) {
       $.ui.log(`paradeos-temps: turn.complete ${String(err)}`, { to: "debug" });
     }
@@ -237,7 +229,7 @@ export const register: Register = (on, options) => {
 
   on("session.end", async ($, e, next) => {
     if (ctx.enabled && ctx.tracker) {
-      await flush($, ctx).catch((err) =>
+      await flush($, ctx, true).catch((err) =>
         $.ui.log(`paradeos-temps: session.end ${String(err)}`, { to: "debug" }),
       );
     }

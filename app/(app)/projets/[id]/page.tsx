@@ -37,6 +37,7 @@ import { users } from "@/db/schema/users";
 import { deleteProjectAndRedirect } from "@/lib/actions/projects";
 import { parseBillingTerms, resolveBillingTerms } from "@/lib/billing/billing-terms";
 import { brandTemplateFor } from "@/lib/billing/brand-templates";
+import { getProjectClaudeActivity } from "@/lib/db/queries/claude-activity";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { getProjectProfitability } from "@/lib/db/queries/profitability";
 import { getProjectContacts, getProjectMembers } from "@/lib/db/queries/project-members";
@@ -92,37 +93,45 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     attachments: await getAttachmentsForNotes(n.map((x) => x.id)),
   }));
 
-  const [quoteInvoiceRows, milestonesRows, timeStats, profitability, notesData, projectTasks] =
-    await Promise.all([
-      conn
-        .select()
-        .from(invoices)
-        .where(and(eq(invoices.projectId, id), eq(invoices.kind, "quote")))
-        .limit(1),
-      conn
-        .select()
-        .from(invoices)
-        .where(and(eq(invoices.projectId, id), eq(invoices.kind, "milestone")))
-        .orderBy(asc(invoices.createdAt)),
-      getProjectTimeStats(id),
-      getProjectProfitability(id, {
-        billingType: project.billingType,
-        budgetAmount: project.budgetAmount,
-        hourlyRate: project.hourlyRate,
-      }),
-      notesPromise,
-      conn
-        .select({
-          id: tasks.id,
-          title: tasks.title,
-          status: tasks.status,
-          priority: tasks.priority,
-          dueDate: tasks.dueDate,
-        })
-        .from(tasks)
-        .where(eq(tasks.projectId, id))
-        .orderBy(asc(tasks.dueDate), asc(tasks.title)),
-    ]);
+  const [
+    quoteInvoiceRows,
+    milestonesRows,
+    timeStats,
+    claudeMinutes,
+    profitability,
+    notesData,
+    projectTasks,
+  ] = await Promise.all([
+    conn
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.projectId, id), eq(invoices.kind, "quote")))
+      .limit(1),
+    conn
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.projectId, id), eq(invoices.kind, "milestone")))
+      .orderBy(asc(invoices.createdAt)),
+    getProjectTimeStats(id),
+    getProjectClaudeActivity(id),
+    getProjectProfitability(id, {
+      billingType: project.billingType,
+      budgetAmount: project.budgetAmount,
+      hourlyRate: project.hourlyRate,
+    }),
+    notesPromise,
+    conn
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        status: tasks.status,
+        priority: tasks.priority,
+        dueDate: tasks.dueDate,
+      })
+      .from(tasks)
+      .where(eq(tasks.projectId, id))
+      .orderBy(asc(tasks.dueDate), asc(tasks.title)),
+  ]);
 
   const [
     projectMemberRows,
@@ -410,10 +419,13 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
                 tone="muted"
               />
             </div>
-            {timeStats.claudeMinutes > 0 ? (
+            {claudeMinutes > 0 ? (
               <p className="text-[11px] text-muted-foreground">
-                Dont Claude Code :{" "}
-                <span className="font-mono">{formatDuration(timeStats.claudeMinutes)}</span>
+                Activité Claude Code :{" "}
+                <span className="font-mono">{formatDuration(claudeMinutes)}</span>{" "}
+                <span className="text-muted-foreground/70">
+                  — indicatif, non compté dans le réalisé
+                </span>
               </p>
             ) : null}
 

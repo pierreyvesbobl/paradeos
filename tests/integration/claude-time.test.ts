@@ -1,10 +1,12 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
+import { claudeCodeActivity } from "@/db/schema/claude-activity";
 import { projectRepos } from "@/db/schema/project-repos";
 import { projects } from "@/db/schema/projects";
 import { timeEntries } from "@/db/schema/time-entries";
 import { addProjectRepo, removeProjectRepo } from "@/lib/actions/project-repos";
+import { getClaudeActivity, getProjectClaudeActivity } from "@/lib/db/queries/claude-activity";
 import { getGlobalTimeStats, getProjectTimeStats } from "@/lib/db/queries/time-stats";
 import { linkRepo, resolveRepo, trackClaudeTime } from "../../mcp-server/tools/claude-time";
 import { createTestDb, seedUser, type TestUser } from "./db";
@@ -114,32 +116,82 @@ describe("track_claude_time", () => {
     );
     expect(extended?.id).toBe(first?.id);
 
-    const mine = await db
-      .select({ source: timeEntries.source, kind: timeEntries.kind })
-      .from(timeEntries)
-      .where(eq(timeEntries.sourceRef, "s1:1"));
-    expect(mine).toEqual([{ source: "claude_code", kind: "actual" }]);
-
     // Deuxième session, 10h30 → 11h30 sur Y : 30 min communes partagées.
     await trackClaudeTime(
       { sourceRef: "s2:1", startAt: at(10, 30), endAt: at(11, 30), projectId: y },
       ctx(),
     );
 
-    const stats = await getGlobalTimeStats(new Date(at(0)), new Date(at(23)));
+    const activity = await getClaudeActivity(new Date(at(0)), new Date(at(23)));
     const minutesOf = (id: string) =>
-      stats.byProject.find((p) => p.projectId === id)?.actualMinutes ?? 0;
+      activity.byProject.find((p) => p.projectId === id)?.minutes ?? 0;
     expect(minutesOf(x)).toBe(45);
     expect(minutesOf(y)).toBe(45);
-    expect(stats.bySource.claude_code).toBe(90);
-    expect(stats.totals.actualMinutes).toBe(90);
-
-    const px = await getProjectTimeStats(x);
-    expect(px.totals.actualMinutes).toBe(45);
-    expect(px.claudeMinutes).toBe(45);
+    expect(activity.totalMinutes).toBe(90);
+    expect(await getProjectClaudeActivity(x)).toBe(45);
 
     await expect(
       trackClaudeTime({ sourceRef: "s3:1", startAt: at(12), endAt: at(11) }, ctx()),
     ).rejects.toThrow(/endAt/);
+  });
+
+  it("n'écrit aucun créneau réalisé : le signal reste hors du temps compté", async () => {
+    const z = await seedProject("Projet Z");
+    await trackClaudeTime(
+      { sourceRef: "s9:1", startAt: at(14), endAt: at(15), projectId: z },
+      ctx(),
+    );
+
+    expect(await db.select().from(timeEntries)).toHaveLength(0);
+    const stats = await getGlobalTimeStats(new Date(at(0)), new Date(at(23)));
+    expect(stats.totals.actualMinutes).toBe(0);
+    expect(stats.bySource).toEqual({ manual: 0, calendar: 0 });
+    expect((await getProjectTimeStats(z)).totals.actualMinutes).toBe(0);
+  });
+
+  it("déduit le projet du dépôt rattaché, et le laisse vide sinon", async () => {
+    const w = await seedProject("Webradio");
+    await linkRepo({ remote: "git@github.com:parade/webradio.git", projectId: w }, ctx());
+
+    await trackClaudeTime(
+      {
+        sourceRef: "s4:1",
+        startAt: at(16),
+        endAt: at(17),
+        remote: "https://github.com/Parade/Webradio",
+      },
+      ctx(),
+    );
+    await trackClaudeTime(
+      {
+        sourceRef: "s5:1",
+        startAt: at(18),
+        endAt: at(19),
+        remote: "git@github.com:parade/inconnu.git",
+      },
+      ctx(),
+    );
+
+    const rows = await db
+      .select({
+        sourceRef: claudeCodeActivity.sourceRef,
+        projectId: claudeCodeActivity.projectId,
+        remote: claudeCodeActivity.remote,
+      })
+      .from(claudeCodeActivity)
+      .where(eq(claudeCodeActivity.userId, actor.id));
+    const byRef = new Map(rows.map((r) => [r.sourceRef, r]));
+    expect(byRef.get("s4:1")).toMatchObject({
+      projectId: w,
+      remote: "github.com/parade/webradio",
+    });
+    expect(byRef.get("s5:1")).toMatchObject({
+      projectId: null,
+      remote: "github.com/parade/inconnu",
+    });
+
+    const activity = await getClaudeActivity(new Date(at(16)), new Date(at(23)));
+    const orphan = activity.byProject.find((p) => p.projectId === null);
+    expect(orphan?.remotes).toEqual(["github.com/parade/inconnu"]);
   });
 });

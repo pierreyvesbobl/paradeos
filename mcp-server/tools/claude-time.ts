@@ -4,13 +4,17 @@
  * Trois tools, appelés par le mod et non par le modèle :
  *  - resolve_repo       : remote git → projet Parade OS, ou candidats
  *  - link_repo          : rattache un remote à un projet (partagé entre machines)
- *  - track_claude_time  : upsert d'un segment de travail (idempotent par source_ref)
+ *  - track_claude_time  : upsert d'un segment d'activité (idempotent par source_ref)
+ *
+ * `track_claude_time` écrit dans `claude_code_activity`, pas dans
+ * `time_entries` : le temps passé dans Claude Code est un signal
+ * d'imputation que l'humain arbitre, jamais un créneau réalisé.
  */
 import { desc, eq, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import { claudeCodeActivity } from "../../db/schema/claude-activity";
 import { projectRepos } from "../../db/schema/project-repos";
 import { projects } from "../../db/schema/projects";
-import { timeEntries } from "../../db/schema/time-entries";
 import { gitRemoteBasename, normalizeGitRemote } from "../../lib/git/remote";
 import type { UserContext } from "../context";
 import { db } from "../db";
@@ -140,13 +144,14 @@ export async function linkRepo(args: z.infer<typeof linkRepoSchema>, ctx: UserCo
 }
 
 export const trackClaudeTimeSchema = z.object({
-  /** `<sessionId>:<segment>` — réécrit à chaque fin de tour. */
+  /** `<sessionId>:<segment>` — réécrit quand le segment s'étend. */
   sourceRef: z.string().trim().min(1).max(200),
   startAt: z.string(),
   endAt: z.string(),
+  /** Remote git de la session. Le projet s'en déduit (`project_repos`). */
+  remote: z.string().trim().max(500).nullable().optional(),
+  /** Forçage explicite ; sinon le projet vient du rattachement du remote. */
   projectId: z.string().uuid().nullable().optional(),
-  title: z.string().max(200).optional(),
-  description: z.string().max(1000).optional(),
 });
 
 export async function trackClaudeTime(
@@ -160,32 +165,38 @@ export async function trackClaudeTime(
   }
   if (end <= start) throw new Error("endAt doit être > startAt.");
 
+  // Le projet se déduit du rattachement du dépôt, à chaque push : rattacher
+  // un dépôt depuis la fiche projet impute aussitôt les segments suivants,
+  // sans rien demander dans Claude Code.
+  const remote = args.remote ? normalizeGitRemote(args.remote) : null;
+  let projectId = args.projectId ?? null;
+  if (!projectId && remote) projectId = (await linkedProject(remote))?.id ?? null;
+
   const conn = db();
   const [row] = await conn
-    .insert(timeEntries)
+    .insert(claudeCodeActivity)
     .values({
       userId: ctx.userId,
-      kind: "actual",
-      source: "claude_code",
       sourceRef: args.sourceRef,
-      startAt: start,
-      endAt: end,
-      title: args.title ?? "Claude Code",
-      description: args.description ?? null,
-      projectId: args.projectId ?? null,
+      startedAt: start,
+      endedAt: end,
+      projectId,
+      remote,
     })
     .onConflictDoUpdate({
-      target: [timeEntries.userId, timeEntries.source, timeEntries.sourceRef],
-      targetWhere: sql`${timeEntries.sourceRef} is not null`,
+      target: [claudeCodeActivity.userId, claudeCodeActivity.sourceRef],
       set: {
-        startAt: start,
-        endAt: end,
-        projectId: args.projectId ?? null,
-        title: args.title ?? "Claude Code",
-        description: args.description ?? null,
+        startedAt: start,
+        endedAt: end,
+        projectId,
+        remote,
         updatedAt: new Date(),
       },
     })
-    .returning({ id: timeEntries.id, startAt: timeEntries.startAt, endAt: timeEntries.endAt });
+    .returning({
+      id: claudeCodeActivity.id,
+      startAt: claudeCodeActivity.startedAt,
+      endAt: claudeCodeActivity.endedAt,
+    });
   return row;
 }

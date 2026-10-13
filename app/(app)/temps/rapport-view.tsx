@@ -1,4 +1,4 @@
-import { Clock } from "@phosphor-icons/react/dist/ssr";
+import { Clock, Terminal } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/empty-state";
 import Link from "@/components/link";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { addDays, isoDate, startOfIsoWeek } from "@/lib/calendar";
+import { type ClaudeActivity, getClaudeActivity } from "@/lib/db/queries/claude-activity";
 import { getGlobalProfitability } from "@/lib/db/queries/profitability";
 import { getGlobalTimeStats } from "@/lib/db/queries/time-stats";
 import { formatDate, formatDays, formatDuration, formatEuro } from "@/lib/format";
@@ -60,9 +61,10 @@ export async function RapportView({ range, week }: { range?: Range; week?: strin
   const activeRange: Range = range && ["week", "month", "all"].includes(range) ? range : "week";
   const { start, end } = resolveRange(activeRange, week);
 
-  const [stats, profitability] = await Promise.all([
+  const [stats, profitability, claude] = await Promise.all([
     getGlobalTimeStats(start, end),
     getGlobalProfitability(start, end),
+    getClaudeActivity(start, end),
   ]);
   const totalRevenue = profitability.reduce((acc, p) => acc + p.revenueAmount, 0);
   const totalCost = profitability.reduce((acc, p) => acc + p.costAmount, 0);
@@ -129,8 +131,9 @@ export async function RapportView({ range, week }: { range?: Range; week?: strin
         <span className="uppercase tracking-wide">Réalisé par provenance</span>
         <SourceStat label="Saisi" minutes={stats.bySource.manual} />
         <SourceStat label="Calendrier" minutes={stats.bySource.calendar} />
-        <SourceStat label="Claude Code" minutes={stats.bySource.claude_code} />
       </div>
+
+      <ClaudeActivitySection activity={claude} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiBox label="Revenu" value={formatEuro(totalRevenue)} tone="actual" />
@@ -308,6 +311,57 @@ function FilterLink({ href, active, label }: { href: string; active: boolean; la
     >
       {label}
     </Link>
+  );
+}
+
+/**
+ * Activité Claude Code : un indicateur d'où est parti l'effort, pas du
+ * temps réalisé. Rien de ce bloc n'entre dans les KPI ci-dessus ni dans la
+ * marge : c'est une source parmi d'autres (réunions, mails, calendrier) à
+ * partir de laquelle on décide ce qu'on saisit vraiment.
+ */
+function ClaudeActivitySection({ activity }: { activity: ClaudeActivity }) {
+  if (activity.byProject.length === 0) return null;
+  return (
+    <section className="space-y-3 rounded-lg border border-dashed bg-muted/30 p-6">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="flex items-center gap-2 font-medium text-sm">
+          <Terminal className="size-4 text-muted-foreground" weight="regular" />
+          Activité Claude Code
+        </h2>
+        <span className="font-mono text-muted-foreground text-xs">
+          {formatDuration(activity.totalMinutes)}
+        </span>
+      </div>
+      <p className="text-muted-foreground text-xs">
+        Indicatif, non compté dans le réalisé : à arbitrer avec les réunions, les mails et le
+        calendrier avant de saisir un créneau.
+      </p>
+      <ul className="space-y-1">
+        {activity.byProject.map((row) => (
+          <li
+            key={row.projectId ?? row.remotes.join(",")}
+            className="flex items-baseline justify-between gap-3 text-sm"
+          >
+            <span className="truncate">
+              {row.projectId ? (
+                <Link href={`/projets/${row.projectId}`} className="hover:underline">
+                  {row.projectName ?? "Projet"}
+                </Link>
+              ) : (
+                <span className="text-muted-foreground">
+                  {row.remotes.join(", ") || "Dépôt inconnu"}
+                  <span className="ml-2 text-xs">non rattaché</span>
+                </span>
+              )}
+            </span>
+            <span className="shrink-0 font-mono text-muted-foreground text-xs">
+              {formatDuration(row.minutes)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

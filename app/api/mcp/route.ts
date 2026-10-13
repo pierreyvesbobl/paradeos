@@ -292,7 +292,7 @@ const TOOL_REGISTRY: Record<
   track_claude_time: {
     write: true,
     description:
-      "Upsert d'un segment de temps Claude Code (source=claude_code, kind=actual) identifié par `sourceRef`. Réécrit start/end/projet si le ref existe déjà.",
+      "Upsert d'un segment d'activité Claude Code dans `claude_code_activity`, identifié par `sourceRef`. Signal d'imputation (jamais un créneau réalisé) : réécrit start/end/projet si le ref existe déjà.",
     schema: trackClaudeTimeSchema,
     handler: (a, ctx) => trackClaudeTime(a as never, ctx as never),
   },

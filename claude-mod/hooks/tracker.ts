@@ -120,6 +120,11 @@ export class Tracker {
     return this.segments.filter((s) => !s.flushed && s.end > s.start).map((s) => ({ ...s }));
   }
 
+  /** Numéro du segment en cours, pour distinguer un segment déjà fermé. */
+  currentNo(): number | null {
+    return this.current()?.no ?? null;
+  }
+
   markFlushed(no: number): void {
     const seg = this.segments.find((s) => s.no === no);
     if (seg) seg.flushed = true;

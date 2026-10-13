@@ -335,7 +335,7 @@ server.tool(
 
 server.tool(
   "track_claude_time",
-  "Upsert d'un segment de temps Claude Code identifié par sourceRef (source=claude_code).",
+  "Upsert d'un segment d'activité Claude Code dans `claude_code_activity`, identifié par `sourceRef`. Signal d'imputation (jamais un créneau réalisé) : réécrit start/end/projet si le ref existe déjà.",
   trackClaudeTimeSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await trackClaudeTime(args, ctx), null, 2) }],
