@@ -194,4 +194,72 @@ describe("track_claude_time", () => {
     const orphan = activity.byProject.find((p) => p.projectId === null);
     expect(orphan?.remotes).toEqual(["github.com/parade/inconnu"]);
   });
+
+  it("rattache seul un dépôt dont un unique projet ouvert porte le nom, et impute le passé", async () => {
+    const studio = await seedProject("Studio Chanson");
+    await seedProject("Studio Chanson", "archived"); // fermé : pas candidat
+
+    // Premier segment arrivé avant tout rattachement.
+    await trackClaudeTime(
+      {
+        sourceRef: "s6:1",
+        startAt: at(8),
+        endAt: at(9),
+        remote: "git@github.com:parade/studio-chanson.git",
+      },
+      ctx(),
+    );
+    const link = await db
+      .select({ projectId: projectRepos.projectId, autoLinked: projectRepos.autoLinked })
+      .from(projectRepos)
+      .where(eq(projectRepos.remote, "github.com/parade/studio-chanson"));
+    expect(link).toEqual([{ projectId: studio, autoLinked: true }]);
+
+    const rows = await db
+      .select({ projectId: claudeCodeActivity.projectId })
+      .from(claudeCodeActivity)
+      .where(eq(claudeCodeActivity.sourceRef, "s6:1"));
+    expect(rows).toEqual([{ projectId: studio }]);
+  });
+
+  it("laisse le doute à l'humain quand deux projets se ressemblent", async () => {
+    const a = await seedProject("Thermigo");
+    await seedProject("Thermigo v2");
+
+    await trackClaudeTime(
+      {
+        sourceRef: "s7:1",
+        startAt: at(8),
+        endAt: at(9),
+        remote: "git@github.com:parade/thermigo.git",
+      },
+      ctx(),
+    );
+    expect(
+      await db
+        .select()
+        .from(projectRepos)
+        .where(eq(projectRepos.remote, "github.com/parade/thermigo")),
+    ).toHaveLength(0);
+    const orphan = await db
+      .select({ projectId: claudeCodeActivity.projectId })
+      .from(claudeCodeActivity)
+      .where(eq(claudeCodeActivity.sourceRef, "s7:1"));
+    expect(orphan).toEqual([{ projectId: null }]);
+
+    // L'humain tranche depuis /temps : l'activité passée est imputée.
+    const res = await addProjectRepo({ projectId: a, remote: "github.com/parade/thermigo" });
+    expect(res.ok).toBe(true);
+    expect(res.ok && res.data?.backfilled).toBe(1);
+    const fixed = await db
+      .select({ projectId: claudeCodeActivity.projectId })
+      .from(claudeCodeActivity)
+      .where(eq(claudeCodeActivity.sourceRef, "s7:1"));
+    expect(fixed).toEqual([{ projectId: a }]);
+    const link = await db
+      .select({ autoLinked: projectRepos.autoLinked })
+      .from(projectRepos)
+      .where(eq(projectRepos.remote, "github.com/parade/thermigo"));
+    expect(link).toEqual([{ autoLinked: false }]);
+  });
 });

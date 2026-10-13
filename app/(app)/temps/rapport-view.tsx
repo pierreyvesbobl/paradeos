@@ -1,6 +1,7 @@
 import { Clock, Terminal } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/empty-state";
 import Link from "@/components/link";
+import { RepoLinkPicker } from "@/components/temps/repo-link-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,7 @@ import {
 import { addDays, isoDate, startOfIsoWeek } from "@/lib/calendar";
 import { type ClaudeActivity, getClaudeActivity } from "@/lib/db/queries/claude-activity";
 import { getGlobalProfitability } from "@/lib/db/queries/profitability";
+import { getRepoLinkChoices, type RepoLinkChoice } from "@/lib/db/queries/project-repos";
 import { getGlobalTimeStats } from "@/lib/db/queries/time-stats";
 import { formatDate, formatDays, formatDuration, formatEuro } from "@/lib/format";
 import { computeDaysWorked, computeEffectiveDailyRate } from "@/lib/profitability-math";
@@ -66,6 +68,9 @@ export async function RapportView({ range, week }: { range?: Range; week?: strin
     getGlobalProfitability(start, end),
     getClaudeActivity(start, end),
   ]);
+  // Dépôts arrivés sans projet : de quoi trancher sur place.
+  const unlinked = claude.byProject.filter((r) => r.projectId === null).flatMap((r) => r.remotes);
+  const choices = await getRepoLinkChoices(unlinked);
   const totalRevenue = profitability.reduce((acc, p) => acc + p.revenueAmount, 0);
   const totalCost = profitability.reduce((acc, p) => acc + p.costAmount, 0);
   const totalMargin = totalRevenue - totalCost;
@@ -133,7 +138,7 @@ export async function RapportView({ range, week }: { range?: Range; week?: strin
         <SourceStat label="Calendrier" minutes={stats.bySource.calendar} />
       </div>
 
-      <ClaudeActivitySection activity={claude} />
+      <ClaudeActivitySection activity={claude} choices={choices} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiBox label="Revenu" value={formatEuro(totalRevenue)} tone="actual" />
@@ -320,8 +325,15 @@ function FilterLink({ href, active, label }: { href: string; active: boolean; la
  * marge : c'est une source parmi d'autres (réunions, mails, calendrier) à
  * partir de laquelle on décide ce qu'on saisit vraiment.
  */
-function ClaudeActivitySection({ activity }: { activity: ClaudeActivity }) {
+function ClaudeActivitySection({
+  activity,
+  choices,
+}: {
+  activity: ClaudeActivity;
+  choices: RepoLinkChoice[];
+}) {
   if (activity.byProject.length === 0) return null;
+  const choiceFor = new Map(choices.map((c) => [c.remote, c]));
   return (
     <section className="space-y-3 rounded-lg border border-dashed bg-muted/30 p-6">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -338,28 +350,39 @@ function ClaudeActivitySection({ activity }: { activity: ClaudeActivity }) {
         calendrier avant de saisir un créneau.
       </p>
       <ul className="space-y-1">
-        {activity.byProject.map((row) => (
-          <li
-            key={row.projectId ?? row.remotes.join(",")}
-            className="flex items-baseline justify-between gap-3 text-sm"
-          >
-            <span className="truncate">
-              {row.projectId ? (
-                <Link href={`/projets/${row.projectId}`} className="hover:underline">
-                  {row.projectName ?? "Projet"}
-                </Link>
-              ) : (
-                <span className="text-muted-foreground">
-                  {row.remotes.join(", ") || "Dépôt inconnu"}
-                  <span className="ml-2 text-xs">non rattaché</span>
-                </span>
-              )}
-            </span>
-            <span className="shrink-0 font-mono text-muted-foreground text-xs">
-              {formatDuration(row.minutes)}
-            </span>
-          </li>
-        ))}
+        {activity.byProject.map((row) =>
+          row.projectId ? (
+            <li key={row.projectId} className="flex items-baseline justify-between gap-3 text-sm">
+              <Link href={`/projets/${row.projectId}`} className="truncate hover:underline">
+                {row.projectName ?? "Projet"}
+              </Link>
+              <span className="shrink-0 font-mono text-muted-foreground text-xs">
+                {formatDuration(row.minutes)}
+              </span>
+            </li>
+          ) : (
+            // Un dépôt en doute par remote : le nom seul n'a pas suffi.
+            row.remotes.map((remote) => {
+              const choice = choiceFor.get(remote);
+              return (
+                <li
+                  key={remote}
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm"
+                >
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="truncate font-mono text-muted-foreground text-xs">
+                      {remote}
+                    </span>
+                    {choice ? <RepoLinkPicker choice={choice} /> : null}
+                  </span>
+                  <span className="shrink-0 font-mono text-muted-foreground text-xs">
+                    {row.remotes.length === 1 ? formatDuration(row.minutes) : ""}
+                  </span>
+                </li>
+              );
+            })
+          ),
+        )}
       </ul>
     </section>
   );

@@ -72,6 +72,14 @@ export function ProjectReposSection({ projectId, repos }: Props) {
               <span className="flex min-w-0 items-center gap-2">
                 <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
                 <span className="truncate font-mono text-xs">{r.remote}</span>
+                {r.autoLinked ? (
+                  <span
+                    className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground uppercase tracking-wide"
+                    title="Rattaché automatiquement d'après le nom du dépôt"
+                  >
+                    auto
+                  </span>
+                ) : null}
               </span>
               <Button
                 type="button"

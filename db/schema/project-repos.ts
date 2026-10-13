@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { projects } from "./projects";
 import { users } from "./users";
 
@@ -14,6 +14,10 @@ import { users } from "./users";
  * en SSH ou HTTPS, sur deux machines, tombe sur la même ligne. Un dépôt
  * n'appartient qu'à un projet (index unique), un projet peut en avoir
  * plusieurs.
+ *
+ * `autoLinked` : rattaché par affinité de nom au premier push d'activité
+ * (cf. lib/repos/link.ts), pas par un humain. Affiché sur la fiche projet
+ * pour pouvoir le corriger.
  */
 export const projectRepos = pgTable(
   "project_repos",
@@ -24,6 +28,7 @@ export const projectRepos = pgTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     remote: text("remote").notNull(),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    autoLinked: boolean("auto_linked").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (table) => ({

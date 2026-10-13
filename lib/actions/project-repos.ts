@@ -6,6 +6,7 @@ import { projectRepos } from "@/db/schema/project-repos";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
 import { normalizeGitRemote } from "@/lib/git/remote";
+import { linkRemote } from "@/lib/repos/link";
 import { addProjectRepoSchema, removeProjectRepoSchema } from "@/lib/schemas/project-repos";
 
 export const addProjectRepo = action(addProjectRepoSchema, async ({ input, user }) => {
@@ -15,15 +16,15 @@ export const addProjectRepo = action(addProjectRepoSchema, async ({ input, user 
   }
   const conn = await db();
   // Un dépôt n'appartient qu'à un projet : si déjà pris, on le déplace.
-  const [row] = await conn
-    .insert(projectRepos)
-    .values({ projectId: input.projectId, remote, createdBy: user.id })
-    .onConflictDoUpdate({
-      target: projectRepos.remote,
-      set: { projectId: input.projectId, createdBy: user.id, createdAt: new Date() },
-    })
-    .returning({ id: projectRepos.id, remote: projectRepos.remote });
+  // L'activité Claude Code déjà poussée sous ce remote est imputée au passage.
+  const row = await linkRemote(conn, {
+    remote,
+    projectId: input.projectId,
+    userId: user.id,
+    auto: false,
+  });
   revalidatePath(`/projets/${input.projectId}`);
+  revalidatePath("/temps");
   return row;
 });
 
@@ -34,5 +35,6 @@ export const removeProjectRepo = action(removeProjectRepoSchema, async ({ input 
     .where(eq(projectRepos.id, input.id))
     .returning({ projectId: projectRepos.projectId });
   if (row) revalidatePath(`/projets/${row.projectId}`);
+  revalidatePath("/temps");
   return { id: input.id };
 });

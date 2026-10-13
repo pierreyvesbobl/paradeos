@@ -10,36 +10,15 @@
  * `time_entries` : le temps passé dans Claude Code est un signal
  * d'imputation que l'humain arbitre, jamais un créneau réalisé.
  */
-import { desc, eq, notInArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { claudeCodeActivity } from "../../db/schema/claude-activity";
 import { projectRepos } from "../../db/schema/project-repos";
 import { projects } from "../../db/schema/projects";
-import { gitRemoteBasename, normalizeGitRemote } from "../../lib/git/remote";
+import { normalizeGitRemote } from "../../lib/git/remote";
+import { decideAutoLink, foldName, linkRemote, suggestProjects } from "../../lib/repos/link";
 import type { UserContext } from "../context";
 import { db } from "../db";
-
-const CLOSED_STATUSES = ["lost", "archived", "completed"] as const;
-
-function foldName(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-/** 3 = même nom, 2 = l'un contient l'autre, 1 = un mot de 4+ lettres en commun. */
-function nameAffinity(repoName: string, projectName: string): number {
-  const a = foldName(repoName);
-  const b = foldName(projectName);
-  if (!a || !b) return 0;
-  if (a === b || a.replace(/ /g, "") === b.replace(/ /g, "")) return 3;
-  if (a.includes(b) || b.includes(a)) return 2;
-  const tokens = new Set(a.split(" ").filter((t) => t.length >= 4));
-  return b.split(" ").some((t) => tokens.has(t)) ? 1 : 0;
-}
 
 async function linkedProject(remote: string) {
   const conn = db();
@@ -70,26 +49,7 @@ export async function resolveRepo(args: z.infer<typeof resolveRepoSchema>) {
   const project = await linkedProject(remote);
   if (project) return { remote, linked: true as const, project, candidates: [] };
 
-  const conn = db();
-  const open = await conn
-    .select({
-      id: projects.id,
-      name: projects.name,
-      kind: projects.kind,
-      updatedAt: projects.updatedAt,
-    })
-    .from(projects)
-    .where(notInArray(projects.status, [...CLOSED_STATUSES]))
-    .orderBy(desc(projects.updatedAt))
-    .limit(300);
-
-  const basename = gitRemoteBasename(remote);
-  const candidates = open
-    .map((p, idx) => ({ ...p, score: nameAffinity(basename, p.name), idx }))
-    .sort((a, b) => b.score - a.score || a.idx - b.idx)
-    .slice(0, 3)
-    .map(({ id, name, kind, score }) => ({ id, name, kind, score }));
-
+  const candidates = (await suggestProjects(db(), remote)).slice(0, 3);
   return { remote, linked: false as const, project: null, candidates };
 }
 
@@ -131,14 +91,7 @@ export async function linkRepo(args: z.infer<typeof linkRepoSchema>, ctx: UserCo
   }
   if (!projectId) throw new Error("Projet introuvable.");
 
-  await conn
-    .insert(projectRepos)
-    .values({ projectId, remote, createdBy: ctx.userId })
-    .onConflictDoUpdate({
-      target: projectRepos.remote,
-      set: { projectId, createdBy: ctx.userId, createdAt: new Date() },
-    });
-
+  await linkRemote(conn, { remote, projectId, userId: ctx.userId, auto: false });
   const project = await linkedProject(remote);
   return { remote, project };
 }
@@ -167,12 +120,25 @@ export async function trackClaudeTime(
 
   // Le projet se déduit du rattachement du dépôt, à chaque push : rattacher
   // un dépôt depuis la fiche projet impute aussitôt les segments suivants,
-  // sans rien demander dans Claude Code.
+  // sans rien demander dans Claude Code. Dépôt inconnu : si un seul projet
+  // ouvert porte son nom, on le rattache ici même ; sinon le signal reste
+  // « non rattaché » dans /temps, où l'humain tranche.
+  const conn = db();
   const remote = args.remote ? normalizeGitRemote(args.remote) : null;
   let projectId = args.projectId ?? null;
-  if (!projectId && remote) projectId = (await linkedProject(remote))?.id ?? null;
+  let autoLinked: { id: string; name: string } | null = null;
+  if (!projectId && remote) {
+    projectId = (await linkedProject(remote))?.id ?? null;
+    if (!projectId) {
+      const picked = decideAutoLink(await suggestProjects(conn, remote));
+      if (picked) {
+        await linkRemote(conn, { remote, projectId: picked.id, userId: ctx.userId, auto: true });
+        projectId = picked.id;
+        autoLinked = { id: picked.id, name: picked.name };
+      }
+    }
+  }
 
-  const conn = db();
   const [row] = await conn
     .insert(claudeCodeActivity)
     .values({
@@ -198,5 +164,5 @@ export async function trackClaudeTime(
       startAt: claudeCodeActivity.startedAt,
       endAt: claudeCodeActivity.endedAt,
     });
-  return row;
+  return { ...row, projectId, autoLinked };
 }
