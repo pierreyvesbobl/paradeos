@@ -125,6 +125,13 @@ export async function RapportView({ range, week }: { range?: Range; week?: strin
         <KpiBox label="Jours-hommes" value={formatDays(totalDaysWorked)} tone="muted" />
       </div>
 
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-muted-foreground text-xs">
+        <span className="uppercase tracking-wide">Réalisé par provenance</span>
+        <SourceStat label="Saisi" minutes={stats.bySource.manual} />
+        <SourceStat label="Calendrier" minutes={stats.bySource.calendar} />
+        <SourceStat label="Claude Code" minutes={stats.bySource.claude_code} />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiBox label="Revenu" value={formatEuro(totalRevenue)} tone="actual" />
         <KpiBox label="Coût interne" value={formatEuro(totalCost)} tone="muted" />
@@ -301,6 +308,14 @@ function FilterLink({ href, active, label }: { href: string; active: boolean; la
     >
       {label}
     </Link>
+  );
+}
+
+function SourceStat({ label, minutes }: { label: string; minutes: number }) {
+  return (
+    <span>
+      {label} <span className="font-mono text-foreground">{formatDuration(minutes)}</span>
+    </span>
   );
 }
 

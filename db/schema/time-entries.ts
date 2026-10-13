@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { contacts } from "./contacts";
 import { googleCalendars } from "./google-calendars";
 import { projects } from "./projects";
@@ -7,6 +7,14 @@ import { tasks } from "./tasks";
 import { users } from "./users";
 
 export const timeEntryKind = pgEnum("time_entry_kind", ["planned", "actual"]);
+
+/**
+ * D'où vient le créneau :
+ *  - manual      : saisi dans /planning ou via `log_time`
+ *  - calendar    : miroir d'un event Google Calendar attribué (cf. `attributeCalendarEvent`)
+ *  - claude_code : segment de travail poussé par le mod Claude Code (cf. claude-mod/)
+ */
+export const timeEntrySource = pgEnum("time_entry_source", ["manual", "calendar", "claude_code"]);
 
 /**
  * Créneaux de planification a priori (`planned`) et de réalisation
@@ -41,6 +49,11 @@ export const timeEntries = pgTable(
     googleCalendarId: uuid("google_calendar_id").references(() => googleCalendars.id, {
       onDelete: "set null",
     }),
+    source: timeEntrySource("source").notNull().default("manual"),
+    /** Identifiant côté source, pour écrire de façon idempotente : pour
+     * `claude_code`, `<sessionId>:<n° de segment>`. Le mod réécrit le même
+     * segment à chaque fin de tour en étendant `end_at`. */
+    sourceRef: text("source_ref"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
@@ -51,6 +64,10 @@ export const timeEntries = pgTable(
     kindIdx: index("time_entries_kind_idx").on(table.kind),
     taskIdx: index("time_entries_task_idx").on(table.taskId),
     projectIdx: index("time_entries_project_idx").on(table.projectId),
+    /** Upsert des segments Claude Code : un ref par user et par source. */
+    sourceRefUnique: uniqueIndex("time_entries_source_ref_unique")
+      .on(table.userId, table.source, table.sourceRef)
+      .where(sql`${table.sourceRef} is not null`),
   }),
 );
 

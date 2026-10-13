@@ -177,6 +177,7 @@ export const attributeCalendarEvent = action(
         contactId: input.contactId ?? null,
         googleEventId: event.googleEventId,
         googleCalendarId: event.googleCalendarId,
+        source: "calendar",
       })
       .returning({ id: timeEntries.id });
 

@@ -21,6 +21,7 @@ import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { ProjectEntityField } from "@/components/projects/project-entity-field";
 import { ProjectMeetingsSection } from "@/components/projets/project-meetings-section";
+import { ProjectReposSection } from "@/components/projets/project-repos-section";
 import { ProjectSecretsSection } from "@/components/projets/project-secrets-section";
 import { ProjectTabs } from "@/components/projets/project-tabs";
 import { TaskTable } from "@/components/tasks/task-table";
@@ -39,6 +40,7 @@ import { brandTemplateFor } from "@/lib/billing/brand-templates";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { getProjectProfitability } from "@/lib/db/queries/profitability";
 import { getProjectContacts, getProjectMembers } from "@/lib/db/queries/project-members";
+import { getProjectRepos } from "@/lib/db/queries/project-repos";
 import { getProjectSecretsList } from "@/lib/db/queries/project-secrets";
 import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { getProjectTimeStats } from "@/lib/db/queries/time-stats";
@@ -130,6 +132,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     userOptions,
     contactOptions,
     activityItems,
+    projectRepoRows,
   ] = await Promise.all([
     getProjectMembers(id),
     getProjectContacts(id),
@@ -154,6 +157,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       .leftJoin(entities, eq(entities.id, contactsTable.entityId))
       .orderBy(asc(contactsTable.lastName), asc(contactsTable.firstName)),
     getProjectActivity(id),
+    getProjectRepos(id),
   ]);
 
   const contactAssigneeOptions = contactOptions.map((c) => ({
@@ -277,6 +281,8 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
             options={entityList}
           />
         </section>
+
+        <ProjectReposSection projectId={id} repos={projectRepoRows} />
       </div>
 
       {/* Colonne droite (rail) */}
@@ -404,6 +410,13 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
                 tone="muted"
               />
             </div>
+            {timeStats.claudeMinutes > 0 ? (
+              <p className="text-[11px] text-muted-foreground">
+                Dont Claude Code :{" "}
+                <span className="font-mono">{formatDuration(timeStats.claudeMinutes)}</span>
+              </p>
+            ) : null}
+
             {timeStats.byUser.length > 0 ? (
               <div className="space-y-1.5">
                 <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
