@@ -82,6 +82,32 @@ export function McpSetupGuide({ userId }: { userId: string }) {
         </Card>
       </div>
 
+      <Card
+        title="Claude Code · suivi du temps"
+        subtitle="Le mod paradeos-temps impute le temps de chaque session au projet du dépôt."
+      >
+        <ol className="space-y-2 text-xs">
+          <Step n={1}>
+            Clone le dépôt Parade OS, puis lance Claude Code avec le dossier du mod :
+          </Step>
+        </ol>
+        <CodeBlock code="claude --plugin-dir /CHEMIN/paradeos/claude-mod" label="Au lancement" />
+        <ol className="mt-2 space-y-2 text-xs">
+          <Step n={2}>
+            Au premier tour, <code>/mcp</code> pour autoriser le serveur <code>paradeos</code> que
+            le mod embarque.
+          </Step>
+          <Step n={3}>
+            Dépôt inconnu : Claude Code te demande le projet une fois. Tu peux aussi rattacher un
+            dépôt depuis la fiche projet, section « Dépôts git ».
+          </Step>
+        </ol>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Ne quittent ta machine que des horodatages et le remote git, jamais le contenu des
+          échanges. Règles de comptage dans <code>claude-mod/README.md</code>.
+        </p>
+      </Card>
+
       <SetupCheck />
 
       <details className="text-muted-foreground text-xs">

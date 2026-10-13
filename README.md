@@ -71,6 +71,7 @@ lib/
 proxy.ts                  auth gate global (ex-middleware.ts, convention Next 16)
 mcp-server/               serveur MCP stdio (dev local) ; tools/ par domaine, tools.ts les agrège
 chrome-extension/         extension navigateur (synchro cookie Dougs, import LinkedIn)
+claude-mod/               mod Claude Code : suivi du temps → time_entries (source claude_code)
 scripts/                  seed, magic-link, diagnostics
 scripts/archive/          scripts one-shot déjà joués (ne pas relancer)
 supabase/migrations/      RLS + triggers SQL
@@ -88,6 +89,20 @@ RLS**. Toute la sécurité repose donc sur le code applicatif :
   appelable. Les helpers qui prennent un `userId` explicite (sync
   calendrier, crons) ne doivent jamais y vivre : les mettre dans
   `lib/<domaine>/` (ex. `lib/google/calendar-sync.ts`).
+
+### Suivi du temps Claude Code (`claude-mod/`)
+
+Un mod Claude Code (plugin de function hooks, `claude --plugin-dir claude-mod`)
+compte le temps d'attention passé dans une session et l'écrit dans
+`time_entries` avec `source = claude_code`, imputé au projet dont un dépôt
+(`project_repos`, remote normalisé par `lib/git/remote.ts`) correspond au
+remote git de la session. Un dépôt inconnu déclenche une question dans
+Claude Code ; la réponse est partagée entre machines. Côté serveur, trois
+tools MCP : `resolve_repo`, `link_repo`, `track_claude_time` (upsert par
+`source_ref`). Le rapport /temps ventile par provenance et partage à parts
+égales les minutes de deux sessions ouvertes en parallèle
+(`lib/time/overlap.ts`). Règles de comptage et installation :
+`claude-mod/README.md`.
 
 ## Tests
 
