@@ -133,31 +133,37 @@ async function drainOutbox($: EngineInterface, ctx: Ctx): Promise<void> {
  * sauf en fin de session (`force`). L'écriture est un upsert par
  * `sourceRef` : le dernier envoi porte la durée finale, donc espacer les
  * envois ne change rien au résultat, seulement le nombre d'appels.
+ *
+ * Tout ce qui est en attente va dans la file, pas seulement ce qu'on
+ * envoie : une session tuée avant ses cinq premières minutes ne laisse
+ * sinon aucune trace, et sa fin de session ne s'exécute jamais. La
+ * session suivante poussera le segment tel qu'il était.
  */
 async function flush($: EngineInterface, ctx: Ctx, force: boolean): Promise<void> {
   const tracker = ctx.tracker;
   if (!tracker) return;
   const currentNo = tracker.currentNo();
 
-  const due = tracker.pending().filter((seg) => {
+  const pending = tracker.pending();
+  if (pending.length === 0) return;
+  const toPush = (seg: { no: number; start: number; end: number }): Push => ({
+    sourceRef: `${ctx.sessionId}:${seg.no}`,
+    startAt: new Date(seg.start).toISOString(),
+    endAt: new Date(seg.end).toISOString(),
+    remote: ctx.remote,
+  });
+  await enqueue($, pending.map(toPush));
+
+  const due = pending.filter((seg) => {
     if (force || seg.no !== currentNo) return true;
     const since = seg.end - (ctx.pushedEnd.get(seg.no) ?? seg.start);
     return since >= PUSH_EVERY_MS;
   });
   if (due.length === 0) return;
 
-  const pushes: Push[] = due.map((seg) => ({
-    sourceRef: `${ctx.sessionId}:${seg.no}`,
-    startAt: new Date(seg.start).toISOString(),
-    endAt: new Date(seg.end).toISOString(),
-    remote: ctx.remote,
-  }));
-  await enqueue($, pushes);
-
   const done: string[] = [];
-  for (const [i, push] of pushes.entries()) {
-    const seg = due[i];
-    if (!seg) continue;
+  for (const seg of due) {
+    const push = toPush(seg);
     if (!(await send($, ctx, push))) break;
     tracker.markFlushed(seg.no);
     ctx.pushedEnd.set(seg.no, seg.end);

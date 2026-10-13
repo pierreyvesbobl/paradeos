@@ -49,18 +49,24 @@ ne change pas le résultat, seulement le nombre d'appels réseau.
 - le segment en cours n'est renvoyé que s'il a grandi de 5 min ;
 - `session.end` force l'envoi de tout ce qui reste.
 
-Un envoi qui échoue (hors ligne, serveur non autorisé) reste dans une file
-locale partagée par toutes les sessions de la machine, rejouée au démarrage
-de la suivante. Sans cette file, un segment raté est perdu définitivement :
-une session fermée ne repasse jamais sur le sien.
+Tout segment en attente va dans une file locale partagée par toutes les
+sessions de la machine, rejouée au démarrage de la suivante — qu'il ait
+été envoyé et raté (hors ligne, serveur non autorisé) ou pas encore dû
+(session tuée avant ses cinq premières minutes). Sans cette file, un tel
+segment est perdu définitivement : une session fermée ne repasse jamais
+sur le sien.
 
 ## Résolution du projet
 
 Le mod envoie le remote `origin` normalisé (`github.com/owner/repo`) ;
-Parade OS en déduit le projet via `project_repos`, à chaque envoi. Un dépôt
-se rattache depuis la fiche projet, section « Dépôts git » : les segments
-suivants sont imputés aussitôt, sans rien demander dans Claude Code. Sans
-rattachement, le signal reste visible dans `/temps` sous son remote.
+Parade OS en déduit le projet via `project_repos`, à chaque envoi. Dépôt
+inconnu : si un seul projet ouvert porte son nom (même nom, ou l'un
+contient l'autre — cf. `lib/repos/link.ts`), il est rattaché sans rien
+demander, marqué « auto » sur la fiche projet. Plusieurs candidats, ou
+aucun : le signal reste visible dans `/temps` sous son remote, avec un
+picker qui propose les candidats en tête. Dans les deux cas, l'activité
+déjà poussée sous ce remote est imputée au passage. Un dépôt se rattache
+aussi depuis la fiche projet, section « Dépôts git ».
 
 ## Ce qui quitte la machine
 
