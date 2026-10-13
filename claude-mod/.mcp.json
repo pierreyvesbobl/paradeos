@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "paradeos": {
+      "type": "http",
+      "url": "https://paradeos.vercel.app/api/mcp"
+    }
+  }
+}

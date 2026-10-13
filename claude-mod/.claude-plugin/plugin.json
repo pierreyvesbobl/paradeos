@@ -1,0 +1,23 @@
+{
+  "name": "paradeos-temps",
+  "version": "0.1.0",
+  "description": "Suivi automatique du temps passé dans Claude Code, imputé au projet Parade OS rattaché au dépôt git.",
+  "author": {
+    "name": "Parade"
+  },
+  "mcpServers": "./.mcp.json",
+  "userConfig": {
+    "pauseMinutes": {
+      "type": "number",
+      "description": "Silence (min) après lequel le prompt suivant ouvre un nouveau segment.",
+      "default": 30,
+      "title": "Pause (min)"
+    },
+    "capMinutes": {
+      "type": "number",
+      "description": "Plafond (min) compté pour un tour où Claude travaille seul.",
+      "default": 5,
+      "title": "Plafond par tour (min)"
+    }
+  }
+}
