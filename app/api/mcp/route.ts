@@ -60,6 +60,8 @@ import {
   getProject,
   getProjectSchema,
   getPromptMessages,
+  linkRepo,
+  linkRepoSchema,
   listContacts,
   listContactsSchema,
   listEmails,
@@ -82,10 +84,14 @@ import {
   PROMPTS,
   RESOURCE_TEMPLATES,
   readResource,
+  resolveRepo,
+  resolveRepoSchema,
   searchAll,
   searchAllSchema,
   setMeetingTranscript,
   setMeetingTranscriptSchema,
+  trackClaudeTime,
+  trackClaudeTimeSchema,
   updateContact,
   updateContactSchema,
   updateEntity,
@@ -269,6 +275,26 @@ const TOOL_REGISTRY: Record<
     description: "Enregistre un créneau de temps.",
     schema: logTimeSchema,
     handler: (a, ctx) => logTime(a as never, ctx as never),
+  },
+  resolve_repo: {
+    description:
+      "Remote git (SSH ou HTTPS) → projet Parade OS rattaché, sinon jusqu'à 3 projets candidats par affinité de nom. Utilisé par le mod Claude Code de suivi du temps.",
+    schema: resolveRepoSchema,
+    handler: (a) => resolveRepo(a as never),
+  },
+  link_repo: {
+    write: true,
+    description:
+      "Rattache un remote git à un projet (`projectId` ou `projectName` sans ambiguïté). Un dépôt n'appartient qu'à un projet : le lien précédent est remplacé.",
+    schema: linkRepoSchema,
+    handler: (a, ctx) => linkRepo(a as never, ctx as never),
+  },
+  track_claude_time: {
+    write: true,
+    description:
+      "Upsert d'un segment de temps Claude Code (source=claude_code, kind=actual) identifié par `sourceRef`. Réécrit start/end/projet si le ref existe déjà.",
+    schema: trackClaudeTimeSchema,
+    handler: (a, ctx) => trackClaudeTime(a as never, ctx as never),
   },
   add_note: {
     write: true,

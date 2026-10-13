@@ -7,6 +7,7 @@
  * exposent les données partagées.
  */
 
+export * from "./tools/claude-time";
 export * from "./tools/coworking";
 export * from "./tools/crm";
 export * from "./tools/emails";

@@ -64,6 +64,8 @@ import {
   getNoteSchema,
   getProject,
   getProjectSchema,
+  linkRepo,
+  linkRepoSchema,
   listContacts,
   listContactsSchema,
   listCoworkingContracts,
@@ -89,10 +91,14 @@ import {
   listTasksSchema,
   logTime,
   logTimeSchema,
+  resolveRepo,
+  resolveRepoSchema,
   searchAll,
   searchAllSchema,
   setMeetingTranscript,
   setMeetingTranscriptSchema,
+  trackClaudeTime,
+  trackClaudeTimeSchema,
   updateContact,
   updateContactSchema,
   updateCoworkingContract,
@@ -306,6 +312,33 @@ server.tool(
   logTimeSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await logTime(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "resolve_repo",
+  "Remote git → projet Parade OS rattaché, sinon jusqu'à 3 candidats par affinité de nom (mod Claude Code).",
+  resolveRepoSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await resolveRepo(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "link_repo",
+  "Rattache un remote git à un projet (projectId ou projectName). Remplace le lien précédent.",
+  linkRepoSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await linkRepo(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "track_claude_time",
+  "Upsert d'un segment de temps Claude Code identifié par sourceRef (source=claude_code).",
+  trackClaudeTimeSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await trackClaudeTime(args, ctx), null, 2) }],
   }),
 );
 
