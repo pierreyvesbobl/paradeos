@@ -7,17 +7,22 @@ import { invoices } from "../../../db/schema/invoices";
 import { projects } from "../../../db/schema/projects";
 import { resolveInvoiceDocument } from "../../../lib/billing/brand-documents";
 import { brandTemplateFor } from "../../../lib/billing/brand-templates";
+import { dougsLine } from "../../../lib/billing/dougs-lines";
 import {
   buildDocumentPatch,
+  buildDraftUpdatePayload,
   pushDougsSalesInvoiceDraft,
   resolveDougsClientData,
+  withVerifiedLogo,
 } from "../../../lib/billing/dougs-push";
 import { db } from "../../../lib/db/server";
 import {
   createDougsQuoteDraft,
   getDougsDraftUrl,
   getDougsQuoteUrl,
+  getDougsSalesInvoiceDraft,
   updateDougsQuote,
+  updateDougsSalesInvoice,
 } from "../../../lib/dougs/client";
 import { monthsBetween } from "../../../lib/schemas/coworking";
 
@@ -554,5 +559,127 @@ export async function sendDocumentMcp(
     note: send
       ? "Document finalisé chez Dougs et envoyé au client, message en texte brut avec le PDF en pièce jointe."
       : "Aperçu envoyé à l'utilisateur. Rien n'a été émis. Fais-lui valider le message, puis rappelle avec confirm=true et le même subject/body.",
+  };
+}
+
+// ---------- Modification d'un brouillon ----------
+
+const draftLineSchema = z.object({
+  title: z.string().trim().min(1),
+  description: z.string().trim().default(""),
+  unit: z.string().trim().default("forfait"),
+  quantity: z.number().positive(),
+  unitAmount: z.number().nonnegative(),
+  vatRate: z.number().min(0).max(1).default(0.2),
+});
+
+export const updateDougsInvoiceDraftSchema = z
+  .object({
+    /** Facture Parade OS déjà poussée (brouillon Dougs lié). */
+    invoiceId: z.string().uuid().optional(),
+    /** Ou directement l'identifiant du brouillon Dougs. */
+    dougsDraftId: z.string().trim().min(1).optional(),
+    subject: z.string().trim().max(500).optional(),
+    /** Remplace toutes les lignes. */
+    lines: z.array(draftLineSchema).min(1).optional(),
+    invoicerOthers: z.array(z.string().trim().max(300)).max(5).optional(),
+    thankYouNote: z.string().trim().max(2000).nullable().optional(),
+    footerOthers: z.array(z.string().trim().max(500)).max(5).optional(),
+    paymentTerms: z.string().trim().max(300).optional(),
+    dueDateOption: z.string().trim().max(30).optional(),
+    client: z
+      .object({
+        name: z.string().trim().max(200).optional(),
+        email: z.string().trim().email().optional(),
+        street: z.string().trim().max(300).optional(),
+        zipCode: z.string().trim().max(20).optional(),
+        city: z.string().trim().max(120).optional(),
+        country: z.string().trim().max(80).optional(),
+      })
+      .optional(),
+  })
+  .refine((v) => v.invoiceId || v.dougsDraftId, {
+    message: "Fournis `invoiceId` ou `dougsDraftId`.",
+  });
+
+/**
+ * Modifie un brouillon Dougs déjà poussé : lignes, objet, mentions, client.
+ *
+ * Seul un **brouillon** se modifie. Une facture finalisée a un numéro et
+ * une existence comptable : la corriger passe par un avoir, pas par ici.
+ * Ce qui n'est pas fourni est laissé tel quel ; le logo, lui, est toujours
+ * revérifié (cf. `withVerifiedLogo`).
+ */
+export async function updateDougsInvoiceDraft(
+  args: z.infer<typeof updateDougsInvoiceDraftSchema>,
+  ctx: { userId: string },
+) {
+  let draftId = args.dougsDraftId ?? null;
+  let invoiceRow: { id: string; dougsStatus: string | null; dougsInvoiceId: string | null } | null =
+    null;
+  if (args.invoiceId) {
+    const conn = await db();
+    const [row] = await conn
+      .select({
+        id: invoices.id,
+        dougsStatus: invoices.dougsStatus,
+        dougsInvoiceId: invoices.dougsInvoiceId,
+      })
+      .from(invoices)
+      .where(eq(invoices.id, args.invoiceId))
+      .limit(1);
+    if (!row) throw new Error(`Facture ${args.invoiceId} introuvable.`);
+    if (!row.dougsInvoiceId) {
+      throw new Error("Cette facture n'a pas encore été poussée sur Dougs : rien à modifier.");
+    }
+    invoiceRow = row;
+    draftId = row.dougsInvoiceId;
+  }
+  if (!draftId) throw new Error("Brouillon Dougs introuvable.");
+
+  const draft = await getDougsSalesInvoiceDraft(ctx.userId, draftId);
+  const status = String(draft.status ?? "").toLowerCase();
+  if (status && status !== "draft") {
+    throw new Error(
+      `Le document Dougs ${draft.reference ?? draftId} n'est plus un brouillon (${draft.status}) : il faut un avoir, pas une modification.`,
+    );
+  }
+
+  const document = await withVerifiedLogo(ctx.userId, {
+    ...(args.invoicerOthers !== undefined ? { invoicerOthers: args.invoicerOthers } : {}),
+    ...(args.thankYouNote !== undefined ? { thankYouNote: args.thankYouNote } : {}),
+    ...(args.footerOthers !== undefined ? { footerOthers: args.footerOthers } : {}),
+    ...(args.paymentTerms !== undefined ? { paymentTerms: args.paymentTerms } : {}),
+    ...(args.dueDateOption !== undefined ? { dueDateOption: args.dueDateOption } : {}),
+  });
+
+  const payload = buildDraftUpdatePayload(draft as unknown as Record<string, unknown>, {
+    subject: args.subject,
+    lines: args.lines?.map((l) => dougsLine(l)),
+    document,
+    client: args.client,
+  });
+  const updated = await updateDougsSalesInvoice(ctx.userId, draftId, payload);
+
+  const totalHt = (updated.lines as { amount?: number }[] | undefined)?.reduce(
+    (acc, l) => acc + Number(l.amount ?? 0),
+    0,
+  );
+  if (invoiceRow && totalHt !== undefined) {
+    const conn = await db();
+    await conn
+      .update(invoices)
+      .set({ dougsTotalHt: totalHt.toFixed(2), updatedAt: new Date() })
+      .where(eq(invoices.id, invoiceRow.id));
+  }
+
+  return {
+    dougsDraftId: draftId,
+    reference: updated.reference ?? draft.reference ?? null,
+    status: updated.status ?? "draft",
+    subject: updated.subject ?? null,
+    lines: (updated.lines as unknown[] | undefined)?.length ?? 0,
+    totalHt: totalHt ?? null,
+    url: await getDougsDraftUrl(ctx.userId, draftId),
   };
 }

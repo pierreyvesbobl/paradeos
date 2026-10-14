@@ -26,6 +26,8 @@ import {
   pushProjectQuoteSchema,
   sendDocumentMcp,
   sendDocumentMcpSchema,
+  updateDougsInvoiceDraft,
+  updateDougsInvoiceDraftSchema,
 } from "../app/api/mcp/_dougs-handlers";
 import { getStdioContext } from "./context";
 import { closeDb } from "./db";
@@ -453,6 +455,17 @@ server.tool(
   async (args) => ({
     content: [
       { type: "text", text: JSON.stringify(await pushCoworkingInvoiceMcp(args, ctx), null, 2) },
+    ],
+  }),
+);
+
+server.tool(
+  "update_dougs_invoice_draft",
+  "Modifie un brouillon de facture déjà poussé sur Dougs (lignes, objet, mentions, client). Refuse un document finalisé : il faut un avoir. Args : invoiceId ou dougsDraftId, puis les champs à changer.",
+  updateDougsInvoiceDraftSchema.shape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await updateDougsInvoiceDraft(args, ctx), null, 2) },
     ],
   }),
 );

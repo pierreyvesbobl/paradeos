@@ -27,7 +27,6 @@ import {
   resolveMcpAuth,
   wwwAuthenticate,
 } from "@/lib/oauth/resource-server";
-
 import {
   pushCoworkingInvoiceMcp,
   pushCoworkingInvoiceMcpSchema,
@@ -37,7 +36,10 @@ import {
   pushProjectQuoteSchema,
   sendDocumentMcp,
   sendDocumentMcpSchema,
+  updateDougsInvoiceDraft,
+  updateDougsInvoiceDraftSchema,
 } from "./_dougs-handlers";
+
 import {
   addNote,
   addNoteSchema,
@@ -362,6 +364,14 @@ const TOOL_REGISTRY: Record<
       "Pousse une facture coworking existante sur Dougs (brouillon). Args: coworkingInvoiceId.",
     schema: pushCoworkingInvoiceMcpSchema,
     handler: (a, ctx) => pushCoworkingInvoiceMcp(a as never, ctx as never),
+  },
+  update_dougs_invoice_draft: {
+    write: true,
+    description:
+      "Modifie un brouillon de facture déjà poussé sur Dougs : lignes (remplacées), objet, mentions (invoicerOthers, thankYouNote, footerOthers, paymentTerms, dueDateOption) et champs client. " +
+      "Refuse tout document finalisé : une facture émise se corrige par un avoir. Args: invoiceId (Parade OS) ou dougsDraftId, puis les champs à changer.",
+    schema: updateDougsInvoiceDraftSchema,
+    handler: (a, ctx) => updateDougsInvoiceDraft(a as never, ctx as never),
   },
 };
 

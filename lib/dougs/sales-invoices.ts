@@ -43,6 +43,15 @@ export type DougsSalesInvoiceDraft = {
   [key: string]: unknown;
 };
 
+/** Brouillon tel que Dougs le tient : lignes, client, mentions, logo. */
+export async function getDougsSalesInvoiceDraft(
+  userId: string,
+  draftId: string,
+): Promise<DougsSalesInvoiceDraft> {
+  const res = await dougsFetch(userId, `/companies/{companyId}/sales-invoices-drafts/${draftId}`);
+  return res.json();
+}
+
 /** Crée un brouillon vide. Reference auto-générée. */
 export async function createDougsSalesInvoiceDraft(
   userId: string,
