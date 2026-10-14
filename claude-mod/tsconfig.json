@@ -1,3 +1,19 @@
 {
-  "extends": "./.claude-plugin/types/tsconfig.json"
+  // Autonome, sans `extends` vers .claude-plugin/types/ : ce dossier est
+  // généré par `claude plugin validate` et ignoré par git. En CI il n'existe
+  // pas, et un `extends` cassé faisait échouer la transformation esbuild de
+  // tracker.ts dans Vitest (TSCONFIG_ERROR : Tsconfig not found).
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "typeRoots": ["./.claude-plugin/types"],
+    "types": ["claude-code", "claude-code-tools", "claude-code-mcp"]
+  },
+  "include": ["hooks"]
 }
