@@ -9,7 +9,12 @@ import { invoices } from "@/db/schema/invoices";
 import { projects } from "@/db/schema/projects";
 import { action } from "@/lib/actions/action";
 import { resolveInvoiceDocument } from "@/lib/billing/brand-documents";
-import { buildDocumentPatch, resolveDougsClientData } from "@/lib/billing/dougs-push";
+import { brandTemplateFor } from "@/lib/billing/brand-templates";
+import {
+  buildDocumentPatch,
+  resolveDougsClientData,
+  withVerifiedLogo,
+} from "@/lib/billing/dougs-push";
 import { db } from "@/lib/db/server";
 import {
   createDougsQuoteDraft,
@@ -139,7 +144,14 @@ export const pushProjectQuoteToDougs = action(pushSchema, async ({ input, user }
   // `dueDateOption` est écarté : un devis a une date d'expiration, pas une
   // échéance de paiement.
   const terms = await resolveInvoiceDocument("automato", row.projectBillingTerms);
-  const { dueDateOption: _ignoré, ...quoteDocument } = terms.document;
+  const { dueDateOption: _ignoré, ...invoiceDocument } = terms.document;
+  // Un devis a sa propre note (validité, coûts hors devis) et son pied (CGPS
+  // acceptées par la signature) : la marque les ajoute par-dessus ceux des
+  // factures.
+  const quoteDocument = await withVerifiedLogo(user.id, {
+    ...invoiceDocument,
+    ...brandTemplateFor("automato").quoteDocument,
+  });
 
   const lines = input.lines.map((l) => ({
     title: l.title,

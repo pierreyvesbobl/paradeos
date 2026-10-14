@@ -233,16 +233,24 @@ describe("mentions du document", () => {
     expect(brandTemplateFor("coworking").document.latePaymentTerms).toBeUndefined();
   });
 
-  it("laisse les mentions d'Automato aux réglages Dougs, mais fixe l'échéance", () => {
+  it("épingle toutes les mentions d'Automato : Dougs recopie la dernière facture émise", () => {
     const doc = brandTemplateFor("automato").document;
-    // Sous-titre, CGPS et note de remerciement : Dougs fait foi.
-    expect(doc.invoicerOthers).toBeUndefined();
-    expect(doc.footerOthers).toBeUndefined();
-    expect(doc.thankYouNote).toBeUndefined();
-    expect(doc.paymentTerms).toBeUndefined();
-    // L'échéance est explicitée pour ne pas dépendre d'un défaut Dougs qu'un
-    // changement de réglage déplacerait sans qu'on le voie.
+    // Le 14/10/2026, après des factures coworking, une facture Automato est
+    // sortie sous-titrée « La Cachette est une marque de Parade SAS ».
+    expect(doc.invoicerOthers).toEqual(["Automato est une marque du groupe Parade"]);
+    expect(doc.footerOthers?.[0]).toContain("CGPS");
+    expect(doc.footerOthers?.[0]).not.toContain("signature");
+    expect(doc.thankYouNote).toBeNull();
+    expect(doc.paymentTerms).toContain("30 jours");
     expect(doc.dueDateOption).toBe("DAYS_30");
+  });
+
+  it("réserve aux devis la note de validité et le pied « par la signature »", () => {
+    const quote = brandTemplateFor("automato").quoteDocument;
+    expect(quote?.thankYouNote).toContain("Devis valable 30 jours");
+    expect(quote?.footerOthers?.[0]).toContain("signature du présent devis");
+    expect(quote?.paymentTerms).toBe("à réception");
+    expect(brandTemplateFor("coworking").quoteDocument).toBeUndefined();
   });
 
   it("accorde l'échéance du document avec celle que Parade OS suit", () => {
@@ -253,20 +261,12 @@ describe("mentions du document", () => {
 });
 
 describe("logo", () => {
-  it("épingle un logo par marque plutôt que de suivre le défaut société", () => {
-    // Le défaut `defaultLogoUuid` est global : le changer pour une marque
-    // repeint les factures de toutes les autres. Épingler l'évite.
+  it("n'épingle aucun logo : Dougs n'en garde qu'un par société", () => {
+    // Chaque téléversement remplace le fichier précédent ; un UUID épinglé
+    // finit par répondre 404 et le document sort avec une image cassée.
     for (const brand of ["coworking", "automato", "parade"] as const) {
-      expect(brandTemplateFor(brand).document.logoUuid).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-      );
+      expect(brandTemplateFor(brand).document.logoUuid).toBeUndefined();
     }
-  });
-
-  it("donne au coworking un logo distinct de la prestation", () => {
-    expect(brandTemplateFor("coworking").document.logoUuid).not.toBe(
-      brandTemplateFor("automato").document.logoUuid,
-    );
   });
 });
 

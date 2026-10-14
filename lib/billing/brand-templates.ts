@@ -74,16 +74,15 @@ export type DocumentOverrides = {
   /** Calcul d'échéance côté Dougs, ex. `DAYS_30`. */
   dueDateOption?: string;
   /**
-   * Logo du document (`logoUuid`).
+   * Logo du document (`logoUuid`). Omis = logo par défaut de la société.
    *
-   * Épinglé explicitement pour chaque marque, et pas laissé au défaut de la
-   * société : ce défaut est **global**, donc le changer depuis les réglages
-   * Dougs repeint toutes les factures de toutes les marques d'un coup. C'est
-   * exactement ce qui s'est produit le 2026-10-05.
-   *
-   * Un UUID s'obtient en téléversant l'image chez Dougs
-   * (`POST /companies/{id}/attachments?filename=…&type=invoicingLogo`,
-   * multipart, champ `file`).
+   * On a cru pouvoir épingler un logo par marque. Dougs ne le permet pas :
+   * la société n'a **qu'une** pièce `invoicingLogo`, et chaque téléversement
+   * (`POST /companies/{id}/attachments?type=invoicingLogo`) remplace la
+   * précédente, dont le fichier disparaît. Les trois UUID réglés le
+   * 2026-10-05 et les deux épinglés ici répondaient tous 404 le 2026-10-14 :
+   * image cassée sur toutes les factures. Un `logoUuid` n'est donc posé que
+   * s'il existe encore (cf. `withVerifiedLogo`), sinon on laisse le défaut.
    */
   logoUuid?: string;
 };
@@ -121,6 +120,8 @@ export type BrandTemplate = {
   reminderCadenceDays: number[];
   /** Ce que la marque impose au document Dougs. */
   document: DocumentOverrides;
+  /** Ce qu'un **devis** de la marque ajoute par-dessus `document`. */
+  quoteDocument?: DocumentOverrides;
 };
 
 /**
@@ -259,9 +260,6 @@ const COWORKING: BrandTemplate = {
     footerOthers: [],
     // Un abonnement se règle sur la période qu'il couvre, pas 30 jours après.
     dueDateOption: "DAYS_15",
-    // « la_cachette_space.jpeg », téléversé le 2026-10-05. À confirmer sur un
-    // brouillon : c'est le logo qui doit apparaître sur les factures du lieu.
-    logoUuid: "cd5ac84f-34f4-4bcb-b653-3fa9aa7b87ff",
   },
 };
 
@@ -313,16 +311,29 @@ const AUTOMATO: BrandTemplate = {
     ].join("\n"),
   }),
   reminderCadenceDays: [7, 21, 45],
-  // Rien à surcharger côté mentions : les réglages Dougs globaux sont déjà
-  // ceux d'Automato (sous-titre, CGPS, note de remerciement). On explicite en
-  // revanche l'échéance, pour ne pas dépendre d'un défaut Dougs qu'un
-  // changement de réglage pourrait déplacer sans qu'on le voie.
+  // Tout est épinglé, y compris ce qui « était déjà le défaut Dougs ». Ce
+  // défaut n'en est pas un : Dougs préremplit un brouillon avec les mentions
+  // de la **dernière facture émise** (`lastIssuedInvoicingInfos`). Le 14/10,
+  // après une série de factures coworking, une facture Automato est sortie
+  // sous-titrée « La Cachette est une marque de Parade SAS ».
   document: {
+    invoicerOthers: ["Automato est une marque du groupe Parade"],
+    // La note des devis (coûts du pipeline, validité) n'a rien à faire sur
+    // une facture.
+    thankYouNote: null,
+    paymentTerms: "Paiement à 30 jours date de facture, par virement bancaire.",
+    footerOthers: [
+      "Le Client reconnaît avoir pris connaissance des CGPS de Parade SAS disponibles à https://automato.tech/cgps/ et les accepter sans réserve.",
+    ],
     dueDateOption: "DAYS_30",
-    // Logo historique, celui qui servait de défaut société avant le
-    // 2026-10-05. L'épingler protège la prestation d'un changement de défaut
-    // décidé pour une autre marque.
-    logoUuid: "98426423-a3a5-4416-bd40-a48898585247",
+  },
+  quoteDocument: {
+    thankYouNote:
+      "Coûts d'usage du pipeline (appels LLM, génération des visuels, API SEO) hors devis. Devis valable 30 jours.",
+    paymentTerms: "à réception",
+    footerOthers: [
+      "Le Client reconnaît avoir pris connaissance des CGPS de Parade SAS disponibles à https://automato.tech/cgps/ et les accepter sans réserve par la signature du présent devis.",
+    ],
   },
 };
 
@@ -383,9 +394,6 @@ const PARADE: BrandTemplate = {
     // signature d'un devis.
     footerOthers: [],
     dueDateOption: "DAYS_30",
-    // Même logo qu'Automato : Parade et Automato partagent leur identité
-    // visuelle, seule La Cachette a la sienne.
-    logoUuid: "98426423-a3a5-4416-bd40-a48898585247",
   },
 };
 

@@ -17,6 +17,7 @@ import {
   createDougsSalesInvoiceDraft,
   DougsApiError,
   DougsAuthError,
+  dougsFileExists,
   searchDougsClients,
   updateDougsSalesInvoice,
 } from "@/lib/dougs/client";
@@ -59,6 +60,22 @@ export function buildDocumentPatch(
   }
 
   return patch;
+}
+
+/**
+ * Retire le logo s'il n'existe plus chez Dougs : le document prend alors le
+ * logo par défaut de la société au lieu d'une image cassée. Voir
+ * `DocumentOverrides.logoUuid` pour la raison.
+ */
+export async function withVerifiedLogo<T extends DocumentOverrides | undefined>(
+  userId: string,
+  ov: T,
+): Promise<T> {
+  if (!ov?.logoUuid) return ov;
+  if (await dougsFileExists(userId, ov.logoUuid)) return ov;
+  console.warn(`[dougs] logo ${ov.logoUuid} introuvable chez Dougs, logo par défaut appliqué`);
+  const { logoUuid: _dead, ...rest } = ov;
+  return rest as T;
 }
 
 /** Adresse au format attendu par Dougs (`zipCode` camelCase dans le payload). */
@@ -201,11 +218,12 @@ export async function pushDougsSalesInvoiceDraft(args: {
   document?: DocumentOverrides;
 }): Promise<{ id: string; reference: string }> {
   try {
+    const document = await withVerifiedLogo(args.userId, args.document);
     const draft = await createDougsSalesInvoiceDraft(args.userId);
     await updateDougsSalesInvoice(args.userId, draft.id, {
       ...draft,
       ...(args.subject ? { subject: args.subject } : {}),
-      ...buildDocumentPatch(draft, args.document),
+      ...buildDocumentPatch(draft, document),
       clientData: args.clientData,
       lines: args.lines,
     });

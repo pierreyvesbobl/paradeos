@@ -39,9 +39,10 @@ export async function BrandLogosSection() {
           formats différents n'occupent pas la même place sur le document.
         </p>
         <p className="mt-1 text-muted-foreground text-xs">
-          Épingler un logo par marque est volontaire : le logo « par défaut » des réglages Dougs est
-          global à la société, donc le changer pour une marque repeint les documents de toutes les
-          autres.
+          Limite Dougs : la société n'a qu'un seul logo de facturation, et chaque téléversement
+          remplace le précédent — y compris celui réglé pour une autre marque, dont le fichier
+          disparaît. Un logo devenu introuvable est ignoré au moment du push : le document prend
+          alors le logo par défaut de la société plutôt qu'une image cassée.
         </p>
       </header>
       <BrandLogosSettings brands={brands} />

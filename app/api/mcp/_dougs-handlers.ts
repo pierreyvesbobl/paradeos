@@ -318,6 +318,9 @@ export async function pushProjectMilestoneInvoice(
   );
 
   const template = brandTemplateFor("automato");
+  // Conditions négociées sur le projet et logo réglé en base, comme l'action
+  // UI : ce handler envoyait le gabarit brut, donc pas le même document.
+  const terms = await resolveInvoiceDocument("automato", project.billingTerms);
   const ctxLines = {
     label,
     amountHt,
@@ -332,7 +335,7 @@ export async function pushProjectMilestoneInvoice(
     clientData,
     lines: template.buildLines(ctxLines),
     subject: template.invoiceSubject(ctxLines),
-    document: template.document,
+    document: terms.document,
   });
 
   let milestoneInvoiceId: string;
@@ -463,12 +466,13 @@ export async function pushCoworkingInvoiceMcp(
     unitPriceHt: Number(invoice.unitPriceHt ?? contract.unitPriceHt),
   };
 
+  const terms = await resolveInvoiceDocument(invoice.brand, contract.billingTerms);
   const draft = await pushDougsSalesInvoiceDraft({
     userId: ctx.userId,
     clientData,
     lines: template.buildLines(lineCtx),
     subject: template.invoiceSubject(lineCtx),
-    document: template.document,
+    document: terms.document,
   });
 
   // Pas de passage à 'sent' ici : un brouillon Dougs n'est pas une facture

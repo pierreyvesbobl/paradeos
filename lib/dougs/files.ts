@@ -64,6 +64,36 @@ export async function downloadDougsQuoteDraftPdf(
   );
 }
 
+/**
+ * Le fichier existe-t-il encore chez Dougs ? Une 3xx vers l'URL signée
+ * vaut oui, une 404 vaut non. Tout le reste (timeout, 5xx) vaut oui : on ne
+ * retire pas un logo sur un doute, Dougs tranchera.
+ *
+ * Sert avant de poser un `logoUuid` sur un document : Dougs ne garde qu'un
+ * logo de facturation par société, et remplace le fichier à chaque
+ * téléversement. Un UUID réglé il y a huit jours peut ne plus mener nulle
+ * part, et le document sort avec une image cassée.
+ */
+export async function dougsFileExists(userId: string, fileUuid: string): Promise<boolean> {
+  const session = await loadSession(userId);
+  if (!session) return true;
+  try {
+    const res = await fetchWithTimeout(
+      new URL(`${BASE}/files/${encodeURIComponent(fileUuid)}/actions/download`),
+      {
+        method: "GET",
+        redirect: "manual",
+        headers: { Cookie: session.cookie },
+        timeoutMs: 8000,
+        label: "Dougs HEAD /files",
+      },
+    );
+    return res.status !== 404;
+  } catch {
+    return true;
+  }
+}
+
 async function downloadFromDougs(
   userId: string,
   pathTemplate: string,
