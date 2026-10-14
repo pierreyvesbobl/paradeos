@@ -189,7 +189,7 @@ export const patchProject = action(patchProjectSchema, async ({ input }) => {
   return { id: input.id };
 });
 
-export const deleteProject = action(deleteProjectSchema, async ({ input }) => {
+const deleteProject = action(deleteProjectSchema, async ({ input }) => {
   const conn = await db();
   await conn.delete(projects).where(eq(projects.id, input.id));
   revalidatePath("/projets");

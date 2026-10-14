@@ -290,7 +290,7 @@ export const revertProposal = action(revertProposalSchema, async ({ input }) => 
   return { ok: true as const };
 });
 
-export const deleteMeeting = action(deleteMeetingSchema, async ({ input }) => {
+const deleteMeeting = action(deleteMeetingSchema, async ({ input }) => {
   const conn = await db();
   await conn.delete(meetings).where(eq(meetings.id, input.id));
   revalidatePath("/meetings");

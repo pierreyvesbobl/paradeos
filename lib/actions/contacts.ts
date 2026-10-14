@@ -279,7 +279,7 @@ export const setPrimaryContactEmail = action(setPrimaryContactEmailSchema, async
   return { contactId: input.contactId, email: input.email };
 });
 
-export const deleteContact = action(deleteContactSchema, async ({ input }) => {
+const deleteContact = action(deleteContactSchema, async ({ input }) => {
   const conn = await db();
   await conn.delete(contacts).where(eq(contacts.id, input.id));
   revalidatePath("/crm/contacts");

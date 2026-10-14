@@ -115,7 +115,7 @@ export const patchEntity = action(patchEntitySchema, async ({ input }) => {
   return { id };
 });
 
-export const deleteEntity = action(deleteEntitySchema, async ({ input }) => {
+const deleteEntity = action(deleteEntitySchema, async ({ input }) => {
   const conn = await db();
   await conn.delete(entities).where(eq(entities.id, input.id));
   revalidatePath("/crm/entites");

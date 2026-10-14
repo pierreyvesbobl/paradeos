@@ -6,11 +6,7 @@ import { noteAttachments } from "@/db/schema/note-attachments";
 import { notes } from "@/db/schema/notes";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
-import {
-  attachToNoteSchema,
-  deleteAttachmentSchema,
-  signedUrlSchema,
-} from "@/lib/schemas/note-attachments";
+import { attachToNoteSchema, signedUrlSchema } from "@/lib/schemas/note-attachments";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET = "note-attachments";
@@ -71,32 +67,6 @@ export const signedUploadUrl = action(signedUrlSchema, async ({ input }) => {
     signedUrl: data.signedUrl,
     token: data.token,
   };
-});
-
-/** Supprime une pièce jointe (DB + Storage). */
-export const deleteAttachment = action(deleteAttachmentSchema, async ({ input }) => {
-  const conn = await db();
-  const [att] = await conn
-    .select({
-      id: noteAttachments.id,
-      storagePath: noteAttachments.storagePath,
-      noteId: noteAttachments.noteId,
-    })
-    .from(noteAttachments)
-    .where(eq(noteAttachments.id, input.id))
-    .limit(1);
-
-  if (!att) throw new Error("Pièce jointe introuvable.");
-
-  const sb = createAdminClient();
-  const { error } = await sb.storage.from(BUCKET).remove([att.storagePath]);
-  if (error) console.error("[note-attachments] storage remove error:", error);
-
-  await conn.delete(noteAttachments).where(eq(noteAttachments.id, input.id));
-
-  // Revalide tous les paths possibles (on n'a pas le sujet ici sans 1 query de plus).
-  revalidatePath("/notes");
-  return { ok: true as const };
 });
 
 /** `<note_id>/<uuid>-<fichier>` sans segment `..` ni chemin absolu. */

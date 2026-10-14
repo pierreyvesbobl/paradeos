@@ -17,7 +17,3 @@ export const attachToNoteSchema = z.object({
     .max(50 * 1024 * 1024)
     .optional(),
 });
-
-export const deleteAttachmentSchema = z.object({
-  id: z.string().uuid(),
-});
