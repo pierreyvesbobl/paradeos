@@ -152,17 +152,23 @@ export async function pushProjectQuote(
   }));
 
   const draft = await createDougsQuoteDraft(ctx.userId);
-  // Mêmes mentions que depuis l'UI : logo de la marque, sous-titre, modalités.
+  // Mentions de la marque et conditions du projet, puis ce qu'un devis a en
+  // propre (note de validité, pied « par la signature », à réception).
   // `dueDateOption` est écarté — un devis a une expiration, pas une échéance.
-  const { dueDateOption: _ignoré, ...quoteDocument } = (
+  const { dueDateOption: _ignoré, ...invoiceDocument } = (
     await resolveInvoiceDocument("automato", row.projectBillingTerms)
   ).document;
+  const quoteDocument = await withVerifiedLogo(ctx.userId, {
+    ...invoiceDocument,
+    ...brandTemplateFor("automato").quoteDocument,
+  });
 
   const updated = await updateDougsQuote(ctx.userId, draft.id, {
     ...draft,
     ...buildDocumentPatch(draft as unknown as Record<string, unknown>, quoteDocument),
     subject: args.subject,
-    thankYouNote: args.thankYouNote,
+    // Le rédacteur peut remplacer la note ; sinon celle de la marque.
+    thankYouNote: args.thankYouNote || (quoteDocument.thankYouNote ?? ""),
     clientData,
     lines,
   });

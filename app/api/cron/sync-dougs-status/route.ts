@@ -53,7 +53,7 @@ async function sleep(ms: number) {
 
 /**
  * Mapping Dougs status → invoice_status local pour les devis. Doit
- * rester cohérent avec linkProjectQuoteToDougs et pushProjectQuoteToDougs.
+ * rester cohérent avec linkProjectQuoteToDougs et push_project_quote (MCP).
  */
 function mapDougsQuoteStatus(dougs: string | null): "draft" | "sent" | "accepted" | "refused" {
   switch ((dougs ?? "").toUpperCase()) {
