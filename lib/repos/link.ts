@@ -35,8 +35,14 @@ export function nameAffinity(repoName: string, projectName: string): number {
   const a = foldName(repoName);
   const b = foldName(projectName);
   if (!a || !b) return 0;
-  if (a === b || a.replace(/ /g, "") === b.replace(/ /g, "")) return 3;
-  if (a.includes(b) || b.includes(a)) return 2;
+  const aTight = a.replace(/ /g, "");
+  const bTight = b.replace(/ /g, "");
+  if (a === b || aTight === bTight) return 3;
+  // Espaces ignorés des deux côtés : « Mise en place de Parade OS » contient
+  // bien `paradeos`. Garde-fou sur la longueur : un dépôt `os` ou `api` ne
+  // doit pas s'accrocher à n'importe quel nom.
+  const shorter = Math.min(aTight.length, bTight.length);
+  if (shorter >= 5 && (aTight.includes(bTight) || bTight.includes(aTight))) return 2;
   const tokens = new Set(a.split(" ").filter((t) => t.length >= 4));
   return b.split(" ").some((t) => tokens.has(t)) ? 1 : 0;
 }

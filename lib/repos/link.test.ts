@@ -10,6 +10,16 @@ describe("nameAffinity", () => {
     expect(nameAffinity("site-vitrine-parade", "Refonte vitrine")).toBe(1);
     expect(nameAffinity("foo", "Bar")).toBe(0);
   });
+
+  it("retrouve le dépôt dans un nom de projet plus long, espaces ignorés", () => {
+    expect(nameAffinity("paradeos", "Mise en place de Parade OS")).toBe(2);
+    expect(
+      rankProjects("local/paradeos", [{ id: "a", name: "Mise en place de Parade OS" }]),
+    ).toEqual([{ id: "a", name: "Mise en place de Parade OS", score: 2 }]);
+    // Trop court pour être un indice : `os` est dans « Parade OS » et ailleurs.
+    expect(nameAffinity("os", "Mise en place de Parade OS")).toBe(0);
+    expect(nameAffinity("gpasplus-channel-health", "GpasPlus - Automatisation e-commerce")).toBe(1);
+  });
 });
 
 describe("decideAutoLink", () => {
