@@ -10,6 +10,18 @@ l'humain l'arbitre dans `/temps` avec les autres sources (réunions, mails,
 calendrier) avant de saisir un vrai `time_entry`. Le mod ne demande donc
 jamais rien en pleine session.
 
+Côté Parade OS, les segments contigus d'une même séance (silence < 30 min,
+même projet ou même dépôt) forment un **bloc** affiché en fantôme hachuré
+dans la grille semaine de `/temps`. Un clic ouvre le dialogue de créneau
+prérempli ; enregistrer impute le bloc (`claude_code_activity.time_entry_id`),
+qui sort de la grille. Supprimer le créneau l'y ramène. L'onglet Rapport
+montre par projet le signal reçu, la part déjà imputée et le reste.
+
+La même consolidation se fait depuis Claude, en fin de journée : le prompt
+MCP `consolidate_my_day` (ou à la main `list_claude_activity`, puis
+`log_time` avec `claudeSegmentIds`) liste les blocs du jour, les confronte
+aux réunions et aux créneaux déjà saisis, et enregistre ce qu'on valide.
+
 ## Installation
 
 ```bash
@@ -59,7 +71,10 @@ sur le sien.
 ## Résolution du projet
 
 Le mod envoie le remote `origin` normalisé (`github.com/owner/repo`) ;
-Parade OS en déduit le projet via `project_repos`, à chaque envoi. Dépôt
+Parade OS en déduit le projet via `project_repos`, à chaque envoi. Sans
+dépôt git (dossier de maquettes, motion design…), il envoie le nom du
+dossier de travail et Parade OS le traite comme un dépôt sous la clé
+`local/<dossier>` : même rattachement par nom, même picker. Dépôt
 inconnu : si un seul projet ouvert porte son nom (même nom, ou l'un
 contient l'autre — cf. `lib/repos/link.ts`), il est rattaché sans rien
 demander, marqué « auto » sur la fiche projet. Plusieurs candidats, ou
@@ -70,8 +85,8 @@ aussi depuis la fiche projet, section « Dépôts git ».
 
 ## Ce qui quitte la machine
 
-Horodatages, remote git, numéro de segment. Jamais le contenu des échanges
-ni les noms de fichiers.
+Horodatages, remote git (ou, sans dépôt, le nom du dossier de travail),
+numéro de segment. Jamais le contenu des échanges ni les noms de fichiers.
 
 ## Développement
 

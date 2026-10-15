@@ -11,9 +11,20 @@ import {
   moveTimeEntrySchema,
   updateTimeEntrySchema,
 } from "@/lib/schemas/time-entries";
+import { attachClaudeSegments, claimableClaudeSegments } from "@/lib/time/claude-blocks";
 
 export const createTimeEntry = action(createTimeEntrySchema, async ({ input, user }) => {
   const conn = await db();
+
+  // Imputation d'un bloc Claude Code : on ne prend que les segments de
+  // l'utilisateur encore libres. Un bloc déjà tranché (autre onglet, double
+  // clic) ne doit pas produire un second créneau.
+  const segmentIds = input.claudeSegmentIds ?? [];
+  const segments = await claimableClaudeSegments(conn, user.id, segmentIds);
+  if (segmentIds.length > 0 && segments.length === 0) {
+    throw new Error("Ce bloc d'activité a déjà été imputé.");
+  }
+
   const [row] = await conn
     .insert(timeEntries)
     .values({
@@ -27,8 +38,18 @@ export const createTimeEntry = action(createTimeEntrySchema, async ({ input, use
       projectId: input.projectId ?? null,
       contactId: input.contactId ?? null,
       color: input.color ?? null,
+      source: segments.length > 0 ? "claude_code" : "manual",
+      sourceRef: segments[0]?.sourceRef ?? null,
     })
     .returning({ id: timeEntries.id });
+
+  if (row) {
+    await attachClaudeSegments(
+      conn,
+      segments.map((s) => s.id),
+      row.id,
+    );
+  }
 
   revalidatePath("/temps");
   revalidatePath("/");

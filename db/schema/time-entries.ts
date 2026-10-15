@@ -12,7 +12,8 @@ export const timeEntryKind = pgEnum("time_entry_kind", ["planned", "actual"]);
  * D'où vient le créneau :
  *  - manual      : saisi dans /planning ou via `log_time`
  *  - calendar    : miroir d'un event Google Calendar attribué (cf. `attributeCalendarEvent`)
- *  - claude_code : segment de travail poussé par le mod Claude Code (cf. claude-mod/)
+ *  - claude_code : imputé par l'humain depuis un bloc d'activité Claude Code
+ *                  (cf. claude_code_activity.time_entry_id) — jamais écrit par le mod
  */
 export const timeEntrySource = pgEnum("time_entry_source", ["manual", "calendar", "claude_code"]);
 
@@ -50,9 +51,8 @@ export const timeEntries = pgTable(
       onDelete: "set null",
     }),
     source: timeEntrySource("source").notNull().default("manual"),
-    /** Identifiant côté source, pour écrire de façon idempotente : pour
-     * `claude_code`, `<sessionId>:<n° de segment>`. Le mod réécrit le même
-     * segment à chaque fin de tour en étendant `end_at`. */
+    /** Identifiant côté source. Pour `claude_code`, le `sourceRef` du
+     * premier segment du bloc imputé : une trace, pas une clé d'upsert. */
     sourceRef: text("source_ref"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),

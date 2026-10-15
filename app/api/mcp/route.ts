@@ -64,6 +64,8 @@ import {
   getPromptMessages,
   linkRepo,
   linkRepoSchema,
+  listClaudeActivity,
+  listClaudeActivitySchema,
   listContacts,
   listContactsSchema,
   listEmails,
@@ -290,6 +292,12 @@ const TOOL_REGISTRY: Record<
       "Rattache un remote git à un projet (`projectId` ou `projectName` sans ambiguïté). Un dépôt n'appartient qu'à un projet : le lien précédent est remplacé.",
     schema: linkRepoSchema,
     handler: (a, ctx) => linkRepo(a as never, ctx as never),
+  },
+  list_claude_activity: {
+    description:
+      "Blocs d'activité Claude Code à imputer (séances fusionnées, par projet ou dépôt) pour un jour (Europe/Paris, défaut aujourd'hui) ou une période. Sert à consolider sa journée : chaque bloc devient un créneau via log_time + claudeSegmentIds.",
+    schema: listClaudeActivitySchema,
+    handler: (a, ctx) => listClaudeActivity(a as never, ctx as never),
   },
   track_claude_time: {
     write: true,

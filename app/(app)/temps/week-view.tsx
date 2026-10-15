@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "@phosphor-icons/react";
+import { Plus, Terminal } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -68,10 +68,29 @@ export type GoogleEventSerialized = {
   backgroundColor: string | null;
 };
 
+/**
+ * Bloc d'activité Claude Code pas encore imputé (cf. getClaudeBlocksForUser).
+ * Fantôme dans la grille : un clic ouvre le dialogue de créneau prérempli.
+ */
+export type ClaudeBlockSerialized = {
+  id: string;
+  segmentIds: string[];
+  projectId: string | null;
+  /** Projet, dépôt ou dossier — ce qu'on affiche sur le bloc. Null quand
+   * la session n'a rien dit (ni git, ni dossier : anciennes versions du mod). */
+  label: string | null;
+  /** Titre proposé pour le créneau. */
+  title: string;
+  startAt: string;
+  endAt: string;
+  minutes: number;
+};
+
 type Props = {
   weekStartIso: string;
   entries: EntrySerialized[];
   googleEvents: GoogleEventSerialized[];
+  claudeBlocks: ClaudeBlockSerialized[];
   tasks: { id: string; title: string }[];
   projects: { id: string; name: string }[];
   contacts: { id: string; label: string }[];
@@ -101,6 +120,7 @@ export function WeekView({
   weekStartIso,
   entries,
   googleEvents,
+  claudeBlocks,
   tasks,
   projects,
   contacts,
@@ -122,7 +142,12 @@ export function WeekView({
   const gridRef = useRef<HTMLDivElement | null>(null);
 
   const [dialogState, setDialogState] = useState<
-    | { mode: "create"; defaults: { startAt: string; endAt: string } }
+    | {
+        mode: "create";
+        defaults: { startAt: string; endAt: string };
+        /** Création depuis un bloc Claude Code : préremplissage + imputation. */
+        claude?: ClaudeBlockSerialized;
+      }
     | { mode: "edit"; entry: EntrySerialized }
     | null
   >(null);
@@ -314,6 +339,7 @@ export function WeekView({
           {days.map((d, i) => {
             const today = isSameDay(d, new Date());
             const minutes = dayActualMinutes(d, optimistic);
+            const claudeMinutes = dayClaudeMinutes(d, claudeBlocks);
             return (
               <div
                 key={d.toISOString()}
@@ -340,6 +366,16 @@ export function WeekView({
                 >
                   {minutes > 0 ? formatDuration(minutes) : "—"}
                 </p>
+                {claudeMinutes > 0 ? (
+                  <p
+                    className="inline-flex items-center gap-1 text-[11px] tabular-nums"
+                    style={{ color: "var(--ds-tint-mauve-text)" }}
+                    title="Activité Claude Code à imputer"
+                  >
+                    <Terminal size={11} weight="duotone" />
+                    {formatDuration(claudeMinutes)} à imputer
+                  </p>
+                ) : null}
               </div>
             );
           })}
@@ -367,6 +403,7 @@ export function WeekView({
               dayIndex={dayIndex}
               entries={optimistic}
               googleEvents={googleEvents}
+              claudeBlocks={claudeBlocks}
               entryDragId={entryDrag?.id ?? null}
               createDrag={createDrag?.dayIndex === dayIndex ? createDrag : null}
               onEntryClick={onEntryClick}
@@ -378,6 +415,16 @@ export function WeekView({
                   endAt: g.endAt,
                   location: g.location,
                   htmlLink: g.htmlLink,
+                })
+              }
+              onClaudeBlockClick={(b) =>
+                setDialogState({
+                  mode: "create",
+                  defaults: {
+                    startAt: localInput(new Date(b.startAt)),
+                    endAt: localInput(new Date(b.endAt)),
+                  },
+                  claude: b,
                 })
               }
               startEntryDrag={startEntryDrag}
@@ -419,11 +466,13 @@ export function WeekView({
                   kind: "actual",
                   startAt: dialogState.defaults.startAt,
                   endAt: dialogState.defaults.endAt,
-                  title: "",
+                  title: dialogState.claude?.title ?? "",
                   description: "",
                   taskId: "",
-                  projectId: "",
+                  projectId: dialogState.claude?.projectId ?? "",
                   contactId: "",
+                  claudeSegmentIds: dialogState.claude?.segmentIds,
+                  claudeLabel: dialogState.claude?.label,
                 }
               : {
                   id: dialogState.entry.id,
@@ -448,10 +497,12 @@ function DayColumn({
   dayIndex,
   entries,
   googleEvents,
+  claudeBlocks,
   entryDragId,
   createDrag,
   onEntryClick,
   onGoogleEventClick,
+  onClaudeBlockClick,
   startEntryDrag,
   startCreateDrag,
 }: {
@@ -459,10 +510,12 @@ function DayColumn({
   dayIndex: number;
   entries: EntrySerialized[];
   googleEvents: GoogleEventSerialized[];
+  claudeBlocks: ClaudeBlockSerialized[];
   entryDragId: string | null;
   createDrag: CreateDrag | null;
   onEntryClick: (entry: EntrySerialized) => void;
   onGoogleEventClick: (event: GoogleEventSerialized) => void;
+  onClaudeBlockClick: (block: ClaudeBlockSerialized) => void;
   startEntryDrag: (
     e: React.PointerEvent<HTMLElement>,
     entry: EntrySerialized,
@@ -472,6 +525,7 @@ function DayColumn({
 }) {
   const dayEntries = entries.filter((e) => isSameDay(new Date(e.startAt), day));
   const dayGoogleEvents = googleEvents.filter((e) => isSameDay(new Date(e.startAt), day));
+  const dayClaudeBlocks = claudeBlocks.filter((b) => isSameDay(new Date(b.startAt), day));
   const now = new Date();
   const isToday = isSameDay(day, now);
   const nowMinutes = (now.getHours() - HOURS_START) * 60 + now.getMinutes();
@@ -539,12 +593,65 @@ function DayColumn({
         const layoutItems = [
           ...dayEntries.map((e) => ({ id: e.id, startAt: e.startAt, endAt: e.endAt })),
           ...dayGoogleEvents.map((g) => ({ id: g.id, startAt: g.startAt, endAt: g.endAt })),
+          ...dayClaudeBlocks.map((b) => ({ id: b.id, startAt: b.startAt, endAt: b.endAt })),
         ];
         const layout = layoutDayEntries(layoutItems);
         const gutter = 2;
 
         return (
           <>
+            {/* Activité Claude Code à imputer — fantôme hachuré, clic = créneau */}
+            {dayClaudeBlocks.map((b) => {
+              const start = new Date(b.startAt);
+              const end = new Date(b.endAt);
+              const startMinutes = (start.getHours() - HOURS_START) * 60 + start.getMinutes();
+              const durationMinutes = Math.max(
+                15,
+                Math.round((end.getTime() - start.getTime()) / 60_000),
+              );
+              const visibleStart = Math.max(0, startMinutes);
+              const visibleEnd = Math.min(
+                (HOURS_END - HOURS_START) * 60,
+                startMinutes + durationMinutes,
+              );
+              if (visibleEnd <= visibleStart) return null;
+              const top = (visibleStart / 60) * HOUR_HEIGHT;
+              const height = ((visibleEnd - visibleStart) / 60) * HOUR_HEIGHT - 2;
+              const slot = layout.get(b.id) ?? { lane: 0, lanes: 1 };
+              const widthPct = 100 / slot.lanes;
+              const leftPct = slot.lane * widthPct;
+              return (
+                <button
+                  type="button"
+                  key={b.id}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClaudeBlockClick(b);
+                  }}
+                  className="absolute z-1 cursor-pointer overflow-hidden rounded-md border border-dashed px-1.5 py-1 text-left text-[10px] leading-tight transition-colors hover:border-solid"
+                  style={{
+                    top,
+                    height,
+                    left: `calc(${leftPct}% + 2px)`,
+                    width: `calc(${widthPct}% - ${gutter + 2}px)`,
+                    borderColor: "var(--ds-tint-mauve-dot)",
+                    color: "var(--ds-tint-mauve-text)",
+                    backgroundImage:
+                      "repeating-linear-gradient(135deg, var(--ds-tint-mauve-bg) 0 6px, transparent 6px 12px)",
+                  }}
+                  title={`${b.label ?? "Séance"} · ${formatDuration(b.minutes)} dans Claude Code — clic pour imputer`}
+                >
+                  <p className="flex items-center gap-1 truncate font-medium text-[11px]">
+                    <Terminal size={11} weight="duotone" className="shrink-0" />
+                    <span className="truncate">{b.label ?? "Claude Code"}</span>
+                  </p>
+                  <p className="text-[9px] tabular-nums opacity-80">
+                    {formatHm(start)}–{formatHm(end)} · à imputer
+                  </p>
+                </button>
+              );
+            })}
             {/* Events Google Calendar — lecture seule, partagent les lanes */}
             {dayGoogleEvents.map((g) => {
               const start = new Date(g.startAt);
@@ -700,6 +807,17 @@ function CategoryLegend() {
           {it.label}
         </span>
       ))}
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          className="inline-block size-2.5 rounded-[3px] border border-dashed"
+          style={{
+            borderColor: "var(--ds-tint-mauve-dot)",
+            backgroundImage:
+              "repeating-linear-gradient(135deg, var(--ds-tint-mauve-bg) 0 2px, transparent 2px 4px)",
+          }}
+        />
+        Claude Code à imputer
+      </span>
     </div>
   );
 }
@@ -774,6 +892,13 @@ function dayActualMinutes(day: Date, entries: EntrySerialized[]): number {
       const end = new Date(e.endAt).getTime();
       return acc + Math.max(0, (end - start) / 60000);
     }, 0);
+}
+
+/** Signal Claude Code non tranché sur la journée (minutes brutes des blocs). */
+function dayClaudeMinutes(day: Date, blocks: ClaudeBlockSerialized[]): number {
+  return blocks
+    .filter((b) => isSameDay(new Date(b.startAt), day))
+    .reduce((acc, b) => acc + b.minutes, 0);
 }
 
 function isSameDay(a: Date, b: Date): boolean {

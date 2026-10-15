@@ -23,6 +23,14 @@ export const PROMPTS = [
     description: "Liste les projets commerciaux à relancer (followUpDate dépassée).",
     arguments: [],
   },
+  {
+    name: "consolidate_my_day",
+    description:
+      "Consolide le temps d'une journée : blocs Claude Code à imputer, réunions, créneaux déjà saisis, puis propose les créneaux à enregistrer.",
+    arguments: [
+      { name: "date", description: "Jour (YYYY-MM-DD), défaut aujourd'hui", required: false },
+    ],
+  },
 ];
 
 export function getPromptMessages(
@@ -58,6 +66,31 @@ Reste pragmatique, pas plus de 3-4 tâches par jour, et bloque du temps profond 
           },
         ],
       };
+
+    case "consolidate_my_day": {
+      const date = args.date?.trim() || "aujourd'hui";
+      return {
+        description: `Consolidation du ${date}`,
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `Aide-moi à consolider mon temps du ${date}. Utilise les tools MCP :
+1. \`list_claude_activity\` (date=${date === "aujourd'hui" ? "défaut" : date}) : les séances Claude Code à imputer, par projet ou dépôt,
+2. \`list_my_time\` sur la même journée : ce qui est déjà saisi (réunions attribuées, créneaux manuels),
+3. \`list_meetings\` du jour si besoin de contexte.
+
+Puis propose-moi la journée sous forme de liste chronologique : pour chaque bloc Claude Code, le créneau que tu enregistrerais (début, fin, projet, titre), en signalant les chevauchements avec des réunions ou des créneaux déjà saisis, et les blocs sans projet (dépôt ou dossier non rattaché : demande-moi le projet ou propose \`link_repo\`).
+
+Pense aussi à ce que les outils ne voient pas : mails, téléphone, déplacements, admin. Demande-moi ce qui manque entre le premier et le dernier signal de la journée, sans inventer.
+
+N'enregistre rien avant mon accord. Une fois validé, un \`log_time\` par bloc avec \`claudeSegmentIds\` = les segmentIds du bloc (le bloc sort alors de la liste), et des \`log_time\` simples pour le reste.`,
+            },
+          },
+        ],
+      };
+    }
 
     case "project_summary": {
       const ref = args.project_id_or_name ?? "";

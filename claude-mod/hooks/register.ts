@@ -10,8 +10,9 @@
  * pleine session : il envoie le remote, Parade OS en déduit le projet
  * d'après les dépôts rattachés à la fiche projet.
  *
- * Ce qui part de la machine : des horodatages, le remote git, le numéro
- * de segment. Jamais le contenu des échanges.
+ * Ce qui part de la machine : des horodatages, le remote git (ou, sans
+ * dépôt, le nom du dossier de travail), le numéro de segment. Jamais le
+ * contenu des échanges.
  *
  * Les règles de comptage vivent dans tracker.ts (pur, testé). Ici : le
  * branchement sur les événements du moteur, la cadence des envois et
@@ -34,6 +35,9 @@ type Push = {
   startAt: string;
   endAt: string;
   remote: string | null;
+  /** Nom du dossier de travail, envoyé seulement sans remote : un dossier
+   * sans git (maquettes, motion design) a quand même un projet. */
+  workdir: string | null;
 };
 
 type Ctx = {
@@ -41,6 +45,7 @@ type Ctx = {
   sessionId: string;
   tracker: Tracker | null;
   remote: string | null;
+  workdir: string | null;
   server: string | null;
   warnedOffline: boolean;
   /** `end` du segment au dernier envoi réussi, par numéro de segment. */
@@ -52,6 +57,15 @@ function fmtMs(ms: number): string {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return h > 0 ? `${h} h ${String(m).padStart(2, "0")}` : `${m} min`;
+}
+
+/** Dernier segment d'un chemin, séparateurs POSIX ou Windows. */
+function basename(path: string): string | null {
+  const last = path
+    .replace(/[\\/]+$/, "")
+    .split(/[\\/]/)
+    .pop();
+  return last ? last : null;
 }
 
 function stateKey(ctx: Ctx): string {
@@ -151,6 +165,7 @@ async function flush($: EngineInterface, ctx: Ctx, force: boolean): Promise<void
     startAt: new Date(seg.start).toISOString(),
     endAt: new Date(seg.end).toISOString(),
     remote: ctx.remote,
+    workdir: ctx.remote ? null : ctx.workdir,
   });
   await enqueue($, pending.map(toPush));
 
@@ -184,6 +199,7 @@ export const register: Register = (on, options) => {
     sessionId: "",
     tracker: null,
     remote: null,
+    workdir: null,
     server: null,
     warnedOffline: false,
     pushedEnd: new Map(),
@@ -195,6 +211,7 @@ export const register: Register = (on, options) => {
       try {
         ctx.sessionId = await $.session.id();
         ctx.remote = (await $.session.repo())?.remote ?? null;
+        ctx.workdir = basename(await $.session.cwd());
         const saved = (await $.store.get(stateKey(ctx))) as TrackerState | undefined;
         ctx.tracker = new Tracker({ pauseMs, capMs }, saved ?? null);
         await drainOutbox($, ctx);

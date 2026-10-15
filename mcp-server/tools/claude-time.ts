@@ -1,10 +1,14 @@
 /**
  * Suivi du temps passé dans Claude Code (cf. claude-mod/).
  *
- * Trois tools, appelés par le mod et non par le modèle :
+ * Trois tools appelés par le mod, pas par le modèle :
  *  - resolve_repo       : remote git → projet Parade OS, ou candidats
  *  - link_repo          : rattache un remote à un projet (partagé entre machines)
  *  - track_claude_time  : upsert d'un segment d'activité (idempotent par source_ref)
+ *
+ * Et un tool pour l'humain qui consolide sa journée depuis Claude :
+ *  - list_claude_activity : les blocs à imputer (séances fusionnées), que
+ *    `log_time` transforme en créneau avec `claudeSegmentIds`.
  *
  * `track_claude_time` écrit dans `claude_code_activity`, pas dans
  * `time_entries` : le temps passé dans Claude Code est un signal
@@ -15,8 +19,9 @@ import { z } from "zod";
 import { claudeCodeActivity } from "../../db/schema/claude-activity";
 import { projectRepos } from "../../db/schema/project-repos";
 import { projects } from "../../db/schema/projects";
-import { normalizeGitRemote } from "../../lib/git/remote";
+import { localRepoKey, normalizeGitRemote } from "../../lib/git/remote";
 import { decideAutoLink, foldName, linkRemote, suggestProjects } from "../../lib/repos/link";
+import { claudeBlockTitle, fetchClaudeBlocks } from "../../lib/time/claude-blocks";
 import type { UserContext } from "../context";
 import { db } from "../db";
 
@@ -103,6 +108,9 @@ export const trackClaudeTimeSchema = z.object({
   endAt: z.string(),
   /** Remote git de la session. Le projet s'en déduit (`project_repos`). */
   remote: z.string().trim().max(500).nullable().optional(),
+  /** Dossier de travail (chemin ou nom), utilisé sans remote : la clé
+   * `local/<dossier>` tient alors lieu de dépôt (cf. lib/git/remote.ts). */
+  workdir: z.string().trim().max(500).nullable().optional(),
   /** Forçage explicite ; sinon le projet vient du rattachement du remote. */
   projectId: z.string().uuid().nullable().optional(),
 });
@@ -124,7 +132,7 @@ export async function trackClaudeTime(
   // ouvert porte son nom, on le rattache ici même ; sinon le signal reste
   // « non rattaché » dans /temps, où l'humain tranche.
   const conn = db();
-  const remote = args.remote ? normalizeGitRemote(args.remote) : null;
+  const remote = normalizeGitRemote(args.remote) ?? localRepoKey(args.workdir);
   let projectId = args.projectId ?? null;
   let autoLinked: { id: string; name: string } | null = null;
   if (!projectId && remote) {
@@ -165,4 +173,95 @@ export async function trackClaudeTime(
       endAt: claudeCodeActivity.endedAt,
     });
   return { ...row, projectId, autoLinked };
+}
+
+export const listClaudeActivitySchema = z.object({
+  /** Jour (YYYY-MM-DD, Europe/Paris). Défaut : aujourd'hui. Ignoré si `from`/`to`. */
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  /** Bornes ISO 8601 explicites, [from, to). */
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
+const TIME_ZONE = "Europe/Paris";
+
+/** Décalage (ms) de `TIME_ZONE` par rapport à UTC à l'instant donné. */
+function tzOffsetMs(at: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIME_ZONE,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(at);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const asUtc = Date.UTC(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    get("hour"),
+    get("minute"),
+    get("second"),
+  );
+  return asUtc - at.getTime();
+}
+
+/** Journée civile de Paris [00:00, 24:00) pour une date YYYY-MM-DD. */
+export function parisDayRange(date: string): { start: Date; end: Date } {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  const naive = Date.UTC(y, m - 1, d);
+  const start = new Date(naive - tzOffsetMs(new Date(naive)));
+  const nextNaive = Date.UTC(y, m - 1, d + 1);
+  const end = new Date(nextNaive - tzOffsetMs(new Date(nextNaive)));
+  return { start, end };
+}
+
+function todayParis(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE }).format(now);
+}
+
+export async function listClaudeActivity(
+  args: z.infer<typeof listClaudeActivitySchema>,
+  ctx: UserContext,
+) {
+  let start: Date;
+  let end: Date;
+  if (args.from || args.to) {
+    start = args.from ? new Date(args.from) : new Date(0);
+    end = args.to ? new Date(args.to) : new Date(Date.now() + 365 * 86_400_000);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new Error("from / to doivent être des dates ISO 8601 valides.");
+    }
+  } else {
+    ({ start, end } = parisDayRange(args.date ?? todayParis()));
+  }
+
+  const blocks = await fetchClaudeBlocks(db(), ctx.userId, start, end);
+  const totalMinutes = blocks.reduce((acc, b) => acc + b.minutes, 0);
+  return {
+    from: start.toISOString(),
+    to: end.toISOString(),
+    totalMinutes,
+    blocks: blocks.map((b) => ({
+      segmentIds: b.segmentIds,
+      startAt: b.startAt.toISOString(),
+      endAt: b.endAt.toISOString(),
+      minutes: b.minutes,
+      projectId: b.projectId,
+      projectName: b.projectName,
+      remote: b.remote,
+      label: b.label,
+      suggestedTitle: claudeBlockTitle(b),
+    })),
+    hint:
+      blocks.length === 0
+        ? "Rien à imputer sur la période."
+        : "Pour imputer un bloc : log_time avec startAt/endAt (ajustables), projectId et claudeSegmentIds = segmentIds du bloc. Un bloc dont le projet est null vient d'un dépôt ou dossier non rattaché : demande le projet, ou link_repo pour rattacher le remote.",
+  };
 }

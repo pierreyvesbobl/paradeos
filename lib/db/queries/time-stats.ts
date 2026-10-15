@@ -32,7 +32,7 @@ export type ByProjectRow = TimeBreakdown & {
   projectKind: string | null;
 };
 
-export type TimeSource = "manual" | "calendar";
+export type TimeSource = "manual" | "calendar" | "claude_code";
 
 /** Minutes réalisées par provenance de saisie. */
 export type BySource = Record<TimeSource, number>;
@@ -179,9 +179,9 @@ export async function getGlobalTimeStats(start: Date, end: Date) {
 
   const totals = totalsRows[0] ?? { actualMinutes: 0, plannedMinutes: 0 };
 
-  const bySource: BySource = { manual: 0, calendar: 0 };
+  const bySource: BySource = { manual: 0, calendar: 0, claude_code: 0 };
   for (const r of bySourceRows) {
-    if (r.source === "manual" || r.source === "calendar") bySource[r.source] = r.actualMinutes;
+    if (r.source in bySource) bySource[r.source as TimeSource] = r.actualMinutes;
   }
 
   return {

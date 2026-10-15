@@ -9,6 +9,7 @@ import { users } from "../../db/schema/users";
 import { matchOpenTask } from "../../lib/crm/candidates";
 import { isCertainMatch } from "../../lib/crm/pick";
 import { setTaskAssignees } from "../../lib/db/queries/task-assignees";
+import { attachClaudeSegments, claimableClaudeSegments } from "../../lib/time/claude-blocks";
 import type { UserContext } from "../context";
 import { db } from "../db";
 import { DEFAULT_LIMIT } from "./shared";
@@ -227,6 +228,9 @@ export const logTimeSchema = z.object({
   kind: z.enum(["planned", "actual"]).optional(),
   title: z.string().max(200).optional(),
   description: z.string().max(1000).optional(),
+  /** Ids de segments d'un bloc renvoyé par `list_claude_activity` : le
+   * créneau impute ce bloc, qui sort de la liste « à imputer ». */
+  claudeSegmentIds: z.array(z.string().uuid()).max(200).optional(),
 });
 
 export async function logTime(args: z.infer<typeof logTimeSchema>, ctx: UserContext) {
@@ -238,6 +242,12 @@ export async function logTime(args: z.infer<typeof logTimeSchema>, ctx: UserCont
   if (end <= start) throw new Error("endAt doit être > startAt.");
 
   const conn = db();
+  const segmentIds = args.claudeSegmentIds ?? [];
+  const segments = await claimableClaudeSegments(conn, ctx.userId, segmentIds);
+  if (segmentIds.length > 0 && segments.length === 0) {
+    throw new Error("Ce bloc d'activité Claude Code a déjà été imputé.");
+  }
+
   const [row] = await conn
     .insert(timeEntries)
     .values({
@@ -250,7 +260,16 @@ export async function logTime(args: z.infer<typeof logTimeSchema>, ctx: UserCont
       projectId: args.projectId ?? null,
       taskId: args.taskId ?? null,
       contactId: args.contactId ?? null,
+      source: segments.length > 0 ? "claude_code" : "manual",
+      sourceRef: segments[0]?.sourceRef ?? null,
     })
     .returning({ id: timeEntries.id });
-  return row;
+  if (row) {
+    await attachClaudeSegments(
+      conn,
+      segments.map((s) => s.id),
+      row.id,
+    );
+  }
+  return row ? { ...row, imputedSegments: segments.length } : row;
 }

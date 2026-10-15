@@ -8,6 +8,7 @@ import { timeEntries } from "@/db/schema/time-entries";
 import { requireUser } from "@/lib/auth/server";
 import { addDays, formatWeekRange, startOfIsoWeek } from "@/lib/calendar";
 import { getCalendarEventsForRange } from "@/lib/db/queries/calendar";
+import { claudeBlockTitle, getClaudeBlocksForUser } from "@/lib/db/queries/claude-activity";
 import { db } from "@/lib/db/server";
 import { formatDuration, formatPersonName } from "@/lib/format";
 import { WeekView } from "./week-view";
@@ -33,46 +34,50 @@ export async function PlanningView({ week }: { week?: string }) {
   const weekEnd = addDays(weekStart, 7);
 
   const conn = await db();
-  const [entries, taskList, projectList, contactList, googleEvents] = await Promise.all([
-    conn
-      .select({
-        id: timeEntries.id,
-        kind: timeEntries.kind,
-        startAt: timeEntries.startAt,
-        endAt: timeEntries.endAt,
-        title: timeEntries.title,
-        description: timeEntries.description,
-        taskId: timeEntries.taskId,
-        projectId: timeEntries.projectId,
-        contactId: timeEntries.contactId,
-        color: timeEntries.color,
-        googleEventId: timeEntries.googleEventId,
-      })
-      .from(timeEntries)
-      .where(
-        and(
-          eq(timeEntries.userId, user.id),
-          gte(timeEntries.startAt, weekStart),
-          lt(timeEntries.startAt, weekEnd),
-        ),
-      )
-      .orderBy(asc(timeEntries.startAt)),
-    // Sélecteur d'attribution : seules les tâches ouvertes ont un sens.
-    conn
-      .select({ id: tasks.id, title: tasks.title })
-      .from(tasks)
-      .where(notInArray(tasks.status, ["done", "cancelled"]))
-      .orderBy(asc(tasks.title)),
-    conn
-      .select({ id: projects.id, name: projects.name })
-      .from(projects)
-      .orderBy(asc(projects.name)),
-    conn
-      .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
-      .from(contacts)
-      .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
-    getCalendarEventsForRange(user.id, weekStart, weekEnd),
-  ]);
+  const [entries, taskList, projectList, contactList, googleEvents, claudeBlocks] =
+    await Promise.all([
+      conn
+        .select({
+          id: timeEntries.id,
+          kind: timeEntries.kind,
+          startAt: timeEntries.startAt,
+          endAt: timeEntries.endAt,
+          title: timeEntries.title,
+          description: timeEntries.description,
+          taskId: timeEntries.taskId,
+          projectId: timeEntries.projectId,
+          contactId: timeEntries.contactId,
+          color: timeEntries.color,
+          googleEventId: timeEntries.googleEventId,
+        })
+        .from(timeEntries)
+        .where(
+          and(
+            eq(timeEntries.userId, user.id),
+            gte(timeEntries.startAt, weekStart),
+            lt(timeEntries.startAt, weekEnd),
+          ),
+        )
+        .orderBy(asc(timeEntries.startAt)),
+      // Sélecteur d'attribution : seules les tâches ouvertes ont un sens.
+      conn
+        .select({ id: tasks.id, title: tasks.title })
+        .from(tasks)
+        .where(notInArray(tasks.status, ["done", "cancelled"]))
+        .orderBy(asc(tasks.title)),
+      conn
+        .select({ id: projects.id, name: projects.name })
+        .from(projects)
+        .orderBy(asc(projects.name)),
+      conn
+        .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
+        .from(contacts)
+        .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
+      getCalendarEventsForRange(user.id, weekStart, weekEnd),
+      // Signal Claude Code pas encore tranché : affiché en fantôme, un clic
+      // en fait un créneau. Rien n'entre dans le réalisé tant qu'on n'a pas cliqué.
+      getClaudeBlocksForUser(user.id, weekStart, weekEnd),
+    ]);
 
   const prevWeek = addDays(weekStart, -7);
   const nextWeek = addDays(weekStart, 7);
@@ -172,6 +177,16 @@ export async function PlanningView({ week }: { week?: string }) {
               backgroundColor: e.calendarBackgroundColor,
             }));
         })()}
+        claudeBlocks={claudeBlocks.map((b) => ({
+          id: b.id,
+          segmentIds: b.segmentIds,
+          projectId: b.projectId,
+          label: b.label,
+          title: claudeBlockTitle(b),
+          startAt: b.startAt.toISOString(),
+          endAt: b.endAt.toISOString(),
+          minutes: b.minutes,
+        }))}
         tasks={taskList}
         projects={projectList}
         contacts={contactList.map((c) => ({

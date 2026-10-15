@@ -146,6 +146,8 @@ servers. Tu peux maintenant demander à Claude :
 - `get_meeting` — détail + propositions LLM
 - `get_meeting_transcript` — transcript brut seul, sans les propositions
 - `list_my_time` (period, project) — total en minutes
+- `list_claude_activity` (date ou from/to) — blocs Claude Code à imputer,
+  avec `segmentIds` à passer à `log_time`
 - `list_contacts` / `list_entities`
 - `list_notes` — filtres subjectType+subjectId, kind, authorId, mine, search, since/until
 - `get_note` — contenu intégral par id
@@ -153,7 +155,9 @@ servers. Tu peux maintenant demander à Claude :
 ### Writes (scope `mcp:write`)
 - `create_task` — assignée à toi par défaut
 - `complete_task` — bascule en `done`
-- `log_time` — créneau planned ou actual
+- `log_time` — créneau planned ou actual ; avec `claudeSegmentIds`, impute
+  un bloc de `list_claude_activity` (il sort de la liste, et y revient si le
+  créneau est supprimé)
 - `add_note` — polymorphique (project/contact/etc.)
 - `create_meeting` — réunion depuis un transcript collé (+ participants)
 - `set_meeting_transcript` — pose / complète le transcript d'une réunion

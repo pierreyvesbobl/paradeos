@@ -50,7 +50,14 @@ export const timeEntryBaseSchema = z
     }
   });
 
-export const createTimeEntrySchema = timeEntryBaseSchema;
+/**
+ * `claudeSegmentIds` : le créneau est imputé depuis un bloc d'activité
+ * Claude Code ; ces segments en sortent de la grille « à imputer ».
+ */
+export const createTimeEntrySchema = z.intersection(
+  timeEntryBaseSchema,
+  z.object({ claudeSegmentIds: z.array(z.string().uuid()).max(200).optional() }),
+);
 export const updateTimeEntrySchema = z.intersection(
   timeEntryBaseSchema,
   z.object({ id: z.string().uuid() }),

@@ -1,5 +1,6 @@
 "use client";
 
+import { Terminal } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -42,6 +43,11 @@ type Defaults = {
   taskId: string;
   projectId: string;
   contactId: string;
+  /** Création depuis un bloc d'activité Claude Code : ces segments
+   * quittent la grille « à imputer » une fois le créneau enregistré. */
+  claudeSegmentIds?: string[];
+  /** Ce que le bloc montrait (projet, dépôt ou dossier), pour le bandeau. */
+  claudeLabel?: string | null;
 };
 
 type Props = {
@@ -90,6 +96,8 @@ export function TimeEntryDialog({
     };
   }
 
+  const fromClaude = mode === "create" && (defaults.claudeSegmentIds?.length ?? 0) > 0;
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrors({});
@@ -97,7 +105,10 @@ export function TimeEntryDialog({
       const payload = buildPayload();
       const result =
         mode === "create"
-          ? await createTimeEntry(payload)
+          ? await createTimeEntry({
+              ...payload,
+              claudeSegmentIds: fromClaude ? defaults.claudeSegmentIds : undefined,
+            })
           : await updateTimeEntry({ ...payload, id: defaults.id ?? "" });
 
       if (!result.ok) {
@@ -106,7 +117,13 @@ export function TimeEntryDialog({
         toast.error(result.message);
         return;
       }
-      toast.success(mode === "create" ? "Créneau créé." : "Créneau mis à jour.");
+      toast.success(
+        fromClaude
+          ? "Activité imputée."
+          : mode === "create"
+            ? "Créneau créé."
+            : "Créneau mis à jour.",
+      );
       onClose();
       router.refresh();
     });
@@ -136,10 +153,32 @@ export function TimeEntryDialog({
     <Dialog open={open} onOpenChange={(v) => (!v ? onClose() : null)}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{mode === "create" ? "Nouveau créneau" : "Modifier le créneau"}</DialogTitle>
+          <DialogTitle>
+            {fromClaude
+              ? "Imputer l'activité Claude Code"
+              : mode === "create"
+                ? "Nouveau créneau"
+                : "Modifier le créneau"}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="space-y-4">
+          {fromClaude ? (
+            <p
+              className="flex items-start gap-2 rounded-md px-3 py-2 text-[12px] leading-snug"
+              style={{
+                background: "var(--ds-tint-mauve-bg)",
+                color: "var(--ds-tint-mauve-text)",
+              }}
+            >
+              <Terminal size={14} weight="duotone" className="mt-0.5 shrink-0" />
+              <span>
+                Séance Claude Code sur <span className="font-medium">{defaults.claudeLabel}</span>.
+                Ajuste les bornes si la séance a débordé sur autre chose, puis enregistre : le bloc
+                sort de la grille et entre dans le réalisé.
+              </span>
+            </p>
+          ) : null}
           <div className="space-y-2">
             <Label htmlFor="kind">Type</Label>
             <Select
@@ -263,7 +302,13 @@ export function TimeEntryDialog({
                 Annuler
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Enregistrement…" : mode === "create" ? "Créer" : "Enregistrer"}
+                {pending
+                  ? "Enregistrement…"
+                  : fromClaude
+                    ? "Imputer"
+                    : mode === "create"
+                      ? "Créer"
+                      : "Enregistrer"}
               </Button>
             </div>
           </DialogFooter>

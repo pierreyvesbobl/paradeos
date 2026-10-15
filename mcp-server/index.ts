@@ -68,6 +68,8 @@ import {
   getProjectSchema,
   linkRepo,
   linkRepoSchema,
+  listClaudeActivity,
+  listClaudeActivitySchema,
   listContacts,
   listContactsSchema,
   listCoworkingContracts,
@@ -332,6 +334,15 @@ server.tool(
   linkRepoSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await linkRepo(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "list_claude_activity",
+  "Blocs d'activité Claude Code à imputer (séances fusionnées, par projet ou dépôt) pour un jour (Europe/Paris, défaut aujourd'hui) ou une période. Sert à consolider sa journée : chaque bloc devient un créneau via log_time + claudeSegmentIds.",
+  listClaudeActivitySchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await listClaudeActivity(args, ctx), null, 2) }],
   }),
 );
 

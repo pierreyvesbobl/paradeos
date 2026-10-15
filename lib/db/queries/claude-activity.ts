@@ -2,6 +2,7 @@ import { and, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { claudeCodeActivity } from "@/db/schema/claude-activity";
 import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
+import { type ClaudeBlock, fetchClaudeBlocks } from "@/lib/time/claude-blocks";
 import { creditOverlaps } from "@/lib/time/overlap";
 
 /**
@@ -22,6 +23,7 @@ type Row = {
   remote: string | null;
   startedAt: Date;
   endedAt: Date;
+  timeEntryId: string | null;
 };
 
 const select = {
@@ -31,6 +33,7 @@ const select = {
   remote: claudeCodeActivity.remote,
   startedAt: claudeCodeActivity.startedAt,
   endedAt: claudeCodeActivity.endedAt,
+  timeEntryId: claudeCodeActivity.timeEntryId,
 };
 
 /** Minutes créditées par segment, recouvrements partagés par utilisateur. */
@@ -51,16 +54,32 @@ function credit(rows: readonly Row[]): Map<string, number> {
   return out;
 }
 
+async function projectNames(conn: Awaited<ReturnType<typeof db>>, ids: readonly string[]) {
+  const names = new Map<string, string>();
+  if (ids.length === 0) return names;
+  const found = await conn
+    .select({ id: projects.id, name: projects.name })
+    .from(projects)
+    .where(inArray(projects.id, [...ids]));
+  for (const p of found) names.set(p.id, p.name);
+  return names;
+}
+
 export type ClaudeActivityRow = {
   projectId: string | null;
   projectName: string | null;
   /** Dépôts observés, utile quand `projectId` est null (non rattaché). */
   remotes: string[];
+  /** Segments reçus sur la période. */
+  segments: number;
   minutes: number;
+  /** Part de `minutes` déjà tranchée en créneau réalisé. */
+  imputedMinutes: number;
 };
 
 export type ClaudeActivity = {
   totalMinutes: number;
+  imputedMinutes: number;
   byProject: ClaudeActivityRow[];
   /** Dernier segment vu sur la période, pour dire si le signal est frais. */
   lastAt: Date | null;
@@ -73,43 +92,66 @@ export async function getClaudeActivity(start: Date, end: Date): Promise<ClaudeA
     .select(select)
     .from(claudeCodeActivity)
     .where(and(gte(claudeCodeActivity.startedAt, start), lt(claudeCodeActivity.startedAt, end)));
-  if (rows.length === 0) return { totalMinutes: 0, byProject: [], lastAt: null };
+  if (rows.length === 0) return { totalMinutes: 0, imputedMinutes: 0, byProject: [], lastAt: null };
 
   const credits = credit(rows);
-  const projectIds = [...new Set(rows.map((r) => r.projectId).filter((id): id is string => !!id))];
-  const names = new Map<string, string>();
-  if (projectIds.length > 0) {
-    const found = await conn
-      .select({ id: projects.id, name: projects.name })
-      .from(projects)
-      .where(inArray(projects.id, projectIds));
-    for (const p of found) names.set(p.id, p.name);
-  }
+  const names = await projectNames(conn, [
+    ...new Set(rows.map((r) => r.projectId).filter((id): id is string => !!id)),
+  ]);
 
-  const acc = new Map<string | null, { minutes: number; remotes: Set<string> }>();
+  // Un projet = une ligne ; sans projet, une ligne par dépôt (ou dossier),
+  // pour que chaque signal non rattaché reste visible et rattachable.
+  const acc = new Map<
+    string,
+    {
+      projectId: string | null;
+      minutes: number;
+      imputed: number;
+      segments: number;
+      remotes: Set<string>;
+    }
+  >();
   let totalMinutes = 0;
+  let imputedMinutes = 0;
   let lastAt: Date | null = null;
   for (const r of rows) {
     const minutes = credits.get(r.id) ?? 0;
     totalMinutes += minutes;
+    if (r.timeEntryId) imputedMinutes += minutes;
     if (!lastAt || r.endedAt > lastAt) lastAt = r.endedAt;
-    const cur = acc.get(r.projectId) ?? { minutes: 0, remotes: new Set<string>() };
+    const key = r.projectId ?? `remote:${r.remote ?? ""}`;
+    const cur = acc.get(key) ?? {
+      projectId: r.projectId,
+      minutes: 0,
+      imputed: 0,
+      segments: 0,
+      remotes: new Set<string>(),
+    };
     cur.minutes += minutes;
+    if (r.timeEntryId) cur.imputed += minutes;
+    cur.segments += 1;
     if (r.remote) cur.remotes.add(r.remote);
-    acc.set(r.projectId, cur);
+    acc.set(key, cur);
   }
 
-  const byProject = [...acc.entries()]
-    .map(([projectId, v]) => ({
-      projectId,
-      projectName: projectId ? (names.get(projectId) ?? null) : null,
+  const byProject = [...acc.values()]
+    .map((v) => ({
+      projectId: v.projectId,
+      projectName: v.projectId ? (names.get(v.projectId) ?? null) : null,
       remotes: [...v.remotes].sort(),
+      segments: v.segments,
       minutes: Math.round(v.minutes),
+      imputedMinutes: Math.round(v.imputed),
     }))
     .filter((r) => r.minutes > 0)
     .sort((a, b) => b.minutes - a.minutes);
 
-  return { totalMinutes: Math.round(totalMinutes), byProject, lastAt };
+  return {
+    totalMinutes: Math.round(totalMinutes),
+    imputedMinutes: Math.round(imputedMinutes),
+    byProject,
+    lastAt,
+  };
 }
 
 /**
@@ -144,4 +186,19 @@ export async function getProjectClaudeActivity(projectId: string): Promise<numbe
   let minutes = 0;
   for (const r of own) minutes += credits.get(r.id) ?? 0;
   return Math.round(minutes);
+}
+
+export {
+  type ClaudeBlock,
+  claudeBlockTitle,
+  mergeSegmentsIntoBlocks,
+} from "@/lib/time/claude-blocks";
+
+/** Blocs non imputés d'un utilisateur dont le début tombe dans [start, end). */
+export async function getClaudeBlocksForUser(
+  userId: string,
+  start: Date,
+  end: Date,
+): Promise<ClaudeBlock[]> {
+  return fetchClaudeBlocks(await db(), userId, start, end);
 }

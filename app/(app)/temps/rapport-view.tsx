@@ -1,4 +1,4 @@
-import { Clock, Terminal } from "@phosphor-icons/react/dist/ssr";
+import { CalendarDots, Clock, Terminal } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/empty-state";
 import Link from "@/components/link";
 import { RepoLinkPicker } from "@/components/temps/repo-link-picker";
@@ -17,7 +17,14 @@ import { type ClaudeActivity, getClaudeActivity } from "@/lib/db/queries/claude-
 import { getGlobalProfitability } from "@/lib/db/queries/profitability";
 import { getRepoLinkChoices, type RepoLinkChoice } from "@/lib/db/queries/project-repos";
 import { getGlobalTimeStats } from "@/lib/db/queries/time-stats";
-import { formatDate, formatDays, formatDuration, formatEuro } from "@/lib/format";
+import {
+  formatDate,
+  formatDays,
+  formatDuration,
+  formatEuro,
+  formatRelativeShort,
+} from "@/lib/format";
+import { repoKeyLabel } from "@/lib/git/remote";
 import { computeDaysWorked, computeEffectiveDailyRate } from "@/lib/profitability-math";
 import { projectKindLabels } from "@/lib/schemas/projects";
 
@@ -136,9 +143,14 @@ export async function RapportView({ range, week }: { range?: Range; week?: strin
         <span className="uppercase tracking-wide">Réalisé par provenance</span>
         <SourceStat label="Saisi" minutes={stats.bySource.manual} />
         <SourceStat label="Calendrier" minutes={stats.bySource.calendar} />
+        <SourceStat label="Claude Code" minutes={stats.bySource.claude_code} />
       </div>
 
-      <ClaudeActivitySection activity={claude} choices={choices} />
+      <ClaudeActivitySection
+        activity={claude}
+        choices={choices}
+        planningHref={`/temps?tab=planning&week=${isoDate(start)}`}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiBox label="Revenu" value={formatEuro(totalRevenue)} tone="actual" />
@@ -323,67 +335,138 @@ function FilterLink({ href, active, label }: { href: string; active: boolean; la
  * Activité Claude Code : un indicateur d'où est parti l'effort, pas du
  * temps réalisé. Rien de ce bloc n'entre dans les KPI ci-dessus ni dans la
  * marge : c'est une source parmi d'autres (réunions, mails, calendrier) à
- * partir de laquelle on décide ce qu'on saisit vraiment.
+ * partir de laquelle on décide ce qu'on saisit vraiment. L'imputation se
+ * fait dans la grille du planning, bloc par bloc ; ici on voit ce qui
+ * reste à trancher et par projet.
  */
 function ClaudeActivitySection({
   activity,
   choices,
+  planningHref,
 }: {
   activity: ClaudeActivity;
   choices: RepoLinkChoice[];
+  planningHref: string;
 }) {
   if (activity.byProject.length === 0) return null;
   const choiceFor = new Map(choices.map((c) => [c.remote, c]));
+  const remaining = activity.totalMinutes - activity.imputedMinutes;
   return (
     <section className="space-y-3 rounded-lg border border-dashed bg-muted/30 p-6">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <h2 className="flex items-center gap-2 font-medium text-sm">
           <Terminal className="size-4 text-muted-foreground" weight="regular" />
           Activité Claude Code
         </h2>
-        <span className="font-mono text-muted-foreground text-xs">
-          {formatDuration(activity.totalMinutes)}
+        <span className="flex flex-wrap items-center gap-x-3 text-muted-foreground text-xs">
+          <span>
+            Signal{" "}
+            <span className="font-mono text-foreground">
+              {formatDuration(activity.totalMinutes)}
+            </span>
+          </span>
+          <span>
+            Imputé{" "}
+            <span className="font-mono text-foreground">
+              {formatDuration(activity.imputedMinutes)}
+            </span>
+          </span>
+          <span>
+            Reste{" "}
+            <span
+              className="font-mono"
+              style={{ color: remaining > 0 ? "var(--ds-tint-mauve-text)" : undefined }}
+            >
+              {formatDuration(remaining)}
+            </span>
+          </span>
+          {activity.lastAt ? (
+            <span>Dernier signal {formatRelativeShort(activity.lastAt)}</span>
+          ) : null}
         </span>
+        {remaining > 0 ? (
+          <Button variant="outline" size="sm" asChild className="ml-auto gap-1.5">
+            <Link href={planningHref}>
+              <CalendarDots className="size-3.5" weight="duotone" />
+              Imputer dans le planning
+            </Link>
+          </Button>
+        ) : null}
       </div>
       <p className="text-muted-foreground text-xs">
-        Indicatif, non compté dans le réalisé : à arbitrer avec les réunions, les mails et le
-        calendrier avant de saisir un créneau.
+        Indicatif, non compté dans le réalisé. Chaque séance apparaît en fantôme dans le planning :
+        un clic la transforme en créneau, à arbitrer avec les réunions, les mails et le calendrier.
       </p>
-      <ul className="space-y-1">
-        {activity.byProject.map((row) =>
-          row.projectId ? (
-            <li key={row.projectId} className="flex items-baseline justify-between gap-3 text-sm">
-              <Link href={`/projets/${row.projectId}`} className="truncate hover:underline">
-                {row.projectName ?? "Projet"}
-              </Link>
-              <span className="shrink-0 font-mono text-muted-foreground text-xs">
-                {formatDuration(row.minutes)}
-              </span>
-            </li>
-          ) : (
-            // Un dépôt en doute par remote : le nom seul n'a pas suffi.
-            row.remotes.map((remote) => {
-              const choice = choiceFor.get(remote);
-              return (
-                <li
-                  key={remote}
-                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm"
-                >
-                  <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="truncate font-mono text-muted-foreground text-xs">
-                      {remote}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Projet ou dépôt</TableHead>
+            <TableHead className="text-right">Séances</TableHead>
+            <TableHead className="text-right">Signal</TableHead>
+            <TableHead className="text-right">Imputé</TableHead>
+            <TableHead className="w-[40%]">Part du signal</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {activity.byProject.map((row) => {
+            const remote = row.remotes[0] ?? null;
+            const choice = remote ? choiceFor.get(remote) : undefined;
+            const share =
+              activity.totalMinutes > 0 ? (row.minutes / activity.totalMinutes) * 100 : 0;
+            const imputedShare = row.minutes > 0 ? (row.imputedMinutes / row.minutes) * 100 : 0;
+            return (
+              <TableRow key={row.projectId ?? `remote:${remote ?? "?"}`}>
+                <TableCell className="font-medium">
+                  {row.projectId ? (
+                    <Link href={`/projets/${row.projectId}`} className="hover:underline">
+                      {row.projectName ?? "Projet"}
+                    </Link>
+                  ) : (
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="truncate font-mono text-muted-foreground text-xs">
+                        {remote ? repoKeyLabel(remote) : "Sans dépôt"}
+                      </span>
+                      {choice ? <RepoLinkPicker choice={choice} /> : null}
                     </span>
-                    {choice ? <RepoLinkPicker choice={choice} /> : null}
-                  </span>
-                  <span className="shrink-0 font-mono text-muted-foreground text-xs">
-                    {row.remotes.length === 1 ? formatDuration(row.minutes) : ""}
-                  </span>
-                </li>
-              );
-            })
-          ),
-        )}
-      </ul>
+                  )}
+                </TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground text-sm">
+                  {row.segments}
+                </TableCell>
+                <TableCell className="text-right font-mono text-sm">
+                  {formatDuration(row.minutes)}
+                </TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground text-sm">
+                  {row.imputedMinutes > 0 ? formatDuration(row.imputedMinutes) : "—"}
+                </TableCell>
+                <TableCell>
+                  <div
+                    className="relative h-2 w-full overflow-hidden rounded-full"
+                    style={{ background: "var(--ds-bg-hover)" }}
+                    title={`${Math.round(share)} % du signal, ${Math.round(imputedShare)} % imputé`}
+                  >
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full"
+                      style={{
+                        width: `${share}%`,
+                        backgroundImage:
+                          "repeating-linear-gradient(135deg, var(--ds-tint-mauve-dot) 0 3px, var(--ds-tint-mauve-bg) 3px 6px)",
+                      }}
+                    />
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full"
+                      style={{
+                        width: `${(share * imputedShare) / 100}%`,
+                        background: "var(--ds-tint-green-dot)",
+                      }}
+                    />
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </section>
   );
 }
