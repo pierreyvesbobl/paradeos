@@ -7,6 +7,7 @@ import { meetings } from "../../db/schema/meetings";
 import { notes } from "../../db/schema/notes";
 import { projects } from "../../db/schema/projects";
 import { tasks } from "../../db/schema/tasks";
+import { completeBillingIdentity } from "../../lib/billing/billing-identity";
 import { matchContact, matchEntity } from "../../lib/crm/candidates";
 import { contactEmailIlike, contactHasEmail } from "../../lib/crm/contact-emails";
 import { isCertainMatch } from "../../lib/crm/pick";
@@ -303,6 +304,14 @@ export const createEntitySchema = z.object({
     .string()
     .regex(/^\d{9}$/)
     .optional(),
+  /** 14 chiffres. Déduit du SIREN (siège) s'il est omis. */
+  siret: z
+    .string()
+    .regex(/^\d{14}$/)
+    .optional(),
+  /** Dénomination sociale à faire figurer sur les factures. */
+  legalName: z.string().trim().max(200).optional(),
+  /** Déduit du SIREN s'il est omis (société française). */
   vatNumber: z.string().max(40).optional(),
   address: z
     .object({
@@ -328,6 +337,12 @@ export async function createEntity(args: z.infer<typeof createEntitySchema>, ctx
       .limit(1);
     return { ...found, alreadyExisted: true as const };
   }
+  const identity = await completeBillingIdentity({
+    siren: args.siren ?? null,
+    siret: args.siret ?? null,
+    vatNumber: args.vatNumber ?? null,
+    country: args.address?.country ?? null,
+  });
   const [row] = await conn
     .insert(entities)
     .values({
@@ -335,7 +350,9 @@ export async function createEntity(args: z.infer<typeof createEntitySchema>, ctx
       kind: args.kind ?? "prospect",
       website: args.website ?? null,
       siren: args.siren ?? null,
-      vatNumber: args.vatNumber ?? null,
+      siret: identity.siret,
+      legalName: args.legalName ?? null,
+      vatNumber: identity.vatNumber,
       address: args.address ?? null,
       notes: args.notes ?? null,
       ownerId: ctx.userId,
@@ -355,6 +372,12 @@ export const updateEntitySchema = z.object({
     .regex(/^\d{9}$/)
     .nullable()
     .optional(),
+  siret: z
+    .string()
+    .regex(/^\d{14}$/)
+    .nullable()
+    .optional(),
+  legalName: z.string().trim().max(200).nullable().optional(),
   vatNumber: z.string().max(40).nullable().optional(),
   address: z
     .object({
@@ -375,10 +398,34 @@ export async function updateEntity(args: z.infer<typeof updateEntitySchema>) {
   if (args.kind !== undefined) update.kind = args.kind;
   if (args.website !== undefined) update.website = args.website;
   if (args.siren !== undefined) update.siren = args.siren;
+  if (args.siret !== undefined) update.siret = args.siret;
+  if (args.legalName !== undefined) update.legalName = args.legalName;
   if (args.vatNumber !== undefined) update.vatNumber = args.vatNumber;
   if (args.address !== undefined) update.address = args.address;
   if (args.notes !== undefined) update.notes = args.notes;
 
+  // Un SIREN posé entraîne SIRET et TVA : une facture B2B sans ces deux
+  // mentions est incomplète. Les valeurs déjà en fiche sont conservées.
+  if (args.siren) {
+    const [current] = await conn
+      .select({ siret: entities.siret, vatNumber: entities.vatNumber, address: entities.address })
+      .from(entities)
+      .where(eq(entities.id, args.id))
+      .limit(1);
+    const identity = await completeBillingIdentity({
+      siren: args.siren,
+      siret: args.siret ?? current?.siret ?? null,
+      vatNumber: args.vatNumber ?? current?.vatNumber ?? null,
+      country: args.address?.country ?? current?.address?.country ?? null,
+    });
+    update.siret = identity.siret;
+    update.vatNumber = identity.vatNumber;
+  }
+
   await conn.update(entities).set(update).where(eq(entities.id, args.id));
-  return { id: args.id };
+  return {
+    id: args.id,
+    siret: update.siret ?? undefined,
+    vatNumber: update.vatNumber ?? undefined,
+  };
 }

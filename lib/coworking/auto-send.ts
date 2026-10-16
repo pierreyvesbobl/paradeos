@@ -20,6 +20,7 @@ import { coworkingContracts } from "@/db/schema/coworking";
 import { entities as entitiesTable } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { tasks } from "@/db/schema/tasks";
+import { billingIdentityWarnings } from "@/lib/billing/billing-identity";
 import { dueDateFrom } from "@/lib/billing/billing-terms";
 import { resolveInvoiceDocument } from "@/lib/billing/brand-documents";
 import { brandTemplateFor } from "@/lib/billing/brand-templates";
@@ -277,6 +278,7 @@ export async function autoSendCoworkingInvoice(args: {
       isBtoB,
       searchName: isBtoB ? (row.entityName ?? clientName) : clientName,
       local: {
+        entityId: contract.billToEntityId,
         legalName: row.entityLegalName ?? row.entityName ?? null,
         siren: row.entitySiren ?? null,
         siret: row.entitySiret ?? null,
@@ -288,6 +290,11 @@ export async function autoSendCoworkingInvoice(args: {
         email: recipient,
       },
     });
+    // Pas de blocage : la facture coworking B2B part même sans SIRET, mais
+    // on laisse une trace pour compléter la fiche.
+    for (const w of billingIdentityWarnings(clientData, row.entityName ?? clientName)) {
+      console.warn(`[auto-send] ${w}`);
+    }
     draft = await pushDougsSalesInvoiceDraft({
       userId,
       clientData,

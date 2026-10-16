@@ -7,6 +7,7 @@ import { z } from "zod";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { action } from "@/lib/actions/action";
+import { completeBillingIdentity } from "@/lib/billing/billing-identity";
 import { assertEntityIsNew } from "@/lib/crm/assert-new";
 import { findExistingEntityId } from "@/lib/crm/find-or-link";
 import { db } from "@/lib/db/server";
@@ -18,11 +19,34 @@ import {
   updateEntitySchema,
 } from "@/lib/schemas/entities";
 
-export const createEntity = action(createEntitySchema, async ({ input, user }) => {
+/**
+ * SIRET et numéro de TVA déduits du SIREN quand la saisie les omet : une
+ * fiche avec SIREN seul produirait des factures incomplètes. Les valeurs
+ * saisies restent prioritaires.
+ */
+async function withDerivedIdentity<
+  T extends {
+    siren?: string | null;
+    siret?: string | null;
+    vatNumber?: string | null;
+    address?: { country?: string | null } | null;
+  },
+>(input: T): Promise<T & { siret: string | null; vatNumber: string | null }> {
+  const { siret, vatNumber } = await completeBillingIdentity({
+    siren: input.siren ?? null,
+    siret: input.siret ?? null,
+    vatNumber: input.vatNumber ?? null,
+    country: input.address?.country ?? null,
+  });
+  return { ...input, siret, vatNumber };
+}
+
+export const createEntity = action(createEntitySchema, async ({ input: raw, user }) => {
   const conn = await db();
   // Refus si la fiche existe déjà : la saisie est intentionnelle, c'est à
   // l'humain de trancher (cf. `lib/crm/assert-new.ts`).
-  await assertEntityIsNew(input.name);
+  await assertEntityIsNew(raw.name);
+  const input = await withDerivedIdentity(raw);
   const [row] = await conn
     .insert(entities)
     .values({
@@ -45,8 +69,9 @@ export const createEntity = action(createEntitySchema, async ({ input, user }) =
   return { id: row?.id };
 });
 
-export const updateEntity = action(updateEntitySchema, async ({ input }) => {
+export const updateEntity = action(updateEntitySchema, async ({ input: raw }) => {
   const conn = await db();
+  const input = await withDerivedIdentity(raw);
   await conn
     .update(entities)
     .set({
@@ -109,6 +134,24 @@ export const patchEntity = action(patchEntitySchema, async ({ input }) => {
     Object.entries(rest).filter(([, v]) => v !== undefined),
   ) as Record<string, unknown>;
   if (Object.keys(updates).length === 0) return { id };
+  // Un SIREN posé en ligne entraîne SIRET et TVA avec lui ; on relit la fiche
+  // pour ne pas écraser ce qui y est déjà.
+  if (typeof updates.siren === "string" && updates.siren) {
+    const [current] = await conn
+      .select({ siret: entities.siret, vatNumber: entities.vatNumber, address: entities.address })
+      .from(entities)
+      .where(eq(entities.id, id))
+      .limit(1);
+    const derived = await withDerivedIdentity({
+      siren: updates.siren,
+      siret: (updates.siret as string | null | undefined) ?? current?.siret ?? null,
+      vatNumber: (updates.vatNumber as string | null | undefined) ?? current?.vatNumber ?? null,
+      address:
+        (updates.address as { country?: string | null } | null | undefined) ?? current?.address,
+    });
+    updates.siret = derived.siret;
+    updates.vatNumber = derived.vatNumber;
+  }
   await conn.update(entities).set(updates).where(eq(entities.id, id));
   revalidatePath("/crm/entites");
   revalidatePath(`/entites/${id}`);

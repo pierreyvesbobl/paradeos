@@ -9,6 +9,7 @@ import { entities as entitiesTable } from "@/db/schema/entities";
 import { invoices } from "@/db/schema/invoices";
 import { action } from "@/lib/actions/action";
 import { requireAdmin } from "@/lib/auth/admin";
+import { billingIdentityWarnings } from "@/lib/billing/billing-identity";
 import { resolveInvoiceDocument } from "@/lib/billing/brand-documents";
 import { brandTemplateFor } from "@/lib/billing/brand-templates";
 import { pushDougsSalesInvoiceDraft, resolveDougsClientData } from "@/lib/billing/dougs-push";
@@ -168,6 +169,7 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
     isBtoB,
     searchName,
     local: {
+      entityId: contract.billToEntityId,
       legalName: row.billToEntityLegalName ?? row.billToEntityName ?? null,
       siren: row.billToEntitySiren ?? null,
       siret: row.billToEntitySiret ?? null,
@@ -219,7 +221,12 @@ export const pushCoworkingInvoiceToDougs = action(idSchema, async ({ input, user
   revalidatePath("/coworking");
   revalidatePath(`/coworking/factures/${input.id}`);
   revalidatePath("/compta");
-  return { dougsId: draft.id, reference: draft.reference, url };
+  return {
+    dougsId: draft.id,
+    reference: draft.reference,
+    url,
+    warnings: billingIdentityWarnings(clientData, searchName),
+  };
 });
 
 // =====================================================================

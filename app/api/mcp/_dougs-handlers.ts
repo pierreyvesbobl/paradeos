@@ -5,6 +5,7 @@ import { coworkingContracts } from "../../../db/schema/coworking";
 import { type EntityAddress, entities as entitiesTable } from "../../../db/schema/entities";
 import { invoices } from "../../../db/schema/invoices";
 import { projects } from "../../../db/schema/projects";
+import { billingIdentityWarnings } from "../../../lib/billing/billing-identity";
 import { resolveInvoiceDocument } from "../../../lib/billing/brand-documents";
 import { brandTemplateFor } from "../../../lib/billing/brand-templates";
 import { dougsLine } from "../../../lib/billing/dougs-lines";
@@ -45,6 +46,7 @@ async function buildClientDataFromEntity(
   userId: string,
   entityName: string,
   fallback: {
+    entityId: string;
     legalName?: string | null;
     siren: string | null;
     siret?: string | null;
@@ -59,6 +61,7 @@ async function buildClientDataFromEntity(
     isBtoB: true,
     searchName: entityName,
     local: {
+      entityId: fallback.entityId,
       legalName: fallback.legalName ?? entityName,
       siren: fallback.siren,
       siret: fallback.siret ?? null,
@@ -126,6 +129,7 @@ export async function pushProjectQuote(
     ctx.userId,
     row.entityName,
     {
+      entityId: project.entityId,
       legalName: row.entityLegalName,
       siren: row.entitySiren,
       siret: row.entitySiret,
@@ -212,6 +216,9 @@ export async function pushProjectQuote(
     reference: updated.reference,
     status: updated.status ?? "DRAFT",
     url,
+    // SIRET ou TVA absents du document : à signaler à l'utilisateur, qui
+    // complète la fiche entité (`update_entity`) avant d'envoyer.
+    warnings: billingIdentityWarnings(clientData, row.entityName),
   };
 }
 
@@ -318,6 +325,7 @@ export async function pushProjectMilestoneInvoice(
     ctx.userId,
     row.entityName,
     {
+      entityId: project.entityId,
       legalName: row.entityLegalName,
       siren: row.entitySiren,
       siret: row.entitySiret,
@@ -396,6 +404,7 @@ export async function pushProjectMilestoneInvoice(
     milestoneId: milestoneInvoiceId,
     milestoneLabel: label,
     url,
+    warnings: billingIdentityWarnings(clientData, row.entityName),
   };
 }
 
@@ -452,6 +461,7 @@ export async function pushCoworkingInvoiceMcp(
     isBtoB,
     searchName,
     local: {
+      entityId: contract.billToEntityId,
       legalName: row.billToEntityLegalName ?? row.billToEntityName ?? null,
       siren: row.billToEntitySiren ?? null,
       siret: row.billToEntitySiret ?? null,
@@ -502,7 +512,12 @@ export async function pushCoworkingInvoiceMcp(
     .where(eq(invoices.id, args.coworkingInvoiceId));
 
   const url = await getDougsDraftUrl(ctx.userId, draft.id);
-  return { dougsInvoiceId: draft.id, reference: draft.reference, url };
+  return {
+    dougsInvoiceId: draft.id,
+    reference: draft.reference,
+    url,
+    warnings: billingIdentityWarnings(clientData, searchName),
+  };
 }
 
 // ---------- 4. Envoi d'un document au client ----------

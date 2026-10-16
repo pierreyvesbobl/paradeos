@@ -40,6 +40,7 @@ export function PushToDougsButton({ invoiceId, dougsInvoiceId, dougsUrl }: Props
         return;
       }
       toast.success(`Brouillon créé sur Dougs (${res.data.reference}).`);
+      for (const w of res.data.warnings) toast.warning(w, { duration: 10_000 });
       setConfirmRepush(false);
       router.refresh();
       window.open(res.data.url, "_blank", "noopener");

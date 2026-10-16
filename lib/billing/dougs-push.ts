@@ -12,7 +12,9 @@ import "server-only";
  * conservée ici.
  */
 
-import type { EntityAddress } from "@/db/schema/entities";
+import { eq, sql } from "drizzle-orm";
+import { type EntityAddress, entities } from "@/db/schema/entities";
+import { db } from "@/lib/db/server";
 import {
   createDougsSalesInvoiceDraft,
   DougsApiError,
@@ -21,6 +23,7 @@ import {
   searchDougsClients,
   updateDougsSalesInvoice,
 } from "@/lib/dougs/client";
+import { completeBillingIdentity, normalizeSiren } from "./billing-identity";
 import type { DocumentOverrides } from "./brand-templates";
 import { buildDocumentPatch } from "./dougs-document";
 import type { DougsInvoiceLine } from "./dougs-lines";
@@ -68,6 +71,12 @@ const EMPTY_ADDRESS: DougsAddress = { street: "", zipCode: "", city: "", country
 
 /** Identité telle que Parade OS la connaît, avant confrontation avec Dougs. */
 export type LocalClientIdentity = {
+  /**
+   * Fiche entité d'origine. Quand elle est connue, le SIRET et le numéro de
+   * TVA déduits de **son** SIREN lui sont réécrits : la prochaine facture
+   * n'aura plus rien à chercher et le CRM s'enrichit au passage.
+   */
+  entityId?: string | null;
   /** Dénomination sociale (B2B). */
   legalName?: string | null;
   siren?: string | null;
@@ -82,9 +91,67 @@ export type LocalClientIdentity = {
 };
 
 /**
+ * Réécrit sur l'entité les identifiants qu'on vient de déduire, sans jamais
+ * écraser une valeur saisie. Échec silencieux : la facture ne doit pas
+ * attendre le CRM.
+ */
+async function persistDerivedIdentity(
+  entityId: string,
+  derived: { siret: string | null; vatNumber: string | null },
+): Promise<void> {
+  if (!derived.siret && !derived.vatNumber) return;
+  try {
+    const conn = await db();
+    await conn
+      .update(entities)
+      .set({
+        siret: sql`coalesce(${entities.siret}, ${derived.siret})`,
+        vatNumber: sql`coalesce(${entities.vatNumber}, ${derived.vatNumber})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(entities.id, entityId));
+  } catch (err) {
+    console.warn(
+      `[dougs] identité déduite non enregistrée sur l'entité ${entityId} :`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+/**
+ * Dernière passe sur un `clientData` B2B : complète SIRET et numéro de TVA
+ * depuis le SIREN retenu (calcul de la clé TVA, SIRET du siège via
+ * l'annuaire), puis mémorise le résultat sur l'entité quand ce SIREN est bien
+ * celui de sa fiche — pas celui d'un homonyme remonté par la recherche Dougs.
+ */
+async function withCompletedIdentity(
+  clientData: Record<string, unknown>,
+  local: LocalClientIdentity,
+  country: string,
+): Promise<Record<string, unknown>> {
+  if (clientData.isBToB !== true) return clientData;
+  const completed = await completeBillingIdentity({
+    siren: clientData.siren as string | null,
+    siret: clientData.siret as string | null,
+    vatNumber: clientData.vatNumber as string | null,
+    country,
+  });
+  const out = { ...clientData, siret: completed.siret, vatNumber: completed.vatNumber };
+  const ownSiren = normalizeSiren(local.siren);
+  if (local.entityId && ownSiren && ownSiren === completed.siren && completed.derived.length) {
+    await persistDerivedIdentity(local.entityId, {
+      siret: completed.derived.includes("siret") ? completed.siret : null,
+      vatNumber: completed.derived.includes("vatNumber") ? completed.vatNumber : null,
+    });
+  }
+  return out;
+}
+
+/**
  * Résout le `clientData` d'une facture Dougs : recherche le client côté Dougs
  * (qui interroge aussi Pappers/INSEE) puis fusionne **champ par champ** avec
- * ce qu'on connaît localement, Dougs prioritaire quand il est non vide.
+ * ce qu'on connaît localement, Dougs prioritaire quand il est non vide, et
+ * complète enfin SIRET + TVA depuis le SIREN (cf. `withCompletedIdentity`).
  *
  * Le merge champ par champ n'est pas un détail : l'endpoint de recherche
  * renvoie souvent la ville et le code postal mais pas la rue. Prendre le
@@ -123,46 +190,54 @@ export async function resolveDougsClientData(args: {
   }
 
   if (!best) {
-    return {
-      isBToB: isBtoB,
-      legalName: isBtoB ? (local.legalName ?? null) : null,
-      siren: local.siren ?? null,
-      siret: local.siret ?? null,
-      vatNumber: local.vatNumber ?? null,
-      firstName: isBtoB ? null : (local.firstName ?? null),
-      lastName: isBtoB ? null : (local.lastName ?? null),
-      address: localAddress,
-      deliveryAddress,
-      others: [],
-      email: local.email ?? null,
-      phone: null,
-      clientId: null,
-    };
+    return withCompletedIdentity(
+      {
+        isBToB: isBtoB,
+        legalName: isBtoB ? (local.legalName ?? null) : null,
+        siren: local.siren ?? null,
+        siret: local.siret ?? null,
+        vatNumber: local.vatNumber ?? null,
+        firstName: isBtoB ? null : (local.firstName ?? null),
+        lastName: isBtoB ? null : (local.lastName ?? null),
+        address: localAddress,
+        deliveryAddress,
+        others: [],
+        email: local.email ?? null,
+        phone: null,
+        clientId: null,
+      },
+      local,
+      localAddress.country,
+    );
   }
 
-  return {
-    isBToB: best.isBtoB,
-    legalName: best.legalName ?? best.name ?? local.legalName ?? null,
-    siren: best.siren || (local.siren ?? null),
-    // Dougs ne renvoie pas le SIRET dans sa recherche : c'est toujours le
-    // nôtre qui fait foi. Historiquement envoyé en `null` en dur, ce qui
-    // privait la facture de l'identifiant d'établissement.
-    siret: local.siret ?? null,
-    vatNumber: best.vatNumber || (local.vatNumber ?? null),
-    firstName: best.firstName ?? local.firstName ?? null,
-    lastName: best.lastName ?? local.lastName ?? null,
-    address: {
-      street: best.address?.street || localAddress.street,
-      zipCode: best.address?.zipcode || localAddress.zipCode,
-      city: best.address?.city || localAddress.city,
-      country: localAddress.country,
+  return withCompletedIdentity(
+    {
+      isBToB: best.isBtoB,
+      legalName: best.legalName ?? best.name ?? local.legalName ?? null,
+      siren: best.siren || (local.siren ?? null),
+      // Dougs ne renvoie pas le SIRET dans sa recherche : c'est toujours le
+      // nôtre qui fait foi. Historiquement envoyé en `null` en dur, ce qui
+      // privait la facture de l'identifiant d'établissement.
+      siret: local.siret ?? null,
+      vatNumber: best.vatNumber || (local.vatNumber ?? null),
+      firstName: best.firstName ?? local.firstName ?? null,
+      lastName: best.lastName ?? local.lastName ?? null,
+      address: {
+        street: best.address?.street || localAddress.street,
+        zipCode: best.address?.zipcode || localAddress.zipCode,
+        city: best.address?.city || localAddress.city,
+        country: localAddress.country,
+      },
+      deliveryAddress,
+      others: [],
+      email: best.email ?? local.email ?? null,
+      phone: best.phone ?? null,
+      clientId: best.clientId,
     },
-    deliveryAddress,
-    others: [],
-    email: best.email ?? local.email ?? null,
-    phone: best.phone ?? null,
-    clientId: best.clientId,
-  };
+    local,
+    localAddress.country,
+  );
 }
 
 /**
