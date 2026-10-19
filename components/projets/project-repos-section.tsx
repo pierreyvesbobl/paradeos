@@ -4,14 +4,17 @@ import { GitBranch, Plus, X } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { RepoMovePicker } from "@/components/projets/repo-move-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { addProjectRepo, removeProjectRepo } from "@/lib/actions/project-repos";
-import type { ProjectRepoRow } from "@/lib/db/queries/project-repos";
+import type { ProjectRepoRow, RepoLinkChoice } from "@/lib/db/queries/project-repos";
 
 type Props = {
   projectId: string;
   repos: ProjectRepoRow[];
+  /** Projets vers lesquels déplacer chaque dépôt, indexés par remote. */
+  choices: RepoLinkChoice[];
 };
 
 /**
@@ -20,8 +23,9 @@ type Props = {
  * accepte l'URL telle que `git remote -v` la donne : elle est normalisée
  * côté serveur.
  */
-export function ProjectReposSection({ projectId, repos }: Props) {
+export function ProjectReposSection({ projectId, repos, choices }: Props) {
   const [value, setValue] = useState("");
+  const choiceFor = new Map(choices.map((c) => [c.remote, c]));
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -58,7 +62,8 @@ export function ProjectReposSection({ projectId, repos }: Props) {
           Dépôts git
         </p>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          Le temps passé dans Claude Code sur ces dépôts est imputé à ce projet.
+          Le temps passé dans Claude Code sur ces dépôts est imputé à ce projet. Un dépôt mal lié se
+          déplace vers le bon projet, son activité suit.
         </p>
       </div>
 
@@ -81,17 +86,26 @@ export function ProjectReposSection({ projectId, repos }: Props) {
                   </span>
                 ) : null}
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-6 shrink-0"
-                disabled={pending}
-                onClick={() => remove(r)}
-                aria-label={`Détacher ${r.remote}`}
-              >
-                <X className="size-3.5" />
-              </Button>
+              <span className="flex shrink-0 items-center gap-1">
+                {choiceFor.get(r.remote) ? (
+                  <RepoMovePicker
+                    choice={choiceFor.get(r.remote) as RepoLinkChoice}
+                    currentProjectId={projectId}
+                    className="h-6 max-w-[200px] text-[11px]"
+                  />
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-6 shrink-0"
+                  disabled={pending}
+                  onClick={() => remove(r)}
+                  aria-label={`Détacher ${r.remote}`}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </span>
             </li>
           ))}
         </ul>

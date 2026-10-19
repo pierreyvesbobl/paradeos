@@ -24,6 +24,7 @@ export const addProjectRepo = action(addProjectRepoSchema, async ({ input, user 
     auto: false,
   });
   revalidatePath(`/projets/${input.projectId}`);
+  if (row.previousProjectId) revalidatePath(`/projets/${row.previousProjectId}`);
   revalidatePath("/temps");
   return row;
 });

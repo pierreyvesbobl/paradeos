@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, notInArray } from "drizzle-orm";
+import { and, desc, eq, isNull, notInArray, or } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { claudeCodeActivity } from "@/db/schema/claude-activity";
 import { projectRepos } from "@/db/schema/project-repos";
@@ -92,14 +92,23 @@ export async function suggestProjects(conn: Database, remote: string): Promise<R
 
 /**
  * Rattache (ou déplace) un dépôt, puis impute rétroactivement l'activité
- * Claude Code déjà poussée sous ce remote sans projet : le signal des
- * sessions passées n'est pas perdu parce que le rattachement est venu
- * après.
+ * Claude Code déjà poussée sous ce remote : celle arrivée sans projet, et,
+ * quand le dépôt change de projet, celle imputée à l'ancien — un mauvais
+ * rattachement se corrige d'un geste, le signal suit. Les créneaux réalisés
+ * (`time_entries`) ne bougent pas : ce sont des décisions humaines.
  */
 export async function linkRemote(
   conn: Database,
   input: { remote: string; projectId: string; userId: string | null; auto: boolean },
-): Promise<{ id: string; remote: string; backfilled: number }> {
+): Promise<{ id: string; remote: string; backfilled: number; previousProjectId: string | null }> {
+  const [previous] = await conn
+    .select({ projectId: projectRepos.projectId })
+    .from(projectRepos)
+    .where(eq(projectRepos.remote, input.remote))
+    .limit(1);
+  const previousProjectId =
+    previous && previous.projectId !== input.projectId ? previous.projectId : null;
+
   const [row] = await conn
     .insert(projectRepos)
     .values({
@@ -123,8 +132,18 @@ export async function linkRemote(
   const backfilled = await conn
     .update(claudeCodeActivity)
     .set({ projectId: input.projectId, updatedAt: new Date() })
-    .where(and(eq(claudeCodeActivity.remote, input.remote), isNull(claudeCodeActivity.projectId)))
+    .where(
+      and(
+        eq(claudeCodeActivity.remote, input.remote),
+        previousProjectId
+          ? or(
+              isNull(claudeCodeActivity.projectId),
+              eq(claudeCodeActivity.projectId, previousProjectId),
+            )
+          : isNull(claudeCodeActivity.projectId),
+      ),
+    )
     .returning({ id: claudeCodeActivity.id });
 
-  return { ...row, backfilled: backfilled.length };
+  return { ...row, backfilled: backfilled.length, previousProjectId };
 }

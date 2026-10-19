@@ -1,6 +1,7 @@
 import { CalendarDots, Clock, Terminal } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/empty-state";
 import Link from "@/components/link";
+import { RepoMovePicker } from "@/components/projets/repo-move-picker";
 import { RepoLinkPicker } from "@/components/temps/repo-link-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,9 +76,9 @@ export async function RapportView({ range, week }: { range?: Range; week?: strin
     getGlobalProfitability(start, end),
     getClaudeActivity(start, end),
   ]);
-  // Dépôts arrivés sans projet : de quoi trancher sur place.
-  const unlinked = claude.byProject.filter((r) => r.projectId === null).flatMap((r) => r.remotes);
-  const choices = await getRepoLinkChoices(unlinked);
+  // Tous les dépôts du rapport : ceux sans projet pour trancher sur place,
+  // ceux déjà rattachés pour corriger un mauvais rattachement.
+  const choices = await getRepoLinkChoices(claude.byProject.flatMap((r) => r.remotes));
   const totalRevenue = profitability.reduce((acc, p) => acc + p.revenueAmount, 0);
   const totalCost = profitability.reduce((acc, p) => acc + p.costAmount, 0);
   const totalMargin = totalRevenue - totalCost;
@@ -418,9 +419,31 @@ function ClaudeActivitySection({
               <TableRow key={row.projectId ?? `remote:${remote ?? "?"}`}>
                 <TableCell className="font-medium">
                   {row.projectId ? (
-                    <Link href={`/projets/${row.projectId}`} className="hover:underline">
-                      {row.projectName ?? "Projet"}
-                    </Link>
+                    <span className="flex min-w-0 flex-col gap-1">
+                      <Link href={`/projets/${row.projectId}`} className="hover:underline">
+                        {row.projectName ?? "Projet"}
+                      </Link>
+                      {row.remotes.map((rm) => {
+                        const c = choiceFor.get(rm);
+                        return (
+                          <span
+                            key={rm}
+                            className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
+                          >
+                            <span className="truncate font-mono text-[11px] text-muted-foreground">
+                              {repoKeyLabel(rm)}
+                            </span>
+                            {c && row.projectId ? (
+                              <RepoMovePicker
+                                choice={c}
+                                currentProjectId={row.projectId}
+                                className="h-6 max-w-[220px] text-[11px]"
+                              />
+                            ) : null}
+                          </span>
+                        );
+                      })}
+                    </span>
                   ) : (
                     <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                       <span className="truncate font-mono text-muted-foreground text-xs">

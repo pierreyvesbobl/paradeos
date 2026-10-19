@@ -86,6 +86,37 @@ describe("dépôts git ↔ projets", () => {
     expect(await db.select().from(projectRepos)).toHaveLength(0);
   });
 
+  it("déplacer un dépôt mal lié réimpute son activité, pas les créneaux réalisés", async () => {
+    // Un autre jour que les tests de partage de minutes, qui comptent la journée.
+    const day = (h: number) => new Date(Date.UTC(2026, 8, 1, h)).toISOString();
+    const wrong = await seedProject("Youtube Automato");
+    const right = await seedProject("Emile motion design");
+    await linkRepo({ remote: "local/emile-motiondesign", projectId: wrong }, ctx());
+    await trackClaudeTime(
+      { sourceRef: "s-move:1", startAt: day(8), endAt: day(9), remote: "local/emile-motiondesign" },
+      ctx(),
+    );
+    // Un segment d'un autre dépôt imputé au même projet ne doit pas bouger.
+    await linkRepo({ remote: "local/automato-shorts", projectId: wrong }, ctx());
+    await trackClaudeTime(
+      { sourceRef: "s-move:2", startAt: day(10), endAt: day(11), remote: "local/automato-shorts" },
+      ctx(),
+    );
+
+    const moved = await addProjectRepo({ projectId: right, remote: "local/emile-motiondesign" });
+    expect(moved.ok).toBe(true);
+    expect(moved.ok && moved.data?.backfilled).toBe(1);
+    expect(moved.ok && moved.data?.previousProjectId).toBe(wrong);
+
+    const rows = await db
+      .select({ sourceRef: claudeCodeActivity.sourceRef, projectId: claudeCodeActivity.projectId })
+      .from(claudeCodeActivity)
+      .where(eq(claudeCodeActivity.userId, actor.id));
+    expect(rows.find((r) => r.sourceRef === "s-move:1")?.projectId).toBe(right);
+    expect(rows.find((r) => r.sourceRef === "s-move:2")?.projectId).toBe(wrong);
+    expect(await db.select().from(timeEntries)).toHaveLength(0);
+  });
+
   it("resolve_repo renvoie le projet lié, sinon des candidats par affinité de nom", async () => {
     const thermigo = await seedProject("Thermigo");
     await seedProject("Vieux projet", "archived");

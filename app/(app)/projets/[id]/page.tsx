@@ -41,7 +41,7 @@ import { getProjectClaudeActivity } from "@/lib/db/queries/claude-activity";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { getProjectProfitability } from "@/lib/db/queries/profitability";
 import { getProjectContacts, getProjectMembers } from "@/lib/db/queries/project-members";
-import { getProjectRepos } from "@/lib/db/queries/project-repos";
+import { getProjectRepos, getRepoLinkChoices } from "@/lib/db/queries/project-repos";
 import { getProjectSecretsList } from "@/lib/db/queries/project-secrets";
 import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { getProjectTimeStats } from "@/lib/db/queries/time-stats";
@@ -169,6 +169,8 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     getProjectRepos(id),
   ]);
 
+  const repoChoices = await getRepoLinkChoices(projectRepoRows.map((r) => r.remote));
+
   const contactAssigneeOptions = contactOptions.map((c) => ({
     id: c.id,
     fullName: formatPersonName(c.firstName, c.lastName),
@@ -291,7 +293,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
           />
         </section>
 
-        <ProjectReposSection projectId={id} repos={projectRepoRows} />
+        <ProjectReposSection projectId={id} repos={projectRepoRows} choices={repoChoices} />
       </div>
 
       {/* Colonne droite (rail) */}
