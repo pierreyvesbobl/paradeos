@@ -12,6 +12,7 @@ import { getValidAccessToken } from "@/lib/google/account";
 import { createLabel, listLabels, modifyThreadLabels, updateLabel } from "@/lib/google/gmail-api";
 import {
   buildLabelName,
+  CANDIDATURE_LABEL,
   collectInvolvedDomains,
   collectInvolvedEmails,
   INVOICE_DIRECTION_LABEL,
@@ -195,6 +196,24 @@ export async function markThreadInvoiceDirection(args: {
     userId: args.userId,
     name: INVOICE_DIRECTION_LABEL[args.direction],
   });
+  await linkThread({
+    userId: args.userId,
+    threadIdLocal: args.threadIdLocal,
+    labelId: label.id,
+    source: "auto",
+  });
+  return { labelId: label.id, labelName: label.labelName };
+}
+
+/**
+ * Marque un fil comme candidature traitée (réponse automatique envoyée)
+ * et pousse le libellé `Paradeos/Candidature` dans Gmail. Idempotent.
+ */
+export async function markThreadCandidature(args: {
+  userId: string;
+  threadIdLocal: string;
+}): Promise<{ labelId: string; labelName: string }> {
+  const label = await ensureSystemLabel({ userId: args.userId, name: CANDIDATURE_LABEL });
   await linkThread({
     userId: args.userId,
     threadIdLocal: args.threadIdLocal,

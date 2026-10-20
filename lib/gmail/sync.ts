@@ -19,6 +19,13 @@ import {
   parseAddressList,
 } from "@/lib/google/gmail-api";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import { looksLikeCandidatureMessage } from "./candidature-detect";
+import {
+  isCandidatureAutoReplyEnabled,
+  processPendingCandidatures,
+  queueCandidature,
+  recoverMissedCandidatures,
+} from "./candidature-filer";
 import { domainFromEmail, extractDomain, GENERIC_EMAIL_DOMAINS } from "./domain";
 import { extractAndSaveEmailProposals } from "./extract-and-save";
 import { looksLikeInvoiceMessage } from "./invoice-detect";
@@ -46,6 +53,10 @@ export const SKIP_LABELS = new Set(["SPAM", "TRASH"]);
 const MAX_EXTRACTIONS_PER_RUN = 10;
 /** Cap classement de factures par run (chaque appel = download PJ + LLM + upload ~10s). */
 const MAX_INVOICE_FILINGS_PER_RUN = 5;
+/** Cap réponses aux candidatures par run (LLM + envoi + libellé ~5s). */
+const MAX_CANDIDATURE_REPLIES_PER_RUN = 10;
+/** Cap rattrapage des candidatures déjà en base (un `format=full` chacune). */
+const MAX_CANDIDATURE_RECOVERIES_PER_RUN = 20;
 
 /**
  * Rattrapage des factures passées entre les mailles : mails à PDF de la
@@ -98,6 +109,14 @@ export type GmailSyncResult = {
   invoicesRejected: number;
   /** Erreurs techniques pendant le classement (download/upload/LLM). */
   invoicesErrored: number;
+  /** Candidatures repérées et mises en file (sync + rattrapage). */
+  candidaturesQueued: number;
+  /** Réponses « pas de poste ouvert » envoyées sur ce run. */
+  candidaturesReplied: number;
+  /** Candidatures écartées (pas une candidature, fil déjà traité, trop vieux). */
+  candidaturesRejected: number;
+  /** Erreurs techniques de l'agent candidatures (LLM, envoi). */
+  candidaturesErrored: number;
   errors: string[];
   newHistoryId: number | null;
   hasMore: boolean;
@@ -162,6 +181,18 @@ function messageLooksLikeInvoice(
   });
 }
 
+/** Signal candidature sur un message metadata — cf. `looksLikeCandidatureMessage`. */
+function messageLooksLikeCandidature(
+  message: GmailMessage,
+  labelNamesById: Map<string, string>,
+): boolean {
+  return looksLikeCandidatureMessage({
+    subject: getHeader(message.payload, "Subject"),
+    fromEmail: parseAddressList(getHeader(message.payload, "From"))[0]?.email ?? null,
+    labelNames: (message.labelIds ?? []).map((id) => labelNamesById.get(id) ?? ""),
+  });
+}
+
 /** État partagé par les étapes d'ingestion d'un run de sync. */
 type IngestContext = {
   userId: string;
@@ -198,11 +229,26 @@ async function ingestMessage(
   }
   const matched = messageMatchesCrm(meta, ctx.matchers);
   const invoiceCandidate = !matched && messageLooksLikeInvoice(meta, ctx.labelNamesById);
-  if (matched || invoiceCandidate) {
+  // Une candidature vient par définition de quelqu'un d'inconnu du CRM :
+  // un contact connu qui parle de recrutement n'est pas un candidat.
+  const candidatureCandidate =
+    !matched && !invoiceCandidate && messageLooksLikeCandidature(meta, ctx.labelNamesById);
+  if (matched || invoiceCandidate || candidatureCandidate) {
     await sleep(SLEEP_MS_BETWEEN_CALLS);
     const full = await getMessage(ctx.accessToken, gmailMessageId, "full");
-    await ingestFullMessage(ctx, full, matched ? "pending" : "skipped");
+    const ingested = await ingestFullMessage(ctx, full, matched ? "pending" : "skipped");
     if (invoiceCandidate) ctx.result.invoiceCandidatesIngested++;
+    if (candidatureCandidate && ingested.messageIdLocal) {
+      const from = parseAddressList(getHeader(full.payload, "From"))[0];
+      const queued = await queueCandidature({
+        userId: ctx.userId,
+        messageIdLocal: ingested.messageIdLocal,
+        threadIdLocal: ingested.threadIdLocal,
+        fromEmail: from?.email ?? null,
+        fromName: from?.name ?? null,
+      });
+      if (queued) ctx.result.candidaturesQueued++;
+    }
   } else {
     const { threadIdLocal } = await upsertThreadAndMessage(ctx.userId, meta, null, "skipped");
     ctx.touchedThreads.add(threadIdLocal);
@@ -216,7 +262,7 @@ async function ingestFullMessage(
   ctx: IngestContext,
   full: GmailMessage,
   extractionStatus: "skipped" | "pending",
-): Promise<void> {
+): Promise<{ threadIdLocal: string; messageIdLocal: string | null }> {
   ctx.result.bodiesFetched++;
   // On utilise les headers du full (plus complets).
   const { threadIdLocal, messageIdLocal } = await upsertThreadAndMessage(
@@ -226,7 +272,7 @@ async function ingestFullMessage(
     extractionStatus,
   );
   ctx.touchedThreads.add(threadIdLocal);
-  if (!messageIdLocal) return;
+  if (!messageIdLocal) return { threadIdLocal, messageIdLocal };
   try {
     const refs = collectAttachments(full.payload);
     await queueInvoiceCandidates({ userId: ctx.userId, messageIdLocal, refs });
@@ -235,6 +281,7 @@ async function ingestFullMessage(
       `queue invoice ${full.id}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
+  return { threadIdLocal, messageIdLocal };
 }
 
 /**
@@ -545,6 +592,10 @@ function emptySyncResult(): GmailSyncResult {
     invoiceSalesDetected: 0,
     invoicesRejected: 0,
     invoicesErrored: 0,
+    candidaturesQueued: 0,
+    candidaturesReplied: 0,
+    candidaturesRejected: 0,
+    candidaturesErrored: 0,
     errors: [],
     newHistoryId: null,
     hasMore: false,
@@ -568,6 +619,10 @@ async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult>
     invoiceSalesDetected: 0,
     invoicesRejected: 0,
     invoicesErrored: 0,
+    candidaturesQueued: 0,
+    candidaturesReplied: 0,
+    candidaturesRejected: 0,
+    candidaturesErrored: 0,
     errors: [],
     newHistoryId: null,
     hasMore: false,
@@ -753,6 +808,27 @@ async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult>
     }
   }
 
+  // ─── 3ter. Rattrapage des candidatures déjà en base ───────────────
+  // Mails ingérés en métadonnées seules avant l'agent, ou avant une règle
+  // plus récente : on télécharge le corps et on met en file. Se lit sur
+  // les colonnes en base, sans appel Gmail de liste.
+  try {
+    const r = await recoverMissedCandidatures({
+      userId,
+      labelNamesById,
+      limit: MAX_CANDIDATURE_RECOVERIES_PER_RUN,
+      fetchBody: async (gmailMessageId) => {
+        const full = await getMessage(accessToken, gmailMessageId, "full");
+        await ingestFullMessage(ctx, full, "skipped");
+        await sleep(SLEEP_MS_BETWEEN_CALLS);
+      },
+    });
+    result.candidaturesQueued += r.queued;
+    result.errors.push(...r.errors);
+  } catch (err) {
+    result.errors.push(`recover candidatures: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   // ─── 4. Lie les threads touchés ──────────────────────────────────
   // (a) Auto-link par participants : pose les liaisons project/contact/
   //     entity non ambiguës côté Paradeos (idempotent, et sans jamais
@@ -856,6 +932,15 @@ async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult>
         );
       }
     }
+  }
+
+  // ─── 4quater. Réponse automatique aux candidatures (kill switch) ──
+  if (await isCandidatureAutoReplyEnabled()) {
+    const r = await processPendingCandidatures(userId, MAX_CANDIDATURE_REPLIES_PER_RUN);
+    result.candidaturesReplied += r.replied;
+    result.candidaturesRejected += r.rejected;
+    result.candidaturesErrored += r.errored;
+    result.errors.push(...r.errors);
   }
 
   // ─── 5. Persiste l'état de sync ────────────────────────────────────

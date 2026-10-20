@@ -52,6 +52,17 @@ export function invoiceDirectionLabelName(direction: InvoiceDirection): string {
   return buildLabelName("category", INVOICE_DIRECTION_LABEL[direction]);
 }
 
+/**
+ * Libellé système des candidatures : projection du fait « ce fil a reçu
+ * la réponse automatique » (cf. `candidature_replies`), pas une catégorie
+ * choisie à la main.
+ */
+export const CANDIDATURE_LABEL = "Candidature";
+
+export function candidatureLabelName(): string {
+  return buildLabelName("category", CANDIDATURE_LABEL);
+}
+
 export type ParticipantMessage = {
   fromEmail: string | null;
   toEmails: string[] | null;

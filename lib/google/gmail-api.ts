@@ -471,6 +471,12 @@ type CreateDraftArgs = {
   /** Corps texte brut (UTF-8). Sera encodé en 8bit / base64 selon l'ASCII-ness. */
   body: string;
   /**
+   * Expéditeur affiché (`Nom <adresse>`). Doit être une adresse « envoyer
+   * en tant que » vérifiée du compte, sinon Gmail la remplace par
+   * l'adresse principale. Absent : adresse par défaut du compte.
+   */
+  from?: string | null;
+  /**
    * Attribue le brouillon à un thread Gmail existant — Gmail placera
    * la réponse au bon endroit dans la conversation. Si absent, crée un
    * brouillon isolé.
@@ -483,6 +489,37 @@ type CreateDraftArgs = {
    */
   inReplyToHeader?: string | null;
 };
+
+/** Message RFC 822 texte brut, encodé pour le champ `raw` de Gmail. */
+function buildRawMessage(args: CreateDraftArgs): string {
+  const headers: string[] = [
+    ...(args.from ? [`From: ${encodeAddressIfNeeded(args.from)}`] : []),
+    `To: ${args.to}`,
+    ...(args.cc && args.cc.length > 0 ? [`Cc: ${args.cc.join(", ")}`] : []),
+    `Subject: ${encodeHeaderIfNeeded(args.subject)}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: 8bit",
+  ];
+  if (args.inReplyToHeader) {
+    headers.push(`In-Reply-To: ${args.inReplyToHeader}`);
+    headers.push(`References: ${args.inReplyToHeader}`);
+  }
+  return base64urlEncode(`${headers.join("\r\n")}\r\n\r\n${args.body}`);
+}
+
+/**
+ * `Pierre-Yves d'Automato <x@y>` : seul le nom affiché peut porter des
+ * accents, l'adresse reste telle quelle.
+ */
+function encodeAddressIfNeeded(address: string): string {
+  const match = address.match(/^(.*?)\s*<([^>]+)>$/);
+  if (!match) return address;
+  const [, name, email] = match;
+  const displayName = (name ?? "").trim().replace(/^"|"$/g, "");
+  if (!displayName) return `<${email}>`;
+  return `${encodeHeaderIfNeeded(displayName)} <${email}>`;
+}
 
 export type GmailDraft = {
   id: string;
@@ -499,21 +536,7 @@ export async function createGmailDraft(
   accessToken: string,
   args: CreateDraftArgs,
 ): Promise<GmailDraft> {
-  const headers: string[] = [
-    `To: ${args.to}`,
-    ...(args.cc && args.cc.length > 0 ? [`Cc: ${args.cc.join(", ")}`] : []),
-    `Subject: ${encodeHeaderIfNeeded(args.subject)}`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 8bit",
-  ];
-  if (args.inReplyToHeader) {
-    headers.push(`In-Reply-To: ${args.inReplyToHeader}`);
-    headers.push(`References: ${args.inReplyToHeader}`);
-  }
-  const rfc822 = `${headers.join("\r\n")}\r\n\r\n${args.body}`;
-  const raw = base64urlEncode(rfc822);
-
+  const raw = buildRawMessage(args);
   return gmailFetch<GmailDraft>("/users/me/drafts", accessToken, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -523,5 +546,31 @@ export async function createGmailDraft(
         ...(args.gmailThreadId ? { threadId: args.gmailThreadId } : {}),
       },
     }),
+  });
+}
+
+// ─── messages.send ─────────────────────────────────────────────────────
+
+export type GmailSentMessage = { id: string; threadId: string; labelIds?: string[] };
+
+/**
+ * Envoie un message directement, sans passer par un brouillon. Mêmes
+ * en-têtes que le brouillon ; `gmailThreadId` + `inReplyToHeader` placent
+ * la réponse dans le fil d'origine. Scope : `gmail.modify` suffit
+ * (`messages.send` l'accepte, comme `gmail.compose` et `gmail.send`).
+ */
+export async function sendGmailMessage(
+  accessToken: string,
+  args: CreateDraftArgs,
+): Promise<GmailSentMessage> {
+  const raw = buildRawMessage(args);
+  return gmailFetch<GmailSentMessage>("/users/me/messages/send", accessToken, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      raw,
+      ...(args.gmailThreadId ? { threadId: args.gmailThreadId } : {}),
+    }),
+    timeoutMs: 15_000,
   });
 }

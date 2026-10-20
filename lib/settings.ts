@@ -105,6 +105,27 @@ export const SETTING_KEYS = {
    */
   SALES_INVOICE_DRIVE_FOLDER_ID: "SALES_INVOICE_DRIVE_FOLDER_ID",
   /**
+   * Agent candidatures : réponse automatique « pas de poste ouvert » aux
+   * mails de candidature (spontanée, stage, alternance), puis libellé
+   * Paradeos/Candidature et archivage du fil. Absent ou "true" : actif ;
+   * "false" : les candidatures repérées restent en attente, rien ne part.
+   * Un LLM confirme chaque candidature avant l'envoi, et un fil ne
+   * reçoit jamais deux réponses.
+   */
+  CANDIDATURE_AUTOREPLY_ENABLED: "CANDIDATURE_AUTOREPLY_ENABLED",
+  /**
+   * Expéditeur de la réponse (`Nom <adresse>`). Doit être une adresse
+   * « envoyer en tant que » du compte Gmail connecté, sinon Gmail la
+   * remplace par l'adresse principale. Défaut : l'alias Automato (cf.
+   * `lib/gmail/candidature-reply.ts`).
+   */
+  CANDIDATURE_REPLY_FROM: "CANDIDATURE_REPLY_FROM",
+  /**
+   * Corps de la réponse, texte brut ; `{prenom}` est remplacé par le
+   * prénom du candidat. Défaut dans `lib/gmail/candidature-reply.ts`.
+   */
+  CANDIDATURE_REPLY_BODY: "CANDIDATURE_REPLY_BODY",
+  /**
    * Mode démo global : si "true", l'UI affiche des alias déterministes pour
    * les noms d'entreprises, contacts, projets, et applique un facteur (~×1)
    * aux montants. Les données en base restent intactes. Les exports

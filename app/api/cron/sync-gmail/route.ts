@@ -48,6 +48,10 @@ export async function GET(request: Request) {
       invoicesFiled: number;
       invoicesRejected: number;
       invoicesErrored: number;
+      candidaturesQueued: number;
+      candidaturesReplied: number;
+      candidaturesRejected: number;
+      candidaturesErrored: number;
       errors: string[];
       hasMore: boolean;
     }> = [];
@@ -64,6 +68,10 @@ export async function GET(request: Request) {
         invoicesFiled: r.invoicesFiled,
         invoicesRejected: r.invoicesRejected,
         invoicesErrored: r.invoicesErrored,
+        candidaturesQueued: r.candidaturesQueued,
+        candidaturesReplied: r.candidaturesReplied,
+        candidaturesRejected: r.candidaturesRejected,
+        candidaturesErrored: r.candidaturesErrored,
         errors: r.errors,
         hasMore: r.hasMore,
       });
