@@ -15,11 +15,12 @@ export async function DriveTranscriptsSection() {
         <div>
           <h2 className="font-medium text-sm">Transcripts Drive (auto-import)</h2>
           <p className="mt-1 text-muted-foreground text-xs">
-            Surveille un dossier Google Drive et crée un meeting pour chaque nouveau fichier (Google
-            Doc ou texte). Le nom du fichier est lu : date, heure et fuseau donnent la date de la
-            réunion, les personnes qu'il nomme sont rattachées comme participants, et un sujet qui
-            correspond à un projet existant le rattache. L'extraction LLM (résumé, propositions)
-            suit. Cron toutes les 15 min — sync manuel disponible.
+            Surveille un dossier Google Drive et ses sous-dossiers directs, et crée un meeting pour
+            chaque nouveau fichier (Google Doc ou texte). Pointer sur le dossier « Google Meet » :
+            Meet y ouvre un sous-dossier par réunion. Le nom du fichier est lu : date, heure et
+            fuseau donnent la date de la réunion, les personnes qu'il nomme sont rattachées comme
+            participants, et un sujet qui correspond à un projet existant le rattache. L'extraction
+            LLM (résumé, propositions) suit. Cron toutes les 15 min — sync manuel disponible.
           </p>
         </div>
         {folderId ? (

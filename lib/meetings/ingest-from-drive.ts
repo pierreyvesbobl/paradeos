@@ -9,6 +9,7 @@ import { type DriveFile, listFolderChildren } from "@/lib/google/drive-api";
 import { resolveDeclaredProject, saveDeclaredParticipants } from "@/lib/meetings/declared-context";
 import { findDuplicateMeeting, transcriptFingerprint } from "@/lib/meetings/dedupe";
 import { parseDriveTranscriptName } from "@/lib/meetings/drive-filename";
+import { walkTranscriptFolder } from "@/lib/meetings/drive-folder-walk";
 import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import { getIngestionUserId } from "@/lib/meetings/ingestion-user";
 import { canStartAnotherItem } from "@/lib/meetings/run-budget";
@@ -52,8 +53,10 @@ async function downloadDriveText(file: DriveFile, accessToken: string): Promise<
 }
 
 /**
- * Liste le dossier Drive configuré, ingère les nouveaux transcripts
- * (Google Docs / texte) et déclenche l'extraction LLM.
+ * Liste le dossier Drive configuré et ses sous-dossiers directs, ingère
+ * les nouveaux transcripts (Google Docs / texte) et déclenche
+ * l'extraction LLM. Le niveau de sous-dossiers n'est pas un luxe : Meet
+ * range désormais chaque réunion dans le sien (cf. `drive-folder-walk.ts`).
  *
  * Le nom du fichier n'est pas qu'un titre : Meet y écrit la date, l'heure
  * avec son fuseau, et les participants quand la réunion n'a pas de sujet
@@ -107,7 +110,14 @@ export async function ingestDriveTranscripts(): Promise<DriveIngestResult> {
 
   let files: DriveFile[];
   try {
-    files = await listFolderChildren(folderId, accessToken, 100);
+    const walked = await walkTranscriptFolder(folderId, (id, limit) =>
+      listFolderChildren(id, accessToken, limit),
+    );
+    files = walked.files;
+    for (const { folder, error } of walked.errors) {
+      result.errors++;
+      result.errorDetails.push(`Listing sous-dossier "${folder.name}" : ${error.message}`);
+    }
   } catch (err) {
     result.errors++;
     result.errorDetails.push(`Listing dossier : ${(err as Error).message}`);

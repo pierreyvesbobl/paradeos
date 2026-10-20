@@ -25,8 +25,11 @@ export const SETTING_KEYS = {
   /**
    * ID du dossier Google Drive surveillé pour ingestion automatique
    * des transcripts de meeting. Le cron (cf. /api/cron/ingest-drive-transcripts)
-   * liste ce dossier toutes les 15 min et ingère les nouveaux fichiers
-   * (Google Docs ou texte) → meeting + extraction LLM auto.
+   * liste ce dossier et ses sous-dossiers directs toutes les 15 min et
+   * ingère les nouveaux fichiers (Google Docs ou texte) → meeting +
+   * extraction LLM auto. À pointer sur « Google Meet », pas sur
+   * « Meet Recordings » : depuis septembre 2026 Meet ouvre un sous-dossier
+   * par réunion à côté de ce dernier (cf. lib/meetings/drive-folder-walk.ts).
    */
   MEETINGS_DRIVE_FOLDER_ID: "MEETINGS_DRIVE_FOLDER_ID",
   /**
