@@ -56,34 +56,44 @@ export function SendToClientButtons({
   const [open, setOpen] = useState(false);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  /** Adresses en copie, saisies séparées par des virgules. */
+  const [ccRaw, setCcRaw] = useState("");
   const [confirming, setConfirming] = useState(false);
   /**
    * Message dont un aperçu a été expédié. L'envoi reste fermé tant que le texte
    * courant ne correspond pas : c'est la même règle que le serveur applique, et
    * la refléter ici évite de proposer un bouton qui serait refusé.
    */
-  const [previewed, setPreviewed] = useState<{ subject: string; body: string } | null>(null);
+  const [previewed, setPreviewed] = useState<{
+    subject: string;
+    body: string;
+    cc: string;
+  } | null>(null);
 
   const act = documentKind === "quote" ? sendProjectQuoteToClient : sendProjectInvoiceToClient;
   const noun = documentKind === "quote" ? "devis" : "facture";
+  const cc = parseCc(ccRaw);
+  const ccKey = cc.join(",");
   const ready = subject.trim().length > 0 && body.trim().length > 0;
   const previewMatches =
     previewed !== null &&
     previewed.subject.trim() === subject.trim() &&
-    previewed.body.trim() === body.trim();
+    previewed.body.trim() === body.trim() &&
+    previewed.cc === ccKey;
 
   function run(send: boolean) {
     startTransition(async () => {
-      const res = await act({ invoiceId, send, subject, body });
+      const res = await act({ invoiceId, send, subject, body, cc: cc.length > 0 ? cc : undefined });
       if (!res.ok) {
         toast.error(res.message);
         return;
       }
       if ("sent" in res.data) {
-        toast.success(`${res.data.reference} envoyé à ${res.data.to}.`);
+        const copies = res.data.cc.length > 0 ? ` (copie : ${res.data.cc.join(", ")})` : "";
+        toast.success(`${res.data.reference} envoyé à ${res.data.to}${copies}.`);
         setOpen(false);
       } else {
-        setPreviewed({ subject, body });
+        setPreviewed({ subject, body, cc: ccKey });
         toast.success(`Aperçu envoyé à ${res.data.to}. Relis-le, puis envoie au client.`);
       }
       setConfirming(false);
@@ -149,6 +159,21 @@ export function SendToClientButtons({
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="mailCc">Copie (facultatif)</Label>
+              <Input
+                id="mailCc"
+                value={ccRaw}
+                onChange={(e) => {
+                  setCcRaw(e.target.value);
+                  setConfirming(false);
+                }}
+                placeholder="assistant@client.fr, compta@client.fr"
+                disabled={pending}
+                className="font-mono text-xs"
+              />
+            </div>
+
             <p className="text-[11px] text-muted-foreground">
               Destinataire de l'envoi :{" "}
               {contactEmail ? (
@@ -158,6 +183,11 @@ export function SendToClientButtons({
                   aucune adresse sur le contact du projet
                 </span>
               )}
+              {cc.length > 0 ? (
+                <>
+                  , copie à <span className="font-mono">{cc.join(", ")}</span>
+                </>
+              ) : null}
               . L'aperçu, lui, part à toi.
             </p>
 
@@ -165,7 +195,7 @@ export function SendToClientButtons({
               {previewMatches
                 ? "Aperçu relu : l'envoi au client est ouvert."
                 : previewed
-                  ? "Le message a changé depuis l'aperçu — renvoie-en un avant d'adresser au client."
+                  ? "Le message ou les destinataires ont changé depuis l'aperçu — renvoie-en un avant d'adresser au client."
                   : "L'envoi au client s'ouvre après un aperçu : on ne diffuse pas un document que personne n'a relu."}
             </p>
 
@@ -174,8 +204,8 @@ export function SendToClientButtons({
                 <p className="flex items-start gap-1.5 font-medium text-amber-800 text-xs dark:text-amber-300">
                   <Warning className="mt-0.5 size-3.5 shrink-0" />
                   {documentKind === "quote"
-                    ? `Le devis sera finalisé chez Dougs — numéro définitif — puis envoyé à ${contactEmail}.`
-                    : `La facture sera finalisée chez Dougs — numéro définitif, irréversible : seul un avoir peut l'annuler — puis envoyée à ${contactEmail}.`}
+                    ? `Le devis sera finalisé chez Dougs — numéro définitif — puis envoyé à ${contactEmail}${ccSuffix(cc)}.`
+                    : `La facture sera finalisée chez Dougs — numéro définitif, irréversible : seul un avoir peut l'annuler — puis envoyée à ${contactEmail}${ccSuffix(cc)}.`}
                 </p>
               </div>
             ) : null}
@@ -203,7 +233,7 @@ export function SendToClientButtons({
               title={
                 !previewMatches
                   ? previewed
-                    ? "Le message a changé depuis l'aperçu : renvoie un aperçu."
+                    ? "Le message ou les destinataires ont changé depuis l'aperçu : renvoie un aperçu."
                     : "Envoie d'abord un aperçu, pour relire ce que le client recevra."
                   : undefined
               }
@@ -217,4 +247,25 @@ export function SendToClientButtons({
       </Dialog>
     </>
   );
+}
+
+/**
+ * Lit un champ « copie » saisi à la main : virgules, points-virgules ou espaces
+ * comme séparateurs, adresses en minuscules, sans doublon et triées — la même
+ * normalisation que le serveur, pour que le contrôle d'aperçu local reflète
+ * le sien.
+ */
+function parseCc(raw: string): string[] {
+  return [
+    ...new Set(
+      raw
+        .split(/[,;\s]+/)
+        .map((a) => a.trim().toLowerCase())
+        .filter((a) => a.length > 0),
+    ),
+  ].sort();
+}
+
+function ccSuffix(cc: string[]): string {
+  return cc.length > 0 ? `, copie à ${cc.join(", ")}` : "";
 }

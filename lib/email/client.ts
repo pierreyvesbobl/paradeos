@@ -3,6 +3,8 @@ import { Resend } from "resend";
 
 type SendInput = {
   to: string | string[];
+  /** Destinataires en copie, visibles du destinataire principal. */
+  cc?: string | string[];
   subject: string;
   /**
    * Corps HTML. Optionnel : les mails rédigés à la main pour un client
@@ -72,6 +74,7 @@ export async function sendEmail(
     console.info("[email:console]", {
       from,
       to: input.to,
+      cc: input.cc,
       subject: input.subject,
       attachments: input.attachments?.map((a) => `${a.filename} (${a.content.length} o)`),
       preview: (input.html ?? input.text ?? "").slice(0, 200),
@@ -99,6 +102,7 @@ export async function sendEmail(
     const payload = {
       from,
       to: input.to,
+      ...(input.cc && input.cc.length > 0 ? { cc: input.cc } : {}),
       subject: input.subject,
       replyTo: input.replyTo,
       tags: input.tags,

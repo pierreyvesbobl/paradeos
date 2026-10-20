@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertPreviewed, messageDigest } from "./preview-gate";
+import { assertPreviewed, messageDigest, normalizeCc } from "./preview-gate";
 
 const SUBJECT = "Notre proposition pour le rapprochement EBP";
 const BODY = "Bonjour,\n\nVous trouverez ci-joint notre devis.\n\nBien à vous,";
@@ -63,5 +63,32 @@ describe("assertPreviewed", () => {
     expect(() =>
       assertPreviewed({ noun: "facture", previewDigest: null, previewSentAt: null, digest }),
     ).toThrow(/facture/);
+  });
+});
+
+describe("messageDigest avec copies", () => {
+  it("garde l'empreinte d'avant quand il n'y a pas de copie", () => {
+    // Les aperçus enregistrés avant l'arrivée du Cc restent valables.
+    expect(messageDigest(SUBJECT, BODY, [])).toBe(messageDigest(SUBJECT, BODY));
+    expect(messageDigest(SUBJECT, BODY, undefined)).toBe(messageDigest(SUBJECT, BODY));
+  });
+
+  it("change dès qu'une copie est ajoutée", () => {
+    expect(messageDigest(SUBJECT, BODY, ["compta@client.fr"])).not.toBe(
+      messageDigest(SUBJECT, BODY),
+    );
+  });
+
+  it("ignore l'ordre, la casse et les doublons des copies", () => {
+    expect(messageDigest(SUBJECT, BODY, ["B@client.fr", "a@client.fr", " a@client.fr "])).toBe(
+      messageDigest(SUBJECT, BODY, ["a@client.fr", "b@client.fr"]),
+    );
+  });
+});
+
+describe("normalizeCc", () => {
+  it("trie, dédoublonne et met en minuscules", () => {
+    expect(normalizeCc([" B@x.fr", "a@x.fr", "b@X.FR", ""])).toEqual(["a@x.fr", "b@x.fr"]);
+    expect(normalizeCc(undefined)).toEqual([]);
   });
 });

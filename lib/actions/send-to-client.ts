@@ -21,6 +21,11 @@ const schema = z.object({
   /** Objet et corps rédigés par l'utilisateur. Le document part en pièce jointe. */
   subject: z.string().trim().min(1, "Objet requis.").max(300),
   body: z.string().trim().min(1, "Message requis.").max(10000),
+  /**
+   * Adresses en copie. Le destinataire principal reste le contact du projet ;
+   * les copies entrent dans l'empreinte de l'aperçu.
+   */
+  cc: z.array(z.string().trim().email()).max(10).optional(),
 });
 
 // `async` obligatoire : Next refuse une server action synchrone, même quand

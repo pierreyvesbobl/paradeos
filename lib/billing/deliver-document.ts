@@ -46,6 +46,8 @@ export async function deliverDocumentEmail(args: {
   /** `invoice` lit la facture, `quote` le devis : deux endpoints distincts. */
   documentKind: "invoice" | "quote";
   recipient: string;
+  /** Adresses en copie, en plus du destinataire principal. */
+  cc?: string[];
   reference: string;
   brand: InvoiceBrand;
   /**
@@ -78,6 +80,7 @@ export async function deliverDocumentEmail(args: {
     const filename = `${args.reference.replace(/[^\w.-]+/g, "-")}.pdf`;
     const res = await sendEmail({
       to: args.recipient,
+      cc: args.cc,
       subject: args.mail.subject,
       ...(args.mail.html ? { html: args.mail.html } : {}),
       text: args.mail.body,
@@ -124,6 +127,7 @@ export async function deliverDocumentEmail(args: {
   if (args.documentKind === "invoice") {
     await sendDougsSalesInvoiceEmail(args.userId, args.documentId, {
       to: args.recipient,
+      cc: args.cc,
       subject: args.mail.subject,
       body: args.mail.body,
     });

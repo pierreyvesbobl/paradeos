@@ -538,6 +538,12 @@ export const sendDocumentMcpSchema = z.object({
   /** Corps du message, en **texte brut**. Le document voyage en pièce jointe. */
   body: z.string().trim().min(1).max(10000),
   /**
+   * Adresses en copie (un assistant, un second interlocuteur…). Le
+   * destinataire principal est toujours le contact du projet. Comme l'objet et
+   * le corps, la liste doit être **identique** entre l'aperçu et l'envoi.
+   */
+  cc: z.array(z.string().trim().email()).max(10).optional(),
+  /**
    * `true` = finalise et envoie au client. Absent ou `false` = aperçu.
    *
    * Un `confirm: true` ne suffit pas : le serveur exige qu'un aperçu du **même**
@@ -571,6 +577,7 @@ export async function sendDocumentMcp(
     send,
     subject: args.subject,
     body: args.body,
+    cc: args.cc,
   });
 
   return {
@@ -579,7 +586,7 @@ export async function sendDocumentMcp(
     ...result,
     note: send
       ? "Document finalisé chez Dougs et envoyé au client, message en texte brut avec le PDF en pièce jointe."
-      : "Aperçu envoyé à l'utilisateur. Rien n'a été émis. Fais-lui valider le message, puis rappelle avec confirm=true et le même subject/body.",
+      : "Aperçu envoyé à l'utilisateur. Rien n'a été émis. Fais-lui valider le message et les destinataires, puis rappelle avec confirm=true et les mêmes subject/body/cc.",
   };
 }
 

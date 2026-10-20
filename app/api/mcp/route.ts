@@ -359,10 +359,11 @@ const TOOL_REGISTRY: Record<
     description:
       "Envoie un devis ou une facture au client : finalise chez Dougs, puis expédie **le message que tu rédiges** (texte brut, pas de gabarit) avec le PDF en pièce jointe, et classe la facture dans le Drive comptable. " +
       "DEUX ÉTAPES OBLIGATOIRES. 1) Appelle sans confirm : un aperçu part à l'utilisateur, rien n'est émis. " +
-      "2) Fais-lui valider le message, puis rappelle avec confirm=true et le MÊME subject/body. " +
-      "Le serveur refuse tout envoi qui n'a pas été prévisualisé, et refuse aussi si le message a changé depuis l'aperçu. " +
+      "2) Fais-lui valider le message, puis rappelle avec confirm=true et les MÊMES subject/body/cc. " +
+      "Le serveur refuse tout envoi qui n'a pas été prévisualisé, et refuse aussi si le message ou les copies ont changé depuis l'aperçu. " +
       "N'utilise confirm=true que sur accord explicite de l'utilisateur : la finalisation d'une facture est irréversible et le mail part à un tiers. " +
-      "Args: invoiceId, subject, body, confirm (optionnel).",
+      "Le destinataire principal est le contact du projet ; `cc` ajoute des adresses en copie (10 max). " +
+      "Args: invoiceId, subject, body, cc (optionnel), confirm (optionnel).",
     schema: sendDocumentMcpSchema,
     handler: (a, ctx) => sendDocumentMcp(a as never, ctx as never),
   },

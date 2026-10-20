@@ -9,7 +9,7 @@ import { dueDateFrom } from "@/lib/billing/billing-terms";
 import { resolveInvoiceDocument } from "@/lib/billing/brand-documents";
 import { brandTemplateFor } from "@/lib/billing/brand-templates";
 import { deliverDocumentEmail } from "@/lib/billing/deliver-document";
-import { assertPreviewed, messageDigest } from "@/lib/billing/preview-gate";
+import { assertPreviewed, messageDigest, normalizeCc } from "@/lib/billing/preview-gate";
 import { db } from "@/lib/db/server";
 import {
   canFinalizeDougsSalesInvoice,
@@ -42,11 +42,19 @@ export type SendDocumentArgs = {
    */
   subject: string;
   body: string;
+  /**
+   * Adresses en copie du message client (un assistant, un second
+   * interlocuteur…). Le destinataire principal reste le contact du projet.
+   * L'aperçu ne part qu'à l'utilisateur, mais il annonce ces copies et elles
+   * entrent dans l'empreinte : en ajouter une après l'aperçu exige d'en
+   * renvoyer un.
+   */
+  cc?: string[];
 };
 
 export type SendDocumentResult =
-  | { previewed: true; to: string }
-  | { sent: true; reference: string; to: string };
+  | { previewed: true; to: string; cc: string[] }
+  | { sent: true; reference: string; to: string; cc: string[] };
 
 /** Contexte commun : la facture, son projet, son client et ses conditions. */
 async function loadProjectDocument(invoiceId: string) {
@@ -103,6 +111,17 @@ async function resolveRecipient(args: {
 }
 
 /**
+ * Corps de l'aperçu : le message tel quel, précédé de la liste des
+ * destinataires réels. L'utilisateur relit ainsi aussi **à qui** ça part, pas
+ * seulement quoi — c'est ce que l'aperçu doit permettre de valider.
+ */
+function previewText(args: { contactEmail: string | null; cc: string[]; body: string }): string {
+  const lines = [`À : ${args.contactEmail?.trim() || "(aucune adresse sur le contact du projet)"}`];
+  if (args.cc.length > 0) lines.push(`Cc : ${args.cc.join(", ")}`);
+  return `${lines.join("\n")}\n\n----------\n\n${args.body}`;
+}
+
+/**
  * Envoie (ou prévisualise) une facture projet — jalon ou facture libre.
  *
  * Un envoi réel finalise la facture : numéro définitif, irréversible. On
@@ -136,7 +155,8 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
     milestonePercent: invoice.milestonePercent,
   };
   const mail = { subject: input.subject, body: input.body };
-  const digest = messageDigest(mail.subject, mail.body);
+  const cc = normalizeCc(input.cc);
+  const digest = messageDigest(mail.subject, mail.body, cc);
 
   const isDraft = (invoice.dougsStatus ?? "DRAFT").toUpperCase() === "DRAFT";
 
@@ -147,7 +167,7 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
     const res = await sendEmail({
       to: recipient,
       subject: `[Aperçu] ${mail.subject}`,
-      text: mail.body,
+      text: previewText({ contactEmail, cc, body: mail.body }),
       fromName: template.senderName,
       tags: [{ name: "type", value: "invoice-preview" }],
       attachments: [{ filename: "apercu-facture.pdf", content: pdf.buffer }],
@@ -158,7 +178,7 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
       .update(invoices)
       .set({ previewSentAt: new Date(), previewDigest: digest, updatedAt: new Date() })
       .where(eq(invoices.id, invoice.id));
-    return { previewed: true as const, to: recipient };
+    return { previewed: true as const, to: recipient, cc };
   }
 
   // --- Envoi réel. ---
@@ -205,6 +225,7 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
     documentId,
     documentKind: "invoice",
     recipient,
+    cc,
     reference,
     brand: invoice.brand,
     mail,
@@ -220,7 +241,7 @@ export async function sendProjectInvoiceCore(input: SendDocumentArgs): Promise<S
   revalidateTag(`dougs:${user.id}`, { expire: 0 });
   revalidatePath(`/projets/${project.id}`);
   revalidatePath("/compta");
-  return { sent: true as const, reference, to: recipient };
+  return { sent: true as const, reference, to: recipient, cc };
 }
 
 /**
@@ -250,7 +271,8 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
   // Seul le nom d'expéditeur vient de la marque : le message est rédigé.
   const template = brandTemplateFor(invoice.brand);
   const mail = { subject: input.subject, body: input.body };
-  const digest = messageDigest(mail.subject, mail.body);
+  const cc = normalizeCc(input.cc);
+  const digest = messageDigest(mail.subject, mail.body, cc);
   const isDraft = (invoice.dougsStatus ?? "DRAFT").toUpperCase() === "DRAFT";
 
   if (!input.send) {
@@ -259,7 +281,7 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
     const res = await sendEmail({
       to: recipient,
       subject: `[Aperçu] ${mail.subject}`,
-      text: mail.body,
+      text: previewText({ contactEmail, cc, body: mail.body }),
       fromName: template.senderName,
       tags: [{ name: "type", value: "quote-preview" }],
       attachments: [{ filename: "apercu-devis.pdf", content: pdf.buffer }],
@@ -269,7 +291,7 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
       .update(invoices)
       .set({ previewSentAt: new Date(), previewDigest: digest, updatedAt: new Date() })
       .where(eq(invoices.id, invoice.id));
-    return { previewed: true as const, to: recipient };
+    return { previewed: true as const, to: recipient, cc };
   }
 
   assertPreviewed({
@@ -302,6 +324,7 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
     documentId: invoice.dougsQuoteId,
     documentKind: "quote",
     recipient,
+    cc,
     reference,
     brand: invoice.brand,
     mail,
@@ -315,7 +338,7 @@ export async function sendProjectQuoteCore(input: SendDocumentArgs): Promise<Sen
 
   revalidateTag(`dougs:${user.id}`, { expire: 0 });
   revalidatePath(`/projets/${project.id}`);
-  return { sent: true as const, reference, to: recipient };
+  return { sent: true as const, reference, to: recipient, cc };
 }
 
 /** `invoices.due_date` est une colonne `date`, pas un timestamp. */

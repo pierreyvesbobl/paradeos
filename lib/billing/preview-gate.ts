@@ -11,12 +11,28 @@
 import { createHash } from "node:crypto";
 
 /**
+ * Adresses en copie, normalisées : minuscules, sans doublon, triées. Deux
+ * listes équivalentes donnent la même empreinte, quel que soit l'ordre saisi.
+ */
+export function normalizeCc(cc: readonly string[] | null | undefined): string[] {
+  if (!cc) return [];
+  return [...new Set(cc.map((a) => a.trim().toLowerCase()).filter(Boolean))].sort();
+}
+
+/**
  * Empreinte du message soumis. Sert de garde : l'envoi au client n'est autorisé
  * que si un aperçu **du même message** est parti avant. Normalise les espaces
  * de bord pour qu'un retour à la ligne de plus ne force pas un nouvel aperçu.
+ *
+ * Les adresses en copie font partie de l'empreinte : ajouter un tiers après
+ * l'aperçu change qui reçoit le document, donc exige une nouvelle relecture.
+ * Sans copie, l'empreinte est celle d'avant : les aperçus déjà enregistrés
+ * restent valables.
  */
-export function messageDigest(subject: string, body: string): string {
-  return createHash("sha256").update(`${subject.trim()}\n\n${body.trim()}`).digest("hex");
+export function messageDigest(subject: string, body: string, cc?: readonly string[]): string {
+  const copies = normalizeCc(cc);
+  const suffix = copies.length > 0 ? `\n\ncc:${copies.join(",")}` : "";
+  return createHash("sha256").update(`${subject.trim()}\n\n${body.trim()}${suffix}`).digest("hex");
 }
 
 /**
