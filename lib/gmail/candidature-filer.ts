@@ -120,6 +120,31 @@ export async function processCandidatureReply(replyId: string): Promise<Candidat
     )
     .limit(1);
   if (alreadyReplied) return reject(row.id, "fil déjà répondu.");
+  // Le même candidat qui ouvre un second fil (« candidature actualisée »)
+  // a déjà sa réponse : la lui renvoyer ferait automate.
+  if (msg.fromEmail) {
+    const [sameCandidate] = await conn
+      .select({ repliedAt: candidatureReplies.repliedAt })
+      .from(candidatureReplies)
+      .where(
+        and(
+          eq(candidatureReplies.userId, row.userId),
+          eq(candidatureReplies.status, "replied"),
+          eq(candidatureReplies.candidateEmail, msg.fromEmail),
+          gt(
+            candidatureReplies.repliedAt,
+            new Date(Date.now() - CANDIDATURE_MAX_AGE_DAYS * 86_400_000),
+          ),
+        ),
+      )
+      .limit(1);
+    if (sameCandidate) {
+      return reject(
+        row.id,
+        `candidat déjà répondu le ${sameCandidate.repliedAt?.toLocaleDateString("fr-FR") ?? "?"}.`,
+      );
+    }
+  }
   // Un fil où nous avons déjà écrit (à la main ou par l'agent) ne reçoit
   // pas la réponse type : la conversation est engagée.
   const [ourMessage] = await conn

@@ -85,7 +85,9 @@ async function createMessage(args: {
       threadId: args.threadId,
       userId: actor.id,
       gmailMessageId: args.gmailMessageId,
-      fromEmail: args.fromEmail ?? "candice@example.com",
+      // Une adresse par message par défaut : la garde « même candidat »
+      // isolerait sinon les tests les uns des autres.
+      fromEmail: args.fromEmail ?? `candidat-${args.gmailMessageId}@example.com`,
       fromName: args.fromName === undefined ? "Candice DUPUIS" : args.fromName,
       subject: args.subject ?? "Candidature spontanée – Alternance IA & automatisation",
       bodyText:
@@ -101,12 +103,16 @@ async function createMessage(args: {
 }
 
 async function queue(threadId: string, messageId: string) {
+  const [msg] = await db
+    .select({ fromEmail: gmailMessages.fromEmail, fromName: gmailMessages.fromName })
+    .from(gmailMessages)
+    .where(eq(gmailMessages.id, messageId));
   await queueCandidature({
     userId: actor.id,
     messageIdLocal: messageId,
     threadIdLocal: threadId,
-    fromEmail: "candice@example.com",
-    fromName: "Candice DUPUIS",
+    fromEmail: msg?.fromEmail ?? null,
+    fromName: msg?.fromName ?? null,
   });
   const [row] = await db
     .select({ id: candidatureReplies.id })
@@ -137,7 +143,11 @@ beforeEach(() => {
 describe("agent candidatures", () => {
   it("répond dans le fil, libelle et archive", async () => {
     const threadId = await createThread("gt-1");
-    const messageId = await createMessage({ threadId, gmailMessageId: "gm-1" });
+    const messageId = await createMessage({
+      threadId,
+      gmailMessageId: "gm-1",
+      fromEmail: "candice@example.com",
+    });
     const replyId = await queue(threadId, messageId);
 
     const outcome = await processCandidatureReply(replyId);
@@ -198,6 +208,29 @@ describe("agent candidatures", () => {
     expect(outcome.reason).toBe("fil déjà répondu.");
     expect(sendGmailMessage).toHaveBeenCalledTimes(1);
     expect(classifyCandidature).toHaveBeenCalledTimes(1);
+  });
+
+  it("le même candidat dans un nouveau fil n'est pas répondu deux fois", async () => {
+    const threadA = await createThread("gt-2c");
+    const first = await createMessage({
+      threadId: threadA,
+      gmailMessageId: "gm-2c",
+      fromEmail: "zen@example.com",
+    });
+    await processCandidatureReply(await queue(threadA, first));
+    expect(sendGmailMessage).toHaveBeenCalledTimes(1);
+
+    const threadB = await createThread("gt-2d");
+    const second = await createMessage({
+      threadId: threadB,
+      gmailMessageId: "gm-2d",
+      fromEmail: "zen@example.com",
+      subject: "Candidature actualisée",
+    });
+    const outcome = await processCandidatureReply(await queue(threadB, second));
+    expect(outcome.status).toBe("rejected");
+    expect(outcome.reason).toContain("candidat déjà répondu");
+    expect(sendGmailMessage).toHaveBeenCalledTimes(1);
   });
 
   it("n'envoie rien quand le LLM n'y voit pas une candidature", async () => {
