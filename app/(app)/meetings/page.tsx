@@ -23,6 +23,12 @@ import { DemoBlur, ProjectName } from "@/lib/demo/components";
 import { applyFilters, parseFiltersFromSearchParams } from "@/lib/filters/apply";
 import { buildSortHref, collectF } from "@/lib/filters/url-helpers";
 import { applyViewPrefRedirect } from "@/lib/view-prefs/apply";
+import { SyncMeetingsButton } from "./sync-meetings-button";
+
+// Le bouton « Récupérer » appelle les Server Actions d'ingestion depuis
+// cette route : elles en héritent le `maxDuration`. Sans ça, Whisper ou
+// l'extraction LLM se font couper avant la fin (cf. LLM_BUDGET_MS).
+export const maxDuration = 300;
 
 const STATUS_LABEL = {
   ingested: "À extraire",
@@ -143,12 +149,15 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Sea
         title="Meetings"
         description="Importe un transcript, génère un résumé et extrais tâches / contacts / opportunités à valider."
         actions={
-          <Button asChild>
-            <Link href="/meetings/nouveau">
-              <Plus className="size-4" />
-              Importer un transcript
-            </Link>
-          </Button>
+          <>
+            <SyncMeetingsButton />
+            <Button asChild>
+              <Link href="/meetings/nouveau">
+                <Plus className="size-4" />
+                Importer un transcript
+              </Link>
+            </Button>
+          </>
         }
       />
 
