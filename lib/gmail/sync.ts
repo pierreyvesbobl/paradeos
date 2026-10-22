@@ -57,6 +57,16 @@ const MAX_INVOICE_FILINGS_PER_RUN = 5;
 const MAX_CANDIDATURE_REPLIES_PER_RUN = 10;
 /** Cap rattrapage des candidatures déjà en base (un `format=full` chacune). */
 const MAX_CANDIDATURE_RECOVERIES_PER_RUN = 20;
+/**
+ * Budget de temps par défaut d'un run. Les caps ci-dessus comptent des
+ * éléments, pas des secondes : avec un modèle lent (DeepSeek ~20-30 s
+ * par extraction) dix extractions plus quelques classements et réponses
+ * dépassaient les 300 s de la fonction Vercel, qui tuait le run avant la
+ * persistance de l'état — et le libellé Gmail des fils attendait le run
+ * suivant. Passé le budget, les phases LLM s'arrêtent, l'état est
+ * persisté, et `hasMore` signale qu'il reste du travail.
+ */
+export const SYNC_TIME_BUDGET_MS = 240_000;
 
 /**
  * Rattrapage des factures passées entre les mailles : mails à PDF de la
@@ -119,7 +129,12 @@ export type GmailSyncResult = {
   candidaturesErrored: number;
   errors: string[];
   newHistoryId: number | null;
+  /** Il reste du travail : historique plafonné ou budget de temps épuisé. */
   hasMore: boolean;
+  /** Le run s'est arrêté sur le budget de temps, pas faute de travail. */
+  budgetExhausted: boolean;
+  /** Durée de chaque phase en ms, pour lire dans les logs ce qui coûte. */
+  timings: Record<string, number>;
 };
 
 /**
@@ -564,12 +579,18 @@ async function releaseSyncLock(userId: string): Promise<void> {
     .where(eq(gmailSyncState.userId, userId));
 }
 
-export async function syncIncremental(userId: string): Promise<GmailSyncResult> {
+export async function syncIncremental(
+  userId: string,
+  opts: {
+    /** Horodatage (ms epoch) au-delà duquel les phases LLM s'arrêtent. */
+    deadline?: number;
+  } = {},
+): Promise<GmailSyncResult> {
   if (!(await acquireSyncLock(userId))) {
     return { ...emptySyncResult(), skipped: "already_running" };
   }
   try {
-    return await syncIncrementalUnlocked(userId);
+    return await syncIncrementalUnlocked(userId, opts.deadline ?? Date.now() + SYNC_TIME_BUDGET_MS);
   } finally {
     await releaseSyncLock(userId);
   }
@@ -599,10 +620,12 @@ function emptySyncResult(): GmailSyncResult {
     errors: [],
     newHistoryId: null,
     hasMore: false,
+    budgetExhausted: false,
+    timings: {},
   };
 }
 
-async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult> {
+async function syncIncrementalUnlocked(userId: string, deadline: number): Promise<GmailSyncResult> {
   const result: GmailSyncResult = {
     mode: "incremental",
     inserted: 0,
@@ -626,6 +649,22 @@ async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult>
     errors: [],
     newHistoryId: null,
     hasMore: false,
+    budgetExhausted: false,
+    timings: {},
+  };
+  // Lecture du budget : une fois dépassé, chaque phase LLM s'interrompt
+  // entre deux éléments et le reste attend le run suivant.
+  const outOfTime = () => {
+    if (Date.now() < deadline) return false;
+    result.budgetExhausted = true;
+    result.hasMore = true;
+    return true;
+  };
+  let phaseStartedAt = Date.now();
+  const endPhase = (name: string) => {
+    const now = Date.now();
+    result.timings[name] = now - phaseStartedAt;
+    phaseStartedAt = now;
   };
 
   const accessToken = await getValidAccessToken(userId);
@@ -744,6 +783,8 @@ async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult>
     return result;
   }
 
+  endPhase("list");
+
   // ─── 2. Skip les messages déjà connus ─────────────────────────────
   if (messageIds.length === 0) {
     // Pas de nouveaux messages — on persiste juste l'historyId si on en a un.
@@ -798,9 +839,11 @@ async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult>
     }
   }
 
+  endPhase("ingest");
+
   // ─── 3bis. Rattrapage des factures passées entre les mailles ──────
   // Hors bootstrap, qui balaie déjà toute la fenêtre.
-  if (!isBootstrap) {
+  if (!isBootstrap && !outOfTime()) {
     try {
       await recoverMissedInvoices(ctx);
     } catch (err) {
@@ -808,28 +851,37 @@ async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult>
     }
   }
 
+  endPhase("recoverInvoices");
+
   // ─── 3ter. Rattrapage des candidatures déjà en base ───────────────
   // Mails ingérés en métadonnées seules avant l'agent, ou avant une règle
   // plus récente : on télécharge le corps et on met en file. Se lit sur
   // les colonnes en base, sans appel Gmail de liste.
-  try {
-    const r = await recoverMissedCandidatures({
-      userId,
-      labelNamesById,
-      limit: MAX_CANDIDATURE_RECOVERIES_PER_RUN,
-      fetchBody: async (gmailMessageId) => {
-        const full = await getMessage(accessToken, gmailMessageId, "full");
-        await ingestFullMessage(ctx, full, "skipped");
-        await sleep(SLEEP_MS_BETWEEN_CALLS);
-      },
-    });
-    result.candidaturesQueued += r.queued;
-    result.errors.push(...r.errors);
-  } catch (err) {
-    result.errors.push(`recover candidatures: ${err instanceof Error ? err.message : String(err)}`);
+  if (!outOfTime()) {
+    try {
+      const r = await recoverMissedCandidatures({
+        userId,
+        labelNamesById,
+        limit: MAX_CANDIDATURE_RECOVERIES_PER_RUN,
+        fetchBody: async (gmailMessageId) => {
+          const full = await getMessage(accessToken, gmailMessageId, "full");
+          await ingestFullMessage(ctx, full, "skipped");
+          await sleep(SLEEP_MS_BETWEEN_CALLS);
+        },
+      });
+      result.candidaturesQueued += r.queued;
+      result.errors.push(...r.errors);
+    } catch (err) {
+      result.errors.push(
+        `recover candidatures: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
+  endPhase("recoverCandidatures");
 
   // ─── 4. Lie les threads touchés ──────────────────────────────────
+  // Pas de budget ici : c'est la phase qui pose les libellés Gmail, et
+  // elle est bornée par le cap de messages du run.
   // (a) Auto-link par participants : pose les liaisons project/contact/
   //     entity non ambiguës côté Paradeos (idempotent, et sans jamais
   //     rétablir une liaison que l'utilisateur a invalidée).
@@ -873,18 +925,21 @@ async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult>
     }
   }
 
+  endPhase("link");
+
   // ─── 4bis. Extraction LLM des messages en `pending` ────────────────
-  // On limite à MAX_EXTRACTIONS_PER_RUN pour borner le coût et le temps
-  // de sync. Les messages non-traités cette fois seront repris au sync
-  // suivant (extraction_status='pending' reste indexé).
+  // On limite à MAX_EXTRACTIONS_PER_RUN et au budget de temps pour borner
+  // le coût et la durée. Les messages non-traités cette fois seront repris
+  // au sync suivant (extraction_status='pending' reste indexé).
   const extractionEnabled = (await getSetting(SETTING_KEYS.GMAIL_EXTRACTION_ENABLED)) !== "false";
-  if (extractionEnabled) {
+  if (extractionEnabled && !outOfTime()) {
     const pendingMessages = await conn
       .select({ id: gmailMessages.id })
       .from(gmailMessages)
       .where(and(eq(gmailMessages.userId, userId), eq(gmailMessages.extractionStatus, "pending")))
       .limit(MAX_EXTRACTIONS_PER_RUN);
     for (const pm of pendingMessages) {
+      if (outOfTime()) break;
       try {
         const r = await extractAndSaveEmailProposals(pm.id);
         if (r.skipped) {
@@ -900,9 +955,11 @@ async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult>
     }
   }
 
+  endPhase("extract");
+
   // ─── 4ter. Classement automatique des factures (kill switch) ─────
   const filingEnabled = (await getSetting(SETTING_KEYS.INVOICE_FILING_ENABLED)) !== "false";
-  if (filingEnabled) {
+  if (filingEnabled && !outOfTime()) {
     // Les `pending` déjà passés au LLM (confiance faible) attendent une
     // validation manuelle dans l'inbox : les reprendre ici les ferait
     // repasser au LLM à chaque run et boucherait la file pour les autres.
@@ -919,6 +976,7 @@ async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult>
       .orderBy(invoiceFilings.createdAt)
       .limit(MAX_INVOICE_FILINGS_PER_RUN);
     for (const pf of pendingFilings) {
+      if (outOfTime()) break;
       try {
         const r = await processInvoiceFiling(pf.id);
         if (r.direction === "sale") result.invoiceSalesDetected++;
@@ -934,14 +992,18 @@ async function syncIncrementalUnlocked(userId: string): Promise<GmailSyncResult>
     }
   }
 
+  endPhase("fileInvoices");
+
   // ─── 4quater. Réponse automatique aux candidatures (kill switch) ──
-  if (await isCandidatureAutoReplyEnabled()) {
-    const r = await processPendingCandidatures(userId, MAX_CANDIDATURE_REPLIES_PER_RUN);
+  if (!outOfTime() && (await isCandidatureAutoReplyEnabled())) {
+    const r = await processPendingCandidatures(userId, MAX_CANDIDATURE_REPLIES_PER_RUN, outOfTime);
     result.candidaturesReplied += r.replied;
     result.candidaturesRejected += r.rejected;
     result.candidaturesErrored += r.errored;
     result.errors.push(...r.errors);
   }
+
+  endPhase("candidatures");
 
   // ─── 5. Persiste l'état de sync ────────────────────────────────────
   // Calcule les valeurs finales d'abord (sans interpolation SQL avec

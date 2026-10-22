@@ -24,6 +24,14 @@ import { hasRequiredGmailScopes } from "@/lib/google/oauth";
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
+/**
+ * Budget total du run, sous `maxDuration` avec de la marge pour la
+ * persistance de l'état et la réponse. Réparti entre les utilisateurs :
+ * chacun reçoit une part égale du temps restant, et ce qu'un run rapide
+ * n'a pas consommé profite au suivant.
+ */
+const RUN_BUDGET_MS = 270_000;
+
 export async function GET(request: Request) {
   const unauthorized = cronUnauthorized(request);
   if (unauthorized) return unauthorized;
@@ -57,10 +65,15 @@ export async function GET(request: Request) {
       candidaturesErrored: number;
       errors: string[];
       hasMore: boolean;
+      budgetExhausted: boolean;
+      timings: Record<string, number>;
     }> = [];
 
-    for (const t of targets) {
-      const r = await syncIncremental(t.userId);
+    const runDeadline = Date.now() + RUN_BUDGET_MS;
+    for (const [i, t] of targets.entries()) {
+      const remaining = Math.max(0, runDeadline - Date.now());
+      const deadline = Date.now() + remaining / (targets.length - i);
+      const r = await syncIncremental(t.userId, { deadline });
       results.push({
         userId: t.userId,
         mode: r.mode,
@@ -77,6 +90,8 @@ export async function GET(request: Request) {
         candidaturesErrored: r.candidaturesErrored,
         errors: r.errors,
         hasMore: r.hasMore,
+        budgetExhausted: r.budgetExhausted,
+        timings: r.timings,
       });
     }
 

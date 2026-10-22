@@ -278,6 +278,8 @@ async function markError(id: string, message: string): Promise<CandidatureReplyO
 export async function processPendingCandidatures(
   userId: string,
   limit: number,
+  /** Budget de temps de l'appelant : vrai = s'arrêter avant le prochain. */
+  shouldStop: () => boolean = () => false,
 ): Promise<{ replied: number; rejected: number; errored: number; errors: string[] }> {
   const conn = await db();
   const pending = await conn
@@ -288,6 +290,7 @@ export async function processPendingCandidatures(
     .limit(limit);
   const stats = { replied: 0, rejected: 0, errored: 0, errors: [] as string[] };
   for (const p of pending) {
+    if (shouldStop()) break;
     try {
       const r = await processCandidatureReply(p.id);
       if (r.status === "replied") stats.replied++;
