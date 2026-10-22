@@ -40,7 +40,9 @@ import {
 // `-in:spam -in:trash` exclut les emails dans la corbeille et le dossier
 // spam de Gmail. `-in:promotions` filtre l'onglet Promotions (newsletters
 // marketing) — désactivable plus tard si on veut le contexte client.
-const BOOTSTRAP_QUERY = "newer_than:90d -in:spam -in:trash";
+// `-in:drafts` : un brouillon est réécrit à chaque sauvegarde auto sous un
+// nouvel id, l'ancien disparaissant — on n'ingère que le mail envoyé.
+const BOOTSTRAP_QUERY = "newer_than:90d -in:spam -in:trash -in:drafts";
 const MAX_MESSAGES_PER_RUN = 50;
 const SLEEP_MS_BETWEEN_CALLS = 100;
 /** Labels Gmail qui causent un skip silencieux à l'ingestion. */
@@ -101,6 +103,12 @@ export type GmailSyncResult = {
   skippedNotFound: number;
   /** Messages skip parce qu'ils ont un label SPAM ou TRASH. */
   skippedSpam: number;
+  /**
+   * Brouillons écartés à la lecture de l'historique. Gmail crée un
+   * message par sauvegarde automatique d'un brouillon : une boîte où l'on
+   * écrit saturait le cap du run avec des ids morts (404 au `get`).
+   */
+  skippedDrafts: number;
   /** Extractions LLM réussies sur ce run. */
   extractionsDone: number;
   /** Extractions skip (pas de body, sensitive detected, désactivé…). */
@@ -604,6 +612,7 @@ function emptySyncResult(): GmailSyncResult {
     bodiesFetched: 0,
     skippedNotFound: 0,
     skippedSpam: 0,
+    skippedDrafts: 0,
     extractionsDone: 0,
     extractionsSkipped: 0,
     proposalsCreated: 0,
@@ -633,6 +642,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
     bodiesFetched: 0,
     skippedNotFound: 0,
     skippedSpam: 0,
+    skippedDrafts: 0,
     extractionsDone: 0,
     extractionsSkipped: 0,
     proposalsCreated: 0,
@@ -742,6 +752,18 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
             for (const a of h.messagesAdded ?? []) {
               if (seen.has(a.message.id)) continue;
               seen.add(a.message.id);
+              // Les libellés sont dans l'historique : on écarte spam,
+              // corbeille et brouillons sans appel `get`, et sans les
+              // compter dans le cap du run.
+              const labels = a.message.labelIds ?? [];
+              if (labels.some((l) => SKIP_LABELS.has(l))) {
+                result.skippedSpam++;
+                continue;
+              }
+              if (labels.includes("DRAFT")) {
+                result.skippedDrafts++;
+                continue;
+              }
               messageIds.push({ id: a.message.id, threadId: a.message.threadId });
             }
             lastRecordId = h.id;

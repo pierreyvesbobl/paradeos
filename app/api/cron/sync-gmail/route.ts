@@ -54,6 +54,9 @@ export async function GET(request: Request) {
       mode: string;
       inserted: number;
       bodiesFetched: number;
+      skippedSpam: number;
+      skippedNotFound: number;
+      skippedDrafts: number;
       invoiceCandidatesIngested: number;
       invoicesRecovered: number;
       invoicesFiled: number;
@@ -79,6 +82,9 @@ export async function GET(request: Request) {
         mode: r.mode,
         inserted: r.inserted,
         bodiesFetched: r.bodiesFetched,
+        skippedSpam: r.skippedSpam,
+        skippedNotFound: r.skippedNotFound,
+        skippedDrafts: r.skippedDrafts,
         invoiceCandidatesIngested: r.invoiceCandidatesIngested,
         invoicesRecovered: r.invoicesRecovered,
         invoicesFiled: r.invoicesFiled,
