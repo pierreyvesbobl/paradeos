@@ -3,7 +3,10 @@
 # Vercel Hobby ne descend pas sous un passage par jour, or l'ingestion des
 # transcripts (Drive et mail) n'a d'intérêt qu'au quart d'heure : un
 # compte-rendu de la réunion qui vient de finir doit être exploitable dans la
-# foulée. Ces endpoints sont donc déclenchés d'ici (cf. docs/cron-external.md).
+# foulée. Même logique pour la sync Gmail : un mail client reçu le matin doit
+# être lié à son projet (et libellé dans Gmail) avant le soir, pas le
+# lendemain à 6 h 30. Ces endpoints sont donc déclenchés d'ici (cf.
+# docs/cron-external.md).
 #
 # Le quart d'heure plutôt que la demi-heure : GitHub peut décaler un run
 # planifié de 5 à 10 minutes, ce qui poussait l'attente réelle jusqu'à 40
@@ -23,7 +26,8 @@ on:
   workflow_dispatch:
 
 # Un run à la fois : deux ingestions simultanées ne casseraient rien
-# (l'idempotence tient) mais paieraient deux fois le même travail LLM.
+# (l'idempotence tient, et la sync Gmail a son propre verrou en base) mais
+# paieraient deux fois le même travail LLM.
 concurrency:
   group: crons-externes
   cancel-in-progress: false
@@ -62,4 +66,25 @@ jobs:
           curl -sS --fail-with-body --max-time 600 \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$BASE_URL/api/cron/ingest-drive-transcripts"
+          echo
+
+  gmail:
+    # Job séparé : la sync Gmail peut durer jusqu'à 5 min (cap de 50
+    # messages et 10 extractions LLM par run) et ne doit pas retarder les
+    # transcripts. Le cron Vercel quotidien de 6 h 30 reste en filet de
+    # sécurité, le verrou `gmail_sync_state` évite tout chevauchement.
+    name: Sync Gmail (liaisons, libellés, factures, candidatures)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      BASE_URL: https://paradeos.vercel.app
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+    steps:
+      - name: Sync Gmail incrémentale
+        run: |
+          curl -sS --fail-with-body --max-time 600 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$BASE_URL/api/cron/sync-gmail"
           echo

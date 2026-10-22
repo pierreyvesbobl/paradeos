@@ -10,6 +10,11 @@ Les endpoints restent en place :
 - `GET /api/cron/ingest-drive-transcripts` — ingestion auto des transcripts Drive
 - `GET /api/cron/ingest-email-transcripts` — ingestion des réunions envoyées par
   mail (label Gmail configuré dans les réglages)
+- `GET /api/cron/sync-gmail` — sync incrémentale Gmail : nouveaux messages,
+  auto-liaison des fils aux projets/contacts et projection en libellés Gmail,
+  extraction LLM, classement des factures, réponses aux candidatures. Reste
+  aussi dans `vercel.json` (6 h 30) en filet de sécurité ; un verrou en base
+  (`gmail_sync_state.sync_started_at`) empêche deux runs simultanés.
 - `GET /api/cron/file-sales-invoices` — classe dans le Drive comptable les
   factures de vente émises dont le PDF n'y est pas encore. Sert au rattrapage
   du stock historique, puis de filet : une facture finalisée à la main dans
@@ -20,8 +25,15 @@ Auth : header `Authorization: Bearer $CRON_SECRET`.
 
 ## En place aujourd'hui : GitHub Actions
 
-`.github/workflows/crons.yml` appelle les deux endpoints d'ingestion tous les
-quarts d'heure. Le dépôt étant public, les minutes Actions sont gratuites.
+`.github/workflows/crons.yml` appelle les deux endpoints d'ingestion et la
+sync Gmail tous les quarts d'heure. Le dépôt étant public, les minutes Actions
+sont gratuites.
+
+Cadence réelle, mesurée en octobre 2026 : GitHub ne respecte pas le `*/15` sur
+ce dépôt et ne lance que 6 à 7 runs par jour, espacés de 2 à 7 heures. C'est
+déjà bien mieux que le passage quotidien de Vercel Hobby, mais pour un vrai
+quart d'heure il faut passer par cron-job.org (option 2 ci-dessous) ou par
+Vercel Pro.
 
 Pourquoi 15 et pas 30 : la dérive GitHub s'ajoute à l'intervalle, donc à
 `*/30` un transcript déposé par Meet pouvait attendre 40 minutes. Un run à

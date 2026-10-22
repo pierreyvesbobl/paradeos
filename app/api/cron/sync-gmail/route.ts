@@ -1,11 +1,14 @@
 /**
- * Cron daily : ingère les nouveaux threads/messages Gmail pour
- * l'utilisateur admin connecté au scope gmail.readonly.
+ * Cron : ingère les nouveaux threads/messages Gmail pour l'utilisateur
+ * admin connecté au scope gmail.readonly.
  *
  * Auth : `Authorization: Bearer <CRON_SECRET>` (Vercel le pose auto).
- * Hobby tier : 1 exécution / jour. Pendant le bootstrap initial (3
- * derniers mois), le run peut être appelé plusieurs fois manuellement
- * via le bouton "Sync now" pour drainer plus vite (cf.
+ * Déclenché par le cron Vercel quotidien (6 h 30, filet de sécurité) et,
+ * plusieurs fois par jour, par `.github/workflows/crons.yml` — Hobby
+ * plafonne Vercel à un passage par jour (cf. docs/cron-external.md). Le
+ * verrou de `syncIncremental` rend les appels concurrents inoffensifs.
+ * Pendant le bootstrap initial (3 derniers mois), le run peut aussi être
+ * appelé à la main via le bouton "Sync now" pour drainer plus vite (cf.
  * `lib/actions/gmail.ts:triggerGmailSync`).
  */
 
