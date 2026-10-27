@@ -6,8 +6,9 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { RepoMovePicker } from "@/components/projets/repo-move-picker";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { addProjectRepo, removeProjectRepo } from "@/lib/actions/project-repos";
+import { addProjectRepo, removeProjectRepo, setProjectRepoSync } from "@/lib/actions/project-repos";
 import type { ProjectRepoRow, RepoLinkChoice } from "@/lib/db/queries/project-repos";
 
 type Props = {
@@ -44,6 +45,22 @@ export function ProjectReposSection({ projectId, repos, choices }: Props) {
     });
   }
 
+  function toggleSync(repo: ProjectRepoRow, syncIssues: boolean) {
+    startTransition(async () => {
+      const res = await setProjectRepoSync({ id: repo.id, syncIssues });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(
+        syncIssues
+          ? "Les fonctionnalités de ce projet partiront en issues sur ce dépôt."
+          : "Projection en issues coupée pour ce dépôt.",
+      );
+      router.refresh();
+    });
+  }
+
   function remove(repo: ProjectRepoRow) {
     startTransition(async () => {
       const res = await removeProjectRepo({ id: repo.id });
@@ -63,7 +80,8 @@ export function ProjectReposSection({ projectId, repos, choices }: Props) {
         </p>
         <p className="mt-1 text-[11px] text-muted-foreground">
           Le temps passé dans Claude Code sur ces dépôts est imputé à ce projet. Un dépôt mal lié se
-          déplace vers le bon projet, son activité suit.
+          déplace vers le bon projet, son activité suit. Sur un dépôt GitHub, « Issues » projette
+          les tâches de type Fonctionnalité en issues, avec le brief tiré de ce qui a été dit.
         </p>
       </div>
 
@@ -87,6 +105,21 @@ export function ProjectReposSection({ projectId, repos, choices }: Props) {
                 ) : null}
               </span>
               <span className="flex shrink-0 items-center gap-1">
+                {r.remote.startsWith("github.com/") ? (
+                  <label
+                    htmlFor={`sync-${r.id}`}
+                    className="mr-1 flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground"
+                    title="Projeter les tâches Fonctionnalité de ce projet en issues GitHub"
+                  >
+                    <Checkbox
+                      id={`sync-${r.id}`}
+                      checked={r.syncIssues}
+                      disabled={pending}
+                      onCheckedChange={(v) => toggleSync(r, v === true)}
+                    />
+                    Issues
+                  </label>
+                ) : null}
                 {choiceFor.get(r.remote) ? (
                   <RepoMovePicker
                     choice={choiceFor.get(r.remote) as RepoLinkChoice}

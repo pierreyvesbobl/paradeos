@@ -19,6 +19,7 @@ import {
 } from "@/lib/meetings/completed-tasks";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import { TASK_KIND_PROMPT_RULES } from "@/lib/tasks/task-kind";
 import {
   normalizeExcerpts,
   type ResolvedTaskMention,
@@ -124,6 +125,8 @@ const extractionSchema = z.object({
       dueDate: z.string().nullable(),
       projectName: z.string().nullable(),
       priority: z.enum(["low", "normal", "high"]).nullable(),
+      /** Nature : à développer, à analyser, geste humain (lib/tasks/task-kind.ts). */
+      kind: z.enum(["feature", "investigation", "action"]).nullable(),
       /** Passages verbatim du transcript qui expriment ce besoin. */
       excerpts: z.array(excerptSchema),
     }),
@@ -445,6 +448,8 @@ de l'équipe" → internal ; si Sophie est dans "Contacts" → external.
 ${COMPLETED_TASKS_PROMPT_RULES}
 
 ${TASK_SOURCES_PROMPT_RULES}
+
+${TASK_KIND_PROMPT_RULES}
 
 # Projet (objet unique couvrant tout le cycle)
 

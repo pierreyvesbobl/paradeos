@@ -92,6 +92,7 @@ function proposedTask(title: string, quote: string) {
     dueDate: null,
     projectName: null,
     priority: null,
+    kind: null,
     excerpts: [{ quote, speaker: "Eric" }],
   };
 }
@@ -270,6 +271,7 @@ describe("mail déjà trié", () => {
           projectName: null,
           assigneeName: null,
           priority: null,
+          kind: null,
           excerpts: [{ quote: "un export quotidien des prix", speaker: "Vittorio Morino" }],
         },
         {
@@ -278,6 +280,7 @@ describe("mail déjà trié", () => {
           projectName: null,
           assigneeName: null,
           priority: null,
+          kind: null,
           excerpts: [{ quote: "relancez Bagheera", speaker: "Vittorio Morino" }],
         },
       ],

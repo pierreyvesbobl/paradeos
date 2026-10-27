@@ -29,6 +29,11 @@ export const projectRepos = pgTable(
     remote: text("remote").notNull(),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     autoLinked: boolean("auto_linked").notNull().default(false),
+    /**
+     * Le dépôt reçoit en issue GitHub les tâches `feature` de son projet
+     * (projection à sens unique, cf. lib/github/project-issue.ts).
+     */
+    syncIssues: boolean("sync_issues").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (table) => ({

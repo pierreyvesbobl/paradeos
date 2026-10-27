@@ -1,9 +1,11 @@
 import { CaretRight } from "@phosphor-icons/react/dist/ssr";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { TaskAssigneeRailEditor } from "@/app/(app)/taches/[id]/rail/assignee-rail-editor";
 import { TaskCompletedEditor } from "@/app/(app)/taches/[id]/rail/completed-editor";
 import { TaskCompletionSources } from "@/app/(app)/taches/[id]/rail/completion-sources";
+import { TaskGithubIssueField } from "@/app/(app)/taches/[id]/rail/github-issue-field";
+import { TaskKindPillEditor } from "@/app/(app)/taches/[id]/rail/kind-pill-editor";
 import { TaskPriorityPillEditor } from "@/app/(app)/taches/[id]/rail/priority-pill-editor";
 import { TaskProjectRailEditor } from "@/app/(app)/taches/[id]/rail/project-rail-editor";
 import { TaskStatusPillEditor } from "@/app/(app)/taches/[id]/rail/status-pill-editor";
@@ -15,7 +17,9 @@ import Link from "@/components/link";
 import { NoteList } from "@/components/notes/note-list";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
+import { projectRepos } from "@/db/schema/project-repos";
 import { projects } from "@/db/schema/projects";
+import { taskGithubIssues } from "@/db/schema/task-github-issues";
 import { tasks } from "@/db/schema/tasks";
 import { users } from "@/db/schema/users";
 import { deleteTaskAndRedirect } from "@/lib/actions/tasks";
@@ -59,6 +63,8 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
     contactRows,
     completionSources,
     sources,
+    issueRows,
+    syncRepoRows,
   ] = await Promise.all([
     fetchAssigneesForTasks(conn, [id]),
     getTaskTimeStats(id),
@@ -84,7 +90,25 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
     // Seule une tâche terminée peut l'avoir été d'après une source.
     task.status === "done" ? getTaskCompletionSources(id) : Promise.resolve([]),
     getTaskSources(id),
+    conn
+      .select({
+        url: taskGithubIssues.url,
+        number: taskGithubIssues.number,
+        remote: taskGithubIssues.remote,
+      })
+      .from(taskGithubIssues)
+      .where(eq(taskGithubIssues.taskId, id))
+      .limit(1),
+    task.projectId
+      ? conn
+          .select({ id: projectRepos.id })
+          .from(projectRepos)
+          .where(and(eq(projectRepos.projectId, task.projectId), eq(projectRepos.syncIssues, true)))
+          .limit(1)
+      : Promise.resolve([]),
   ]);
+  const githubIssue = issueRows[0] ?? null;
+  const canProject = syncRepoRows.length > 0;
 
   const assignees = assigneesByTask.get(id) ?? [];
   const contactOptions = contactRows.map((c) => ({
@@ -195,6 +219,19 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
 
           <RailField label="Priorité">
             <TaskPriorityPillEditor id={id} value={task.priority} />
+          </RailField>
+
+          <RailField label="Type">
+            <TaskKindPillEditor id={id} value={task.kind} />
+          </RailField>
+
+          <RailField label="Issue GitHub">
+            <TaskGithubIssueField
+              taskId={id}
+              kind={task.kind}
+              issue={githubIssue}
+              canProject={canProject}
+            />
           </RailField>
 
           <RailField label={`Assigné${assignees.length > 1 ? "s" : "e"} à`}>

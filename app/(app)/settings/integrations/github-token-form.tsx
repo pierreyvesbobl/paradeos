@@ -88,8 +88,8 @@ export function GithubTokenForm({ currentKeyPreview }: { currentKeyPreview: stri
           >
             github.com/settings/personal-access-tokens
           </a>
-          , limité aux dépôts rattachés à des projets, avec la seule permission « Issues : lecture
-          ».
+          , limité aux dépôts rattachés à des projets, avec la permission « Issues : lecture » pour
+          les afficher, « lecture et écriture » pour que les fonctionnalités partent en issues.
         </p>
       </div>
 

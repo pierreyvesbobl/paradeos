@@ -237,6 +237,7 @@ describe("réunion : passages verbatim", () => {
           dueDate: null,
           projectName: null,
           priority: null,
+          kind: null,
           excerpts: [
             {
               quote: "On a des EAN qui matchent sur le mauvais produit chez Boulanger.",
@@ -281,6 +282,7 @@ describe("réunion : passages verbatim", () => {
           dueDate: null,
           projectName: null,
           priority: null,
+          kind: null,
           excerpts: [
             { quote: "Les invitations Vente Unique sont toujours en attente.", speaker: "Éric" },
           ],
@@ -326,6 +328,7 @@ describe("mail : passages verbatim", () => {
           projectName: null,
           assigneeName: null,
           priority: null,
+          kind: null,
           excerpts: [
             { quote: "un export quotidien des prix par canal", speaker: "Vittorio Morino" },
           ],

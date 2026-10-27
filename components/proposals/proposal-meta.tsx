@@ -11,6 +11,7 @@ import {
   Warning,
 } from "@phosphor-icons/react";
 import { HashedAvatar } from "@/components/user/hashed-avatar";
+import { taskKindFromPayload, taskKindLabels } from "@/lib/tasks/task-kind";
 import { excerptsFromPayload } from "@/lib/tasks/task-sources";
 import { formatDueDate, type PipelineStage, PRIORITY_TINT, STAGE_STYLE } from "./helpers";
 import type { Proposal } from "./types";
@@ -35,8 +36,26 @@ export function ProposalMetaTags({
       const prio = priority && priority !== "normal" ? PRIORITY_TINT[priority] : null;
       const excerpts = excerptsFromPayload(payload);
       const firstExcerpt = excerpts[0];
+      const kind = taskKindFromPayload(payload);
+      const kindTint = kind === "feature" ? "blue" : kind === "investigation" ? "yellow" : "gray";
       return (
         <div className="flex flex-wrap items-center gap-1.5">
+          {kind ? (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-medium text-[12px]"
+              style={{
+                background: `var(--ds-tint-${kindTint}-bg)`,
+                color: `var(--ds-tint-${kindTint}-text)`,
+              }}
+              title="Nature de la tâche, posée par l'extraction"
+            >
+              <span
+                className="inline-block size-1.5 rounded-full"
+                style={{ background: `var(--ds-tint-${kindTint}-dot)` }}
+              />
+              {taskKindLabels[kind]}
+            </span>
+          ) : null}
           {assigneeName ? (
             <span className="inline-flex items-center gap-1.5 rounded-full border bg-(--ds-bg-app) py-0.5 pr-2 pl-0.5 text-[12px] text-muted-foreground">
               <HashedAvatar name={assigneeName} seed={assigneeName} size="xs" />

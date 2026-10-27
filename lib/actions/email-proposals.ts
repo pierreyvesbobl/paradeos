@@ -20,6 +20,7 @@ import {
 import { type AssigneeRef, setTaskAssignees } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
 import { sanitizeNameInput } from "@/lib/format";
+import { projectTaskToIssueQuietly } from "@/lib/github/project-issue";
 import {
   clearThreadLinkDecisions,
   dismissThreadLinksOfKind,
@@ -35,6 +36,7 @@ import {
   undoTaskCompletion,
 } from "@/lib/tasks/completion-proposals";
 import { recordTaskSources } from "@/lib/tasks/record-sources";
+import { taskKindFromPayload } from "@/lib/tasks/task-kind";
 import { excerptsFromPayload } from "@/lib/tasks/task-sources";
 
 /**
@@ -178,6 +180,7 @@ export const acceptEmailProposal = action(
         const priority: "low" | "medium" | "high" | "urgent" =
           priorityIn === "high" ? "high" : priorityIn === "low" ? "low" : "medium";
         const assignees = readAssigneesFromPayload(payload);
+        const kind = taskKindFromPayload(payload);
         createdEntityId = await conn.transaction(async (tx) => {
           const [inserted] = await tx
             .insert(tasks)
@@ -189,6 +192,7 @@ export const acceptEmailProposal = action(
                   ? dueDate.toISOString().slice(0, 10)
                   : null,
               priority,
+              kind,
               assigneeId: null,
               assigneeContactId: null,
               createdBy: user.id,
@@ -205,6 +209,9 @@ export const acceptEmailProposal = action(
           });
           return inserted.id;
         });
+        // Une fonctionnalité acceptée part en issue GitHub si le projet
+        // projette ; l'acceptation n'attend pas GitHub pour réussir.
+        if (kind === "feature") await projectTaskToIssueQuietly(createdEntityId);
       }
     } else if (proposal.kind === "project_link") {
       // L'user peut avoir changé le projet suggéré via combobox — la

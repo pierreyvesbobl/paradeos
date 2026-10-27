@@ -20,6 +20,7 @@ import {
 import type { Match } from "@/lib/crm/match";
 import { setTaskAssignees } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
+import { projectTaskToIssueQuietly } from "@/lib/github/project-issue";
 import { extractAndSaveProposals } from "@/lib/meetings/extract-and-save";
 import {
   createMeetingSchema,
@@ -37,6 +38,7 @@ import {
   undoTaskCompletion,
 } from "@/lib/tasks/completion-proposals";
 import { recordTaskSources } from "@/lib/tasks/record-sources";
+import { taskKindFromPayload } from "@/lib/tasks/task-kind";
 import { excerptsFromPayload } from "@/lib/tasks/task-sources";
 export const createMeeting = action(createMeetingSchema, async ({ input, user }) => {
   const conn = await db();
@@ -532,6 +534,7 @@ async function createForKind(
       const priorityIn = payload.priority as "low" | "normal" | "high" | null | undefined;
       const priority: "low" | "medium" | "high" | "urgent" =
         priorityIn === "high" ? "high" : priorityIn === "low" ? "low" : "medium";
+      const kind = taskKindFromPayload(payload);
       const inserted = await conn.transaction(async (tx) => {
         const [row] = await tx
           .insert(tasks)
@@ -539,6 +542,7 @@ async function createForKind(
             title: taskTitle,
             status: "todo",
             priority,
+            kind,
             projectId,
             // Colonnes legacy mises à NULL : la source de vérité est
             // task_assignees.
@@ -562,6 +566,9 @@ async function createForKind(
         }
         return row;
       });
+      // Une fonctionnalité acceptée part en issue GitHub si le projet
+      // projette ; l'acceptation n'attend pas GitHub pour réussir.
+      if (inserted && kind === "feature") await projectTaskToIssueQuietly(inserted.id);
       return inserted?.id ?? "";
     }
   }
@@ -685,12 +692,14 @@ async function applyUpdateForKind(
       const priorityIn = payload.priority as "low" | "normal" | "high" | null | undefined;
       const priority: "low" | "medium" | "high" | "urgent" =
         priorityIn === "high" ? "high" : priorityIn === "low" ? "low" : "medium";
+      const kind = taskKindFromPayload(payload);
       await conn.transaction(async (tx) => {
         await tx
           .update(tasks)
           .set({
             title: taskTitle,
             priority,
+            ...(kind ? { kind } : {}),
             projectId,
             assigneeId: null,
             assigneeContactId: null,

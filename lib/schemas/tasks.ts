@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TASK_KINDS } from "@/lib/tasks/task-kind";
 
 export const taskStatusEnum = z.enum([
   "todo",
@@ -28,6 +29,9 @@ export const taskPriorityLabels: Record<TaskPriority, string> = {
   high: "Haute",
   urgent: "Urgente",
 };
+
+export const taskKindEnum = z.enum(TASK_KINDS);
+export { taskKindLabels } from "@/lib/tasks/task-kind";
 
 const optionalText = (max: number) =>
   z
@@ -115,6 +119,8 @@ export const patchTaskSchema = z.object({
   id: z.string().uuid(),
   status: taskStatusEnum.optional(),
   priority: taskPriorityEnum.optional(),
+  /** Nature de la tâche ; `null` = non typée. */
+  kind: taskKindEnum.nullable().optional(),
   projectId: z.union([z.string().uuid(), z.null()]).optional(),
   /** Si fourni, remplace l'ensemble des assignés (strip-and-replace). */
   assignees: assigneesSchema.optional(),

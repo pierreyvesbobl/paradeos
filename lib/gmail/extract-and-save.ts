@@ -272,6 +272,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
         projectName: t.projectName,
         projectId: taskProjectId,
         assigneeName: t.assigneeName,
+        kind: t.kind,
         excerpts: t.excerpts,
       },
       matchedId: null,

@@ -13,6 +13,7 @@ import {
 import { formatVocabulary, getKnownVocabulary } from "@/lib/meetings/extract";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import { TASK_KIND_PROMPT_RULES } from "@/lib/tasks/task-kind";
 import {
   normalizeExcerpts,
   type ResolvedTaskMention,
@@ -73,6 +74,8 @@ const extractionSchema = z.object({
       projectName: z.string().nullable(),
       assigneeName: z.string().nullable(),
       priority: z.enum(["low", "normal", "high"]).nullable(),
+      /** Nature : à développer, à analyser, geste humain (lib/tasks/task-kind.ts). */
+      kind: z.enum(["feature", "investigation", "action"]).nullable(),
       /** Passages verbatim du mail qui expriment ce besoin. */
       excerpts: z.array(excerptSchema),
     }),
@@ -223,6 +226,8 @@ Classifie l'affaire portée par cet email :
 ${COMPLETED_TASKS_PROMPT_RULES}
 
 ${TASK_SOURCES_PROMPT_RULES}
+
+${TASK_KIND_PROMPT_RULES}
 
 Précision mail : pour \`excerpts\`, cite le corps du mail (et l'historique du fil s'il porte la demande), jamais la signature ni les en-têtes ; \`speaker\` = le nom de l'expéditeur du passage cité.
 

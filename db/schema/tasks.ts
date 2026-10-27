@@ -16,6 +16,13 @@ export const taskStatus = pgEnum("task_status", [
 export const taskPriority = pgEnum("task_priority", ["low", "medium", "high", "urgent"]);
 
 /**
+ * Nature de la tâche (cf. lib/tasks/task-kind.ts) : à développer, à
+ * analyser, ou geste humain. Posée par l'extraction, corrigeable à la main ;
+ * seules les `feature` sont projetées en issue GitHub.
+ */
+export const taskKind = pgEnum("task_kind", ["feature", "investigation", "action"]);
+
+/**
  * Tâches = unités d'action concrètes. Attachables à un projet (le cas
  * standard) ou autonomes (todo perso). L'assignation à un user est
  * facultative — une tâche peut être "à prendre".
@@ -28,6 +35,8 @@ export const tasks = pgTable(
     description: text("description"),
     status: taskStatus("status").notNull().default("todo"),
     priority: taskPriority("priority").notNull().default("medium"),
+    /** Null = pas encore typée (tâches antérieures, saisie rapide). */
+    kind: taskKind("kind"),
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     /** Assigné interne (membre Paradeos). XOR avec assigneeContactId au niveau applicatif —
      * une tâche est soit pour un membre, soit pour un contact externe. */

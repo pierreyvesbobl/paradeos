@@ -162,6 +162,22 @@ d'une clôture). La ré-extraction d'une source efface ses `mention` /
 montre groupés par source et dans l'ordre chronologique (« Ce qui a été
 dit ») : c'est la matière d'un brief, humain ou agent.
 
+### Du besoin à l'issue GitHub (`tasks.kind`, `task_github_issues`)
+
+Les extractions qualifient chaque tâche proposée (`kind` : `feature` à
+développer, `investigation` à analyser, `action` geste humain ;
+`lib/tasks/task-kind.ts`), corrigeable dans le rail de la fiche tâche.
+Un dépôt GitHub rattaché au projet (`project_repos.sync_issues`, case
+« Issues » sur la fiche projet) reçoit en issue les tâches `feature` : à
+l'acceptation d'une proposition, quand une tâche passe en Fonctionnalité,
+ou à la demande depuis la fiche. L'issue porte le brief
+(`lib/github/issue-brief.ts`) : projet, priorité, lien retour, « Ce qui a
+été dit » source par source, et un marqueur caché avec l'id de tâche.
+Projection à sens unique (`lib/github/project-issue.ts`) : Parade OS
+possède titre et brief et repousse quand ils changent (empreinte dans
+`task_github_issues`), GitHub ne possède que la fermeture. Jeton
+`GITHUB_TOKEN` en « Issues : lecture et écriture » ; migration `0092`.
+
 ## Tests
 
 - `pnpm test` : unitaires (Vitest), fonctions pures de `lib/`, ~1 s.

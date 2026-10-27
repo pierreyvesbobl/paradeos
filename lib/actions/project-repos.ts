@@ -7,7 +7,11 @@ import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
 import { normalizeGitRemote } from "@/lib/git/remote";
 import { linkRemote } from "@/lib/repos/link";
-import { addProjectRepoSchema, removeProjectRepoSchema } from "@/lib/schemas/project-repos";
+import {
+  addProjectRepoSchema,
+  removeProjectRepoSchema,
+  setProjectRepoSyncSchema,
+} from "@/lib/schemas/project-repos";
 
 export const addProjectRepo = action(addProjectRepoSchema, async ({ input, user }) => {
   const remote = normalizeGitRemote(input.remote);
@@ -38,4 +42,17 @@ export const removeProjectRepo = action(removeProjectRepoSchema, async ({ input 
   if (row) revalidatePath(`/projets/${row.projectId}`);
   revalidatePath("/temps");
   return { id: input.id };
+});
+
+/** Active ou coupe la projection des tâches `feature` du projet en issues sur ce dépôt. */
+export const setProjectRepoSync = action(setProjectRepoSyncSchema, async ({ input }) => {
+  const conn = await db();
+  const [row] = await conn
+    .update(projectRepos)
+    .set({ syncIssues: input.syncIssues })
+    .where(eq(projectRepos.id, input.id))
+    .returning({ projectId: projectRepos.projectId, syncIssues: projectRepos.syncIssues });
+  if (!row) throw new Error("Dépôt introuvable.");
+  revalidatePath(`/projets/${row.projectId}`);
+  return row;
 });

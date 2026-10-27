@@ -7,6 +7,8 @@ export type ProjectRepoRow = {
   id: string;
   remote: string;
   autoLinked: boolean;
+  /** Projection des tâches `feature` en issues GitHub activée. */
+  syncIssues: boolean;
   createdAt: Date;
 };
 
@@ -17,6 +19,7 @@ export async function getProjectRepos(projectId: string): Promise<ProjectRepoRow
       id: projectRepos.id,
       remote: projectRepos.remote,
       autoLinked: projectRepos.autoLinked,
+      syncIssues: projectRepos.syncIssues,
       createdAt: projectRepos.createdAt,
     })
     .from(projectRepos)

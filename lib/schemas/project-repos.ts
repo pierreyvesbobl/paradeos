@@ -10,4 +10,9 @@ export const removeProjectRepoSchema = z.object({
   id: z.string().uuid(),
 });
 
+export const setProjectRepoSyncSchema = z.object({
+  id: z.string().uuid(),
+  syncIssues: z.boolean(),
+});
+
 export type AddProjectRepoInput = z.infer<typeof addProjectRepoSchema>;

@@ -7,6 +7,7 @@ import { tasks } from "@/db/schema/tasks";
 import { action } from "@/lib/actions/action";
 import { type AssigneeRef, setTaskAssignees } from "@/lib/db/queries/task-assignees";
 import { db } from "@/lib/db/server";
+import { projectTaskToIssueQuietly } from "@/lib/github/project-issue";
 import {
   bulkDeleteTaskSchema,
   bulkPatchTaskSchema,
@@ -217,6 +218,7 @@ export const patchTask = action(patchTaskSchema, async ({ input, user }) => {
       status: tasks.status,
       completedAt: tasks.completedAt,
       projectId: tasks.projectId,
+      kind: tasks.kind,
     })
     .from(tasks)
     .where(eq(tasks.id, input.id))
@@ -227,6 +229,7 @@ export const patchTask = action(patchTaskSchema, async ({ input, user }) => {
   const updates: Partial<typeof tasks.$inferInsert> = {};
   if (input.title !== undefined) updates.title = input.title;
   if (input.priority !== undefined) updates.priority = input.priority;
+  if (input.kind !== undefined) updates.kind = input.kind;
   if (input.projectId !== undefined) updates.projectId = input.projectId;
   if (input.dueDate !== undefined) updates.dueDate = input.dueDate;
   if (input.startDate !== undefined) updates.startDate = input.startDate;
@@ -251,6 +254,12 @@ export const patchTask = action(patchTaskSchema, async ({ input, user }) => {
       await setTaskAssignees(tx, input.id, desiredAssignees, user.id);
     }
   });
+
+  // Devenue fonctionnalité, ou renommée alors qu'elle en est une : l'issue
+  // GitHub suit (si le projet projette), sans jamais bloquer l'édition.
+  const becameFeature = input.kind === "feature" && previous.kind !== "feature";
+  const featureRenamed = input.title !== undefined && previous.kind === "feature";
+  if (becameFeature || featureRenamed) await projectTaskToIssueQuietly(input.id);
 
   revalidatePath(`/taches/${input.id}`);
   revalidateTaskPaths(previous.projectId);
