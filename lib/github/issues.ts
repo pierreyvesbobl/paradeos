@@ -56,9 +56,11 @@ export async function listOpenIssues(ref: {
     const message =
       res.status === 401
         ? "Jeton GitHub refusé."
-        : res.status === 404
-          ? "Dépôt introuvable ou jeton sans accès à ce dépôt."
-          : `GitHub a répondu ${res.status}.`;
+        : res.status === 403
+          ? "Le jeton voit le dépôt mais n'a pas la permission « Issues : lecture »."
+          : res.status === 404
+            ? "Dépôt introuvable ou jeton sans accès à ce dépôt."
+            : `GitHub a répondu ${res.status}.`;
     return { status: "error", httpStatus: res.status, message };
   }
   const raw = (await res.json()) as RawGithubIssue[];
