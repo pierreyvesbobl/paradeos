@@ -66,8 +66,11 @@ export const assigneesSchema = z
       id: z.string().uuid(),
     }),
   )
-  .max(20)
-  .default([]);
+  .max(20);
+// Pas de `.default([])` ici : depuis Zod 4, `.default(x).optional()` renvoie
+// `x` quand la clé est absente, et les patchs partiels (priorité, statut,
+// type…) écrasaient alors les assignés par une liste vide. Le défaut se
+// pose là où une liste est attendue (création), jamais sur un patch.
 
 export type AssigneeRef = z.infer<typeof assigneesSchema>[number];
 
@@ -78,7 +81,7 @@ export const taskBaseSchema = z.object({
   priority: taskPriorityEnum.default("medium"),
   projectId: optionalUuid,
   /** Multi-assigné. Source de vérité depuis la phase contract. */
-  assignees: assigneesSchema,
+  assignees: assigneesSchema.default([]),
   /**
    * @deprecated Compat ascendante pour les anciens callers (form, MCP).
    * Si fourni sans `assignees`, est converti en `[{kind:"user", id}]`.
