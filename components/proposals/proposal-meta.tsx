@@ -11,6 +11,7 @@ import {
   Warning,
 } from "@phosphor-icons/react";
 import { HashedAvatar } from "@/components/user/hashed-avatar";
+import { excerptsFromPayload } from "@/lib/tasks/task-sources";
 import { formatDueDate, type PipelineStage, PRIORITY_TINT, STAGE_STYLE } from "./helpers";
 import type { Proposal } from "./types";
 import { Tint } from "./ui";
@@ -32,6 +33,8 @@ export function ProposalMetaTags({
         proposal.matchedProjectName ?? (payload.projectName as string | null | undefined);
       const dueDate = payload.dueDate as string | null | undefined;
       const prio = priority && priority !== "normal" ? PRIORITY_TINT[priority] : null;
+      const excerpts = excerptsFromPayload(payload);
+      const firstExcerpt = excerpts[0];
       return (
         <div className="flex flex-wrap items-center gap-1.5">
           {assigneeName ? (
@@ -81,6 +84,20 @@ export function ProposalMetaTags({
               Pas d'échéance
             </span>
           )}
+          {firstExcerpt ? (
+            <span
+              className="inline-flex min-w-0 basis-full items-center gap-1 text-[12px] text-muted-foreground italic"
+              title={excerpts.map((e) => e.quote).join("\n\n")}
+            >
+              <Quotes size={13} weight="duotone" className="flex-none text-(--ds-text-tertiary)" />
+              <span className="truncate">{firstExcerpt.quote}</span>
+              {excerpts.length > 1 ? (
+                <span className="flex-none text-(--ds-text-tertiary) not-italic">
+                  +{excerpts.length - 1}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
         </div>
       );
     }

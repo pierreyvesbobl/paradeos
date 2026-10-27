@@ -8,6 +8,7 @@ import { TaskPriorityPillEditor } from "@/app/(app)/taches/[id]/rail/priority-pi
 import { TaskProjectRailEditor } from "@/app/(app)/taches/[id]/rail/project-rail-editor";
 import { TaskStatusPillEditor } from "@/app/(app)/taches/[id]/rail/status-pill-editor";
 import { TaskTitleEditor } from "@/app/(app)/taches/[id]/rail/title-editor";
+import { TaskSourcesSection } from "@/app/(app)/taches/[id]/sources-section";
 import { TaskScheduleEditor } from "@/app/(app)/taches/inline-editors/schedule-editor";
 import { DeleteButton } from "@/components/delete-button";
 import Link from "@/components/link";
@@ -21,6 +22,7 @@ import { deleteTaskAndRedirect } from "@/lib/actions/tasks";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
 import { getTaskCompletionSources } from "@/lib/db/queries/task-completions";
+import { getTaskSources } from "@/lib/db/queries/task-sources";
 import { getTaskTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
 import { formatDateTime, formatDuration, formatPersonName } from "@/lib/format";
@@ -56,6 +58,7 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
     userOptions,
     contactRows,
     completionSources,
+    sources,
   ] = await Promise.all([
     fetchAssigneesForTasks(conn, [id]),
     getTaskTimeStats(id),
@@ -80,6 +83,7 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
       .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
     // Seule une tâche terminée peut l'avoir été d'après une source.
     task.status === "done" ? getTaskCompletionSources(id) : Promise.resolve([]),
+    getTaskSources(id),
   ]);
 
   const assignees = assigneesByTask.get(id) ?? [];
@@ -128,6 +132,8 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
         {/* colonne principale */}
         <div className="min-w-0 flex-1 space-y-8 px-10 py-8">
           <TaskTitleEditor id={id} value={task.title} />
+
+          <TaskSourcesSection sources={sources} />
 
           <section className="space-y-3.5">
             <h2 className="font-medium text-[17px]">Temps passé</h2>

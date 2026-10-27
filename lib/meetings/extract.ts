@@ -19,6 +19,12 @@ import {
 } from "@/lib/meetings/completed-tasks";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import {
+  normalizeExcerpts,
+  type ResolvedTaskMention,
+  resolveMentionedTasks,
+  TASK_SOURCES_PROMPT_RULES,
+} from "@/lib/tasks/task-sources";
 
 /**
  * Borne du transcript envoyé au LLM (~30k tokens). Un enregistrement de
@@ -52,6 +58,12 @@ const PRIORITY_TASK_LIMIT = 100;
  * pré-won. Le champ `proposedCommercialStatus` indique si le projet
  * proposé est encore au stade commercial.
  */
+/** Un passage verbatim et, si le transcript le dit, qui parle. */
+const excerptSchema = z.object({
+  quote: z.string(),
+  speaker: z.string().nullable(),
+});
+
 const extractionSchema = z.object({
   summary: z.string(),
   occurredAt: z.string().nullable(),
@@ -112,6 +124,19 @@ const extractionSchema = z.object({
       dueDate: z.string().nullable(),
       projectName: z.string().nullable(),
       priority: z.enum(["low", "normal", "high"]).nullable(),
+      /** Passages verbatim du transcript qui expriment ce besoin. */
+      excerpts: z.array(excerptSchema),
+    }),
+  ),
+  /**
+   * Tâches ouvertes du vocabulaire que le transcript réévoque sans les
+   * donner pour faites, avec les passages qui en parlent. `taskRef` est
+   * résolu en id par `resolveMentionedTasks`.
+   */
+  mentionedTasks: z.array(
+    z.object({
+      taskRef: z.string(),
+      excerpts: z.array(excerptSchema),
     }),
   ),
   /**
@@ -131,8 +156,9 @@ const extractionSchema = z.object({
 type RawMeetingExtraction = z.infer<typeof extractionSchema>;
 
 /** Sortie de l'extraction, références de tâches déjà résolues en ids. */
-export type MeetingExtraction = Omit<RawMeetingExtraction, "completedTasks"> & {
+export type MeetingExtraction = Omit<RawMeetingExtraction, "completedTasks" | "mentionedTasks"> & {
   completedTasks: ResolvedTaskCompletion[];
+  mentionedTasks: ResolvedTaskMention[];
 };
 
 export type Vocabulary = {
@@ -418,6 +444,8 @@ de l'équipe" → internal ; si Sophie est dans "Contacts" → external.
 
 ${COMPLETED_TASKS_PROMPT_RULES}
 
+${TASK_SOURCES_PROMPT_RULES}
+
 # Projet (objet unique couvrant tout le cycle)
 
 Un projet/deal couvre **tout le cycle**, de la prospection commerciale à la
@@ -612,6 +640,11 @@ export async function extractMeeting(
 
   return {
     ...object,
+    proposedTasks: object.proposedTasks.map((t) => ({
+      ...t,
+      excerpts: normalizeExcerpts(t.excerpts),
+    })),
+    mentionedTasks: resolveMentionedTasks(object.mentionedTasks, vocab.tasks),
     completedTasks: resolveCompletedTasks(object.completedTasks, vocab.tasks),
   };
 }

@@ -126,6 +126,24 @@ la même source, et n'applique plus jamais d'office une tâche déjà proposée
 une fois. Les enums `*_proposal_kind` ne se réduisent pas (`ADD VALUE` sans
 retour) : migration `0090`.
 
+### Ce qui a été dit d'une tâche (`task_sources`)
+
+Une tâche extraite ne garde pas que son titre : les mêmes extractions
+renvoient, pour chaque tâche nouvelle (`proposedTasks[].excerpts`) et pour
+chaque tâche ouverte réévoquée sans être close (`mentionedTasks`), les
+passages verbatim du transcript ou du mail qui en parlent, avec qui parle.
+Ils s'accumulent dans `task_sources` (migration `0091`), une ligne par
+passage, pointant la réunion ou le message : `origin` (posée à l'acceptation
+de la proposition, ou directement sur la tâche existante si la proposition
+est écartée comme doublon), `mention` (posée dès l'extraction, sans
+validation : c'est du contexte, pas une décision), `completion` (la citation
+d'une clôture). La ré-extraction d'une source efface ses `mention` /
+`completion` et les repose ; l'empreinte normalisée du passage
+(`lib/tasks/task-sources.ts`, pur ; écriture dans
+`lib/tasks/record-sources.ts`) rend tout ça idempotent. La fiche tâche les
+montre groupés par source et dans l'ordre chronologique (« Ce qui a été
+dit ») : c'est la matière d'un brief, humain ou agent.
+
 ## Tests
 
 - `pnpm test` : unitaires (Vitest), fonctions pures de `lib/`, ~1 s.

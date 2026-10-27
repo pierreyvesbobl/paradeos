@@ -36,6 +36,8 @@ import {
   completionTaskId,
   undoTaskCompletion,
 } from "@/lib/tasks/completion-proposals";
+import { recordTaskSources } from "@/lib/tasks/record-sources";
+import { excerptsFromPayload } from "@/lib/tasks/task-sources";
 export const createMeeting = action(createMeetingSchema, async ({ input, user }) => {
   const conn = await db();
   const occurredAt = input.occurredAt ? new Date(input.occurredAt) : null;
@@ -210,7 +212,17 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
     // Nettoie le marqueur interne avant de pousser au créateur.
     const { _linkExistingId: _omit, ...createPayload } = payload;
     void _omit;
-    createdEntityId = await createForKind(proposal.kind, createPayload, user.id);
+    createdEntityId = await createForKind(proposal.kind, createPayload, user.id, {
+      meetingId: proposal.meetingId,
+    });
+  } else if (proposal.kind === "task") {
+    // Liée à une tâche déjà ouverte : ce que la réunion en dit la rejoint.
+    await recordTaskSources(conn, {
+      taskId: createdEntityId,
+      source: { meetingId: proposal.meetingId },
+      relation: "mention",
+      excerpts: excerptsFromPayload(payload),
+    });
   }
 
   await conn
@@ -355,6 +367,8 @@ async function createForKind(
   kind: "task" | "project" | "opportunity" | "contact" | "entity",
   payload: Record<string, unknown>,
   userId: string,
+  /** Réunion d'origine : ses passages verbatim suivent la tâche créée. */
+  source?: { meetingId: string },
 ): Promise<string> {
   const conn = await db();
 
@@ -472,8 +486,19 @@ async function createForKind(
       // Même action acceptée deux fois (deux réunions, deux mails d'un
       // fil) → on renvoie la tâche déjà ouverte au lieu d'en ouvrir une 2e.
       const taskTitle = String(payload.title ?? "Sans titre");
+      const excerpts = excerptsFromPayload(payload);
       const existingTaskId = await findExistingOpenTaskId(taskTitle, projectId);
-      if (existingTaskId) return existingTaskId;
+      if (existingTaskId) {
+        if (source) {
+          await recordTaskSources(conn, {
+            taskId: existingTaskId,
+            source,
+            relation: "mention",
+            excerpts,
+          });
+        }
+        return existingTaskId;
+      }
       // XOR-ish : si un contact externe est désigné, on ignore assigneeId.
       // Sinon on retombe sur user via assigneeId ou fuzzy-match nom.
       let assigneeContactId: string | null =
@@ -529,6 +554,11 @@ async function createForKind(
         else if (assigneeId) assignees.push({ kind: "user", id: assigneeId });
         if (assignees.length > 0) {
           await setTaskAssignees(tx, row.id, assignees, userId);
+        }
+        // Ce que la réunion a dit du besoin part avec la tâche : c'est
+        // la matière du brief, le titre n'en est que l'étiquette.
+        if (source) {
+          await recordTaskSources(tx, { taskId: row.id, source, relation: "origin", excerpts });
         }
         return row;
       });

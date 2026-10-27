@@ -25,6 +25,7 @@ import {
   isTaskAutocompleteEnabled,
   planTaskCompletions,
 } from "@/lib/tasks/completion-proposals";
+import { clearExtractedTaskSources, recordTaskSources } from "@/lib/tasks/record-sources";
 
 type ProposalKind =
   | "task"
@@ -182,6 +183,29 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     completionDecided: 0,
     completionPendingElsewhere: 0,
   };
+  // Ce que le mail dit des tâches (lib/tasks/task-sources.ts) : on repart
+  // de zéro pour ce message, les lignes `origin` posées à l'acceptation
+  // d'une proposition restent.
+  await clearExtractedTaskSources(conn, { messageId });
+  let sourcesWritten = 0;
+  for (const m of result.mentionedTasks) {
+    sourcesWritten += await recordTaskSources(conn, {
+      taskId: m.taskId,
+      source: { messageId },
+      relation: "mention",
+      excerpts: m.excerpts,
+    });
+  }
+  for (const c of result.completedTasks) {
+    if (!c.evidence) continue;
+    sourcesWritten += await recordTaskSources(conn, {
+      taskId: c.taskId,
+      source: { messageId },
+      relation: "completion",
+      excerpts: [{ quote: c.evidence, speaker: msg.fromName ?? msg.fromEmail ?? null }],
+    });
+  }
+
   const seenTaskKeys = new Set<string>();
   for (const t of result.proposedTasks) {
     const projectMatch = t.projectName ? await fuzzyMatchProject(t.projectName) : null;
@@ -201,7 +225,15 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       anyProject: taskProjectId === null,
     });
     if (dupTask) {
+      // L'action est déjà tracée : ce que le mail en dit va sur la tâche
+      // existante au lieu d'être perdu avec la proposition écartée.
       skipped.dupTask++;
+      sourcesWritten += await recordTaskSources(conn, {
+        taskId: dupTask.id,
+        source: { messageId },
+        relation: "mention",
+        excerpts: t.excerpts,
+      });
       continue;
     }
     if (
@@ -224,6 +256,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
         projectName: t.projectName,
         projectId: taskProjectId,
         assigneeName: t.assigneeName,
+        excerpts: t.excerpts,
       },
       matchedId: null,
       matchConfidence: null,
@@ -562,6 +595,11 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     });
   }
 
+  if (sourcesWritten > 0) {
+    console.info(
+      `[extract email ${messageId}] ${sourcesWritten} passage(s) attaché(s) à des tâches.`,
+    );
+  }
   if (Object.values(skipped).some((n) => n > 0)) {
     console.info(
       `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,

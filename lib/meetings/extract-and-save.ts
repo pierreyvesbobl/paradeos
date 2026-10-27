@@ -25,6 +25,7 @@ import {
   isTaskAutocompleteEnabled,
   planTaskCompletions,
 } from "@/lib/tasks/completion-proposals";
+import { clearExtractedTaskSources, recordTaskSources } from "@/lib/tasks/record-sources";
 /**
  * Helper coeur du pipeline d'extraction : prend un meetingId, lit son
  * transcript, appelle le LLM, persiste les propositions (avec fuzzy
@@ -238,6 +239,29 @@ export async function extractAndSaveProposals(
   // est celui que l'acceptation utilisera (projet nommé par le LLM, sinon
   // projet du meeting) — comparer sur un autre scope laissait passer les
   // doublons.
+  // Ce que la réunion dit des tâches (lib/tasks/task-sources.ts) : on
+  // repart de zéro pour cette réunion, les lignes `origin` posées à
+  // l'acceptation d'une proposition restent.
+  await clearExtractedTaskSources(conn, { meetingId: meeting.id });
+  let sourcesWritten = 0;
+  for (const m of result.mentionedTasks) {
+    sourcesWritten += await recordTaskSources(conn, {
+      taskId: m.taskId,
+      source: { meetingId: meeting.id },
+      relation: "mention",
+      excerpts: m.excerpts,
+    });
+  }
+  for (const c of result.completedTasks) {
+    if (!c.evidence) continue;
+    sourcesWritten += await recordTaskSources(conn, {
+      taskId: c.taskId,
+      source: { meetingId: meeting.id },
+      relation: "completion",
+      excerpts: [{ quote: c.evidence, speaker: null }],
+    });
+  }
+
   const seenTaskKeys = new Set<string>();
   for (const t of result.proposedTasks) {
     const projectMatch = t.projectName ? await fuzzyMatchProject(t.projectName) : null;
@@ -258,7 +282,16 @@ export async function extractAndSaveProposals(
       anyProject: projectId === null,
     });
     if (dupTask) {
+      // L'action est déjà tracée : rien à proposer, mais ce que la
+      // réunion en dit va sur la tâche existante, qui s'enrichit au lieu
+      // de se dupliquer.
       skipped.dupTask++;
+      sourcesWritten += await recordTaskSources(conn, {
+        taskId: dupTask.id,
+        source: { meetingId: meeting.id },
+        relation: "mention",
+        excerpts: t.excerpts,
+      });
       continue;
     }
     if (
@@ -311,6 +344,11 @@ export async function extractAndSaveProposals(
     });
   }
 
+  if (sourcesWritten > 0) {
+    console.info(
+      `[extract meeting ${meeting.id}] ${sourcesWritten} passage(s) attaché(s) à des tâches.`,
+    );
+  }
   if (Object.values(skipped).some((n) => n > 0)) {
     console.info(
       `[extract meeting ${meeting.id}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.genericName} nom(s) de projet sans contenu ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
@@ -401,7 +439,9 @@ async function resolveTaskAssignee(
 }
 
 /** Contexte projet injecté dans le prompt quand le meeting est rattaché. */
-async function loadProjectContext(projectId: string | null): Promise<ProjectContext | undefined> {
+export async function loadProjectContext(
+  projectId: string | null,
+): Promise<ProjectContext | undefined> {
   if (!projectId) return undefined;
   const conn = await db();
   const [proj] = await conn

@@ -36,6 +36,7 @@ const emptyMeetingExtraction = {
   proposedContacts: [],
   proposedProjects: [],
   proposedTasks: [],
+  mentionedTasks: [],
   completedTasks: [] as ResolvedTaskCompletion[],
 };
 
@@ -51,6 +52,7 @@ const emptyEmailExtraction = {
   needsReply: false,
   replyDraft: null,
   sensitiveDetected: false,
+  mentionedTasks: [],
   completedTasks: [] as ResolvedTaskCompletion[],
 };
 

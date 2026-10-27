@@ -13,6 +13,12 @@ import {
 import { formatVocabulary, getKnownVocabulary } from "@/lib/meetings/extract";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import {
+  normalizeExcerpts,
+  type ResolvedTaskMention,
+  resolveMentionedTasks,
+  TASK_SOURCES_PROMPT_RULES,
+} from "@/lib/tasks/task-sources";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
@@ -40,6 +46,12 @@ export const MAX_BODY_CHARS_FOR_LLM = 50_000;
  *   `proposedProjects` qui propose la CRÉATION d'un projet inconnu.
  * - sensitiveDetected : sécurité — si true on ne persiste rien.
  */
+/** Un passage verbatim du mail et, si on le sait, qui l'écrit. */
+const excerptSchema = z.object({
+  quote: z.string(),
+  speaker: z.string().nullable(),
+});
+
 const extractionSchema = z.object({
   summary: z.string(),
   intent: z.enum(["info", "request", "fyi", "decision", "follow_up", "compta", "admin", "other"]),
@@ -61,6 +73,19 @@ const extractionSchema = z.object({
       projectName: z.string().nullable(),
       assigneeName: z.string().nullable(),
       priority: z.enum(["low", "normal", "high"]).nullable(),
+      /** Passages verbatim du mail qui expriment ce besoin. */
+      excerpts: z.array(excerptSchema),
+    }),
+  ),
+  /**
+   * Tâches ouvertes du vocabulaire que le mail réévoque sans les donner
+   * pour faites, avec les passages qui en parlent (cf.
+   * `lib/tasks/task-sources.ts`).
+   */
+  mentionedTasks: z.array(
+    z.object({
+      taskRef: z.string(),
+      excerpts: z.array(excerptSchema),
     }),
   ),
   proposedEntities: z.array(
@@ -126,8 +151,9 @@ const extractionSchema = z.object({
 
 type RawEmailExtraction = z.infer<typeof extractionSchema>;
 
-export type EmailExtraction = Omit<RawEmailExtraction, "completedTasks"> & {
+export type EmailExtraction = Omit<RawEmailExtraction, "completedTasks" | "mentionedTasks"> & {
   completedTasks: ResolvedTaskCompletion[];
+  mentionedTasks: ResolvedTaskMention[];
 };
 
 /**
@@ -195,6 +221,10 @@ Classifie l'affaire portée par cet email :
 - Si **needsReply=false**, replyDraft = null.
 
 ${COMPLETED_TASKS_PROMPT_RULES}
+
+${TASK_SOURCES_PROMPT_RULES}
+
+Précision mail : pour \`excerpts\`, cite le corps du mail (et l'historique du fil s'il porte la demande), jamais la signature ni les en-têtes ; \`speaker\` = le nom de l'expéditeur du passage cité.
 
 Précision mail : une pièce jointe ou un lien qui correspond au livrable attendu (« ci-joint le devis signé », « voici le fichier ») vaut confidence="certain" pour la tâche qui attendait ce livrable.
 
@@ -298,6 +328,11 @@ export async function extractEmail(
 
   return {
     ...object,
+    proposedTasks: object.proposedTasks.map((t) => ({
+      ...t,
+      excerpts: normalizeExcerpts(t.excerpts),
+    })),
+    mentionedTasks: resolveMentionedTasks(object.mentionedTasks, vocab.tasks),
     completedTasks: resolveCompletedTasks(object.completedTasks, vocab.tasks),
   };
 }

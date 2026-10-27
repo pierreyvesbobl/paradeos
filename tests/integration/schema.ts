@@ -32,6 +32,7 @@ export * from "@/db/schema/projects";
 export * from "@/db/schema/purchase-matching";
 export * from "@/db/schema/tags";
 export * from "@/db/schema/task-assignees";
+export * from "@/db/schema/task-sources";
 export * from "@/db/schema/tasks";
 export * from "@/db/schema/time-entries";
 export * from "@/db/schema/user-api-tokens";

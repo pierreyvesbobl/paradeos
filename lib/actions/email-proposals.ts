@@ -34,6 +34,8 @@ import {
   completionTaskId,
   undoTaskCompletion,
 } from "@/lib/tasks/completion-proposals";
+import { recordTaskSources } from "@/lib/tasks/record-sources";
+import { excerptsFromPayload } from "@/lib/tasks/task-sources";
 
 /**
  * Extrait la liste d'assignés d'un payload de proposition task. Supporte :
@@ -156,8 +158,16 @@ export const acceptEmailProposal = action(
       revalidatePath("/");
       revalidatePath(`/taches/${taskId}`);
     } else if (proposal.kind === "task") {
+      const excerpts = excerptsFromPayload(payload);
       if (linkExistingId) {
         createdEntityId = linkExistingId;
+        // Liée à une tâche déjà ouverte : ce que le mail en dit la rejoint.
+        await recordTaskSources(conn, {
+          taskId: linkExistingId,
+          source: { messageId: proposal.messageId },
+          relation: "mention",
+          excerpts,
+        });
       } else {
         const title = String(payload.title ?? "").trim();
         if (!title) throw new Error("Titre de tâche vide.");
@@ -186,6 +196,13 @@ export const acceptEmailProposal = action(
             .returning({ id: tasks.id });
           if (!inserted) throw new Error("Échec création tâche.");
           await setTaskAssignees(tx, inserted.id, assignees, user.id);
+          // Ce que le mail a dit du besoin part avec la tâche.
+          await recordTaskSources(tx, {
+            taskId: inserted.id,
+            source: { messageId: proposal.messageId },
+            relation: "origin",
+            excerpts,
+          });
           return inserted.id;
         });
       }
