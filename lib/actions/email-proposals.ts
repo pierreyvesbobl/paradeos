@@ -759,6 +759,11 @@ export const reExtractMessage = action(
     const { extractAndSaveEmailProposals } = await import("@/lib/gmail/extract-and-save");
     const r = await extractAndSaveEmailProposals(input.messageId);
     revalidatePath("/emails/propositions");
+    revalidatePath("/inbox");
+    if (r.autoCompletedTasks > 0) {
+      revalidatePath("/");
+      revalidatePath("/taches");
+    }
     return r;
   },
 );

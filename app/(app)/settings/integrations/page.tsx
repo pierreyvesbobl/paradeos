@@ -25,6 +25,7 @@ import { LlmConfigForm } from "./llm-config-form";
 import { OauthCallbackToast } from "./oauth-callback-toast";
 import { OpenAiKeyForm } from "./openai-key-form";
 import { SalesInvoiceDriveSection } from "./sales-invoice-drive-section";
+import { TaskCompletionSection } from "./task-completion-section";
 
 export default async function IntegrationsSettingsPage({
   searchParams,
@@ -97,6 +98,7 @@ export default async function IntegrationsSettingsPage({
       <GmailSection userId={user.id} />
       <InvoiceFilingSection userId={user.id} />
       {isAdmin ? <CandidaturesSection userId={user.id} /> : null}
+      {isAdmin ? <TaskCompletionSection /> : null}
       {isAdmin ? <DriveTranscriptsSection /> : null}
       {isAdmin ? <EmailTranscriptsSection userId={user.id} /> : null}
     </>

@@ -129,6 +129,15 @@ export const SETTING_KEYS = {
    */
   CANDIDATURE_REPLY_BODY: "CANDIDATURE_REPLY_BODY",
   /**
+   * Clôture automatique des tâches : quand un mail ou une réunion donne
+   * une tâche ouverte pour faite **à coup sûr**, la tâche passe en `done`
+   * sans clic (annulable depuis l'historique /inbox). Absent ou "false" :
+   * chaque clôture est proposée dans /inbox. Les détections seulement
+   * probables, et les tâches déjà soumises une fois à l'humain, restent
+   * des propositions quoi qu'il arrive.
+   */
+  TASK_AUTOCOMPLETE_ENABLED: "TASK_AUTOCOMPLETE_ENABLED",
+  /**
    * Mode démo global : si "true", l'UI affiche des alias déterministes pour
    * les noms d'entreprises, contacts, projets, et applique un facteur (~×1)
    * aux montants. Les données en base restent intactes. Les exports

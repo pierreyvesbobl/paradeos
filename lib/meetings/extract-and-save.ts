@@ -21,8 +21,8 @@ import { formatPersonName, sanitizeNameInput } from "@/lib/format";
 import { extractMeeting, type ProjectContext } from "@/lib/meetings/extract";
 import { getParticipantContext, syncParticipantsFromAttendees } from "@/lib/meetings/participants";
 import {
-  completionMatchConfidence,
-  completionPayload,
+  buildCompletionProposal,
+  isTaskAutocompleteEnabled,
   planTaskCompletions,
 } from "@/lib/tasks/completion-proposals";
 /**
@@ -40,7 +40,9 @@ import {
  * du meeting et on ré-injecte. Si tu veux préserver les `accepted`/
  * `rejected`, ne re-extrait pas un meeting déjà traité.
  */
-export async function extractAndSaveProposals(meetingId: string): Promise<{ count: number }> {
+export async function extractAndSaveProposals(
+  meetingId: string,
+): Promise<{ count: number; autoCompletedTasks: number }> {
   const conn = await db();
   const [meeting] = await conn.select().from(meetings).where(eq(meetings.id, meetingId)).limit(1);
   if (!meeting) throw new Error("Meeting introuvable.");
@@ -97,6 +99,10 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
     payload: unknown;
     matchedId: string | null;
     matchConfidence: string | null;
+    /** Clôture appliquée d'office : la ligne naît déjà décidée. */
+    status?: "pending" | "accepted";
+    decidedAt?: Date | null;
+    createdEntityId?: string | null;
   }[] = [];
 
   // Dédup intra-extraction : le LLM peut citer la même société / le même
@@ -288,13 +294,20 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
   skipped.completionDone = completions.skipped.alreadyDone;
   skipped.completionDecided = completions.skipped.alreadyDecided;
   skipped.completionPendingElsewhere = completions.skipped.pendingElsewhere;
+  const autoEnabled = completions.plans.length > 0 ? await isTaskAutocompleteEnabled() : false;
+  let autoCompletedTasks = 0;
   for (const plan of completions.plans) {
+    const built = await buildCompletionProposal(conn, plan, autoEnabled);
+    if (built.auto) autoCompletedTasks++;
     proposalsRows.push({
       meetingId: meeting.id,
       kind: "task_completion",
-      payload: completionPayload(plan, false),
-      matchedId: plan.taskId,
-      matchConfidence: completionMatchConfidence(plan.confidence),
+      payload: built.payload,
+      matchedId: built.matchedId,
+      matchConfidence: built.matchConfidence,
+      status: built.status,
+      decidedAt: built.decidedAt,
+      createdEntityId: built.createdEntityId,
     });
   }
 
@@ -328,7 +341,7 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
     })
     .where(eq(meetings.id, meeting.id));
 
-  return { count: proposalsRows.length };
+  return { count: proposalsRows.length, autoCompletedTasks };
 }
 
 /**

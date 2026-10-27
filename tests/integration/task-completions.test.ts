@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
+import { appSettings } from "@/db/schema/app-settings";
 import { emailProposals, gmailMessages, gmailThreads } from "@/db/schema/gmail";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
 import { projects } from "@/db/schema/projects";
@@ -423,5 +424,114 @@ describe("décider une clôture proposée par un mail", () => {
     const rejected = await rejectEmailProposal({ proposalId });
     expect(rejected.ok).toBe(true);
     expect((await taskRow(taskId)).status).toBe("todo");
+  });
+});
+
+describe("clôture automatique (TASK_AUTOCOMPLETE_ENABLED)", () => {
+  async function setAuto(enabled: boolean) {
+    const value = enabled ? "true" : "false";
+    await db
+      .insert(appSettings)
+      .values({ key: "TASK_AUTOCOMPLETE_ENABLED", value })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value } });
+  }
+
+  it("une détection certaine clôture la tâche sans clic, trace annulable", async () => {
+    await setAuto(true);
+    try {
+      const taskId = await createTask("Envoyer le compte-rendu", "in_progress");
+      const meetingId = await createMeeting();
+      mockedExtractMeeting.mockResolvedValueOnce({
+        ...emptyMeetingExtraction,
+        completedTasks: [completion(taskId, "Envoyer le compte-rendu", "certain")],
+      });
+      const res = await extractAndSaveProposals(meetingId);
+      expect(res.autoCompletedTasks).toBe(1);
+
+      expect((await taskRow(taskId)).status).toBe("done");
+      const [row] = await meetingCompletions(meetingId);
+      expect(row?.status).toBe("accepted");
+      expect(row?.decidedBy).toBeNull();
+      expect(row?.decidedAt).not.toBeNull();
+      expect(row?.createdEntityId).toBe(taskId);
+      expect(row?.payload).toMatchObject({ auto: true, previousStatus: "in_progress" });
+
+      // Annulable comme une décision humaine : la tâche revient.
+      if (!row) throw new Error("ligne attendue");
+      await revertProposal({ proposalId: row.id });
+      expect((await taskRow(taskId)).status).toBe("in_progress");
+
+      // Après l'annulation, la ré-extraction repropose sans jamais
+      // re-clôturer d'office : la question a déjà été posée.
+      mockedExtractMeeting.mockResolvedValueOnce({
+        ...emptyMeetingExtraction,
+        completedTasks: [completion(taskId, "Envoyer le compte-rendu", "certain")],
+      });
+      const again = await extractAndSaveProposals(meetingId);
+      expect(again.autoCompletedTasks).toBe(0);
+      expect((await taskRow(taskId)).status).toBe("in_progress");
+      const rows = await meetingCompletions(meetingId);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.status).toBe("pending");
+    } finally {
+      await setAuto(false);
+    }
+  });
+
+  it("une détection probable reste une proposition même en mode automatique", async () => {
+    await setAuto(true);
+    try {
+      const taskId = await createTask("Relancer le fournisseur");
+      const meetingId = await createMeeting();
+      mockedExtractMeeting.mockResolvedValueOnce({
+        ...emptyMeetingExtraction,
+        completedTasks: [completion(taskId, "Relancer le fournisseur", "probable")],
+      });
+      await extractAndSaveProposals(meetingId);
+      expect((await taskRow(taskId)).status).toBe("todo");
+      const [row] = await meetingCompletions(meetingId);
+      expect(row?.status).toBe("pending");
+      expect(row?.matchConfidence).toBe("0.750");
+    } finally {
+      await setAuto(false);
+    }
+  });
+
+  it("réglage éteint : une détection certaine reste une proposition", async () => {
+    const taskId = await createTask("Publier l'article");
+    const { messageId } = await createEmail();
+    mockedExtractEmail.mockResolvedValueOnce({
+      ...emptyEmailExtraction,
+      completedTasks: [completion(taskId, "Publier l'article", "certain")],
+    });
+    const res = await extractAndSaveEmailProposals(messageId);
+    expect(res.skipped).toBe(false);
+    expect(res.autoCompletedTasks).toBe(0);
+    expect((await taskRow(taskId)).status).toBe("todo");
+  });
+
+  it("mail en mode automatique : clôture directe", async () => {
+    await setAuto(true);
+    try {
+      const taskId = await createTask("Transmettre les accès FTP");
+      const { messageId } = await createEmail();
+      mockedExtractEmail.mockResolvedValueOnce({
+        ...emptyEmailExtraction,
+        completedTasks: [completion(taskId, "Transmettre les accès FTP", "certain")],
+      });
+      const res = await extractAndSaveEmailProposals(messageId);
+      expect(res.autoCompletedTasks).toBe(1);
+      expect((await taskRow(taskId)).status).toBe("done");
+      const [row] = await db
+        .select()
+        .from(emailProposals)
+        .where(
+          and(eq(emailProposals.messageId, messageId), eq(emailProposals.kind, "task_completion")),
+        );
+      expect(row?.status).toBe("accepted");
+      expect(row?.decidedBy).toBeNull();
+    } finally {
+      await setAuto(false);
+    }
   });
 });

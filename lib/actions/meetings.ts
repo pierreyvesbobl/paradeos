@@ -103,11 +103,15 @@ export const updateMeetingSubject = action(updateMeetingSubjectSchema, async ({ 
  * l'invalidation des caches Next.
  */
 export const extractMeetingProposals = action(extractMeetingSchema, async ({ input }) => {
-  const { count } = await extractAndSaveProposals(input.meetingId);
+  const { count, autoCompletedTasks } = await extractAndSaveProposals(input.meetingId);
 
   revalidatePath(`/meetings/${input.meetingId}`);
   revalidatePath("/meetings");
   revalidatePath("/inbox");
+  if (autoCompletedTasks > 0) {
+    revalidatePath("/");
+    revalidatePath("/taches");
+  }
   return { count };
 });
 

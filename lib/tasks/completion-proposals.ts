@@ -5,6 +5,7 @@ import type { Database } from "@/db/client";
 import { tasks } from "@/db/schema/tasks";
 import { hasPendingProposalElsewhere } from "@/lib/crm/proposal-dedupe";
 import type { CompletionConfidence, ResolvedTaskCompletion } from "@/lib/meetings/completed-tasks";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { markTaskDone, restoreTaskStatus, type TaskStatus } from "@/lib/tasks/complete";
 
 /**
@@ -173,4 +174,53 @@ export async function undoTaskCompletion(
         ? previousCompletedAt
         : null,
   });
+}
+
+/** Opt-in explicite : absent ou "false" = on propose, on n'applique pas. */
+export async function isTaskAutocompleteEnabled(): Promise<boolean> {
+  return (await getSetting(SETTING_KEYS.TASK_AUTOCOMPLETE_ENABLED)) === "true";
+}
+
+/**
+ * Ligne de proposition à insérer pour une clôture planifiée. En mode
+ * automatique, une détection certaine sur une tâche jamais soumise à
+ * l'humain est appliquée tout de suite : la ligne naît `accepted`, sans
+ * décideur, et la tâche passe en `done` dans le même mouvement.
+ */
+export async function buildCompletionProposal(
+  conn: Pick<Database, "select" | "update">,
+  plan: TaskCompletionPlan,
+  autoEnabled: boolean,
+): Promise<{
+  payload: Record<string, unknown>;
+  matchedId: string;
+  matchConfidence: string;
+  status: "pending" | "accepted";
+  decidedAt: Date | null;
+  createdEntityId: string | null;
+  auto: boolean;
+}> {
+  const auto = autoEnabled && plan.confidence === "certain" && plan.allowAuto;
+  const base = completionPayload(plan, auto);
+  if (!auto) {
+    return {
+      payload: base,
+      matchedId: plan.taskId,
+      matchConfidence: completionMatchConfidence(plan.confidence),
+      status: "pending",
+      decidedAt: null,
+      createdEntityId: null,
+      auto: false,
+    };
+  }
+  const payload = await applyTaskCompletion(conn, plan.taskId, base);
+  return {
+    payload,
+    matchedId: plan.taskId,
+    matchConfidence: completionMatchConfidence(plan.confidence),
+    status: "accepted",
+    decidedAt: new Date(),
+    createdEntityId: plan.taskId,
+    auto: true,
+  };
 }

@@ -21,8 +21,8 @@ import { extractEmail } from "@/lib/gmail/extract";
 import { computeThreadLinkSignals, linkThread } from "@/lib/gmail/links";
 import { getProjectsForThreads } from "@/lib/gmail/queries";
 import {
-  completionMatchConfidence,
-  completionPayload,
+  buildCompletionProposal,
+  isTaskAutocompleteEnabled,
   planTaskCompletions,
 } from "@/lib/tasks/completion-proposals";
 
@@ -43,6 +43,10 @@ type ProposalRow = {
   payload: Record<string, unknown>;
   matchedId: string | null;
   matchConfidence: string | null;
+  /** Clôture appliquée d'office : la ligne naît déjà décidée. */
+  status?: "pending" | "accepted";
+  decidedAt?: Date | null;
+  createdEntityId?: string | null;
 };
 
 /**
@@ -58,6 +62,8 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   count: number;
   /** Liaisons projet posées directement (sans proposition à valider). */
   autoAppliedProjectLinks: number;
+  /** Tâches passées en done sans clic (réglage TASK_AUTOCOMPLETE_ENABLED). */
+  autoCompletedTasks: number;
   skipped: boolean;
   reason?: string;
 }> {
@@ -68,7 +74,13 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     .where(eq(gmailMessages.id, messageId))
     .limit(1);
   if (!msg)
-    return { count: 0, autoAppliedProjectLinks: 0, skipped: true, reason: "message introuvable" };
+    return {
+      count: 0,
+      autoAppliedProjectLinks: 0,
+      autoCompletedTasks: 0,
+      skipped: true,
+      reason: "message introuvable",
+    };
 
   // On a besoin d'un body pour extraire — un message en `skipped` n'a
   // pas de body stocké.
@@ -77,7 +89,13 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       .update(gmailMessages)
       .set({ extractionStatus: "failed" })
       .where(eq(gmailMessages.id, messageId));
-    return { count: 0, autoAppliedProjectLinks: 0, skipped: true, reason: "pas de body" };
+    return {
+      count: 0,
+      autoAppliedProjectLinks: 0,
+      autoCompletedTasks: 0,
+      skipped: true,
+      reason: "pas de body",
+    };
   }
 
   // Signaux de liaison du fil, calculés avant l'appel LLM : le projet du
@@ -121,7 +139,13 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       .update(gmailMessages)
       .set({ extractionStatus: "failed" })
       .where(eq(gmailMessages.id, messageId));
-    return { count: 0, autoAppliedProjectLinks: 0, skipped: true, reason: "sensitive detected" };
+    return {
+      count: 0,
+      autoAppliedProjectLinks: 0,
+      autoCompletedTasks: 0,
+      skipped: true,
+      reason: "sensitive detected",
+    };
   }
 
   // Les clôtures de tâche déjà vues par ce message, avant le wipe : une
@@ -521,13 +545,20 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   skipped.completionDone = completions.skipped.alreadyDone;
   skipped.completionDecided = completions.skipped.alreadyDecided;
   skipped.completionPendingElsewhere = completions.skipped.pendingElsewhere;
+  const autoEnabled = completions.plans.length > 0 ? await isTaskAutocompleteEnabled() : false;
+  let autoCompletedTasks = 0;
   for (const plan of completions.plans) {
+    const built = await buildCompletionProposal(conn, plan, autoEnabled);
+    if (built.auto) autoCompletedTasks++;
     rows.push({
       messageId,
       kind: "task_completion",
-      payload: completionPayload(plan, false),
-      matchedId: plan.taskId,
-      matchConfidence: completionMatchConfidence(plan.confidence),
+      payload: built.payload,
+      matchedId: built.matchedId,
+      matchConfidence: built.matchConfidence,
+      status: built.status,
+      decidedAt: built.decidedAt,
+      createdEntityId: built.createdEntityId,
     });
   }
 
@@ -557,7 +588,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     })
     .where(eq(gmailMessages.id, messageId));
 
-  return { count: rows.length, autoAppliedProjectLinks, skipped: false };
+  return { count: rows.length, autoAppliedProjectLinks, autoCompletedTasks, skipped: false };
 }
 
 /**

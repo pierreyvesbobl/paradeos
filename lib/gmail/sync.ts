@@ -115,6 +115,8 @@ export type GmailSyncResult = {
   extractionsSkipped: number;
   /** Total des propositions créées (toutes extractions confondues). */
   proposalsCreated: number;
+  /** Tâches passées en done sans clic par les extractions de ce run. */
+  tasksAutoCompleted: number;
   /** Messages ingérés pour leurs PJ sur le seul signal facture (sujet, expéditeur, libellé). */
   invoiceCandidatesIngested: number;
   /** Mails à PDF repris par le rattrapage factures (cf. `recoverMissedInvoices`). */
@@ -616,6 +618,7 @@ function emptySyncResult(): GmailSyncResult {
     extractionsDone: 0,
     extractionsSkipped: 0,
     proposalsCreated: 0,
+    tasksAutoCompleted: 0,
     invoiceCandidatesIngested: 0,
     invoicesRecovered: 0,
     invoicesFiled: 0,
@@ -646,6 +649,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
     extractionsDone: 0,
     extractionsSkipped: 0,
     proposalsCreated: 0,
+    tasksAutoCompleted: 0,
     invoiceCandidatesIngested: 0,
     invoicesRecovered: 0,
     invoicesFiled: 0,
@@ -969,6 +973,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
         } else {
           result.extractionsDone++;
           result.proposalsCreated += r.count;
+          result.tasksAutoCompleted += r.autoCompletedTasks;
         }
         await sleep(SLEEP_MS_BETWEEN_CALLS);
       } catch (err) {
