@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { type Task, tasks } from "@/db/schema/tasks";
 
@@ -83,7 +83,7 @@ export async function restoreTaskStatus(
   const restored = await conn
     .update(tasks)
     .set({ status, completedAt: computeCompletedAt(status, previous.completedAt) })
-    .where(eq(tasks.id, taskId))
+    .where(and(eq(tasks.id, taskId), eq(tasks.status, "done")))
     .returning({ id: tasks.id });
   return restored.length > 0;
 }

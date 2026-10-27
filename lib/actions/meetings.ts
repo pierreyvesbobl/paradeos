@@ -31,6 +31,11 @@ import {
   updateMeetingSubjectSchema,
   updateMeetingSummarySchema,
 } from "@/lib/schemas/meetings";
+import {
+  applyTaskCompletion,
+  completionTaskId,
+  undoTaskCompletion,
+} from "@/lib/tasks/completion-proposals";
 export const createMeeting = action(createMeetingSchema, async ({ input, user }) => {
   const conn = await db();
   const occurredAt = input.occurredAt ? new Date(input.occurredAt) : null;
@@ -162,6 +167,20 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
     ...(input.payloadOverride ?? {}),
   };
 
+  // Clôture de tâche : rien à créer, la décision EST le changement d'état.
+  // L'état d'avant est capturé maintenant pour pouvoir l'annuler.
+  if (proposal.kind === "task_completion") {
+    const taskId = completionTaskId(proposal);
+    if (!taskId) throw new Error("Clôture de tâche : cible manquante.");
+    const nextPayload = await applyTaskCompletion(conn, taskId, payload);
+    await conn
+      .update(meetingProposals)
+      .set({ createdEntityId: taskId, payload: nextPayload })
+      .where(eq(meetingProposals.id, proposal.id));
+    revalidateTaskCompletion(proposal.meetingId, taskId);
+    return { ok: true as const, createdEntityId: taskId };
+  }
+
   // Cas 1 — l'humain a explicitement choisi de lier à un record existant
   // via le picker UI (`_linkExistingId`). On l'utilise direct.
   const linkExistingId =
@@ -184,9 +203,6 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
       : (proposal.matchedId ?? null);
 
   if (!createdEntityId) {
-    if (proposal.kind === "task_completion") {
-      throw new Error("Clôture de tâche : cible manquante.");
-    }
     // Nettoie le marqueur interne avant de pousser au créateur.
     const { _linkExistingId: _omit, ...createPayload } = payload;
     void _omit;
@@ -275,6 +291,16 @@ export const revertProposal = action(revertProposalSchema, async ({ input }) => 
   const clearMatch = input.clearMatch === true && proposal.matchedId !== null;
   if (proposal.status === "pending" && !clearMatch) return { ok: true as const };
 
+  // Annuler une clôture acceptée rouvre la tâche (si personne n'y a
+  // retouché depuis) : pour ce kind, la décision EST le changement d'état.
+  if (proposal.kind === "task_completion" && proposal.status === "accepted") {
+    const taskId = completionTaskId(proposal);
+    if (taskId) {
+      await undoTaskCompletion(conn, taskId, proposal.payload);
+      revalidateTaskCompletion(proposal.meetingId, taskId);
+    }
+  }
+
   await conn
     .update(meetingProposals)
     .set({
@@ -312,6 +338,14 @@ export async function deleteMeetingAndRedirect(formData: FormData) {
 }
 
 // ----- helpers -----
+
+function revalidateTaskCompletion(meetingId: string, taskId: string) {
+  revalidatePath(`/meetings/${meetingId}`);
+  revalidatePath("/");
+  revalidatePath("/taches");
+  revalidatePath(`/taches/${taskId}`);
+  revalidatePath("/inbox");
+}
 
 async function createForKind(
   kind: "task" | "project" | "opportunity" | "contact" | "entity",

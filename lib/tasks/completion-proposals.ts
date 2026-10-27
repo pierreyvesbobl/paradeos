@@ -5,6 +5,7 @@ import type { Database } from "@/db/client";
 import { tasks } from "@/db/schema/tasks";
 import { hasPendingProposalElsewhere } from "@/lib/crm/proposal-dedupe";
 import type { CompletionConfidence, ResolvedTaskCompletion } from "@/lib/meetings/completed-tasks";
+import { markTaskDone, restoreTaskStatus, type TaskStatus } from "@/lib/tasks/complete";
 
 /**
  * Tri des clôtures de tâches signalées par une extraction (mail ou
@@ -115,4 +116,61 @@ export function completionPayload(plan: ResolvedTaskCompletion, auto: boolean) {
     confidence: plan.confidence,
     auto,
   };
+}
+
+/** Id de la tâche visée par une proposition `task_completion`. */
+export function completionTaskId(proposal: {
+  matchedId: string | null;
+  createdEntityId?: string | null;
+  payload: unknown;
+}): string | null {
+  const p = (proposal.payload ?? {}) as Record<string, unknown>;
+  return (
+    proposal.matchedId ??
+    proposal.createdEntityId ??
+    (typeof p.taskId === "string" ? p.taskId : null)
+  );
+}
+
+/**
+ * Applique une clôture : la tâche passe en `done` et le payload garde
+ * l'état d'avant, capturé à cet instant précis (la tâche a pu bouger
+ * depuis l'extraction). Renvoie le payload à persister.
+ */
+export async function applyTaskCompletion(
+  conn: Pick<Database, "select" | "update">,
+  taskId: string,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const snapshot = await markTaskDone(conn, taskId);
+  if (!snapshot) throw new Error("Tâche introuvable.");
+  return {
+    ...payload,
+    previousStatus: snapshot.previousStatus,
+    previousCompletedAt: snapshot.previousCompletedAt?.toISOString() ?? null,
+  };
+}
+
+/**
+ * Annule une clôture acceptée : restaure le statut d'avant. Sans effet si
+ * la tâche était déjà terminée au moment de l'acceptation, ou si
+ * quelqu'un l'a rouverte depuis. Renvoie vrai si la tâche a été rouverte.
+ */
+export async function undoTaskCompletion(
+  conn: Pick<Database, "select" | "update">,
+  taskId: string,
+  payload: unknown,
+): Promise<boolean> {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  const previousStatus = typeof p.previousStatus === "string" ? p.previousStatus : "todo";
+  if (previousStatus === "done") return false;
+  const previousCompletedAt =
+    typeof p.previousCompletedAt === "string" ? new Date(p.previousCompletedAt) : null;
+  return restoreTaskStatus(conn, taskId, {
+    status: previousStatus as TaskStatus,
+    completedAt:
+      previousCompletedAt && !Number.isNaN(previousCompletedAt.getTime())
+        ? previousCompletedAt
+        : null,
+  });
 }

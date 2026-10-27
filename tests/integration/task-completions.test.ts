@@ -5,6 +5,12 @@ import { emailProposals, gmailMessages, gmailThreads } from "@/db/schema/gmail";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
 import { projects } from "@/db/schema/projects";
 import { tasks } from "@/db/schema/tasks";
+import {
+  acceptEmailProposal,
+  rejectEmailProposal,
+  revertEmailProposal,
+} from "@/lib/actions/email-proposals";
+import { decideProposal, revertProposal, updateAcceptedProposal } from "@/lib/actions/meetings";
 import { extractEmail } from "@/lib/gmail/extract";
 import { extractAndSaveEmailProposals } from "@/lib/gmail/extract-and-save";
 import type { ResolvedTaskCompletion } from "@/lib/meetings/completed-tasks";
@@ -298,5 +304,124 @@ describe("extraction mail : tâches données pour faites", () => {
         and(eq(emailProposals.messageId, messageId), eq(emailProposals.kind, "task_completion")),
       );
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe("décider une clôture proposée par une réunion", () => {
+  async function propose(title: string, status: "todo" | "in_progress" = "todo") {
+    const taskId = await createTask(title, status);
+    const meetingId = await createMeeting();
+    mockedExtractMeeting.mockResolvedValueOnce({
+      ...emptyMeetingExtraction,
+      completedTasks: [completion(taskId, title)],
+    });
+    await extractAndSaveProposals(meetingId);
+    const [proposal] = await meetingCompletions(meetingId);
+    if (!proposal) throw new Error("proposition attendue");
+    return { taskId, meetingId, proposalId: proposal.id };
+  }
+
+  it("accepter passe la tâche en done et mémorise l'état d'avant", async () => {
+    const { taskId, proposalId } = await propose("Envoyer la facture", "in_progress");
+    const res = await decideProposal({ proposalId, action: "accept" });
+    expect(res.ok).toBe(true);
+
+    const task = await taskRow(taskId);
+    expect(task.status).toBe("done");
+    expect(task.completedAt).not.toBeNull();
+
+    const [row] = await db
+      .select()
+      .from(meetingProposals)
+      .where(eq(meetingProposals.id, proposalId));
+    expect(row?.status).toBe("accepted");
+    expect(row?.createdEntityId).toBe(taskId);
+    expect(row?.decidedBy).toBe(actor.id);
+    expect(row?.payload).toMatchObject({
+      previousStatus: "in_progress",
+      previousCompletedAt: null,
+    });
+  });
+
+  it("rejeter ne touche pas à la tâche", async () => {
+    const { taskId, proposalId } = await propose("Appeler le client");
+    await decideProposal({ proposalId, action: "reject" });
+    expect((await taskRow(taskId)).status).toBe("todo");
+  });
+
+  it("annuler rouvre la tâche dans son statut d'avant", async () => {
+    const { taskId, proposalId } = await propose("Livrer la maquette", "in_progress");
+    await decideProposal({ proposalId, action: "accept" });
+    const res = await revertProposal({ proposalId });
+    expect(res.ok).toBe(true);
+
+    const task = await taskRow(taskId);
+    expect(task.status).toBe("in_progress");
+    expect(task.completedAt).toBeNull();
+    const [row] = await db
+      .select({ status: meetingProposals.status })
+      .from(meetingProposals)
+      .where(eq(meetingProposals.id, proposalId));
+    expect(row?.status).toBe("pending");
+  });
+
+  it("annuler ne touche pas une tâche rouverte à la main entre-temps", async () => {
+    const { taskId, proposalId } = await propose("Préparer le contrat");
+    await decideProposal({ proposalId, action: "accept" });
+    await db
+      .update(tasks)
+      .set({ status: "blocked", completedAt: null })
+      .where(eq(tasks.id, taskId));
+    await revertProposal({ proposalId });
+    expect((await taskRow(taskId)).status).toBe("blocked");
+  });
+
+  it("une clôture acceptée ne s'édite pas", async () => {
+    const { proposalId } = await propose("Envoyer le planning");
+    await decideProposal({ proposalId, action: "accept" });
+    const res = await updateAcceptedProposal({ proposalId, payload: { taskTitle: "Autre" } });
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe("décider une clôture proposée par un mail", () => {
+  async function propose(title: string) {
+    const taskId = await createTask(title);
+    const { messageId } = await createEmail();
+    mockedExtractEmail.mockResolvedValueOnce({
+      ...emptyEmailExtraction,
+      completedTasks: [completion(taskId, title)],
+    });
+    await extractAndSaveEmailProposals(messageId);
+    const [proposal] = await db
+      .select()
+      .from(emailProposals)
+      .where(
+        and(eq(emailProposals.messageId, messageId), eq(emailProposals.kind, "task_completion")),
+      );
+    if (!proposal) throw new Error("proposition attendue");
+    return { taskId, proposalId: proposal.id };
+  }
+
+  it("accepter, puis annuler, puis rejeter", async () => {
+    const { taskId, proposalId } = await propose("Faire valider la charte");
+
+    const accepted = await acceptEmailProposal({ proposalId, payloadOverride: null });
+    expect(accepted.ok).toBe(true);
+    expect((await taskRow(taskId)).status).toBe("done");
+    const [afterAccept] = await db
+      .select()
+      .from(emailProposals)
+      .where(eq(emailProposals.id, proposalId));
+    expect(afterAccept?.createdEntityId).toBe(taskId);
+    expect(afterAccept?.payload).toMatchObject({ previousStatus: "todo" });
+
+    const reverted = await revertEmailProposal({ proposalId });
+    expect(reverted.ok).toBe(true);
+    expect((await taskRow(taskId)).status).toBe("todo");
+
+    const rejected = await rejectEmailProposal({ proposalId });
+    expect(rejected.ok).toBe(true);
+    expect((await taskRow(taskId)).status).toBe("todo");
   });
 });

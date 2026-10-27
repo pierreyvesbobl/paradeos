@@ -29,6 +29,11 @@ import {
 import { getValidAccessToken } from "@/lib/google/account";
 import { createGmailDraft, getHeader, getMessage } from "@/lib/google/gmail-api";
 import { hasGmailComposeScope, hasRequiredGmailScopes } from "@/lib/google/oauth";
+import {
+  applyTaskCompletion,
+  completionTaskId,
+  undoTaskCompletion,
+} from "@/lib/tasks/completion-proposals";
 
 /**
  * Extrait la liste d'assignés d'un payload de proposition task. Supporte :
@@ -138,8 +143,19 @@ export const acceptEmailProposal = action(
 
     const targetUserId = (await getGmailUserId()) ?? user.id;
     let createdEntityId: string | null = null;
+    /** Payload réécrit à l'acceptation (clôture : état d'avant de la tâche). */
+    let nextPayload: Record<string, unknown> | null = null;
 
-    if (proposal.kind === "task") {
+    if (proposal.kind === "task_completion") {
+      // Rien à créer : la décision EST le passage en `done`. L'état
+      // d'avant est capturé maintenant pour pouvoir l'annuler.
+      const taskId = completionTaskId(proposal);
+      if (!taskId) throw new Error("Clôture de tâche : cible manquante.");
+      nextPayload = await applyTaskCompletion(conn, taskId, payload);
+      createdEntityId = taskId;
+      revalidatePath("/");
+      revalidatePath(`/taches/${taskId}`);
+    } else if (proposal.kind === "task") {
       if (linkExistingId) {
         createdEntityId = linkExistingId;
       } else {
@@ -412,6 +428,7 @@ export const acceptEmailProposal = action(
         decidedBy: user.id,
         decidedAt: new Date(),
         createdEntityId,
+        ...(nextPayload ? { payload: nextPayload } : {}),
       })
       .where(eq(emailProposals.id, proposal.id));
 
@@ -562,6 +579,10 @@ export const updateAcceptedEmailProposal = action(
       throw new Error("Aucun record lié à mettre à jour.");
     }
 
+    if (proposal.kind === "task_completion") {
+      throw new Error("Une clôture de tâche ne s'édite pas : annule-la ou laisse-la.");
+    }
+
     const { _linkExistingId: _omitOld, ...prev } = proposal.payload as Record<string, unknown>;
     const { _linkExistingId: _omitNew, ...next } = input.payload;
     void _omitOld;
@@ -685,6 +706,18 @@ export const revertEmailProposal = action(
       .where(eq(emailProposals.id, input.proposalId))
       .limit(1);
     if (!proposal) throw new Error("Proposition introuvable.");
+
+    // Annuler une clôture acceptée rouvre la tâche (si personne n'y a
+    // retouché depuis) : pour ce kind, la décision EST le changement d'état.
+    if (proposal.kind === "task_completion" && proposal.status === "accepted") {
+      const taskId = completionTaskId(proposal);
+      if (taskId) {
+        await undoTaskCompletion(conn, taskId, proposal.payload);
+        revalidatePath("/");
+        revalidatePath("/taches");
+        revalidatePath(`/taches/${taskId}`);
+      }
+    }
 
     await conn
       .update(emailProposals)
