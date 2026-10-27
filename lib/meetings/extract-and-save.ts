@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
@@ -20,6 +20,11 @@ import { db } from "@/lib/db/server";
 import { formatPersonName, sanitizeNameInput } from "@/lib/format";
 import { extractMeeting, type ProjectContext } from "@/lib/meetings/extract";
 import { getParticipantContext, syncParticipantsFromAttendees } from "@/lib/meetings/participants";
+import {
+  completionMatchConfidence,
+  completionPayload,
+  planTaskCompletions,
+} from "@/lib/tasks/completion-proposals";
 /**
  * Helper coeur du pipeline d'extraction : prend un meetingId, lit son
  * transcript, appelle le LLM, persiste les propositions (avec fuzzy
@@ -61,11 +66,30 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
     projectContext,
     participants,
     meetingContext: { title: meeting.title, occurredAt: meeting.occurredAt },
+    priorityProjectId: meeting.projectId,
   });
 
   await syncParticipantsFromAttendees(meeting.id, result.attendees);
 
-  await conn.delete(meetingProposals).where(eq(meetingProposals.meetingId, meeting.id));
+  // Les clôtures de tâche déjà vues par cette réunion, avant le wipe : une
+  // question déjà tranchée (ou déjà posée) ne se repose pas à l'identique.
+  const existingCompletions = await conn
+    .select({ taskId: meetingProposals.matchedId, status: meetingProposals.status })
+    .from(meetingProposals)
+    .where(
+      and(eq(meetingProposals.meetingId, meeting.id), eq(meetingProposals.kind, "task_completion")),
+    );
+
+  // Wipe + réinjection, sauf les clôtures de tâche déjà décidées : elles
+  // tracent un changement d'état réel (et son annulation possible).
+  await conn
+    .delete(meetingProposals)
+    .where(
+      and(
+        eq(meetingProposals.meetingId, meeting.id),
+        or(ne(meetingProposals.kind, "task_completion"), eq(meetingProposals.status, "pending")),
+      ),
+    );
 
   const proposalsRows: {
     meetingId: string;
@@ -96,7 +120,15 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
   const dedupedProjects = dedupeBy(result.proposedProjects, (p) => compactNameKey(p.name));
 
   /** Propositions écartées, comptées par motif pour le log. */
-  const skipped = { pendingElsewhere: 0, dupTask: 0, alreadyKnown: 0, genericName: 0 };
+  const skipped = {
+    pendingElsewhere: 0,
+    dupTask: 0,
+    alreadyKnown: 0,
+    genericName: 0,
+    completionDone: 0,
+    completionDecided: 0,
+    completionPendingElsewhere: 0,
+  };
 
   // On mémorise les entités matchées pour scoper le match projet ensuite :
   // "GpasPlus - Nouveau X" ne doit pas être confondu avec "GpasPlus -
@@ -246,14 +278,29 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
       matchConfidence: null,
     });
   }
-  if (
-    skipped.dupTask > 0 ||
-    skipped.pendingElsewhere > 0 ||
-    skipped.alreadyKnown > 0 ||
-    skipped.genericName > 0
-  ) {
+  // Clôtures de tâches : la tâche doit être encore ouverte, la réunion ne
+  // doit pas l'avoir déjà tranchée, aucune autre source ne doit l'avoir
+  // déjà en attente.
+  const completions = await planTaskCompletions(conn, result.completedTasks, {
+    existing: existingCompletions,
+    excludeMeetingId: meeting.id,
+  });
+  skipped.completionDone = completions.skipped.alreadyDone;
+  skipped.completionDecided = completions.skipped.alreadyDecided;
+  skipped.completionPendingElsewhere = completions.skipped.pendingElsewhere;
+  for (const plan of completions.plans) {
+    proposalsRows.push({
+      meetingId: meeting.id,
+      kind: "task_completion",
+      payload: completionPayload(plan, false),
+      matchedId: plan.taskId,
+      matchConfidence: completionMatchConfidence(plan.confidence),
+    });
+  }
+
+  if (Object.values(skipped).some((n) => n > 0)) {
     console.info(
-      `[extract meeting ${meeting.id}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.genericName} nom(s) de projet sans contenu.`,
+      `[extract meeting ${meeting.id}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.genericName} nom(s) de projet sans contenu ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
     );
   }
 

@@ -5,6 +5,11 @@ import { z } from "zod";
 import { parseEmailThread } from "@/lib/gmail/thread-parse";
 import { generateStructured } from "@/lib/llm/structured";
 import { LLM_BUDGET_MS, withLlmTimeout } from "@/lib/llm/timeout";
+import {
+  COMPLETED_TASKS_PROMPT_RULES,
+  type ResolvedTaskCompletion,
+  resolveCompletedTasks,
+} from "@/lib/meetings/completed-tasks";
 import { formatVocabulary, getKnownVocabulary } from "@/lib/meetings/extract";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
@@ -105,9 +110,25 @@ const extractionSchema = z.object({
     })
     .nullable(),
   sensitiveDetected: z.boolean(),
+  /**
+   * Tâches ouvertes du vocabulaire que le mail donne pour faites (cf.
+   * `lib/meetings/completed-tasks.ts`). `taskRef` = référence courte du
+   * prompt, résolue en id de tâche avant retour.
+   */
+  completedTasks: z.array(
+    z.object({
+      taskRef: z.string(),
+      evidence: z.string(),
+      confidence: z.enum(["certain", "probable"]),
+    }),
+  ),
 });
 
-export type EmailExtraction = z.infer<typeof extractionSchema>;
+type RawEmailExtraction = z.infer<typeof extractionSchema>;
+
+export type EmailExtraction = Omit<RawEmailExtraction, "completedTasks"> & {
+  completedTasks: ResolvedTaskCompletion[];
+};
 
 /**
  * Strip les patterns sensibles avant envoi LLM. Best-effort — on ne
@@ -141,8 +162,9 @@ function buildSystemPrompt(args: {
 3. Le stade pipeline (lead / opportunity / project / none)
 4. Le projet éventuellement mentionné dans le contenu (à relier au thread)
 5. Les tâches à faire qui ressortent
-6. Les entités, contacts et projets NOUVEAUX évoqués (à créer dans le CRM)
-7. Un brouillon de réponse si le mail attend une action
+6. Les tâches ouvertes déjà connues que le mail donne pour faites
+7. Les entités, contacts et projets NOUVEAUX évoqués (à créer dans le CRM)
+8. Un brouillon de réponse si le mail attend une action
 
 Règles générales :
 - Reste factuel. Pas de paraphrase, pas d'extrapolation.
@@ -171,6 +193,10 @@ Classifie l'affaire portée par cet email :
   - **Aucune affirmation** qui ne soit pas vérifiable depuis le mail d'origine. Si un chiffre/nom/date est incertain, laisse un placeholder \`[À compléter]\`.
   - Ne t'engage pas à la place de l'utilisateur — propose des tournures ouvertes ("je te reviens sur", "je te propose de", "peux-tu me confirmer…").
 - Si **needsReply=false**, replyDraft = null.
+
+${COMPLETED_TASKS_PROMPT_RULES}
+
+Précision mail : une pièce jointe ou un lien qui correspond au livrable attendu (« ci-joint le devis signé », « voici le fichier ») vaut confidence="certain" pour la tâche qui attendait ce livrable.
 
 # Entités, contacts, projets — propositions de création
 
@@ -233,14 +259,20 @@ function buildUserPrompt(input: EmailInput): string {
   return `${header}\n\n---\n\n${body}${historyBlock}`;
 }
 
-export async function extractEmail(input: EmailInput): Promise<EmailExtraction> {
+export async function extractEmail(
+  input: EmailInput,
+  options?: {
+    /** Projet du fil : ses tâches ouvertes sont listées en premier. */
+    priorityProjectId?: string | null;
+  },
+): Promise<EmailExtraction> {
   const apiKey = await getSetting(SETTING_KEYS.OPENROUTER_API_KEY);
   if (!apiKey) {
     throw new Error("Clé OpenRouter non configurée. Ajoute-la dans /settings/integrations.");
   }
   const modelId = (await getSetting(SETTING_KEYS.LLM_MODEL)) ?? DEFAULT_LLM_MODEL;
 
-  const vocab = await getKnownVocabulary();
+  const vocab = await getKnownVocabulary({ priorityProjectId: options?.priorityProjectId });
 
   const openrouter = createOpenAI({
     apiKey,
@@ -264,5 +296,8 @@ export async function extractEmail(input: EmailInput): Promise<EmailExtraction> 
       }),
   );
 
-  return object;
+  return {
+    ...object,
+    completedTasks: resolveCompletedTasks(object.completedTasks, vocab.tasks),
+  };
 }

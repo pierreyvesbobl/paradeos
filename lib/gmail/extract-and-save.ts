@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne, or } from "drizzle-orm";
 import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages, gmailTags, gmailThreads } from "@/db/schema/gmail";
 import { projectContacts } from "@/db/schema/project-contacts";
@@ -19,6 +19,12 @@ import { db } from "@/lib/db/server";
 import { sanitizeNameInput } from "@/lib/format";
 import { extractEmail } from "@/lib/gmail/extract";
 import { computeThreadLinkSignals, linkThread } from "@/lib/gmail/links";
+import { getProjectsForThreads } from "@/lib/gmail/queries";
+import {
+  completionMatchConfidence,
+  completionPayload,
+  planTaskCompletions,
+} from "@/lib/tasks/completion-proposals";
 
 type ProposalKind =
   | "task"
@@ -74,17 +80,32 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     return { count: 0, autoAppliedProjectLinks: 0, skipped: true, reason: "pas de body" };
   }
 
+  // Signaux de liaison du fil, calculés avant l'appel LLM : le projet du
+  // fil (lié, ou seul candidat par contacts/entité) fait remonter ses
+  // tâches ouvertes en tête du vocabulaire.
+  const signals = await computeThreadLinkSignals(msg.threadId);
+  const linkedProjects = (await getProjectsForThreads([msg.threadId])).get(msg.threadId) ?? [];
+  const priorityProjectId =
+    linkedProjects.length === 1
+      ? (linkedProjects[0]?.id ?? null)
+      : signals?.candidateProjectIds.length === 1
+        ? (signals.candidateProjectIds[0] ?? null)
+        : null;
+
   let result: Awaited<ReturnType<typeof extractEmail>>;
   try {
-    result = await extractEmail({
-      subject: msg.subject,
-      fromEmail: msg.fromEmail,
-      fromName: msg.fromName,
-      toEmails: msg.toEmails,
-      ccEmails: msg.ccEmails,
-      bodyText: msg.bodyText,
-      bodyHtml: msg.bodyHtml,
-    });
+    result = await extractEmail(
+      {
+        subject: msg.subject,
+        fromEmail: msg.fromEmail,
+        fromName: msg.fromName,
+        toEmails: msg.toEmails,
+        ccEmails: msg.ccEmails,
+        bodyText: msg.bodyText,
+        bodyHtml: msg.bodyHtml,
+      },
+      { priorityProjectId },
+    );
   } catch (err) {
     await conn
       .update(gmailMessages)
@@ -103,15 +124,40 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     return { count: 0, autoAppliedProjectLinks: 0, skipped: true, reason: "sensitive detected" };
   }
 
-  // Wipe les anciennes propositions du message + ré-injecte.
-  await conn.delete(emailProposals).where(eq(emailProposals.messageId, messageId));
+  // Les clôtures de tâche déjà vues par ce message, avant le wipe : une
+  // question déjà tranchée (ou déjà posée) ne se repose pas à l'identique.
+  const existingCompletions = await conn
+    .select({ taskId: emailProposals.matchedId, status: emailProposals.status })
+    .from(emailProposals)
+    .where(
+      and(eq(emailProposals.messageId, messageId), eq(emailProposals.kind, "task_completion")),
+    );
+
+  // Wipe les anciennes propositions du message + ré-injecte, sauf les
+  // clôtures de tâche déjà décidées : elles tracent un changement d'état
+  // réel (et son annulation possible).
+  await conn
+    .delete(emailProposals)
+    .where(
+      and(
+        eq(emailProposals.messageId, messageId),
+        or(ne(emailProposals.kind, "task_completion"), eq(emailProposals.status, "pending")),
+      ),
+    );
 
   const rows: ProposalRow[] = [];
 
   // 1. Tâches — trois filtres avant de proposer : doublon dans la même
   //    extraction, tâche équivalente déjà ouverte en base, proposition
   //    équivalente déjà en attente sur un autre message ou une réunion.
-  const skipped = { pendingElsewhere: 0, dupTask: 0, alreadyKnown: 0 };
+  const skipped = {
+    pendingElsewhere: 0,
+    dupTask: 0,
+    alreadyKnown: 0,
+    completionDone: 0,
+    completionDecided: 0,
+    completionPendingElsewhere: 0,
+  };
   const seenTaskKeys = new Set<string>();
   for (const t of result.proposedTasks) {
     const projectMatch = t.projectName ? await fuzzyMatchProject(t.projectName) : null;
@@ -171,7 +217,6 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   //    - N candidats ambigus → proposition project_link à valider avec candidateProjectIds[]
   let autoAppliedProjectLinks = 0;
   let autoLinkedProjectId: string | null = null;
-  const signals = await computeThreadLinkSignals(msg.threadId);
   const candidateProjectIds = new Set<string>(signals?.candidateProjectIds ?? []);
   // Scope le match par l'entité du thread si elle est univoque : évite de
   // rattacher "GpasPlus - Nouveau X" à "GpasPlus - Autre Y" sur le seul
@@ -466,9 +511,29 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     });
   }
 
-  if (skipped.dupTask > 0 || skipped.pendingElsewhere > 0 || skipped.alreadyKnown > 0) {
+  // 1b. Clôtures de tâches : la tâche doit être encore ouverte, ce message
+  //     ne doit pas l'avoir déjà tranchée, aucune autre source ne doit
+  //     l'avoir déjà en attente.
+  const completions = await planTaskCompletions(conn, result.completedTasks, {
+    existing: existingCompletions,
+    excludeMessageId: messageId,
+  });
+  skipped.completionDone = completions.skipped.alreadyDone;
+  skipped.completionDecided = completions.skipped.alreadyDecided;
+  skipped.completionPendingElsewhere = completions.skipped.pendingElsewhere;
+  for (const plan of completions.plans) {
+    rows.push({
+      messageId,
+      kind: "task_completion",
+      payload: completionPayload(plan, false),
+      matchedId: plan.taskId,
+      matchConfidence: completionMatchConfidence(plan.confidence),
+    });
+  }
+
+  if (Object.values(skipped).some((n) => n > 0)) {
     console.info(
-      `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs.`,
+      `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
     );
   }
 

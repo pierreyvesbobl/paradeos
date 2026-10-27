@@ -9,6 +9,14 @@ import { users } from "@/db/schema/users";
 import { db } from "@/lib/db/server";
 import { generateStructured } from "@/lib/llm/structured";
 import { LLM_BUDGET_MS, withLlmTimeout } from "@/lib/llm/timeout";
+import {
+  assignTaskRefs,
+  COMPLETED_TASKS_PROMPT_RULES,
+  formatTaskVocabulary,
+  type ResolvedTaskCompletion,
+  resolveCompletedTasks,
+  type TaskVocabularyEntry,
+} from "@/lib/meetings/completed-tasks";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
@@ -30,6 +38,8 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 // Limite la taille du vocabulaire injecté pour ne pas exploser le prompt
 // si la base devient très grande.
 const VOCAB_LIMIT_PER_KIND = 200;
+/** Tâches ouvertes du projet concerné, chargées en plus du plafond global. */
+const PRIORITY_TASK_LIMIT = 100;
 
 /**
  * OpenAI Structured Outputs exigent que **chaque** propriété soit
@@ -104,9 +114,26 @@ const extractionSchema = z.object({
       priority: z.enum(["low", "normal", "high"]).nullable(),
     }),
   ),
+  /**
+   * Tâches ouvertes du vocabulaire que le transcript donne pour faites.
+   * `taskRef` est la référence courte injectée dans le prompt (`T12`),
+   * résolue en id de tâche par `resolveCompletedTasks`.
+   */
+  completedTasks: z.array(
+    z.object({
+      taskRef: z.string(),
+      evidence: z.string(),
+      confidence: z.enum(["certain", "probable"]),
+    }),
+  ),
 });
 
-export type MeetingExtraction = z.infer<typeof extractionSchema>;
+type RawMeetingExtraction = z.infer<typeof extractionSchema>;
+
+/** Sortie de l'extraction, références de tâches déjà résolues en ids. */
+export type MeetingExtraction = Omit<RawMeetingExtraction, "completedTasks"> & {
+  completedTasks: ResolvedTaskCompletion[];
+};
 
 export type Vocabulary = {
   entities: { name: string; kind: string }[];
@@ -119,8 +146,13 @@ export type Vocabulary = {
   }[];
   projects: { name: string; kind: string; status: string; entityName: string | null }[];
   users: string[];
-  /** Tâches encore ouvertes — pour éviter de re-proposer une action déjà notée. */
-  tasks: { title: string; projectName: string | null; status: string }[];
+  /**
+   * Tâches encore ouvertes, numérotées (`T1`…) : le modèle ne doit pas les
+   * re-proposer et peut signaler celles que le contenu donne pour faites.
+   */
+  tasks: TaskVocabularyEntry[];
+  /** Projet de la réunion ou du fil : ses tâches ouvertes passent en tête. */
+  priorityProjectId: string | null;
 };
 
 /**
@@ -131,57 +163,101 @@ export type Vocabulary = {
  * Exporté pour réutilisation par le pipeline email (mêmes données
  * canoniques, mêmes limites).
  */
-export async function getKnownVocabulary(): Promise<Vocabulary> {
-  const conn = await db();
+type OpenTaskRow = {
+  id: string;
+  title: string;
+  status: string;
+  projectId: string | null;
+  projectName: string | null;
+  updatedAt: Date;
+};
 
-  const [entityRows, contactRows, projectRows, userRows, taskRows] = await Promise.all([
-    conn
-      .select({ name: entities.name, kind: entities.kind, updatedAt: entities.updatedAt })
-      .from(entities)
-      .orderBy(desc(entities.updatedAt))
-      .limit(VOCAB_LIMIT_PER_KIND),
-    conn
-      .select({
-        firstName: contacts.firstName,
-        lastName: contacts.lastName,
-        jobTitle: contacts.jobTitle,
-        email: contacts.email,
-        entityName: entities.name,
-        updatedAt: contacts.updatedAt,
-      })
-      .from(contacts)
-      .leftJoin(entities, eq(contacts.entityId, entities.id))
-      .orderBy(desc(contacts.updatedAt))
-      .limit(VOCAB_LIMIT_PER_KIND),
-    conn
-      .select({
-        name: projects.name,
-        kind: projects.kind,
-        status: projects.status,
-        entityName: entities.name,
-        updatedAt: projects.updatedAt,
-      })
-      .from(projects)
-      .leftJoin(entities, eq(projects.entityId, entities.id))
-      .orderBy(desc(projects.updatedAt))
-      .limit(VOCAB_LIMIT_PER_KIND),
-    conn.select({ fullName: users.fullName }).from(users).orderBy(asc(users.fullName)),
-    // Tâches encore ouvertes — sert au LLM pour ne pas re-proposer une
-    // action déjà tracée. On exclut done/cancelled/archived. Ordonne par
-    // updatedAt desc pour prioriser les plus récentes / actives.
-    conn
-      .select({
-        title: tasks.title,
-        status: tasks.status,
-        projectName: projects.name,
-        updatedAt: tasks.updatedAt,
-      })
-      .from(tasks)
-      .leftJoin(projects, eq(tasks.projectId, projects.id))
-      .where(sql`${tasks.status} not in ('done', 'cancelled')`)
-      .orderBy(desc(tasks.updatedAt))
-      .limit(VOCAB_LIMIT_PER_KIND),
-  ]);
+export async function getKnownVocabulary(opts?: {
+  /** Les tâches ouvertes de ce projet sont toutes chargées et listées d'abord. */
+  priorityProjectId?: string | null;
+}): Promise<Vocabulary> {
+  const conn = await db();
+  const priorityProjectId = opts?.priorityProjectId ?? null;
+
+  const [entityRows, contactRows, projectRows, userRows, taskRows, priorityTaskRows] =
+    await Promise.all([
+      conn
+        .select({ name: entities.name, kind: entities.kind, updatedAt: entities.updatedAt })
+        .from(entities)
+        .orderBy(desc(entities.updatedAt))
+        .limit(VOCAB_LIMIT_PER_KIND),
+      conn
+        .select({
+          firstName: contacts.firstName,
+          lastName: contacts.lastName,
+          jobTitle: contacts.jobTitle,
+          email: contacts.email,
+          entityName: entities.name,
+          updatedAt: contacts.updatedAt,
+        })
+        .from(contacts)
+        .leftJoin(entities, eq(contacts.entityId, entities.id))
+        .orderBy(desc(contacts.updatedAt))
+        .limit(VOCAB_LIMIT_PER_KIND),
+      conn
+        .select({
+          name: projects.name,
+          kind: projects.kind,
+          status: projects.status,
+          entityName: entities.name,
+          updatedAt: projects.updatedAt,
+        })
+        .from(projects)
+        .leftJoin(entities, eq(projects.entityId, entities.id))
+        .orderBy(desc(projects.updatedAt))
+        .limit(VOCAB_LIMIT_PER_KIND),
+      conn.select({ fullName: users.fullName }).from(users).orderBy(asc(users.fullName)),
+      // Tâches encore ouvertes — sert au LLM pour ne pas re-proposer une
+      // action déjà tracée. On exclut done/cancelled/archived. Ordonne par
+      // updatedAt desc pour prioriser les plus récentes / actives.
+      conn
+        .select({
+          id: tasks.id,
+          title: tasks.title,
+          status: tasks.status,
+          projectId: tasks.projectId,
+          projectName: projects.name,
+          updatedAt: tasks.updatedAt,
+        })
+        .from(tasks)
+        .leftJoin(projects, eq(tasks.projectId, projects.id))
+        .where(sql`${tasks.status} not in ('done', 'cancelled')`)
+        .orderBy(desc(tasks.updatedAt))
+        .limit(VOCAB_LIMIT_PER_KIND),
+      // Les tâches du projet concerné, toutes : c'est parmi elles qu'une
+      // clôture a le plus de chances d'être signalée, elles ne doivent pas
+      // tomber hors du plafond global.
+      priorityProjectId
+        ? conn
+            .select({
+              id: tasks.id,
+              title: tasks.title,
+              status: tasks.status,
+              projectId: tasks.projectId,
+              projectName: projects.name,
+              updatedAt: tasks.updatedAt,
+            })
+            .from(tasks)
+            .leftJoin(projects, eq(tasks.projectId, projects.id))
+            .where(
+              sql`${tasks.status} not in ('done', 'cancelled') and ${tasks.projectId} = ${priorityProjectId}`,
+            )
+            .orderBy(desc(tasks.updatedAt))
+            .limit(PRIORITY_TASK_LIMIT)
+        : Promise.resolve([] as OpenTaskRow[]),
+    ]);
+
+  const seenTaskIds = new Set<string>();
+  const orderedTasks = [...priorityTaskRows, ...taskRows].filter((t) => {
+    if (seenTaskIds.has(t.id)) return false;
+    seenTaskIds.add(t.id);
+    return true;
+  });
 
   return {
     entities: entityRows.map((r) => ({ name: r.name, kind: r.kind })),
@@ -198,11 +274,16 @@ export async function getKnownVocabulary(): Promise<Vocabulary> {
       entityName: r.entityName ?? null,
     })),
     users: userRows.map((u) => u.fullName).filter((n): n is string => !!n),
-    tasks: taskRows.map((r) => ({
-      title: r.title,
-      status: r.status,
-      projectName: r.projectName ?? null,
-    })),
+    tasks: assignTaskRefs(
+      orderedTasks.map((r) => ({
+        id: r.id,
+        title: r.title,
+        status: r.status,
+        projectId: r.projectId ?? null,
+        projectName: r.projectName ?? null,
+      })),
+    ),
+    priorityProjectId,
   };
 }
 
@@ -262,18 +343,8 @@ client, relis la liste de CE client :\n${blocks}`,
     );
   }
 
-  if (v.tasks.length > 0) {
-    sections.push(
-      `Tâches ouvertes déjà connues (NE PAS re-proposer, même reformulées) :\n${v.tasks
-        .map((t) => {
-          const bits = [t.title];
-          if (t.projectName) bits.push(`— projet ${t.projectName}`);
-          bits.push(`[${t.status}]`);
-          return `- ${bits.join(" ")}`;
-        })
-        .join("\n")}`,
-    );
-  }
+  const taskBlock = formatTaskVocabulary(v.tasks, v.priorityProjectId);
+  if (taskBlock) sections.push(taskBlock);
 
   return sections.join("\n\n");
 }
@@ -344,6 +415,8 @@ Pour chaque tâche, identifie qui doit la faire :
 
 Exemple : "Sophie envoie la maquette mardi prochain" → si Sophie est dans "Membres
 de l'équipe" → internal ; si Sophie est dans "Contacts" → external.
+
+${COMPLETED_TASKS_PROMPT_RULES}
 
 # Projet (objet unique couvrant tout le cycle)
 
@@ -485,6 +558,8 @@ export async function extractMeeting(
     projectContext?: ProjectContext;
     participants?: ParticipantContext[];
     meetingContext?: MeetingContext;
+    /** Projet de la réunion : ses tâches ouvertes sont listées en premier. */
+    priorityProjectId?: string | null;
   },
 ): Promise<MeetingExtraction> {
   const apiKey = await getSetting(SETTING_KEYS.OPENROUTER_API_KEY);
@@ -493,7 +568,7 @@ export async function extractMeeting(
   }
   const modelId = (await getSetting(SETTING_KEYS.LLM_MODEL)) ?? DEFAULT_LLM_MODEL;
 
-  const vocab = await getKnownVocabulary();
+  const vocab = await getKnownVocabulary({ priorityProjectId: options?.priorityProjectId });
   const systemPrompt = buildSystemPrompt(
     vocab,
     options?.projectContext,
@@ -535,5 +610,8 @@ export async function extractMeeting(
       }),
   );
 
-  return object;
+  return {
+    ...object,
+    completedTasks: resolveCompletedTasks(object.completedTasks, vocab.tasks),
+  };
 }
