@@ -32,6 +32,8 @@ const config: NextConfig = {
   // ~600 icônes, sans ça tout le pack est inclus dans chaque chunk).
   experimental: {
     optimizePackageImports: ["@phosphor-icons/react"],
+    // Mises à jour de sécurité de Next pilotées par `next upgrade --agent`.
+    agentUpgrade: "security",
   },
   /**
    * Métadonnées de découverte OAuth (RFC 9728 / RFC 8414). Les clients MCP
