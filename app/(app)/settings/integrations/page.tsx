@@ -15,6 +15,7 @@ import { CoworkingAutoSendSection } from "./coworking-autosend-section";
 import { DougsSection } from "./dougs-section";
 import { DriveTranscriptsSection } from "./drive-transcripts-section";
 import { EmailTranscriptsSection } from "./email-transcripts-section";
+import { GithubTokenForm } from "./github-token-form";
 import { GmailSection } from "./gmail-section";
 import { GoogleCalendarSection } from "./google-calendar-section";
 import { GoogleDriveSection } from "./google-drive-section";
@@ -36,10 +37,11 @@ export default async function IntegrationsSettingsPage({
   const role = await getCurrentUserRole(user);
   const isAdmin = role === "admin";
 
-  const [llmKey, llmModel, openAiKey, params, conn] = await Promise.all([
+  const [llmKey, llmModel, openAiKey, githubToken, params, conn] = await Promise.all([
     isAdmin ? getSettingStatus(SETTING_KEYS.OPENROUTER_API_KEY) : Promise.resolve(null),
     isAdmin ? getSetting(SETTING_KEYS.LLM_MODEL) : Promise.resolve(null),
     isAdmin ? getSettingStatus(SETTING_KEYS.OPENAI_API_KEY) : Promise.resolve(null),
+    isAdmin ? getSettingStatus(SETTING_KEYS.GITHUB_TOKEN) : Promise.resolve(null),
     searchParams,
     db(),
   ]);
@@ -137,6 +139,21 @@ export default async function IntegrationsSettingsPage({
             <Status status={openAiKey} />
           </header>
           <OpenAiKeyForm currentKeyPreview={openAiKey.preview} />
+        </section>
+      ) : null}
+      {isAdmin && githubToken ? (
+        <section className="rounded-lg border bg-card p-6">
+          <header className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-medium text-sm">GitHub</h2>
+              <p className="mt-1 text-muted-foreground text-xs">
+                Jeton qui lit les issues des dépôts rattachés aux projets, pour les afficher sur la
+                fiche projet. Accès admin uniquement.
+              </p>
+            </div>
+            <Status status={githubToken} />
+          </header>
+          <GithubTokenForm currentKeyPreview={githubToken.preview} />
         </section>
       ) : null}
     </>

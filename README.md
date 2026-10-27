@@ -104,6 +104,13 @@ tools MCP : `resolve_repo`, `link_repo`, `track_claude_time` (upsert par
 (`lib/time/overlap.ts`). Règles de comptage et installation :
 `claude-mod/README.md`.
 
+Les dépôts GitHub rattachés donnent aussi une fenêtre sur leurs issues
+ouvertes depuis la fiche projet (`components/projets/project-issues-section.tsx`,
+client `lib/github/issues.ts`) : lecture en direct avec le réglage
+`GITHUB_TOKEN` (PAT à granularité fine, « Issues : lecture »), cache de deux
+minutes, rien n'est stocké. Les pull requests, que l'API mêle aux issues,
+sont écartées.
+
 ### Clôture des tâches d'après les mails et les réunions
 
 Les extractions LLM (`lib/gmail/extract.ts`, `lib/meetings/extract.ts`)

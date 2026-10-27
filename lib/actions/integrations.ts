@@ -42,6 +42,20 @@ export const updateOpenAiKey = action(updateOpenAiKeySchema, async ({ input, use
 });
 
 /**
+ * Met à jour le jeton GitHub qui lit les issues des dépôts rattachés aux
+ * projets (cf. lib/github/issues.ts). `""` = supprimer.
+ */
+export const updateGithubToken = action(
+  z.object({ token: z.string().trim().max(500) }),
+  async ({ input, user }) => {
+    await requireAdmin(user);
+    await setSetting(SETTING_KEYS.GITHUB_TOKEN, input.token === "" ? null : input.token, user.id);
+    revalidatePath("/settings/integrations");
+    return { ok: true as const };
+  },
+);
+
+/**
  * Enregistre le logo de facturation d'une marque.
  *
  * Le fichier est téléversé chez Dougs (seul endroit où `logoUuid` a du sens) et

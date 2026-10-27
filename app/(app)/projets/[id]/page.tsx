@@ -20,6 +20,7 @@ import Link from "@/components/link";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { ProjectEntityField } from "@/components/projects/project-entity-field";
+import { ProjectIssuesSection } from "@/components/projets/project-issues-section";
 import { ProjectMeetingsSection } from "@/components/projets/project-meetings-section";
 import { ProjectReposSection } from "@/components/projets/project-repos-section";
 import { ProjectSecretsSection } from "@/components/projets/project-secrets-section";
@@ -294,6 +295,9 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         </section>
 
         <ProjectReposSection projectId={id} repos={projectRepoRows} choices={repoChoices} />
+        <Suspense fallback={null}>
+          <ProjectIssuesSection repos={projectRepoRows} />
+        </Suspense>
       </div>
 
       {/* Colonne droite (rail) */}

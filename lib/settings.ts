@@ -138,6 +138,13 @@ export const SETTING_KEYS = {
    */
   TASK_AUTOCOMPLETE_ENABLED: "TASK_AUTOCOMPLETE_ENABLED",
   /**
+   * Jeton GitHub (fine-grained PAT) qui lit les issues des dépôts rattachés
+   * aux projets (`project_repos`). Portée minimale : « Issues : lecture »
+   * sur les dépôts concernés. Sans lui, la fiche projet n'affiche pas les
+   * issues des dépôts privés.
+   */
+  GITHUB_TOKEN: "GITHUB_TOKEN",
+  /**
    * Mode démo global : si "true", l'UI affiche des alias déterministes pour
    * les noms d'entreprises, contacts, projets, et applique un facteur (~×1)
    * aux montants. Les données en base restent intactes. Les exports
