@@ -139,6 +139,17 @@ describe("réunion déjà triée", () => {
       {
         meetingId,
         kind: "task",
+        payload: {
+          title: "Relancer une recatégorisation des produits vendus en matching EAN",
+          projectId,
+        },
+        status: "rejected",
+        decidedBy: actor.id,
+        decidedAt: new Date(),
+      },
+      {
+        meetingId,
+        kind: "task",
         payload: { title: "Vieille proposition en attente", projectId },
         status: "pending",
       },
@@ -151,7 +162,22 @@ describe("réunion déjà triée", () => {
       proposedTasks: [
         proposedTask("Contrôle de matching EAN", "tu peux prendre le dossier, c'est officiel"),
         proposedTask("Répondre à Temu", "il faut que je réponde à Temu"),
+        // Refus reformulé par le modèle : même besoin, pas une nouveauté.
+        proposedTask("Relancer une recatégorisation des produits en matching EAN", "je relance"),
         proposedTask("Monitorer les trackings PrestaShop", "monitorer les trackings"),
+      ],
+      // La tâche acceptée est aussi réévoquée comme tâche connue.
+      mentionedTasks: [
+        {
+          taskId: created.id,
+          taskTitle: "Contrôle de matching EAN",
+          excerpts: [
+            {
+              quote: "en n'oubliant pas de finir celui qu'on est en train de faire",
+              speaker: "Eric",
+            },
+          ],
+        },
       ],
     });
     await extractAndSaveProposals(meetingId);
@@ -171,14 +197,17 @@ describe("réunion déjà triée", () => {
     expect(byTitle.get("Répondre à Temu")).toBe("rejected");
     expect(byTitle.get("Monitorer les trackings PrestaShop")).toBe("pending");
     expect(byTitle.has("Vieille proposition en attente")).toBe(false);
-    expect(rows).toHaveLength(3);
+    expect(byTitle.has("Relancer une recatégorisation des produits en matching EAN")).toBe(false);
+    expect(rows).toHaveLength(4);
 
     const sources = await db
       .select({ relation: taskSources.relation, excerpt: taskSources.excerpt })
       .from(taskSources)
       .where(eq(taskSources.taskId, created.id));
-    expect(sources).toEqual([
-      { relation: "origin", excerpt: "tu peux prendre le dossier, c'est officiel" },
+    expect(sources.map((s) => s.relation)).toEqual(["origin", "origin"]);
+    expect(sources.map((s) => s.excerpt).sort()).toEqual([
+      "en n'oubliant pas de finir celui qu'on est en train de faire",
+      "tu peux prendre le dossier, c'est officiel",
     ]);
   });
 });

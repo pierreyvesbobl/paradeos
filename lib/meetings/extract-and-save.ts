@@ -263,7 +263,8 @@ export async function extractAndSaveProposals(
     sourcesWritten += await recordTaskSources(conn, {
       taskId: m.taskId,
       source: { meetingId: meeting.id },
-      relation: "mention",
+      // Une tâche née de cette source : ce qu'elle en dit est son origine.
+      relation: decided.acceptedTaskIds.has(m.taskId) ? "origin" : "mention",
       excerpts: m.excerpts,
     });
   }

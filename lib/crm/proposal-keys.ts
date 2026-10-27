@@ -1,4 +1,5 @@
 import { compactNameKey, normalizeEmail, personCompactKey } from "@/lib/crm/name-key";
+import { MATCH_THRESHOLD, pickBestMatch } from "@/lib/crm/pick";
 
 export type ProposalKind = "entity" | "contact" | "project" | "task" | "task_completion";
 
@@ -81,7 +82,10 @@ export function anyProposalKey(kind: string, payload: unknown, matchedId: string
  * une tâche, la tâche créée reçoit ce que la nouvelle passe en dit.
  */
 export class DecidedProposals {
-  private readonly byKey = new Map<string, { status: string; createdEntityId: string | null }>();
+  private readonly byKey = new Map<string, DecidedProposal>();
+  /** Titres des tâches tranchées, pour le rapprochement flou. */
+  private readonly taskTitles: { id: string; name: string }[] = [];
+  private readonly taskById = new Map<string, DecidedProposal>();
   /** Tâches créées par acceptation d'une proposition de cette source. */
   readonly acceptedTaskIds = new Set<string>();
 
@@ -89,11 +93,18 @@ export class DecidedProposals {
     for (const r of rows) {
       if (r.status === "pending") continue;
       const key = anyProposalKey(r.kind, r.payload, r.matchedId);
-      if (!this.byKey.has(key)) {
-        this.byKey.set(key, { status: r.status, createdEntityId: r.createdEntityId });
-      }
-      if (r.kind === "task" && r.status === "accepted" && r.createdEntityId) {
-        this.acceptedTaskIds.add(r.createdEntityId);
+      const decided = { status: r.status, createdEntityId: r.createdEntityId };
+      if (!this.byKey.has(key)) this.byKey.set(key, decided);
+      if (r.kind === "task") {
+        const title = (r.payload as { title?: unknown } | null)?.title;
+        if (typeof title === "string" && title.trim()) {
+          const id = String(this.taskTitles.length);
+          this.taskTitles.push({ id, name: title });
+          this.taskById.set(id, decided);
+        }
+        if (r.status === "accepted" && r.createdEntityId) {
+          this.acceptedTaskIds.add(r.createdEntityId);
+        }
       }
     }
   }
@@ -102,11 +113,22 @@ export class DecidedProposals {
     return this.byKey.size;
   }
 
-  find(
-    kind: string,
-    payload: unknown,
-    matchedId: string | null,
-  ): { status: string; createdEntityId: string | null } | null {
-    return this.byKey.get(anyProposalKey(kind, payload, matchedId)) ?? null;
+  /**
+   * La ligne tranchée équivalente, s'il y en a une. Pour une tâche, la
+   * clé exacte ne suffit pas : d'une passe à l'autre le modèle reformule
+   * le titre (« produits vendus en matching EAN » devient « produits en
+   * matching EAN »), et un refus reformulé n'est pas un nouveau besoin. On
+   * compare donc aussi les titres avec le même seuil que les tâches
+   * ouvertes.
+   */
+  find(kind: string, payload: unknown, matchedId: string | null): DecidedProposal | null {
+    const exact = this.byKey.get(anyProposalKey(kind, payload, matchedId));
+    if (exact || kind !== "task") return exact ?? null;
+    const title = (payload as { title?: unknown } | null)?.title;
+    if (typeof title !== "string") return null;
+    const match = pickBestMatch(this.taskTitles, title, MATCH_THRESHOLD.task);
+    return match ? (this.taskById.get(match.id) ?? null) : null;
   }
 }
+
+export type DecidedProposal = { status: string; createdEntityId: string | null };
