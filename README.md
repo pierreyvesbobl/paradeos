@@ -104,6 +104,28 @@ tools MCP : `resolve_repo`, `link_repo`, `track_claude_time` (upsert par
 (`lib/time/overlap.ts`). Règles de comptage et installation :
 `claude-mod/README.md`.
 
+### Clôture des tâches d'après les mails et les réunions
+
+Les extractions LLM (`lib/gmail/extract.ts`, `lib/meetings/extract.ts`)
+reçoivent les tâches ouvertes avec une référence courte (`[T12]`, celles du
+projet concerné en tête) et renvoient dans `completedTasks` celles que le
+contenu donne pour faites, avec une citation et une confiance
+`certain | probable`. La persistance en fait des propositions de kind
+`task_completion` (`matched_id` = la tâche) dans `meeting_proposals` /
+`email_proposals`, visibles dans /inbox, sur la réunion et sur le fil mail.
+Accepter passe la tâche en `done` et mémorise son état d'avant dans le
+payload ; annuler la rouvre dans ce statut (`lib/tasks/complete.ts`,
+`lib/tasks/completion-proposals.ts`).
+
+Réglage `TASK_AUTOCOMPLETE_ENABLED` (opt-in, `/settings/integrations`) :
+une détection `certain` sur une tâche jamais soumise à l'humain est
+appliquée sans clic, la ligne naît `accepted` sans décideur et reste
+annulable depuis l'historique /inbox. Règle anti-boucle : la ré-extraction
+conserve les clôtures décidées, ne repropose pas une tâche déjà tranchée par
+la même source, et n'applique plus jamais d'office une tâche déjà proposée
+une fois. Les enums `*_proposal_kind` ne se réduisent pas (`ADD VALUE` sans
+retour) : migration `0090`.
+
 ## Tests
 
 - `pnpm test` : unitaires (Vitest), fonctions pures de `lib/`, ~1 s.
