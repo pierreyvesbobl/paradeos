@@ -3,6 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { TaskAssigneeRailEditor } from "@/app/(app)/taches/[id]/rail/assignee-rail-editor";
 import { TaskCompletedEditor } from "@/app/(app)/taches/[id]/rail/completed-editor";
+import { TaskCompletionSources } from "@/app/(app)/taches/[id]/rail/completion-sources";
 import { TaskPriorityPillEditor } from "@/app/(app)/taches/[id]/rail/priority-pill-editor";
 import { TaskProjectRailEditor } from "@/app/(app)/taches/[id]/rail/project-rail-editor";
 import { TaskStatusPillEditor } from "@/app/(app)/taches/[id]/rail/status-pill-editor";
@@ -19,6 +20,7 @@ import { users } from "@/db/schema/users";
 import { deleteTaskAndRedirect } from "@/lib/actions/tasks";
 import { getAttachmentsForNotes, getNotesForSubject } from "@/lib/db/queries/notes";
 import { fetchAssigneesForTasks } from "@/lib/db/queries/task-assignees";
+import { getTaskCompletionSources } from "@/lib/db/queries/task-completions";
 import { getTaskTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
 import { formatDateTime, formatDuration, formatPersonName } from "@/lib/format";
@@ -46,30 +48,39 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
   if (!row) notFound();
   const { task, project } = row;
 
-  const [assigneesByTask, timeStats, notesList, projectOptions, userOptions, contactRows] =
-    await Promise.all([
-      fetchAssigneesForTasks(conn, [id]),
-      getTaskTimeStats(id),
-      getNotesForSubject("task", id),
-      conn
-        .select({ id: projects.id, name: projects.name })
-        .from(projects)
-        .orderBy(asc(projects.name)),
-      conn
-        .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
-        .from(users)
-        .orderBy(asc(users.fullName)),
-      conn
-        .select({
-          id: contacts.id,
-          firstName: contacts.firstName,
-          lastName: contacts.lastName,
-          entityName: entities.name,
-        })
-        .from(contacts)
-        .leftJoin(entities, eq(contacts.entityId, entities.id))
-        .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
-    ]);
+  const [
+    assigneesByTask,
+    timeStats,
+    notesList,
+    projectOptions,
+    userOptions,
+    contactRows,
+    completionSources,
+  ] = await Promise.all([
+    fetchAssigneesForTasks(conn, [id]),
+    getTaskTimeStats(id),
+    getNotesForSubject("task", id),
+    conn
+      .select({ id: projects.id, name: projects.name })
+      .from(projects)
+      .orderBy(asc(projects.name)),
+    conn
+      .select({ id: users.id, fullName: users.fullName, avatarUrl: users.avatarUrl })
+      .from(users)
+      .orderBy(asc(users.fullName)),
+    conn
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        entityName: entities.name,
+      })
+      .from(contacts)
+      .leftJoin(entities, eq(contacts.entityId, entities.id))
+      .orderBy(asc(contacts.lastName), asc(contacts.firstName)),
+    // Seule une tâche terminée peut l'avoir été d'après une source.
+    task.status === "done" ? getTaskCompletionSources(id) : Promise.resolve([]),
+  ]);
 
   const assignees = assigneesByTask.get(id) ?? [];
   const contactOptions = contactRows.map((c) => ({
@@ -208,6 +219,7 @@ export default async function TaskDetailPage({ params }: { params: Params }) {
 
           <RailField label="Terminée le">
             <TaskCompletedEditor id={id} value={task.completedAt} />
+            <TaskCompletionSources sources={completionSources} />
           </RailField>
 
           <div className="h-px bg-ds-border" />
