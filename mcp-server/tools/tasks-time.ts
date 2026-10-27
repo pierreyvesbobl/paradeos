@@ -9,6 +9,7 @@ import { users } from "../../db/schema/users";
 import { matchOpenTask } from "../../lib/crm/candidates";
 import { isCertainMatch } from "../../lib/crm/pick";
 import { setTaskAssignees } from "../../lib/db/queries/task-assignees";
+import { markTaskDone } from "../../lib/tasks/complete";
 import { attachClaudeSegments, claimableClaudeSegments } from "../../lib/time/claude-blocks";
 import type { UserContext } from "../context";
 import { db } from "../db";
@@ -212,10 +213,9 @@ export const completeTaskSchema = z.object({
 
 export async function completeTask(args: z.infer<typeof completeTaskSchema>) {
   const conn = db();
-  await conn
-    .update(tasks)
-    .set({ status: "done", completedAt: new Date() })
-    .where(eq(tasks.id, args.id));
+  // Helper partagé : une tâche déjà terminée garde son `completed_at`.
+  const snapshot = await markTaskDone(conn, args.id);
+  if (!snapshot) throw new Error("Tâche introuvable.");
   return { id: args.id, status: "done" as const };
 }
 

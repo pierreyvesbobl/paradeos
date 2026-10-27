@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { tasks } from "@/db/schema/tasks";
@@ -17,6 +17,7 @@ import {
   toggleTaskSchema,
   updateTaskSchema,
 } from "@/lib/schemas/tasks";
+import { computeCompletedAt, markTaskDone, restoreTaskStatus } from "@/lib/tasks/complete";
 
 function revalidateTaskPaths(projectId: string | null | undefined) {
   revalidatePath("/"); // le dashboard liste mes tâches ouvertes
@@ -192,23 +193,15 @@ export const toggleTask = action(toggleTaskSchema, async ({ input }) => {
   if (!current) throw new Error("Tâche introuvable.");
 
   const nextStatus = current.status === "done" ? "todo" : "done";
-  const completedAt = nextStatus === "done" ? sql`now()` : null;
-
-  await conn.update(tasks).set({ status: nextStatus, completedAt }).where(eq(tasks.id, input.id));
+  if (nextStatus === "done") {
+    await markTaskDone(conn, input.id);
+  } else {
+    await restoreTaskStatus(conn, input.id, { status: "todo", completedAt: null });
+  }
 
   revalidateTaskPaths(current.projectId);
   return { status: nextStatus };
 });
-
-function computeCompletedAt(
-  nextStatus: string,
-  previousCompletedAt: Date | null | undefined,
-): Date | null {
-  if (nextStatus === "done") {
-    return previousCompletedAt ?? new Date();
-  }
-  return null;
-}
 
 /**
  * Patch partiel depuis les éditeurs inline. Seuls les champs présents
