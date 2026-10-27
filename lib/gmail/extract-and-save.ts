@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, ne, or } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages, gmailTags, gmailThreads } from "@/db/schema/gmail";
 import { projectContacts } from "@/db/schema/project-contacts";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/crm/match";
 import { compactNameKey } from "@/lib/crm/name-key";
 import { hasPendingProposalElsewhere, proposalDedupeKey } from "@/lib/crm/proposal-dedupe";
+import { DecidedProposals } from "@/lib/crm/proposal-keys";
 import { db } from "@/lib/db/server";
 import { sanitizeNameInput } from "@/lib/format";
 import { extractEmail } from "@/lib/gmail/extract";
@@ -26,6 +27,7 @@ import {
   planTaskCompletions,
 } from "@/lib/tasks/completion-proposals";
 import { clearExtractedTaskSources, recordTaskSources } from "@/lib/tasks/record-sources";
+import { excerptsFromPayload } from "@/lib/tasks/task-sources";
 
 type ProposalKind =
   | "task"
@@ -52,7 +54,9 @@ type ProposalRow = {
 
 /**
  * Pipeline d'extraction email : lit le message, appelle LLM, persiste
- * les propositions. Idempotent : delete + insert.
+ * les propositions. Idempotent : les propositions encore `pending` du
+ * message sont effacées puis réinjectées ; celles déjà tranchées restent et
+ * rien d'équivalent n'est reposé (relancer un mail déjà trié est sans risque).
  *
  * Statut du message :
  *   - `pending` → on tente l'extraction
@@ -158,17 +162,25 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       and(eq(emailProposals.messageId, messageId), eq(emailProposals.kind, "task_completion")),
     );
 
-  // Wipe les anciennes propositions du message + ré-injecte, sauf les
-  // clôtures de tâche déjà décidées : elles tracent un changement d'état
-  // réel (et son annulation possible).
+  // Ce que le message a déjà tranché, toutes natures confondues : ces
+  // lignes restent, et rien d'équivalent ne sera reposé (cf. le filtre
+  // avant insertion). Seules les propositions encore en attente sont
+  // effacées puis réinjectées.
+  const decided = new DecidedProposals(
+    await conn
+      .select({
+        kind: emailProposals.kind,
+        payload: emailProposals.payload,
+        matchedId: emailProposals.matchedId,
+        status: emailProposals.status,
+        createdEntityId: emailProposals.createdEntityId,
+      })
+      .from(emailProposals)
+      .where(and(eq(emailProposals.messageId, messageId), ne(emailProposals.status, "pending"))),
+  );
   await conn
     .delete(emailProposals)
-    .where(
-      and(
-        eq(emailProposals.messageId, messageId),
-        or(ne(emailProposals.kind, "task_completion"), eq(emailProposals.status, "pending")),
-      ),
-    );
+    .where(and(eq(emailProposals.messageId, messageId), eq(emailProposals.status, "pending")));
 
   const rows: ProposalRow[] = [];
 
@@ -179,6 +191,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     pendingElsewhere: 0,
     dupTask: 0,
     alreadyKnown: 0,
+    decidedHere: 0,
     completionDone: 0,
     completionDecided: 0,
     completionPendingElsewhere: 0,
@@ -231,7 +244,9 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       sourcesWritten += await recordTaskSources(conn, {
         taskId: dupTask.id,
         source: { messageId },
-        relation: "mention",
+        // Si c'est ce mail qui a fait naître la tâche, ses passages sont
+        // son origine, pas une simple réévocation.
+        relation: decided.acceptedTaskIds.has(dupTask.id) ? "origin" : "mention",
         excerpts: t.excerpts,
       });
       continue;
@@ -595,6 +610,28 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     });
   }
 
+  // Rien d'équivalent à une proposition déjà tranchée sur ce message : un
+  // refus ne revient pas dans l'inbox, une acceptation n'est pas reposée.
+  // La tâche née d'une acceptation reçoit tout de même ce que cette passe
+  // en dit.
+  const rowsToInsert: ProposalRow[] = [];
+  for (const row of rows) {
+    const prior = decided.find(row.kind, row.payload, row.matchedId);
+    if (!prior) {
+      rowsToInsert.push(row);
+      continue;
+    }
+    skipped.decidedHere++;
+    if (row.kind === "task" && prior.status === "accepted" && prior.createdEntityId) {
+      sourcesWritten += await recordTaskSources(conn, {
+        taskId: prior.createdEntityId,
+        source: { messageId },
+        relation: "origin",
+        excerpts: excerptsFromPayload(row.payload),
+      });
+    }
+  }
+
   if (sourcesWritten > 0) {
     console.info(
       `[extract email ${messageId}] ${sourcesWritten} passage(s) attaché(s) à des tâches.`,
@@ -602,12 +639,12 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   }
   if (Object.values(skipped).some((n) => n > 0)) {
     console.info(
-      `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
+      `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.decidedHere} déjà tranchée(s) sur ce message ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
     );
   }
 
-  if (rows.length > 0) {
-    await conn.insert(emailProposals).values(rows);
+  if (rowsToInsert.length > 0) {
+    await conn.insert(emailProposals).values(rowsToInsert);
   }
 
   // Met à jour extractionMeta (summary + intent + stage + needsReply)

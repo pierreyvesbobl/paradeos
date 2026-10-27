@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, isNull, ne, or } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/crm/match";
 import { compactNameKey, personCompactKey } from "@/lib/crm/name-key";
 import { hasPendingProposalElsewhere, proposalDedupeKey } from "@/lib/crm/proposal-dedupe";
+import { DecidedProposals } from "@/lib/crm/proposal-keys";
 import { db } from "@/lib/db/server";
 import { formatPersonName, sanitizeNameInput } from "@/lib/format";
 import { extractMeeting, type ProjectContext } from "@/lib/meetings/extract";
@@ -26,6 +27,7 @@ import {
   planTaskCompletions,
 } from "@/lib/tasks/completion-proposals";
 import { clearExtractedTaskSources, recordTaskSources } from "@/lib/tasks/record-sources";
+import { excerptsFromPayload } from "@/lib/tasks/task-sources";
 /**
  * Helper coeur du pipeline d'extraction : prend un meetingId, lit son
  * transcript, appelle le LLM, persiste les propositions (avec fuzzy
@@ -37,9 +39,10 @@ import { clearExtractedTaskSources, recordTaskSources } from "@/lib/tasks/record
  * copie de l'action — sans dédup intra-extraction ni dédup des tâches —
  * qui alimentait les doublons visibles dans /inbox.
  *
- * Stratégie idempotence : on supprime les propositions précédentes
- * du meeting et on ré-injecte. Si tu veux préserver les `accepted`/
- * `rejected`, ne re-extrait pas un meeting déjà traité.
+ * Stratégie idempotence : on supprime les propositions encore `pending`
+ * du meeting et on ré-injecte. Ce qui a été tranché (`accepted` /
+ * `rejected`) reste, et une proposition équivalente à une ligne tranchée
+ * n'est pas reposée : relancer une réunion déjà triée est sans risque.
  */
 export async function extractAndSaveProposals(
   meetingId: string,
@@ -83,16 +86,27 @@ export async function extractAndSaveProposals(
       and(eq(meetingProposals.meetingId, meeting.id), eq(meetingProposals.kind, "task_completion")),
     );
 
-  // Wipe + réinjection, sauf les clôtures de tâche déjà décidées : elles
-  // tracent un changement d'état réel (et son annulation possible).
+  // Ce que la réunion a déjà tranché, toutes natures confondues : ces
+  // lignes restent, et rien d'équivalent ne sera reposé (cf. le filtre
+  // avant insertion). Seules les propositions encore en attente sont
+  // effacées puis réinjectées.
+  const decided = new DecidedProposals(
+    await conn
+      .select({
+        kind: meetingProposals.kind,
+        payload: meetingProposals.payload,
+        matchedId: meetingProposals.matchedId,
+        status: meetingProposals.status,
+        createdEntityId: meetingProposals.createdEntityId,
+      })
+      .from(meetingProposals)
+      .where(
+        and(eq(meetingProposals.meetingId, meeting.id), ne(meetingProposals.status, "pending")),
+      ),
+  );
   await conn
     .delete(meetingProposals)
-    .where(
-      and(
-        eq(meetingProposals.meetingId, meeting.id),
-        or(ne(meetingProposals.kind, "task_completion"), eq(meetingProposals.status, "pending")),
-      ),
-    );
+    .where(and(eq(meetingProposals.meetingId, meeting.id), eq(meetingProposals.status, "pending")));
 
   const proposalsRows: {
     meetingId: string;
@@ -132,6 +146,7 @@ export async function extractAndSaveProposals(
     dupTask: 0,
     alreadyKnown: 0,
     genericName: 0,
+    decidedHere: 0,
     completionDone: 0,
     completionDecided: 0,
     completionPendingElsewhere: 0,
@@ -289,7 +304,9 @@ export async function extractAndSaveProposals(
       sourcesWritten += await recordTaskSources(conn, {
         taskId: dupTask.id,
         source: { meetingId: meeting.id },
-        relation: "mention",
+        // Si c'est cette réunion qui a fait naître la tâche, ses passages
+        // sont son origine, pas une simple réévocation.
+        relation: decided.acceptedTaskIds.has(dupTask.id) ? "origin" : "mention",
         excerpts: t.excerpts,
       });
       continue;
@@ -344,6 +361,28 @@ export async function extractAndSaveProposals(
     });
   }
 
+  // Rien d'équivalent à une proposition déjà tranchée par cette réunion :
+  // un refus ne revient pas dans l'inbox, une acceptation n'est pas
+  // reposée. La tâche née d'une acceptation reçoit tout de même ce que
+  // cette passe en dit.
+  const rowsToInsert: typeof proposalsRows = [];
+  for (const row of proposalsRows) {
+    const prior = decided.find(row.kind, row.payload, row.matchedId);
+    if (!prior) {
+      rowsToInsert.push(row);
+      continue;
+    }
+    skipped.decidedHere++;
+    if (row.kind === "task" && prior.status === "accepted" && prior.createdEntityId) {
+      sourcesWritten += await recordTaskSources(conn, {
+        taskId: prior.createdEntityId,
+        source: { meetingId: meeting.id },
+        relation: "origin",
+        excerpts: excerptsFromPayload(row.payload),
+      });
+    }
+  }
+
   if (sourcesWritten > 0) {
     console.info(
       `[extract meeting ${meeting.id}] ${sourcesWritten} passage(s) attaché(s) à des tâches.`,
@@ -351,12 +390,12 @@ export async function extractAndSaveProposals(
   }
   if (Object.values(skipped).some((n) => n > 0)) {
     console.info(
-      `[extract meeting ${meeting.id}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.genericName} nom(s) de projet sans contenu ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
+      `[extract meeting ${meeting.id}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.genericName} nom(s) de projet sans contenu, ${skipped.decidedHere} déjà tranchée(s) par cette réunion ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
     );
   }
 
-  if (proposalsRows.length > 0) {
-    await conn.insert(meetingProposals).values(proposalsRows);
+  if (rowsToInsert.length > 0) {
+    await conn.insert(meetingProposals).values(rowsToInsert);
   }
 
   // Rattachement automatique : uniquement si la réunion n'a pas déjà un

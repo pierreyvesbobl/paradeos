@@ -121,10 +121,21 @@ Réglage `TASK_AUTOCOMPLETE_ENABLED` (opt-in, `/settings/integrations`) :
 une détection `certain` sur une tâche jamais soumise à l'humain est
 appliquée sans clic, la ligne naît `accepted` sans décideur et reste
 annulable depuis l'historique /inbox. Règle anti-boucle : la ré-extraction
-conserve les clôtures décidées, ne repropose pas une tâche déjà tranchée par
-la même source, et n'applique plus jamais d'office une tâche déjà proposée
-une fois. Les enums `*_proposal_kind` ne se réduisent pas (`ADD VALUE` sans
-retour) : migration `0090`.
+n'applique plus jamais d'office une tâche déjà proposée une fois. Les enums
+`*_proposal_kind` ne se réduisent pas (`ADD VALUE` sans retour) : migration
+`0090`.
+
+### Ré-extraire une source déjà triée
+
+Relancer l'extraction d'une réunion ou d'un mail n'efface que ses
+propositions encore `pending`. Celles déjà tranchées restent, et la nouvelle
+passe ne repose rien d'équivalent (`DecidedProposals` dans
+`lib/crm/proposal-keys.ts`, clé par nature : titre + projet pour une tâche,
+cible pour une liaison, une seule par source pour un brouillon de réponse) :
+un refus ne revient pas dans l'inbox, une acceptation n'est pas reproposée.
+La tâche née d'une acceptation reçoit tout de même les passages de la
+nouvelle passe, en `origin`. On peut donc relancer les réunions anciennes
+pour poser « ce qui a été dit » sans rien retrier.
 
 ### Ce qui a été dit d'une tâche (`task_sources`)
 
