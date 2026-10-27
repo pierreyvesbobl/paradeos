@@ -23,13 +23,14 @@ const EMAIL_SUCCESS: Record<ProposalKind, string> = {
   entity_link: "Entité rattachée.",
   project_contact_link: "Contact rattaché au projet.",
   draft_reply: "Brouillon poussé dans Gmail.",
+  task_completion: "Tâche marquée terminée.",
 };
 
 const emailSource: ProposalSourceAdapter = {
   // Actions humaines en premier (task, project, contact, entity), puis les
   // rattachements (project_link). Le draft_reply est traité à part, au-dessus
   // du panneau, par `EmailProposalsPanel`.
-  kindOrder: ["task", "project", "contact", "entity", "project_link"],
+  kindOrder: ["task", "task_completion", "project", "contact", "entity", "project_link"],
   actions: {
     accept: (proposalId, payloadOverride) =>
       acceptEmailProposal({ proposalId, payloadOverride: payloadOverride ?? null }),
@@ -54,7 +55,7 @@ const emailSource: ProposalSourceAdapter = {
 };
 
 const meetingSource: ProposalSourceAdapter = {
-  kindOrder: ["task", "opportunity", "project", "contact", "entity"],
+  kindOrder: ["task", "task_completion", "opportunity", "project", "contact", "entity"],
   actions: {
     accept: (proposalId, payloadOverride) =>
       decideProposal({ proposalId, action: "accept", payloadOverride }),

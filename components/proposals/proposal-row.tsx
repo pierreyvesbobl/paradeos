@@ -227,7 +227,11 @@ export function ProposalRow({ proposal, options, adapter, onChange }: RowProps) 
           <span className="font-medium text-foreground text-sm leading-snug">
             {summaryFor(proposal, payload)}
           </span>
-          {matched ? <MatchBadge confidence={confidence} /> : <NewBadge kind={proposal.kind} />}
+          {proposal.kind === "task_completion" ? null : matched ? (
+            <MatchBadge confidence={confidence} />
+          ) : (
+            <NewBadge kind={proposal.kind} />
+          )}
         </div>
         <ProposalMetaTags proposal={proposal} payload={payload} />
         <CrossKindBanner proposal={proposal} payload={payload} />

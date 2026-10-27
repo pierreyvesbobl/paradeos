@@ -6,6 +6,7 @@ import {
   Briefcase,
   Buildings,
   Check,
+  CheckCircle,
   ListChecks,
   PlusCircle,
   User,
@@ -38,6 +39,8 @@ export function KindIcon({ kind }: { kind: ProposalKind }) {
       return <Buildings {...props} />;
     case "draft_reply":
       return <ArrowBendUpLeft {...props} />;
+    case "task_completion":
+      return <CheckCircle {...props} />;
   }
 }
 

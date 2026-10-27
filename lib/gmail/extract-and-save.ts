@@ -28,7 +28,8 @@ type ProposalKind =
   | "contact"
   | "entity"
   | "project"
-  | "draft_reply";
+  | "draft_reply"
+  | "task_completion";
 
 type ProposalRow = {
   messageId: string;

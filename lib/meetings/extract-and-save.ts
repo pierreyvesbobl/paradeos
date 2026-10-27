@@ -69,7 +69,7 @@ export async function extractAndSaveProposals(meetingId: string): Promise<{ coun
 
   const proposalsRows: {
     meetingId: string;
-    kind: "task" | "project" | "opportunity" | "contact" | "entity";
+    kind: "task" | "project" | "opportunity" | "contact" | "entity" | "task_completion";
     payload: unknown;
     matchedId: string | null;
     matchConfidence: string | null;

@@ -91,6 +91,9 @@ export type InboxHistoryData = {
 const MAX_WINDOW = 400;
 const DEFAULT_LIMIT = 40;
 
+/** Nom affiché à la place du décideur quand la clôture s'est faite sans clic. */
+const AUTO_DECIDER = "automatique";
+
 /** Kinds dont le record lié est éditable (cf. updateAccepted*Proposal). */
 const EDITABLE_KINDS = new Set<InboxExtractionKind>([
   "task",
@@ -309,7 +312,8 @@ export async function getInboxHistory(
     createdEntityId: string | null,
   ): { href: string | null; label: string | null } {
     if (!createdEntityId) return { href: null, label: null };
-    if (kind === "task") return { href: `/taches/${createdEntityId}`, label: "Voir la tâche" };
+    if (kind === "task" || kind === "task_completion")
+      return { href: `/taches/${createdEntityId}`, label: "Voir la tâche" };
     if (kind === "project" || kind === "opportunity")
       return {
         href: `/projets/${createdEntityId}`,
@@ -377,6 +381,10 @@ export async function getInboxHistory(
         String(payload.contactName ?? "Contact");
       detail = status === "accepted" ? "Ajouté aux contacts du projet" : "Ajout refusé";
       meta.projectName = linkedProject?.name ?? (payload.projectName as string) ?? null;
+    } else if (kind === "task_completion") {
+      title = String(payload.taskTitle ?? "Tâche");
+      detail = completionHistoryDetail(status, payload);
+      meta.projectName = linkedProject?.name ?? (payload.projectName as string) ?? null;
     } else {
       title = String(payload.name ?? payload.title ?? "Proposition");
     }
@@ -403,7 +411,7 @@ export async function getInboxHistory(
       recordLabel: record.label,
       decidedSort: toIso(decidedAt),
       decidedLabel: relativeAgoLabel(decidedAt),
-      decidedByName: r.decidedByName ?? null,
+      decidedByName: r.decidedByName ?? (payload.auto === true ? AUTO_DECIDER : null),
       projectId: linkedProject?.id ?? null,
       projectColor: linkedProject?.color ?? null,
       meta,
@@ -422,12 +430,17 @@ export async function getInboxHistory(
 
     const meta: InboxItemMeta = {};
     let title = "";
+    let detail: string | null = null;
 
     if (kind === "task") {
       title = String(payload.title ?? "Tâche sans titre");
       meta.dueDate = (payload.dueDate as string) ?? null;
       meta.priority = (payload.priority as string) ?? null;
       meta.assigneeName = (payload.assigneeName as string) ?? null;
+      meta.projectName = payloadProject?.name ?? (payload.projectName as string) ?? null;
+    } else if (kind === "task_completion") {
+      title = String(payload.taskTitle ?? "Tâche");
+      detail = completionHistoryDetail(status, payload);
       meta.projectName = payloadProject?.name ?? (payload.projectName as string) ?? null;
     } else if (kind === "contact") {
       title = formatPersonName(
@@ -458,14 +471,14 @@ export async function getInboxHistory(
       kind,
       status,
       title,
-      detail: null,
+      detail,
       sourceLabel: `Meeting : ${r.meetingTitle}`,
       sourceHref: `/meetings/${r.meetingId}`,
       recordHref: record.href,
       recordLabel: record.label,
       decidedSort: toIso(decidedAt),
       decidedLabel: relativeAgoLabel(decidedAt),
-      decidedByName: r.decidedByName ?? null,
+      decidedByName: r.decidedByName ?? (payload.auto === true ? AUTO_DECIDER : null),
       projectId: payloadProject?.id ?? r.projectId ?? null,
       projectColor: payloadProject?.color ?? r.projectColor ?? null,
       meta,
@@ -623,4 +636,16 @@ function toDate(value: Date | string | null | undefined): Date | null {
 
 function toIso(value: Date | string | null | undefined): string {
   return (toDate(value) ?? new Date()).toISOString();
+}
+
+function completionHistoryDetail(
+  status: InboxHistoryStatus,
+  payload: Record<string, unknown>,
+): string {
+  if (status !== "accepted") return "Clôture refusée";
+  const evidence = typeof payload.evidence === "string" ? payload.evidence.trim() : "";
+  const head = payload.auto === true ? "Terminée automatiquement" : "Marquée terminée";
+  if (!evidence) return head;
+  const short = evidence.length > 120 ? `${evidence.slice(0, 120)}…` : evidence;
+  return `${head} · « ${short} »`;
 }

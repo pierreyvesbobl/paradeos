@@ -23,6 +23,7 @@ export type InboxSource = "email" | "meeting" | "filing" | "reconciliation" | "l
 export type InboxExtractionKind =
   // Extractions email + meeting partagées
   | "task"
+  | "task_completion"
   | "contact"
   | "entity"
   | "project"
@@ -422,6 +423,10 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
       title = String(payload.subject ?? "Re: (sans objet)");
       const preview = typeof payload.body === "string" ? payload.body.slice(0, 80) : null;
       detail = preview ? `${preview}…` : "Brouillon de réponse";
+    } else if (r.kind === "task_completion") {
+      title = String(payload.taskTitle ?? "Tâche");
+      detail = completionDetail(payload);
+      meta.projectName = linkedProject?.name ?? (payload.projectName as string) ?? null;
     } else {
       title = String(payload.name ?? payload.title ?? "Proposition");
     }
@@ -449,6 +454,9 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
       }`;
     } else if (r.kind === "draft_reply") {
       dedupKey = `draft_reply:${r.threadId}`;
+    } else if (r.kind === "task_completion") {
+      // Mail et réunion qui donnent la même tâche pour faite : une ligne.
+      dedupKey = `task_completion:${r.matchedId ?? r.id}`;
     }
 
     pushDedup(
@@ -489,7 +497,7 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
     const linkedProjectName = payloadProject?.name ?? null;
 
     let title = "";
-    const detail: string | null = null;
+    let detail: string | null = null;
     const kind = r.kind as InboxExtractionKind;
 
     const meta: InboxItemMeta = {};
@@ -499,6 +507,10 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
       meta.dueDate = (payload.dueDate as string) ?? null;
       meta.priority = (payload.priority as string) ?? null;
       meta.assigneeName = (payload.assigneeName as string) ?? null;
+      meta.projectName = linkedProjectName ?? (payload.projectName as string) ?? null;
+    } else if (r.kind === "task_completion") {
+      title = String(payload.taskTitle ?? "Tâche");
+      detail = completionDetail(payload);
       meta.projectName = linkedProjectName ?? (payload.projectName as string) ?? null;
     } else if (r.kind === "contact") {
       title = formatPersonName(
@@ -532,6 +544,8 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
       dedupKey = keyed("project", norm(payload.name)) || dedupKey;
     } else if (r.kind === "opportunity") {
       dedupKey = keyed("opportunity", norm(payload.title)) || dedupKey;
+    } else if (r.kind === "task_completion") {
+      dedupKey = `task_completion:${r.matchedId ?? r.id}`;
     }
 
     pushDedup(
@@ -868,4 +882,15 @@ export async function getInboxTotalCount(userId: string): Promise<number> {
   ]);
 
   return (emailRow[0]?.count ?? 0) + (meetingRow[0]?.count ?? 0) + (filingRow[0]?.count ?? 0);
+}
+
+/**
+ * Détail d'une clôture de tâche : la citation qui la justifie, tronquée.
+ * Le niveau de confiance est porté par `matchConfidence`.
+ */
+function completionDetail(payload: Record<string, unknown>): string {
+  const evidence = typeof payload.evidence === "string" ? payload.evidence.trim() : "";
+  if (!evidence) return "Donnée pour faite";
+  const short = evidence.length > 140 ? `${evidence.slice(0, 140)}…` : evidence;
+  return `« ${short} »`;
 }

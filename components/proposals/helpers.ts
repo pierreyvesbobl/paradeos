@@ -106,6 +106,8 @@ export function summaryFor(p: Proposal, payload: Record<string, unknown>): strin
       );
     case "draft_reply":
       return String(payload.subject ?? "Re:");
+    case "task_completion":
+      return String(payload.taskTitle ?? "Tâche");
   }
 }
 
@@ -133,6 +135,8 @@ export function matchedSubtitle(p: Proposal, payload: Record<string, unknown>): 
     }
     case "draft_reply":
       return "";
+    case "task_completion":
+      return "tâche ouverte";
   }
 }
 
@@ -140,6 +144,7 @@ export function matchedViewHref(p: Proposal): string | null {
   if (!p.matchedId) return null;
   switch (p.kind) {
     case "task":
+    case "task_completion":
       return `/taches/${p.matchedId}`;
     case "project":
     case "project_link":

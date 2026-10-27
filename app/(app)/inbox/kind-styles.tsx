@@ -2,6 +2,7 @@
 
 import {
   Buildings,
+  CheckCircle,
   CheckSquare,
   EnvelopeOpen,
   LinkedinLogo,
@@ -39,6 +40,15 @@ export const KINDS: KindDef[] = [
     icon: CheckSquare,
     bg: "var(--ds-tint-blue-bg)",
     textColor: "var(--ds-tint-blue-text)",
+  },
+  {
+    key: "task_completion",
+    label: "Tâches terminées",
+    actionLabel: "Marquer terminée",
+    doneLabel: "Tâche terminée",
+    icon: CheckCircle,
+    bg: "var(--ds-tint-green-bg)",
+    textColor: "var(--ds-tint-green-text)",
   },
   {
     key: "contact",

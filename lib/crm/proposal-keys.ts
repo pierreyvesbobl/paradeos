@@ -1,6 +1,6 @@
 import { compactNameKey, normalizeEmail, personCompactKey } from "@/lib/crm/name-key";
 
-export type ProposalKind = "entity" | "contact" | "project" | "task";
+export type ProposalKind = "entity" | "contact" | "project" | "task" | "task_completion";
 
 /**
  * Clés de comparaison, alignées sur celles de /inbox (`lib/db/queries/inbox.ts`)
@@ -18,6 +18,8 @@ export const proposalDedupeKey = {
   }) => normalizeEmail(payload.email) || personCompactKey(payload.firstName, payload.lastName),
   task: (title: string | null | undefined, projectId: string | null) =>
     `${compactNameKey(title)}:${projectId ?? ""}`,
+  /** Une clôture vise une tâche précise : la clé est son id. */
+  task_completion: (taskId: string | null | undefined) => taskId ?? "",
 };
 
 /** Clé d'un payload de proposition stocké. */
@@ -33,5 +35,6 @@ export function payloadKey(kind: ProposalKind, payload: unknown): string {
       email: str(p.email),
     });
   }
+  if (kind === "task_completion") return proposalDedupeKey.task_completion(str(p.taskId));
   return proposalDedupeKey.task(str(p.title), str(p.projectId));
 }

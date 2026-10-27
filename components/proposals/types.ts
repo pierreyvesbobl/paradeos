@@ -15,7 +15,8 @@ export type ProposalKind =
   | "project_link"
   | "entity_link"
   | "project_contact_link"
-  | "draft_reply";
+  | "draft_reply"
+  | "task_completion";
 
 export type ProposalStatus = "pending" | "accepted" | "rejected";
 

@@ -30,6 +30,14 @@ describe("proposalDedupeKey", () => {
     expect(proposalDedupeKey.task("Relancer le devis", null)).toBe("relancerdevis:");
   });
 
+  it("identifie une clôture de tâche par l'id de la tâche visée", () => {
+    expect(proposalDedupeKey.task_completion("t1")).toBe("t1");
+    expect(proposalDedupeKey.task_completion(null)).toBe("");
+    expect(payloadKey("task_completion", { taskId: "t1", taskTitle: "Envoyer le devis" })).toBe(
+      "t1",
+    );
+  });
+
   it("retourne une clé vide pour un nom illisible — rien à dédoublonner", () => {
     expect(proposalDedupeKey.entity("  ")).toBe("");
     expect(proposalDedupeKey.contact({ firstName: null, lastName: null })).toBe("");

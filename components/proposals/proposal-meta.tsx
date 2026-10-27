@@ -7,6 +7,7 @@ import {
   EnvelopeSimple,
   Folder,
   IdentificationBadge,
+  Quotes,
   Warning,
 } from "@phosphor-icons/react";
 import { HashedAvatar } from "@/components/user/hashed-avatar";
@@ -150,6 +151,37 @@ export function ProposalMetaTags({
       const k = payload.kind as string | null | undefined;
       if (!k) return null;
       return <span className="text-[12px] text-muted-foreground">{k}</span>;
+    }
+    case "task_completion": {
+      const evidence = payload.evidence as string | null | undefined;
+      const confidence = payload.confidence as string | null | undefined;
+      const projectName = payload.projectName as string | null | undefined;
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Tint
+            tint={confidence === "certain" ? "green" : "yellow"}
+            label={confidence === "certain" ? "Donnée pour faite" : "Probablement faite"}
+          />
+          {projectName ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium text-[12px]"
+              style={{
+                background: "var(--ds-tint-mauve-bg)",
+                color: "var(--ds-tint-mauve-text)",
+              }}
+            >
+              <Folder size={13} weight="duotone" />
+              {projectName}
+            </span>
+          ) : null}
+          {evidence ? (
+            <span className="inline-flex min-w-0 items-center gap-1 text-[12px] text-muted-foreground italic">
+              <Quotes size={13} weight="duotone" className="flex-none text-(--ds-text-tertiary)" />
+              <span className="truncate">{evidence}</span>
+            </span>
+          ) : null}
+        </div>
+      );
     }
     case "project_link":
     case "entity_link":

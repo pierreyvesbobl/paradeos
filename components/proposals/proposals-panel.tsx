@@ -58,8 +58,16 @@ export function ProposalsPanel({
   //                       record existant ; rien à valider, on les montre pour
   //                       transparence (et pour corriger un match incorrect).
   const flat = orderProposals(proposals, adapter.kindOrder);
-  const toReview = flat.filter((p) => p.status !== "pending" || p.matchedId === null);
-  const alreadyInDb = flat.filter((p) => p.status === "pending" && p.matchedId !== null);
+  // Une clôture de tâche porte sa cible dans `matchedId` mais reste une
+  // décision à prendre (valider / invalider) : elle ne va pas dans « Déjà
+  // en base », où le seul geste est « mauvaise fiche ».
+  const isDecision = (p: Proposal) => p.kind === "task_completion";
+  const toReview = flat.filter(
+    (p) => p.status !== "pending" || p.matchedId === null || isDecision(p),
+  );
+  const alreadyInDb = flat.filter(
+    (p) => p.status === "pending" && p.matchedId !== null && !isDecision(p),
+  );
 
   const pendingIds = toReview.filter((p) => p.status === "pending").map((p) => p.id);
   const acceptedCount = toReview.filter((p) => p.status === "accepted").length;

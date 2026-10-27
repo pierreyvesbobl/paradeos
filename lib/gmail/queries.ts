@@ -165,7 +165,7 @@ const BUCKET_SQL = {
       join public.gmail_messages im on im.id = ep.message_id
       where im.thread_id = gmail_threads.id
         and ep.status = 'pending'
-        and ep.kind in ('task', 'draft_reply', 'project', 'contact', 'entity')
+        and ep.kind in ('task', 'task_completion', 'draft_reply', 'project', 'contact', 'entity')
     )
     or exists (
       select 1 from public.gmail_messages im

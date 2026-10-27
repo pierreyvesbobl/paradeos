@@ -6,6 +6,7 @@ import {
   Briefcase,
   Buildings,
   Check,
+  CheckCircle,
   Envelope,
   ListChecks,
   UserPlus,
@@ -28,7 +29,8 @@ type ProposalKind =
   | "contact"
   | "entity"
   | "project"
-  | "draft_reply";
+  | "draft_reply"
+  | "task_completion";
 
 type Proposal = {
   id: string;
@@ -62,6 +64,7 @@ const KIND_ICON: Record<ProposalKind, typeof ListChecks> = {
   entity: Buildings,
   project: Briefcase,
   draft_reply: ArrowBendUpLeft,
+  task_completion: CheckCircle,
 };
 
 const KIND_LABEL: Record<ProposalKind, string> = {
@@ -73,6 +76,7 @@ const KIND_LABEL: Record<ProposalKind, string> = {
   entity: "Entité",
   project: "Projet",
   draft_reply: "Brouillon de réponse",
+  task_completion: "Tâche terminée",
 };
 
 export function ProposalCard({ message, proposals }: Props) {
@@ -138,7 +142,9 @@ function ProposalRow({ proposal: p }: { proposal: Proposal }) {
                 ? "Entité créée."
                 : p.kind === "draft_reply"
                   ? "Brouillon Gmail créé."
-                  : "Projet créé.",
+                  : p.kind === "task_completion"
+                    ? "Tâche marquée terminée."
+                    : "Projet créé.",
       );
     });
   }
@@ -223,6 +229,9 @@ function describeProposal(p: Proposal): string {
   if (p.kind === "draft_reply") {
     return String(p.payload.subject ?? "Re: (sans objet)");
   }
+  if (p.kind === "task_completion") {
+    return String(p.payload.taskTitle ?? "Tâche");
+  }
   // project (création)
   return String(p.payload.name ?? "Projet");
 }
@@ -259,6 +268,10 @@ function describeDetails(p: Proposal): string {
   if (p.kind === "draft_reply") {
     const body = String(p.payload.body ?? "");
     return body.slice(0, 140) + (body.length > 140 ? "…" : "");
+  }
+  if (p.kind === "task_completion") {
+    const evidence = String(p.payload.evidence ?? "");
+    return evidence ? `« ${evidence.slice(0, 140)}${evidence.length > 140 ? "…" : ""} »` : "—";
   }
   // project (création)
   const parts: string[] = [];

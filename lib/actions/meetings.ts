@@ -184,6 +184,9 @@ export const decideProposal = action(decideProposalSchema, async ({ input, user 
       : (proposal.matchedId ?? null);
 
   if (!createdEntityId) {
+    if (proposal.kind === "task_completion") {
+      throw new Error("Clôture de tâche : cible manquante.");
+    }
     // Nettoie le marqueur interne avant de pousser au créateur.
     const { _linkExistingId: _omit, ...createPayload } = payload;
     void _omit;
@@ -234,6 +237,9 @@ export const updateAcceptedProposal = action(updateAcceptedProposalSchema, async
   void _omitNew;
   const merged = { ...prevPayload, ...newPayload };
 
+  if (proposal.kind === "task_completion") {
+    throw new Error("Une clôture de tâche ne s'édite pas : annule-la ou laisse-la.");
+  }
   await applyUpdateForKind(proposal.kind, proposal.createdEntityId, merged);
 
   await conn

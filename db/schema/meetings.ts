@@ -40,6 +40,8 @@ export const meetingProposalKind = pgEnum("meeting_proposal_kind", [
   "opportunity",
   "contact",
   "entity",
+  /** Clôture d'une tâche ouverte que le transcript donne pour faite (matchedId = tâche). */
+  "task_completion",
 ]);
 
 export const meetingProposalStatus = pgEnum("meeting_proposal_status", [

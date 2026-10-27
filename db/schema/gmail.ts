@@ -223,6 +223,8 @@ export const emailProposalKind = pgEnum("email_proposal_kind", [
   "entity",
   "project",
   "draft_reply",
+  /** Clôture d'une tâche ouverte que le mail donne pour faite (matchedId = tâche). */
+  "task_completion",
 ]);
 
 export const emailProposalStatus = pgEnum("email_proposal_status", [
