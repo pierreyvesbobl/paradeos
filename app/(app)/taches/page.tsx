@@ -287,6 +287,9 @@ export default async function TasksPage({ searchParams }: { searchParams: Search
         actions={
           <>
             <Button variant="outline" asChild>
+              <Link href="/taches/issues">Issues</Link>
+            </Button>
+            <Button variant="outline" asChild>
               <Link href="/taches/gantt">Gantt</Link>
             </Button>
             <Button asChild>

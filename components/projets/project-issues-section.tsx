@@ -1,4 +1,4 @@
-import { ArrowSquareOut, ChatCircle, GithubLogo } from "@phosphor-icons/react/dist/ssr";
+import { ArrowSquareOut, ChatCircle, GithubLogo, Kanban } from "@phosphor-icons/react/dist/ssr";
 import Link from "@/components/link";
 import type { ProjectRepoRow } from "@/lib/db/queries/project-repos";
 import { formatRelativeShort } from "@/lib/format";
@@ -11,7 +11,14 @@ import { parseGithubRepo } from "@/lib/github/remote";
  * fenêtre sur le dépôt, pas un miroir. Les dépôts qui ne sont pas sur
  * github.com n'apparaissent pas ; sans dépôt GitHub, la section non plus.
  */
-export async function ProjectIssuesSection({ repos }: { repos: ProjectRepoRow[] }) {
+export async function ProjectIssuesSection({
+  projectId,
+  repos,
+}: {
+  projectId: string;
+  repos: ProjectRepoRow[];
+}) {
+  const synced = repos.some((r) => r.syncIssues && parseGithubRepo(r.remote) !== null);
   const targets = repos
     .map((r) => ({ remote: r.remote, ref: parseGithubRepo(r.remote) }))
     .filter((t): t is { remote: string; ref: { owner: string; repo: string } } => t.ref !== null);
@@ -36,11 +43,22 @@ export async function ProjectIssuesSection({ repos }: { repos: ProjectRepoRow[] 
             Les issues ouvertes des dépôts rattachés, lues en direct sur GitHub.
           </p>
         </div>
-        {total > 0 ? (
-          <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
-            {total} ouverte{total > 1 ? "s" : ""}
-          </span>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground">
+          {total > 0 ? (
+            <span className="tabular-nums">
+              {total} ouverte{total > 1 ? "s" : ""}
+            </span>
+          ) : null}
+          {synced ? (
+            <Link
+              href={`/taches/issues?project=${projectId}`}
+              className="flex items-center gap-1 hover:text-foreground"
+            >
+              <Kanban className="size-3.5" />
+              Tableau
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {results.map((r) => (

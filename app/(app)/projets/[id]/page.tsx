@@ -296,7 +296,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
 
         <ProjectReposSection projectId={id} repos={projectRepoRows} choices={repoChoices} />
         <Suspense fallback={null}>
-          <ProjectIssuesSection repos={projectRepoRows} />
+          <ProjectIssuesSection projectId={id} repos={projectRepoRows} />
         </Suspense>
       </div>
 

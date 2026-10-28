@@ -178,6 +178,15 @@ possède titre et brief et repousse quand ils changent (empreinte dans
 `task_github_issues`), GitHub ne possède que la fermeture. Jeton
 `GITHUB_TOKEN` en « Issues : lecture et écriture » ; migration `0092`.
 
+La vue « où en est le développement » est le tableau `/taches/issues`
+(bouton Issues de la liste des tâches, lien Tableau sur la fiche projet) :
+les issues des dépôts suivis, lues en GraphQL (`lib/github/board.ts`) et
+rangées en quatre colonnes déduites de GitHub (`lib/github/issue-board.ts`) :
+à développer, en cours (assignée ou PR brouillon liée), en revue (PR liée
+prête), livrées (fermées depuis 30 jours). Pas de glisser-déposer : on agit
+sur GitHub, le tableau suit. Les PR liées demandent « Pull requests :
+lecture » sur le jeton ; sans elle, le tableau ne voit que les assignations.
+
 ## Tests
 
 - `pnpm test` : unitaires (Vitest), fonctions pures de `lib/`, ~1 s.
