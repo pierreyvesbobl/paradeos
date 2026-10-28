@@ -169,6 +169,23 @@ mails (`lib/gmail/`) :
   avec plus de 5 candidats, rien n'est proposé : le fil se rattache depuis
   sa page.
 
+### Archivage automatique de la boîte de réception
+
+`lib/gmail/auto-archive.ts`, à chaque relève, derrière deux réglages de
+`/settings/integrations` : retirer de l'inbox, jamais supprimer.
+
+- `GMAIL_ARCHIVE_DONE_TASKS` (actif par défaut) : un fil dont toutes les
+  tâches liées (`task_sources`, propositions acceptées) sont closes, dont
+  une au moins terminée, lu, sans proposition en attente et sans message
+  arrivé après la clôture.
+- `GMAIL_ARCHIVE_AUTOMATED_DAYS` (`off` par défaut, 3/7/14) : un fil où
+  seuls des expéditeurs machines ont écrit, lu ou non, dont le dernier
+  message a plus de N jours. 100 fils par relève.
+
+La trace est sur `gmail_threads.auto_archived_at` / `auto_archive_reason`
+(migration `0098`) : un fil remis en boîte à la main n'est pas repris tant
+qu'aucun message plus récent n'arrive.
+
 Les brouillons de réponse ne sont plus générés ni affichés (`needsReply`
 reste porté par le message ; le kind `draft_reply` survit dans l'enum pour
 les lignes historiques).

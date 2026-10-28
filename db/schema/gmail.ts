@@ -54,6 +54,14 @@ export const gmailThreads = pgTable(
     messageCount: integer("message_count").notNull().default(0),
     hasUnread: boolean("has_unread").notNull().default(false),
     labels: text("labels").array().notNull().default(sql`'{}'::text[]`),
+    /**
+     * Retiré de la boîte de réception par la relève (cf.
+     * lib/gmail/auto-archive.ts) : quand, et pourquoi (`task_done`,
+     * `automated`). Un fil remis en boîte à la main n'est pas ré-archivé
+     * tant qu'aucun message plus récent n'arrive.
+     */
+    autoArchivedAt: timestamp("auto_archived_at", { withTimezone: true }),
+    autoArchiveReason: text("auto_archive_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },

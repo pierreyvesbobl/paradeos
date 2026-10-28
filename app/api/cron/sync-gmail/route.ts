@@ -74,6 +74,8 @@ async function run(request: Request): Promise<Response> {
       candidaturesReplied: number;
       candidaturesRejected: number;
       candidaturesErrored: number;
+      proposalsExpired: number;
+      threadsArchived: number;
       errors: string[];
       hasMore: boolean;
       budgetExhausted: boolean;
@@ -102,6 +104,8 @@ async function run(request: Request): Promise<Response> {
         candidaturesReplied: r.candidaturesReplied,
         candidaturesRejected: r.candidaturesRejected,
         candidaturesErrored: r.candidaturesErrored,
+        proposalsExpired: r.proposalsExpired,
+        threadsArchived: r.threadsArchived,
         errors: r.errors,
         hasMore: r.hasMore,
         budgetExhausted: r.budgetExhausted,

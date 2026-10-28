@@ -138,6 +138,18 @@ export const SETTING_KEYS = {
    */
   TASK_AUTOCOMPLETE_ENABLED: "TASK_AUTOCOMPLETE_ENABLED",
   /**
+   * Archivage Gmail des fils dont toutes les tâches liées sont terminées
+   * (cf. lib/gmail/auto-archive.ts). Absent ou "true" : actif ; "false" :
+   * coupé. Le fil est retiré de la boîte de réception, jamais supprimé.
+   */
+  GMAIL_ARCHIVE_DONE_TASKS: "GMAIL_ARCHIVE_DONE_TASKS",
+  /**
+   * Archivage Gmail des fils venant uniquement d'expéditeurs machines
+   * (reçus, alertes, notifications) dont le dernier message a plus de N
+   * jours : "off" (défaut), "3", "7" ou "14".
+   */
+  GMAIL_ARCHIVE_AUTOMATED_DAYS: "GMAIL_ARCHIVE_AUTOMATED_DAYS",
+  /**
    * Jeton GitHub (fine-grained PAT) qui lit les issues des dépôts rattachés
    * aux projets (`project_repos`). Portée minimale : « Issues : lecture »
    * sur les dépôts concernés. Sans lui, la fiche projet n'affiche pas les

@@ -21,6 +21,7 @@ import {
 } from "@/lib/google/gmail-api";
 import { LLM_BUDGET_MS } from "@/lib/llm/timeout";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import { runAutoArchive } from "./auto-archive";
 import { looksLikeCandidatureMessage } from "./candidature-detect";
 import {
   isCandidatureAutoReplyEnabled,
@@ -138,6 +139,8 @@ export type GmailSyncResult = {
   tasksAutoCompleted: number;
   /** Propositions (mails et réunions) passées en `expired` : jamais tranchées en sept jours. */
   proposalsExpired: number;
+  /** Fils retirés de la boîte de réception par l'archivage automatique. */
+  threadsArchived: number;
   /** Messages ingérés pour leurs PJ sur le seul signal facture (sujet, expéditeur, libellé). */
   invoiceCandidatesIngested: number;
   /** Mails à PDF repris par le rattrapage factures (cf. `recoverMissedInvoices`). */
@@ -641,6 +644,7 @@ function emptySyncResult(): GmailSyncResult {
     proposalsCreated: 0,
     tasksAutoCompleted: 0,
     proposalsExpired: 0,
+    threadsArchived: 0,
     invoiceCandidatesIngested: 0,
     invoicesRecovered: 0,
     invoicesFiled: 0,
@@ -673,6 +677,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
     proposalsCreated: 0,
     tasksAutoCompleted: 0,
     proposalsExpired: 0,
+    threadsArchived: 0,
     invoiceCandidatesIngested: 0,
     invoicesRecovered: 0,
     invoicesFiled: 0,
@@ -1065,6 +1070,22 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
   }
 
   endPhase("candidatures");
+
+  // ─── 4quinquies. Archivage automatique (réglages) ─────────────────
+  // Fils dont toutes les tâches liées sont terminées, fils de robots
+  // anciens : retirés de la boîte de réception, jamais supprimés. Pas de
+  // LLM, quelques appels Gmail au plus.
+  if (!outOfTime()) {
+    try {
+      const r = await runAutoArchive({ userId, accessToken, shouldStop: () => outOfTime() });
+      result.threadsArchived += r.archived;
+      result.errors.push(...r.errors);
+    } catch (err) {
+      result.errors.push(`auto-archive: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  endPhase("autoArchive");
 
   // ─── 5. Persiste l'état de sync ────────────────────────────────────
   // Calcule les valeurs finales d'abord (sans interpolation SQL avec

@@ -276,6 +276,31 @@ export const purgeLocalGmail = action(z.object({}), async ({ user }) => {
   return { ok: true as const };
 });
 
+/**
+ * Réglages de l'archivage automatique (cf. lib/gmail/auto-archive.ts) :
+ * fils aux tâches terminées, et fils de robots au-delà d'un âge.
+ */
+export const setGmailAutoArchive = action(
+  z.object({
+    doneTasks: z.boolean().optional(),
+    automatedDays: z.enum(["off", "3", "7", "14"]).optional(),
+  }),
+  async ({ input, user }) => {
+    if (input.doneTasks !== undefined) {
+      await setSetting(
+        SETTING_KEYS.GMAIL_ARCHIVE_DONE_TASKS,
+        input.doneTasks ? "true" : "false",
+        user.id,
+      );
+    }
+    if (input.automatedDays !== undefined) {
+      await setSetting(SETTING_KEYS.GMAIL_ARCHIVE_AUTOMATED_DAYS, input.automatedDays, user.id);
+    }
+    revalidatePath("/settings/integrations");
+    return { ok: true as const };
+  },
+);
+
 /** Toggle l'extraction LLM des emails (kill switch coût). */
 export const setGmailExtractionEnabled = action(
   z.object({ enabled: z.boolean() }),
