@@ -176,8 +176,15 @@ mails (`lib/gmail/`) :
 
 - `GMAIL_ARCHIVE_DONE_TASKS` (actif par défaut) : un fil dont toutes les
   tâches liées (`task_sources`, propositions acceptées) sont closes, dont
-  une au moins terminée, lu, sans proposition en attente et sans message
-  arrivé après la clôture.
+  une au moins terminée, lu, tous messages extraits, sans proposition en
+  attente. Un message arrivé après la clôture ne retient pas le fil, c'est
+  la règle « action attendue » qui tranche. Pour que le lien existe, le
+  vocabulaire de l'extraction liste les tâches terminées depuis 60 jours
+  du projet du fil (`mentionedTasks` peut les citer), et la relève rejoue
+  3 fils par passage parmi ceux tagués à un projet sans aucun lien de
+  tâche (`requeueThreadsForDoneTasks`, extraction en mode « passages
+  seulement », marqueur `requeuedForDoneTasks` / `doneTasksSeen` sur
+  `extraction_meta`).
 - `GMAIL_ARCHIVE_AUTOMATED_DAYS` (`off` par défaut, 3/7/14) : un fil où
   seuls des expéditeurs machines ont écrit, lu ou non, dont le dernier
   message a plus de N jours. 60 fils par relève, avant les phases LLM. Les mails d'agenda

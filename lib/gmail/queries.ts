@@ -314,6 +314,10 @@ export type ExtractionMeta = {
   intent: "info" | "request" | "fyi" | "decision" | "follow_up" | "compta" | "admin" | "other";
   pipelineStage: "lead" | "opportunity" | "project" | "none";
   needsReply: boolean;
+  /** Le vocabulaire de cette extraction listait les tâches terminées du projet. */
+  doneTasksSeen?: boolean;
+  /** Message remis en file pour relier le fil à ses tâches terminées, sans nouvelle proposition. */
+  requeuedForDoneTasks?: boolean;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

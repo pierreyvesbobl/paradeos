@@ -59,12 +59,15 @@ export function formatTaskVocabulary(
     bits.push(`[${t.status}]`);
     return `- ${bits.join(" ")}`;
   };
-  const priority = priorityProjectId ? tasks.filter((t) => t.projectId === priorityProjectId) : [];
-  const others = priorityProjectId ? tasks.filter((t) => t.projectId !== priorityProjectId) : tasks;
+  const open = tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
+  const done = tasks.filter((t) => t.status === "done");
+  const priority = priorityProjectId ? open.filter((t) => t.projectId === priorityProjectId) : [];
+  const others = priorityProjectId ? open.filter((t) => t.projectId !== priorityProjectId) : open;
 
-  const head = `Tâches ouvertes déjà connues, avec leur référence entre crochets. Deux usages :
-- NE PAS re-proposer une de ces tâches dans proposedTasks, même reformulée.
-- Si le contenu établit qu'une de ces tâches est FAITE, renvoie sa référence dans completedTasks.`;
+  const head = `Tâches déjà connues, avec leur référence entre crochets. Trois usages :
+- NE PAS re-proposer une de ces tâches dans proposedTasks, même reformulée, qu'elle soit ouverte ou terminée.
+- Si le contenu établit qu'une tâche OUVERTE est FAITE, renvoie sa référence dans completedTasks.
+- Si le contenu REPARLE d'une tâche, ouverte ou terminée, renvoie sa référence dans mentionedTasks.`;
 
   const blocks: string[] = [head];
   if (priority.length > 0) {
@@ -73,6 +76,13 @@ export function formatTaskVocabulary(
   if (others.length > 0) {
     blocks.push(
       `${priority.length > 0 ? "Autres tâches ouvertes" : "Tâches ouvertes"} :\n${others
+        .map(line)
+        .join("\n")}`,
+    );
+  }
+  if (done.length > 0) {
+    blocks.push(
+      `Tâches terminées récemment du projet concerné (jamais dans completedTasks ni proposedTasks ; dans mentionedTasks si le contenu en reparle : remerciement, vérification du livrable, question dessus) :\n${done
         .map(line)
         .join("\n")}`,
     );

@@ -1,11 +1,13 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
-import { gmailMessages, gmailThreads } from "@/db/schema/gmail";
+import { gmailMessages, gmailTags, gmailThreads, gmailThreadTags } from "@/db/schema/gmail";
+import { projects } from "@/db/schema/projects";
 import { taskSources } from "@/db/schema/task-sources";
 import { tasks } from "@/db/schema/tasks";
 import {
   reconcileInboxMirror,
+  requeueThreadsForDoneTasks,
   runAutoArchive,
   selectAutomatedThreads,
   selectDoneTaskThreads,
@@ -57,7 +59,14 @@ const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000);
 
 async function insertThread(opts: {
   subject: string;
-  messages: { from: string; at: Date; labels?: string[]; needsReply?: boolean }[];
+  messages: {
+    from: string;
+    at: Date;
+    labels?: string[];
+    needsReply?: boolean;
+    extracted?: boolean;
+    meta?: Record<string, unknown>;
+  }[];
   hasUnread?: boolean;
 }) {
   const last = opts.messages.reduce(
@@ -89,7 +98,15 @@ async function insertThread(opts: {
         subject: opts.subject,
         internalDate: m.at,
         labels: m.labels ?? ["INBOX"],
-        extractionMeta: m.needsReply === undefined ? null : { needsReply: m.needsReply },
+        bodyText: "Corps du message.",
+        extractionStatus: m.extracted ? "extracted" : "skipped",
+        extractionMeta:
+          m.needsReply === undefined && !m.meta
+            ? null
+            : {
+                ...(m.meta ?? {}),
+                ...(m.needsReply === undefined ? {} : { needsReply: m.needsReply }),
+              },
       })
       .returning({ id: gmailMessages.id });
     if (!row) throw new Error("insert message");
@@ -121,7 +138,7 @@ async function linkTask(messageId: string, opts: { status: "todo" | "done"; comp
 }
 
 describe("fils aux tâches terminées", () => {
-  it("retient le fil lu dont la tâche est close après le dernier message, et lui seul", async () => {
+  it("retient le fil lu dont les tâches sont closes, sauf s'il attend encore quelque chose", async () => {
     const done = await insertThread({
       subject: "Export",
       messages: [{ from: "vittorio@gpasplus.com", at: daysAgo(5) }],
@@ -134,13 +151,28 @@ describe("fils aux tâches terminées", () => {
     });
     await linkTask(stillOpen.messageIds[0] as string, { status: "todo" });
 
+    // Un merci arrivé après la clôture, extrait, sans réponse attendue : le fil part.
+    const thanked = await insertThread({
+      subject: "Re: Export",
+      messages: [
+        { from: "vittorio@gpasplus.com", at: daysAgo(5), extracted: true },
+        { from: "vittorio@gpasplus.com", at: daysAgo(1), extracted: true, needsReply: false },
+      ],
+    });
+    await linkTask(thanked.messageIds[0] as string, { status: "done", completedAt: daysAgo(3) });
+
+    // Même chose, mais le dernier message n'est pas encore extrait : on ne sait pas, il reste.
     const reopened = await insertThread({
       subject: "Relance",
       messages: [
-        { from: "vittorio@gpasplus.com", at: daysAgo(5) },
+        { from: "vittorio@gpasplus.com", at: daysAgo(5), extracted: true },
         { from: "vittorio@gpasplus.com", at: daysAgo(1) },
       ],
     });
+    await db
+      .update(gmailMessages)
+      .set({ extractionStatus: "pending" })
+      .where(eq(gmailMessages.id, reopened.messageIds[1] as string));
     await linkTask(reopened.messageIds[0] as string, { status: "done", completedAt: daysAgo(3) });
 
     const unread = await insertThread({
@@ -160,10 +192,54 @@ describe("fils aux tâches terminées", () => {
     const ids = new Set(picked.map((c) => c.threadId));
     expect(ids.has(done.threadId)).toBe(true);
     expect(ids.has(stillOpen.threadId)).toBe(false);
+    expect(ids.has(thanked.threadId)).toBe(true);
     expect(ids.has(reopened.threadId)).toBe(false);
     expect(ids.has(unread.threadId)).toBe(false);
     // Tâche close, mais le mail attend une réponse : il reste.
     expect(ids.has(awaiting.threadId)).toBe(false);
+  });
+});
+
+describe("rattrapage des fils sans lien de tâche", () => {
+  it("remet en file le dernier message d'un fil tagué à un projet aux tâches terminées, une fois", async () => {
+    const [project] = await db
+      .insert(projects)
+      .values({ name: "GpasPlus", kind: "client", status: "active" })
+      .returning({ id: projects.id });
+    if (!project) throw new Error("insert project");
+    await db.insert(tasks).values({
+      title: "Export des prix",
+      status: "done",
+      completedAt: daysAgo(10),
+      projectId: project.id,
+      createdBy: actor.id,
+    });
+    const [tag] = await db
+      .insert(gmailTags)
+      .values({
+        userId: actor.id,
+        kind: "project",
+        targetId: project.id,
+        labelName: "Paradeos/Projets/GpasPlus",
+      })
+      .returning({ id: gmailTags.id });
+    if (!tag) throw new Error("insert tag");
+
+    const t = await insertThread({
+      subject: "Merci pour l'export",
+      messages: [{ from: "vittorio@gpasplus.com", at: daysAgo(4), extracted: true }],
+    });
+    await db.insert(gmailThreadTags).values({ threadId: t.threadId, tagId: tag.id });
+
+    expect(await requeueThreadsForDoneTasks(db, { userId: actor.id })).toBe(1);
+    const [m] = await db
+      .select({ status: gmailMessages.extractionStatus, meta: gmailMessages.extractionMeta })
+      .from(gmailMessages)
+      .where(eq(gmailMessages.id, t.messageIds[0] as string));
+    expect(m?.status).toBe("pending");
+    expect((m?.meta as { requeuedForDoneTasks?: boolean }).requeuedForDoneTasks).toBe(true);
+    // Déjà en file : pas rejoué une seconde fois.
+    expect(await requeueThreadsForDoneTasks(db, { userId: actor.id })).toBe(0);
   });
 });
 

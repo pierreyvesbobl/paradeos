@@ -250,6 +250,13 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     });
   }
 
+  // Fil rejoué pour relier ses messages aux tâches terminées (cf.
+  // lib/gmail/auto-archive.ts) : on garde les passages, pas de nouvelle
+  // proposition, le mail a déjà été trié une fois.
+  const sourcesOnly =
+    ((msg.extractionMeta ?? null) as { requeuedForDoneTasks?: unknown } | null)
+      ?.requeuedForDoneTasks === true;
+
   const seenTaskKeys = new Set<string>();
   for (const t of result.proposedTasks) {
     const projectMatch = t.projectName ? await fuzzyMatchProject(t.projectName) : null;
@@ -616,7 +623,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   // 1b. Clôtures de tâches : la tâche doit être encore ouverte, ce message
   //     ne doit pas l'avoir déjà tranchée, aucune autre source ne doit
   //     l'avoir déjà en attente.
-  const completions = await planTaskCompletions(conn, result.completedTasks, {
+  const completions = await planTaskCompletions(conn, sourcesOnly ? [] : result.completedTasks, {
     existing: existingCompletions,
     excludeMessageId: messageId,
   });
@@ -645,7 +652,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   // La tâche née d'une acceptation reçoit tout de même ce que cette passe
   // en dit.
   const rowsToInsert: ProposalRow[] = [];
-  for (const row of rows) {
+  for (const row of sourcesOnly ? [] : rows) {
     const prior = decided.find(row.kind, row.payload, row.matchedId);
     if (!prior) {
       rowsToInsert.push(row);
@@ -689,11 +696,19 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
         intent: result.intent,
         pipelineStage: result.pipelineStage,
         needsReply: result.needsReply,
+        // Le vocabulaire a listé les tâches terminées du projet : inutile
+        // de rejouer ce message pour les relier (cf. auto-archive.ts).
+        doneTasksSeen: priorityProjectId !== null,
       },
     })
     .where(eq(gmailMessages.id, messageId));
 
-  return { count: rows.length, autoAppliedProjectLinks, autoCompletedTasks, skipped: false };
+  return {
+    count: rowsToInsert.length,
+    autoAppliedProjectLinks,
+    autoCompletedTasks,
+    skipped: false,
+  };
 }
 
 /**

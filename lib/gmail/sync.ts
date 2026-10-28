@@ -143,6 +143,8 @@ export type GmailSyncResult = {
   threadsArchived: number;
   /** Fils que le miroir local croyait en boîte et que Gmail n'y a plus : miroir corrigé. */
   inboxMirrorFixed: number;
+  /** Fils remis en file d'extraction pour les relier à leurs tâches terminées. */
+  threadsRequeued: number;
   /** Messages ingérés pour leurs PJ sur le seul signal facture (sujet, expéditeur, libellé). */
   invoiceCandidatesIngested: number;
   /** Mails à PDF repris par le rattrapage factures (cf. `recoverMissedInvoices`). */
@@ -648,6 +650,7 @@ function emptySyncResult(): GmailSyncResult {
     proposalsExpired: 0,
     threadsArchived: 0,
     inboxMirrorFixed: 0,
+    threadsRequeued: 0,
     invoiceCandidatesIngested: 0,
     invoicesRecovered: 0,
     invoicesFiled: 0,
@@ -682,6 +685,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
     proposalsExpired: 0,
     threadsArchived: 0,
     inboxMirrorFixed: 0,
+    threadsRequeued: 0,
     invoiceCandidatesIngested: 0,
     invoicesRecovered: 0,
     invoicesFiled: 0,
@@ -1000,6 +1004,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
       });
       result.threadsArchived += r.archived;
       result.inboxMirrorFixed += r.forgotten;
+      result.threadsRequeued += r.requeued;
       result.errors.push(...r.errors);
     } catch (err) {
       result.errors.push(`auto-archive: ${err instanceof Error ? err.message : String(err)}`);

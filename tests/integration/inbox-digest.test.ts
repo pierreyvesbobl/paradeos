@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
 import { emailProposals, gmailMessages, gmailThreads } from "@/db/schema/gmail";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
+import { taskSources } from "@/db/schema/task-sources";
+import { tasks } from "@/db/schema/tasks";
 import {
   expireStaleEmailProposals,
   expireStaleMeetingProposals,
@@ -64,6 +66,7 @@ async function insertMessage(opts: {
   fromEmail: string;
   fromName?: string;
   subject?: string;
+  extractionMeta?: Record<string, unknown>;
 }) {
   const subject = opts.subject ?? "Sujet";
   const [thread] = await db
@@ -83,6 +86,7 @@ async function insertMessage(opts: {
       bodyText: "Corps du message.",
       internalDate: new Date("2026-10-20T09:00:00Z"),
       extractionStatus: "pending",
+      extractionMeta: opts.extractionMeta ?? null,
     })
     .returning({ id: gmailMessages.id });
   if (!msg) throw new Error("insert message");
@@ -110,6 +114,66 @@ describe("expéditeur automatique", () => {
       .from(gmailMessages)
       .where(eq(gmailMessages.id, messageId));
     expect(msg?.status).toBe("skipped");
+  });
+});
+
+describe("fil rejoué pour ses tâches terminées", () => {
+  it("garde les passages sur la tâche, sans reposer de proposition", async () => {
+    const [done] = await db
+      .insert(tasks)
+      .values({
+        title: "Export des prix",
+        status: "done",
+        completedAt: daysAgo(10),
+        createdBy: actor.id,
+      })
+      .returning({ id: tasks.id });
+    if (!done) throw new Error("insert task");
+    const messageId = await insertMessage({
+      userId: actor.id,
+      fromEmail: "vittorio@gpasplus.com",
+      subject: "Merci pour l'export",
+      extractionMeta: { requeuedForDoneTasks: true },
+    });
+    mockedExtractEmail.mockResolvedValueOnce({
+      ...emptyEmailExtraction,
+      proposedTasks: [
+        {
+          title: "Ajouter la colonne stock",
+          dueDate: null,
+          projectName: null,
+          assigneeName: null,
+          priority: null,
+          kind: null,
+          excerpts: [{ quote: "ajoutez la colonne stock", speaker: "Vittorio" }],
+        },
+      ],
+      mentionedTasks: [
+        {
+          taskId: done.id,
+          taskTitle: "Export des prix",
+          excerpts: [{ quote: "merci pour l'export des prix", speaker: "Vittorio" }],
+        },
+      ],
+    });
+
+    const r = await extractAndSaveEmailProposals(messageId);
+    expect(r).toMatchObject({ skipped: false, count: 0 });
+    const proposals = await db
+      .select({ id: emailProposals.id })
+      .from(emailProposals)
+      .where(eq(emailProposals.messageId, messageId));
+    expect(proposals).toHaveLength(0);
+    const sources = await db
+      .select({ relation: taskSources.relation, excerpt: taskSources.excerpt })
+      .from(taskSources)
+      .where(eq(taskSources.messageId, messageId));
+    expect(sources).toEqual([{ relation: "mention", excerpt: "merci pour l'export des prix" }]);
+    const [m] = await db
+      .select({ meta: gmailMessages.extractionMeta })
+      .from(gmailMessages)
+      .where(eq(gmailMessages.id, messageId));
+    expect((m?.meta as { doneTasksSeen?: boolean }).doneTasksSeen).toBe(false);
   });
 });
 

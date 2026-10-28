@@ -2,7 +2,13 @@ import "server-only";
 
 import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
-import { emailProposals, gmailMessages, gmailThreads } from "@/db/schema/gmail";
+import {
+  emailProposals,
+  gmailMessages,
+  gmailTags,
+  gmailThreads,
+  gmailThreadTags,
+} from "@/db/schema/gmail";
 import { taskSources } from "@/db/schema/task-sources";
 import { tasks } from "@/db/schema/tasks";
 import { db } from "@/lib/db/server";
@@ -19,8 +25,11 @@ import { isCalendarMail } from "./calendar-mail";
  *
  *  - `task_done` : toutes les tâches liées au fil (passages verbatim de
  *    `task_sources`, propositions acceptées) sont terminées ou annulées,
- *    au moins une est terminée, et rien n'est arrivé dans le fil depuis.
- *    Le fil est lu, et aucune proposition n'y attend une décision.
+ *    au moins une est terminée. Le fil est lu, tous ses messages ont été
+ *    extraits, et aucune proposition n'y attend une décision. Un
+ *    message arrivé après la clôture ne retient pas le fil à lui seul :
+ *    c'est la règle « action attendue » qui tranche (un merci part, une
+ *    question reste).
  *  - `automated` : tous les messages viennent d'expéditeurs machines
  *    (cf. automated-sender.ts) et le dernier a plus de N jours. Les mails
  *    d'agenda (invitations, rappels, confirmations de rendez-vous, cf.
@@ -156,7 +165,7 @@ export async function selectDoneTaskThreads(
 
   const taskIds = [...new Set(linkRows.map((r) => r.taskId))];
   const threadIds = [...new Set(linkRows.map((r) => r.threadId))];
-  const [taskRows, threadRows, pendingRows] = await Promise.all([
+  const [taskRows, threadRows, pendingRows, unextractedRows] = await Promise.all([
     conn
       .select({ id: tasks.id, status: tasks.status, completedAt: tasks.completedAt })
       .from(tasks)
@@ -175,10 +184,21 @@ export async function selectDoneTaskThreads(
       .from(emailProposals)
       .innerJoin(gmailMessages, eq(gmailMessages.id, emailProposals.messageId))
       .where(and(inArray(gmailMessages.threadId, threadIds), eq(emailProposals.status, "pending"))),
+    // Un message pas encore passé par l'extraction : on ne sait pas s'il
+    // attend une réponse, le fil attend la relève suivante.
+    conn
+      .selectDistinct({ threadId: gmailMessages.threadId })
+      .from(gmailMessages)
+      .where(
+        and(
+          inArray(gmailMessages.threadId, threadIds),
+          eq(gmailMessages.extractionStatus, "pending"),
+        ),
+      ),
   ]);
   const taskById = new Map(taskRows.map((t) => [t.id, t]));
   const threadById = new Map(threadRows.map((t) => [t.id, t]));
-  const hasPending = new Set(pendingRows.map((r) => r.threadId));
+  const hasPending = new Set([...pendingRows, ...unextractedRows].map((r) => r.threadId));
 
   const tasksByThread = new Map<string, Set<string>>();
   for (const r of linkRows) {
@@ -206,8 +226,6 @@ export async function selectDoneTaskThreads(
       }
     }
     if (!allClosed || !lastDone) continue;
-    // Un message arrivé après la clôture peut rouvrir le sujet : on le laisse.
-    if (thread.lastMessageAt && thread.lastMessageAt > lastDone) continue;
     out.push({ threadId, reason: "task_done" });
   }
   // Tâche close ou pas, un message qui attend une réponse garde le fil.
@@ -301,6 +319,120 @@ export async function selectThreadsToArchive(
   return out.slice(0, MAX_ARCHIVES_PER_RUN);
 }
 
+/** Fils rejoués par relève pour les relier à leurs tâches terminées : chacun coûte un appel LLM. */
+const REQUEUE_PER_RUN = 3;
+
+/**
+ * Les fils en boîte extraits avant que le vocabulaire ne liste les tâches
+ * terminées n'ont aucun lien avec elles : la règle `task_done` ne les voit
+ * pas. On remet en file le dernier message des fils tagués à un seul
+ * projet qui a des tâches terminées depuis deux mois, lus, écrits par un
+ * humain, sans aucun lien de tâche. L'extraction rejouée ne garde que les
+ * passages (`requeuedForDoneTasks`), pas de nouvelle proposition.
+ */
+export async function requeueThreadsForDoneTasks(
+  conn: Database,
+  opts: { userId: string; limit?: number },
+): Promise<number> {
+  const limit = opts.limit ?? REQUEUE_PER_RUN;
+  const inbox = inboxThreadIds(conn, opts.userId);
+  const projectTags = await conn
+    .select({ threadId: gmailThreadTags.threadId, projectId: gmailTags.targetId })
+    .from(gmailThreadTags)
+    .innerJoin(gmailTags, eq(gmailTags.id, gmailThreadTags.tagId))
+    .where(
+      and(
+        eq(gmailTags.userId, opts.userId),
+        eq(gmailTags.kind, "project"),
+        inArray(gmailThreadTags.threadId, inbox),
+      ),
+    );
+  const projectsByThread = new Map<string, Set<string>>();
+  for (const r of projectTags) {
+    if (!r.projectId) continue;
+    const set = projectsByThread.get(r.threadId) ?? new Set<string>();
+    set.add(r.projectId);
+    projectsByThread.set(r.threadId, set);
+  }
+  const single = [...projectsByThread.entries()].filter(([, s]) => s.size === 1);
+  if (single.length === 0) return 0;
+
+  const projectIds = [...new Set(single.map(([, s]) => [...s][0] as string))];
+  const withDone = new Set(
+    (
+      await conn
+        .selectDistinct({ projectId: tasks.projectId })
+        .from(tasks)
+        .where(
+          and(
+            inArray(tasks.projectId, projectIds),
+            eq(tasks.status, "done"),
+            sql`${tasks.completedAt} > now() - interval '60 days'`,
+          ),
+        )
+    ).flatMap((r) => (r.projectId ? [r.projectId] : [])),
+  );
+  const threadIds = single.filter(([, s]) => withDone.has([...s][0] as string)).map(([id]) => id);
+  if (threadIds.length === 0) return 0;
+
+  const [threadRows, linked, msgs] = await Promise.all([
+    conn
+      .select({ id: gmailThreads.id, hasUnread: gmailThreads.hasUnread })
+      .from(gmailThreads)
+      .where(inArray(gmailThreads.id, threadIds)),
+    conn
+      .selectDistinct({ threadId: gmailMessages.threadId })
+      .from(taskSources)
+      .innerJoin(gmailMessages, eq(gmailMessages.id, taskSources.messageId))
+      .where(inArray(gmailMessages.threadId, threadIds)),
+    conn
+      .select({
+        id: gmailMessages.id,
+        threadId: gmailMessages.threadId,
+        fromEmail: gmailMessages.fromEmail,
+        fromName: gmailMessages.fromName,
+        internalDate: gmailMessages.internalDate,
+        extractionStatus: gmailMessages.extractionStatus,
+        extractionMeta: gmailMessages.extractionMeta,
+        bodyText: gmailMessages.bodyText,
+      })
+      .from(gmailMessages)
+      .where(inArray(gmailMessages.threadId, threadIds)),
+  ]);
+  const unread = new Set(threadRows.filter((t) => t.hasUnread).map((t) => t.id));
+  const alreadyLinked = new Set(linked.map((r) => r.threadId));
+
+  const byThread = new Map<string, typeof msgs>();
+  for (const m of msgs) {
+    const arr = byThread.get(m.threadId) ?? [];
+    arr.push(m);
+    byThread.set(m.threadId, arr);
+  }
+  const toRequeue: string[] = [];
+  for (const [threadId, list] of byThread) {
+    if (unread.has(threadId) || alreadyLinked.has(threadId)) continue;
+    if (!list.some((m) => !isAutomatedSender(m))) continue;
+    const last = [...list].sort(
+      (a, b) => (b.internalDate?.getTime() ?? 0) - (a.internalDate?.getTime() ?? 0),
+    )[0];
+    if (!last || !last.bodyText || last.extractionStatus !== "extracted") continue;
+    const meta = (last.extractionMeta ?? null) as { doneTasksSeen?: unknown } | null;
+    if (meta?.doneTasksSeen === true) continue;
+    toRequeue.push(last.id);
+    if (toRequeue.length >= limit) break;
+  }
+  for (const id of toRequeue) {
+    await conn
+      .update(gmailMessages)
+      .set({
+        extractionStatus: "pending",
+        extractionMeta: sql`coalesce(${gmailMessages.extractionMeta}, '{}'::jsonb) || '{"requeuedForDoneTasks": true}'::jsonb`,
+      })
+      .where(eq(gmailMessages.id, id));
+  }
+  return toRequeue.length;
+}
+
 /** Pages de `threads.list` lues au plus pour relever la boîte : 20 × 500 fils. */
 const INBOX_LIST_MAX_PAGES = 20;
 
@@ -351,10 +483,10 @@ export async function runAutoArchive(args: {
   accessToken: string;
   now?: Date;
   shouldStop?: () => boolean;
-}): Promise<{ archived: number; forgotten: number; errors: string[] }> {
+}): Promise<{ archived: number; forgotten: number; requeued: number; errors: string[] }> {
   const settings = await getAutoArchiveSettings();
   if (!settings.doneTasks && settings.automatedDays === null) {
-    return { archived: 0, forgotten: 0, errors: [] };
+    return { archived: 0, forgotten: 0, requeued: 0, errors: [] };
   }
   const conn = await db();
   const errors: string[] = [];
@@ -363,6 +495,14 @@ export async function runAutoArchive(args: {
     forgotten = (await reconcileInboxMirror(conn, args)).forgotten;
   } catch (err) {
     errors.push(`inbox mirror: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  let requeued = 0;
+  if (settings.doneTasks) {
+    try {
+      requeued = await requeueThreadsForDoneTasks(conn, { userId: args.userId });
+    } catch (err) {
+      errors.push(`requeue done tasks: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
   const candidates = await selectThreadsToArchive(conn, {
     userId: args.userId,
@@ -393,7 +533,7 @@ export async function runAutoArchive(args: {
       errors.push(`archive ${c.threadId}: ${message}`);
     }
   }
-  return { archived, forgotten, errors };
+  return { archived, forgotten, requeued, errors };
 }
 
 /** Retire `INBOX` du miroir local d'un fil, sans toucher à Gmail. */

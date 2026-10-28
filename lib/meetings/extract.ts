@@ -47,6 +47,13 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const VOCAB_LIMIT_PER_KIND = 200;
 /** Tâches ouvertes du projet concerné, chargées en plus du plafond global. */
 const PRIORITY_TASK_LIMIT = 100;
+/**
+ * Tâches terminées récemment du projet concerné : un mail qui en reparle
+ * (remerciement, vérification, question sur le livrable) doit pouvoir les
+ * citer dans `mentionedTasks`, c'est ce qui permet de ranger le fil.
+ */
+const DONE_TASK_WINDOW_DAYS = 60;
+const DONE_TASK_LIMIT = 60;
 
 /**
  * OpenAI Structured Outputs exigent que **chaque** propriété soit
@@ -208,7 +215,7 @@ export async function getKnownVocabulary(opts?: {
   const conn = await db();
   const priorityProjectId = opts?.priorityProjectId ?? null;
 
-  const [entityRows, contactRows, projectRows, userRows, taskRows, priorityTaskRows] =
+  const [entityRows, contactRows, projectRows, userRows, taskRows, priorityTaskRows, doneTaskRows] =
     await Promise.all([
       conn
         .select({ name: entities.name, kind: entities.kind, updatedAt: entities.updatedAt })
@@ -279,10 +286,30 @@ export async function getKnownVocabulary(opts?: {
             .orderBy(desc(tasks.updatedAt))
             .limit(PRIORITY_TASK_LIMIT)
         : Promise.resolve([] as OpenTaskRow[]),
+      priorityProjectId
+        ? conn
+            .select({
+              id: tasks.id,
+              title: tasks.title,
+              status: tasks.status,
+              projectId: tasks.projectId,
+              projectName: projects.name,
+              updatedAt: tasks.updatedAt,
+            })
+            .from(tasks)
+            .leftJoin(projects, eq(tasks.projectId, projects.id))
+            .where(
+              sql`${tasks.status} = 'done' and ${tasks.projectId} = ${priorityProjectId} and ${tasks.completedAt} > now() - make_interval(days => ${DONE_TASK_WINDOW_DAYS})`,
+            )
+            .orderBy(desc(tasks.completedAt))
+            .limit(DONE_TASK_LIMIT)
+        : Promise.resolve([] as OpenTaskRow[]),
     ]);
 
   const seenTaskIds = new Set<string>();
-  const orderedTasks = [...priorityTaskRows, ...taskRows].filter((t) => {
+  // Les terminées après les ouvertes : les références restent stables pour
+  // les ouvertes, et le bloc « terminées » se lit à part dans le prompt.
+  const orderedTasks = [...priorityTaskRows, ...taskRows, ...doneTaskRows].filter((t) => {
     if (seenTaskIds.has(t.id)) return false;
     seenTaskIds.add(t.id);
     return true;
