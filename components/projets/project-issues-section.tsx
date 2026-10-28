@@ -51,7 +51,7 @@ export async function ProjectIssuesSection({
           ) : null}
           {synced ? (
             <Link
-              href={`/taches/issues?project=${projectId}`}
+              href={`/projets/${projectId}?tab=dev`}
               className="flex items-center gap-1 hover:text-foreground"
             >
               <Kanban className="size-3.5" />

@@ -20,6 +20,7 @@ import Link from "@/components/link";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { ProjectEntityField } from "@/components/projects/project-entity-field";
+import { ProjectIssueBoard } from "@/components/projets/project-issue-board";
 import { ProjectIssuesSection } from "@/components/projets/project-issues-section";
 import { ProjectMeetingsSection } from "@/components/projets/project-meetings-section";
 import { ProjectReposSection } from "@/components/projets/project-repos-section";
@@ -49,6 +50,7 @@ import { getProjectTimeStats } from "@/lib/db/queries/time-stats";
 import { db } from "@/lib/db/server";
 import { EntityName, EuroAmount, ProjectName } from "@/lib/demo/components";
 import { formatDays, formatDuration, formatPersonName } from "@/lib/format";
+import { parseGithubRepo } from "@/lib/github/remote";
 import { computeDaysWorked, computeEffectiveDailyRate } from "@/lib/profitability-math";
 import { projectBillingTypeLabels } from "@/lib/schemas/projects";
 import { cn } from "@/lib/utils";
@@ -213,6 +215,13 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
       defaultProjectId={id}
     />
   );
+
+  // Tableau des issues GitHub du projet, seulement si un dépôt est suivi.
+  const devContent = projectRepoRows.some((r) => r.syncIssues && parseGithubRepo(r.remote)) ? (
+    <Suspense fallback={<TabSkeleton lines={4} />}>
+      <ProjectIssueBoard projectId={id} />
+    </Suspense>
+  ) : null;
 
   const notesContent = (
     <NoteList
@@ -607,6 +616,7 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
         }
         overview={overviewContent}
         tasks={tasksContent}
+        dev={devContent}
         notes={notesContent}
         meetings={meetingsContent}
         emails={emailsContent}

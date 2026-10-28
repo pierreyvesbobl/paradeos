@@ -6,12 +6,11 @@ import {
   GitPullRequest,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "@/components/link";
-import type { IssueTaskLink, SyncedRepo } from "@/lib/db/queries/issue-board";
 import { formatRelativeShort } from "@/lib/format";
+import type { BoardCard, BoardLoad } from "@/lib/github/board-cards";
 import {
   BOARD_COLUMNS,
   type BoardColumn,
-  type BoardIssue,
   type BoardPullRequest,
   type BoardTint,
   boardColumnHints,
@@ -20,14 +19,7 @@ import {
   groupByColumn,
 } from "@/lib/github/issue-board";
 import { PARADEOS_ISSUE_LABEL } from "@/lib/github/project-issue";
-import type { TaskStatus } from "@/lib/schemas/tasks";
-import { taskStatusLabels } from "@/lib/schemas/tasks";
-
-export type BoardCard = {
-  issue: BoardIssue;
-  repo: SyncedRepo;
-  task: IssueTaskLink | null;
-};
+import { type TaskStatus, taskStatusLabels } from "@/lib/schemas/tasks";
 
 function tintVars(tint: BoardTint) {
   return {
@@ -37,12 +29,20 @@ function tintVars(tint: BoardTint) {
   } as React.CSSProperties;
 }
 
+type BoardProps = {
+  cards: BoardCard[];
+  /** Nom du dépôt sur les cartes (quand plusieurs dépôts sont mêlés). */
+  showRepo: boolean;
+  /** Projet sur les cartes (inutile dans l'onglet d'une fiche projet). */
+  showProject: boolean;
+};
+
 /**
  * Quatre colonnes déduites de GitHub (cf. `lib/github/issue-board.ts`),
  * sans glisser-déposer : on ne déplace pas une carte, on assigne l'issue,
  * on ouvre une PR ou on la ferme, et le tableau suit.
  */
-export function IssueBoard({ cards, showRepo }: { cards: BoardCard[]; showRepo: boolean }) {
+export function IssueBoard({ cards, showRepo, showProject }: BoardProps) {
   const byUpdated = (a: BoardCard, b: BoardCard) =>
     b.issue.updatedAt.localeCompare(a.issue.updatedAt);
   const groups = groupByColumn([...cards].sort(byUpdated));
@@ -50,22 +50,40 @@ export function IssueBoard({ cards, showRepo }: { cards: BoardCard[]; showRepo: 
     <div className="-mx-6 overflow-x-auto px-6 pb-2">
       <div className="flex items-start gap-4">
         {BOARD_COLUMNS.map((column) => (
-          <Column key={column} column={column} cards={groups[column]} showRepo={showRepo} />
+          <Column
+            key={column}
+            column={column}
+            cards={groups[column]}
+            showRepo={showRepo}
+            showProject={showProject}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function Column({
-  column,
-  cards,
-  showRepo,
-}: {
-  column: BoardColumn;
-  cards: BoardCard[];
-  showRepo: boolean;
-}) {
+/** Dépôts en erreur et jeton sans permission PR, au-dessus du tableau. */
+export function BoardNotices({ load }: { load: BoardLoad }) {
+  if (load.problems.length === 0 && !load.pullRequestsUnavailable) return null;
+  return (
+    <ul className="space-y-1 text-muted-foreground text-xs">
+      {load.problems.map((p) => (
+        <li key={p.remote}>
+          <span className="font-mono">{p.remote.replace(/^github\.com\//, "")}</span> : {p.message}
+        </li>
+      ))}
+      {load.pullRequestsUnavailable ? (
+        <li>
+          Le jeton n'a pas « Pull requests : lecture » : les colonnes En cours et En revue ne voient
+          pas les PR, seulement les assignations.
+        </li>
+      ) : null}
+    </ul>
+  );
+}
+
+function Column({ column, cards, showRepo, showProject }: BoardProps & { column: BoardColumn }) {
   return (
     <section
       style={tintVars(boardColumnTints[column])}
@@ -89,6 +107,7 @@ function Column({
               key={`${card.repo.remote}#${card.issue.number}`}
               card={card}
               showRepo={showRepo}
+              showProject={showProject}
             />
           ))}
         </ul>
@@ -121,7 +140,15 @@ function PullRequestBadge({ pr }: { pr: BoardPullRequest }) {
   );
 }
 
-function Card({ card, showRepo }: { card: BoardCard; showRepo: boolean }) {
+function Card({
+  card,
+  showRepo,
+  showProject,
+}: {
+  card: BoardCard;
+  showRepo: boolean;
+  showProject: boolean;
+}) {
   const { issue, repo, task } = card;
   const labels = issue.labels.filter((l) => l !== PARADEOS_ISSUE_LABEL);
   const when =
@@ -172,20 +199,29 @@ function Card({ card, showRepo }: { card: BoardCard; showRepo: boolean }) {
       <div className="h-px bg-border/70" />
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-        <span className="inline-flex min-w-0 items-center gap-1.5">
-          <span
-            className="size-2 shrink-0 rounded-full"
-            style={{ background: repo.projectColor ?? "var(--ds-tint-gray-dot)" }}
-          />
-          <Link href={`/projets/${repo.projectId}`} className="truncate hover:text-foreground">
-            {repo.projectName}
-          </Link>
-          {showRepo ? (
-            <span className="truncate font-mono opacity-80">
-              {repo.remote.replace(/^github\.com\/[^/]+\//, "")}
-            </span>
-          ) : null}
-        </span>
+        {showProject || showRepo ? (
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            {showProject ? (
+              <>
+                <span
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ background: repo.projectColor ?? "var(--ds-tint-gray-dot)" }}
+                />
+                <Link
+                  href={`/projets/${repo.projectId}`}
+                  className="truncate hover:text-foreground"
+                >
+                  {repo.projectName}
+                </Link>
+              </>
+            ) : null}
+            {showRepo ? (
+              <span className="truncate font-mono opacity-80">
+                {repo.remote.replace(/^github\.com\/[^/]+\//, "")}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
         <span className="flex-1" />
         {issue.pullRequests.map((pr) => (
           <PullRequestBadge key={pr.number} pr={pr} />

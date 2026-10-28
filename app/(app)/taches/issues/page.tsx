@@ -1,62 +1,27 @@
 import { Kanban } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/empty-state";
+import { BoardNotices, IssueBoard } from "@/components/issues/issue-board";
 import Link from "@/components/link";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { listIssueTaskLinks, listSyncedRepos } from "@/lib/db/queries/issue-board";
-import { listBoardIssues } from "@/lib/github/board";
+import { listSyncedRepos } from "@/lib/db/queries/issue-board";
+import { loadBoardCards } from "@/lib/github/board-cards";
 import { BOARD_CLOSED_WINDOW_DAYS } from "@/lib/github/issue-board";
-import { parseGithubRepo } from "@/lib/github/remote";
-import { type BoardCard, IssueBoard } from "./issue-board";
 
 type SearchParams = Promise<{ project?: string }>;
 
 /**
- * Tableau des issues GitHub des dépôts suivis (case « Issues » cochée sur
- * la fiche projet). Lu en direct, rien n'est stocké : c'est la vue
- * « où en est le développement » du chantier besoin client → prod.
+ * Tableau des issues GitHub de tous les dépôts suivis (case « Issues »
+ * cochée sur la fiche projet). Lu en direct, rien n'est stocké. La même
+ * vue, par projet, est l'onglet Développement de la fiche projet.
  */
 export default async function IssueBoardPage({ searchParams }: { searchParams: SearchParams }) {
   const { project } = await searchParams;
   const allRepos = await listSyncedRepos();
   const projectsSynced = [...new Map(allRepos.map((r) => [r.projectId, r])).values()];
   const repos = project ? allRepos.filter((r) => r.projectId === project) : allRepos;
-  const targets = repos
-    .map((repo) => ({ repo, ref: parseGithubRepo(repo.remote) }))
-    .filter(
-      (t): t is { repo: (typeof repos)[number]; ref: { owner: string; repo: string } } =>
-        t.ref !== null,
-    );
-
-  const [results, links] = await Promise.all([
-    Promise.all(targets.map(async (t) => ({ ...t, result: await listBoardIssues(t.ref) }))),
-    listIssueTaskLinks(targets.map((t) => t.repo.remote)),
-  ]);
-  const linkByKey = new Map(links.map((l) => [`${l.remote}#${l.number}`, l]));
-
-  const cards: BoardCard[] = [];
-  const problems: { remote: string; message: string }[] = [];
-  let noToken = false;
-  let pullRequestsUnavailable = false;
-  for (const r of results) {
-    if (r.result.status === "no_token") {
-      noToken = true;
-      continue;
-    }
-    if (r.result.status === "error") {
-      problems.push({ remote: r.repo.remote, message: r.result.message });
-      continue;
-    }
-    if (r.result.pullRequestsUnavailable) pullRequestsUnavailable = true;
-    for (const issue of r.result.issues) {
-      cards.push({
-        issue,
-        repo: r.repo,
-        task: linkByKey.get(`${r.repo.remote}#${issue.number}`) ?? null,
-      });
-    }
-  }
-  const openCount = cards.filter((c) => c.issue.state === "open").length;
+  const load = await loadBoardCards(repos);
+  const openCount = load.cards.filter((c) => c.issue.state === "open").length;
 
   return (
     <div className="space-y-6">
@@ -98,7 +63,7 @@ export default async function IssueBoardPage({ searchParams }: { searchParams: S
         </div>
       ) : null}
 
-      {targets.length === 0 ? (
+      {load.repoCount === 0 ? (
         <EmptyState
           icon={Kanban}
           title="Aucun dépôt suivi"
@@ -114,7 +79,7 @@ export default async function IssueBoardPage({ searchParams }: { searchParams: S
             </Button>
           }
         />
-      ) : noToken ? (
+      ) : load.noToken ? (
         <EmptyState
           icon={Kanban}
           title="Aucun jeton GitHub enregistré"
@@ -127,27 +92,12 @@ export default async function IssueBoardPage({ searchParams }: { searchParams: S
         />
       ) : (
         <>
-          {problems.length > 0 || pullRequestsUnavailable ? (
-            <ul className="space-y-1 text-muted-foreground text-xs">
-              {problems.map((p) => (
-                <li key={p.remote}>
-                  <span className="font-mono">{p.remote.replace(/^github\.com\//, "")}</span> :{" "}
-                  {p.message}
-                </li>
-              ))}
-              {pullRequestsUnavailable ? (
-                <li>
-                  Le jeton n'a pas « Pull requests : lecture » : les colonnes En cours et En revue
-                  ne voient pas les PR, seulement les assignations.
-                </li>
-              ) : null}
-            </ul>
-          ) : null}
+          <BoardNotices load={load} />
           <p className="text-[11px] text-muted-foreground tabular-nums">
-            {openCount} ouverte{openCount > 1 ? "s" : ""} sur {targets.length} dépôt
-            {targets.length > 1 ? "s" : ""}
+            {openCount} ouverte{openCount > 1 ? "s" : ""} sur {load.repoCount} dépôt
+            {load.repoCount > 1 ? "s" : ""}
           </p>
-          <IssueBoard cards={cards} showRepo={targets.length > 1} />
+          <IssueBoard cards={load.cards} showRepo={load.repoCount > 1} showProject />
         </>
       )}
     </div>

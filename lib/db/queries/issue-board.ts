@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { projectRepos } from "@/db/schema/project-repos";
 import { projects } from "@/db/schema/projects";
 import { taskGithubIssues } from "@/db/schema/task-github-issues";
@@ -13,7 +13,7 @@ export type SyncedRepo = {
 };
 
 /** Les dépôts dont la case « Issues » est cochée sur une fiche projet. */
-export async function listSyncedRepos(): Promise<SyncedRepo[]> {
+export async function listSyncedRepos(projectId?: string): Promise<SyncedRepo[]> {
   const conn = await db();
   return conn
     .select({
@@ -24,7 +24,11 @@ export async function listSyncedRepos(): Promise<SyncedRepo[]> {
     })
     .from(projectRepos)
     .innerJoin(projects, eq(projectRepos.projectId, projects.id))
-    .where(eq(projectRepos.syncIssues, true))
+    .where(
+      projectId
+        ? and(eq(projectRepos.syncIssues, true), eq(projectRepos.projectId, projectId))
+        : eq(projectRepos.syncIssues, true),
+    )
     .orderBy(asc(projects.name), asc(projectRepos.remote));
 }
 

@@ -178,8 +178,9 @@ possède titre et brief et repousse quand ils changent (empreinte dans
 `task_github_issues`), GitHub ne possède que la fermeture. Jeton
 `GITHUB_TOKEN` en « Issues : lecture et écriture » ; migration `0092`.
 
-La vue « où en est le développement » est le tableau `/taches/issues`
-(bouton Issues de la liste des tâches, lien Tableau sur la fiche projet) :
+La vue « où en est le développement » est le tableau d'issues : onglet
+Développement de la fiche projet (par projet), et `/taches/issues` pour tous
+les dépôts suivis (bouton Issues de la liste des tâches) :
 les issues des dépôts suivis, lues en GraphQL (`lib/github/board.ts`) et
 rangées en quatre colonnes déduites de GitHub (`lib/github/issue-board.ts`) :
 à développer, en cours (assignée ou PR brouillon liée), en revue (PR liée

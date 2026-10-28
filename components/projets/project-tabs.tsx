@@ -5,6 +5,7 @@ import {
   Envelope,
   FolderOpen,
   Info,
+  Kanban,
   Key,
   ListChecks,
   Note,
@@ -19,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const ALL_TABS = [
   { value: "overview", label: "Vue d'ensemble", icon: Info },
   { value: "tasks", label: "Tâches", icon: ListChecks },
+  { value: "dev", label: "Développement", icon: Kanban },
   { value: "notes", label: "Notes", icon: Note },
   { value: "meetings", label: "Meetings", icon: VideoCamera },
   { value: "emails", label: "Emails", icon: Envelope },
@@ -34,6 +36,8 @@ type Props = {
   defaultTab?: TabValue;
   overview: React.ReactNode;
   tasks: React.ReactNode;
+  /** Null = onglet caché (aucun dépôt GitHub suivi). */
+  dev: React.ReactNode | null;
   notes: React.ReactNode;
   meetings: React.ReactNode;
   emails: React.ReactNode;
@@ -53,6 +57,7 @@ export function ProjectTabs({
   defaultTab = "overview",
   overview,
   tasks,
+  dev,
   notes,
   meetings,
   emails,
@@ -64,8 +69,11 @@ export function ProjectTabs({
   const params = useSearchParams();
   const tabParam = params.get("tab");
 
-  // Onglet facturation masqué pour les projets non-client.
-  const tabs = ALL_TABS.filter((t) => t.value !== "billing" || billing !== null);
+  // Onglets masqués faute de contenu : facturation pour les projets
+  // non-client, développement sans dépôt GitHub suivi.
+  const tabs = ALL_TABS.filter(
+    (t) => (t.value !== "billing" || billing !== null) && (t.value !== "dev" || dev !== null),
+  );
   const initialValue: TabValue = tabs.some((t) => t.value === tabParam)
     ? (tabParam as TabValue)
     : defaultTab;
@@ -94,6 +102,7 @@ export function ProjectTabs({
   const contents: Record<TabValue, React.ReactNode> = {
     overview,
     tasks,
+    dev,
     notes,
     meetings,
     emails,
