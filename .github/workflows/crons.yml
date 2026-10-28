@@ -88,3 +88,22 @@ jobs:
             -H "Authorization: Bearer $CRON_SECRET" \
             "$BASE_URL/api/cron/sync-gmail"
           echo
+
+  roadmaps:
+    # Feuilles de route des dépôts suivis : un appel GitHub par dépôt, le
+    # rapprochement LLM seulement si le fichier ou les tâches ont bougé.
+    name: Feuilles de route des dépôts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      BASE_URL: https://paradeos.vercel.app
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+    steps:
+      - name: Synchroniser les feuilles de route
+        run: |
+          curl -sS --fail-with-body --max-time 300 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$BASE_URL/api/cron/sync-roadmaps"
+          echo

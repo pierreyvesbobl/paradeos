@@ -1,0 +1,33 @@
+/**
+ * Relit la feuille de route (`roadmap.json`) des dépôts suivis, aligne les
+ * tâches liées sur le statut de leur item et propose de nouveaux
+ * rapprochements quand quelque chose a bougé (cf. lib/roadmap/sync.ts).
+ *
+ * Auth : `Authorization: Bearer <CRON_SECRET>`. Déclenché toutes les
+ * quinze minutes par `.github/workflows/crons.yml`, une fois par jour par
+ * Vercel en filet de sécurité. Un dépôt inchangé ne coûte qu'un appel
+ * GitHub ; le LLM ne tourne que si le fichier ou les tâches ont changé.
+ */
+
+import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
+import { db } from "@/lib/db/server";
+import { syncRoadmaps } from "@/lib/roadmap/sync";
+
+export const maxDuration = 300;
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  const unauthorized = cronUnauthorized(request);
+  if (unauthorized) return unauthorized;
+
+  const results = await syncRoadmaps(await db());
+  const errors = results.filter((r) => r.status === "error");
+  return cronResponse({
+    repos: results.length,
+    changedTasks: results.reduce((n, r) => n + r.changedTasks, 0),
+    suggested: results.reduce((n, r) => n + r.suggested, 0),
+    results,
+    failed: errors.length,
+    errors,
+  });
+}

@@ -34,6 +34,8 @@ export const projectRepos = pgTable(
      * (projection à sens unique, cf. lib/github/project-issue.ts).
      */
     syncIssues: boolean("sync_issues").notNull().default(false),
+    /** Chemin du `roadmap.json` dans le dépôt (cf. lib/roadmap/). NULL = pas suivi. */
+    roadmapPath: text("roadmap_path"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (table) => ({

@@ -9,6 +9,8 @@ export type ProjectRepoRow = {
   autoLinked: boolean;
   /** Projection des tâches `feature` en issues GitHub activée. */
   syncIssues: boolean;
+  /** Chemin du roadmap.json suivi, ou null. */
+  roadmapPath: string | null;
   createdAt: Date;
 };
 
@@ -20,6 +22,7 @@ export async function getProjectRepos(projectId: string): Promise<ProjectRepoRow
       remote: projectRepos.remote,
       autoLinked: projectRepos.autoLinked,
       syncIssues: projectRepos.syncIssues,
+      roadmapPath: projectRepos.roadmapPath,
       createdAt: projectRepos.createdAt,
     })
     .from(projectRepos)

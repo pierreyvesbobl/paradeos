@@ -24,6 +24,7 @@ import { ProjectIssueBoard } from "@/components/projets/project-issue-board";
 import { ProjectIssuesSection } from "@/components/projets/project-issues-section";
 import { ProjectMeetingsSection } from "@/components/projets/project-meetings-section";
 import { ProjectReposSection } from "@/components/projets/project-repos-section";
+import { ProjectRoadmap } from "@/components/projets/project-roadmap";
 import { ProjectSecretsSection } from "@/components/projets/project-secrets-section";
 import { ProjectTabs } from "@/components/projets/project-tabs";
 import { TaskTable } from "@/components/tasks/task-table";
@@ -216,12 +217,30 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
     />
   );
 
-  // Tableau des issues GitHub du projet, seulement si un dépôt est suivi.
-  const devContent = projectRepoRows.some((r) => r.syncIssues && parseGithubRepo(r.remote)) ? (
-    <Suspense fallback={<TabSkeleton lines={4} />}>
-      <ProjectIssueBoard projectId={id} />
-    </Suspense>
-  ) : null;
+  // Onglet Développement : feuille de route du dépôt (état réel) et, si
+  // un dépôt projette ses issues, le tableau des issues en dessous.
+  const hasRoadmap = projectRepoRows.some((r) => r.roadmapPath);
+  const hasIssueBoard = projectRepoRows.some((r) => r.syncIssues && parseGithubRepo(r.remote));
+  const devContent =
+    hasRoadmap || hasIssueBoard ? (
+      <div className="space-y-8">
+        {hasRoadmap ? (
+          <Suspense fallback={<TabSkeleton lines={6} />}>
+            <ProjectRoadmap projectId={id} />
+          </Suspense>
+        ) : null}
+        {hasIssueBoard ? (
+          <div className="space-y-3">
+            <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
+              Issues GitHub
+            </p>
+            <Suspense fallback={<TabSkeleton lines={4} />}>
+              <ProjectIssueBoard projectId={id} />
+            </Suspense>
+          </div>
+        ) : null}
+      </div>
+    ) : null;
 
   const notesContent = (
     <NoteList

@@ -188,6 +188,25 @@ prête), livrées (fermées depuis 30 jours). Pas de glisser-déposer : on agit
 sur GitHub, le tableau suit. Les PR liées demandent « Pull requests :
 lecture » sur le jeton ; sans elle, le tableau ne voit que les assignations.
 
+### La feuille de route du dépôt comme état réel (`repo_roadmaps`, `task_roadmap_links`)
+
+Les issues ne disent pas où en est le développement quand on travaille sur
+`main` avec Claude Code. Ce qui le dit, c'est le `roadmap.json` que l'agent
+tient dans le dépôt (épics, items numérotés, statuts `done` / `test` /
+`doing` / `todo` / `wait` / `idea`, format dans `lib/roadmap/roadmap.ts`).
+Parade OS le lit, ne l'écrit jamais : chemin par dépôt
+(`project_repos.roadmap_path`, champ « Feuille de route » sur la fiche
+projet, jeton avec « Contents : lecture »), instantané dans `repo_roadmaps`,
+affichage dans l'onglet Développement. Le rapprochement tâche ↔ item est
+proposé par le LLM (`lib/roadmap/match.ts`, une fois par version du fichier
+ou quand des tâches arrivent), tranché sous l'item (`task_roadmap_links`,
+`suggested` / `confirmed` / `rejected`), ou posé à la main. Un lien
+confirmé fait suivre à la tâche le statut de l'item : livré → terminée, en
+test ou en attente → en attente client, en cours → en cours
+(`lib/roadmap/sync.ts`). Relecture toutes les quinze minutes par le workflow
+GitHub, une fois par jour par Vercel, ou « Relire » sur la fiche ; migration
+`0093`.
+
 ## Tests
 
 - `pnpm test` : unitaires (Vitest), fonctions pures de `lib/`, ~1 s.
