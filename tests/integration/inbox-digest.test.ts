@@ -2,7 +2,12 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
 import { emailProposals, gmailMessages, gmailThreads } from "@/db/schema/gmail";
-import { expireStaleEmailProposals, PROPOSAL_TTL_DAYS } from "@/lib/gmail/expire-proposals";
+import { meetingProposals, meetings } from "@/db/schema/meetings";
+import {
+  expireStaleEmailProposals,
+  expireStaleMeetingProposals,
+  PROPOSAL_TTL_DAYS,
+} from "@/lib/crm/expire-proposals";
 import { extractEmail } from "@/lib/gmail/extract";
 import { extractAndSaveEmailProposals } from "@/lib/gmail/extract-and-save";
 import type { ResolvedTaskCompletion } from "@/lib/meetings/completed-tasks";
@@ -164,6 +169,40 @@ describe("péremption", () => {
       Récente: "pending",
       Acceptée: "accepted",
       "Pas à moi": "pending",
+    });
+  });
+
+  it("vaut aussi pour les réunions, sans distinction d'utilisateur", async () => {
+    const [m] = await db
+      .insert(meetings)
+      .values({
+        title: "Point Tech",
+        occurredAt: new Date("2026-10-01T10:00:00Z"),
+        createdBy: other.id,
+      })
+      .returning({ id: meetings.id });
+    if (!m) throw new Error("insert meeting");
+    await db.insert(meetingProposals).values([
+      {
+        meetingId: m.id,
+        kind: "task",
+        payload: { title: "Vieille" },
+        createdAt: daysAgo(PROPOSAL_TTL_DAYS + 1),
+      },
+      { meetingId: m.id, kind: "task", payload: { title: "Récente" }, createdAt: daysAgo(1) },
+    ]);
+
+    expect(await expireStaleMeetingProposals(db)).toBe(1);
+
+    const rows = await db
+      .select({ payload: meetingProposals.payload, status: meetingProposals.status })
+      .from(meetingProposals)
+      .where(eq(meetingProposals.meetingId, m.id));
+    expect(
+      Object.fromEntries(rows.map((r) => [(r.payload as { title: string }).title, r.status])),
+    ).toEqual({
+      Vieille: "expired",
+      Récente: "pending",
     });
   });
 

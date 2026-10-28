@@ -48,6 +48,8 @@ export const meetingProposalStatus = pgEnum("meeting_proposal_status", [
   "pending",
   "accepted",
   "rejected",
+  /** Jamais tranchée en 7 jours (cf. lib/crm/expire-proposals.ts) : hors file, pas un refus. */
+  "expired",
 ]);
 
 /**

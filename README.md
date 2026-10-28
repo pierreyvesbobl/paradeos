@@ -154,10 +154,11 @@ mails (`lib/gmail/`) :
   automatiques, services SaaS. Pas d'appel LLM, le message passe en
   `extraction_status = skipped`. Le classement des factures lit ses pièces
   jointes comme avant.
-- **Péremption** (`expire-proposals.ts`) : une proposition email `pending`
-  depuis plus de 7 jours passe en `expired` à la relève Gmail suivante.
-  Ce n'est pas un refus : absente de l'historique, elle est reposée si on
-  ré-extrait le message (migration `0096`).
+- **Péremption** (`lib/crm/expire-proposals.ts`) : une proposition `pending`
+  depuis plus de 7 jours, mail ou réunion, passe en `expired` à la relève
+  Gmail suivante. Ce n'est pas un refus : absente de l'historique et des
+  pages source, elle est reposée si on ré-extrait (migrations `0096`,
+  `0097`).
 - **Regroupement** : /inbox affiche une ligne par source seule et un groupe
   replié par message ou réunion dès deux propositions, avec « Tout
   accepter » / « Tout refuser » sans confirmation (`groupKey` sur
@@ -168,9 +169,9 @@ mails (`lib/gmail/`) :
   avec plus de 5 candidats, rien n'est proposé : le fil se rattache depuis
   sa page.
 
-Les brouillons de réponse ne sont plus générés d'office (`needsReply`
-reste porté par le message). Les propositions de réunion ne sont pas
-concernées par la péremption.
+Les brouillons de réponse ne sont plus générés ni affichés (`needsReply`
+reste porté par le message ; le kind `draft_reply` survit dans l'enum pour
+les lignes historiques).
 
 ### Ce qui a été dit d'une tâche (`task_sources`)
 

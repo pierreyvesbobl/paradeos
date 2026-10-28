@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import { meetingProposals, meetings } from "../../../db/schema/meetings";
 import { db } from "../../../lib/db/server";
@@ -49,7 +49,7 @@ export async function extractMeetingMcp(args: z.infer<typeof extractMeetingMcpSc
   const proposals = await conn
     .select({ id: meetingProposals.id, kind: meetingProposals.kind })
     .from(meetingProposals)
-    .where(eq(meetingProposals.meetingId, meeting.id));
+    .where(and(eq(meetingProposals.meetingId, meeting.id), ne(meetingProposals.status, "expired")));
 
   const byKind: Record<string, number> = {};
   for (const p of proposals) byKind[p.kind] = (byKind[p.kind] ?? 0) + 1;

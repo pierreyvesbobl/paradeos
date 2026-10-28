@@ -5,6 +5,7 @@ import { entities } from "@/db/schema/entities";
 import { gmailMessages, gmailSyncState, gmailThreads } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { allKnownContactEmails } from "@/lib/crm/contact-emails";
+import { expireStaleEmailProposals, expireStaleMeetingProposals } from "@/lib/crm/expire-proposals";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import {
@@ -28,7 +29,6 @@ import {
   recoverMissedCandidatures,
 } from "./candidature-filer";
 import { domainFromEmail, extractDomain, GENERIC_EMAIL_DOMAINS } from "./domain";
-import { expireStaleEmailProposals } from "./expire-proposals";
 import { extractAndSaveEmailProposals } from "./extract-and-save";
 import { looksLikeInvoiceMessage } from "./invoice-detect";
 import { processInvoiceFiling, queueInvoiceCandidates } from "./invoice-filer";
@@ -136,7 +136,7 @@ export type GmailSyncResult = {
   proposalsCreated: number;
   /** Tâches passées en done sans clic par les extractions de ce run. */
   tasksAutoCompleted: number;
-  /** Propositions email passées en `expired` : jamais tranchées en sept jours. */
+  /** Propositions (mails et réunions) passées en `expired` : jamais tranchées en sept jours. */
   proposalsExpired: number;
   /** Messages ingérés pour leurs PJ sur le seul signal facture (sujet, expéditeur, libellé). */
   invoiceCandidatesIngested: number;
@@ -1006,9 +1006,10 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
   }
 
   // Ce que personne n'a tranché en sept jours sort de la file (cf.
-  // lib/gmail/expire-proposals.ts). Hors budget LLM : une mise à jour.
+  // lib/crm/expire-proposals.ts), mails et réunions. Hors budget LLM.
   try {
     result.proposalsExpired += await expireStaleEmailProposals(conn, { userId });
+    result.proposalsExpired += await expireStaleMeetingProposals(conn);
   } catch (err) {
     result.errors.push(`expire proposals: ${err instanceof Error ? err.message : String(err)}`);
   }

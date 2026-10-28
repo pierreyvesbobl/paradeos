@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { meetingProposals, meetings } from "@/db/schema/meetings";
@@ -88,8 +88,8 @@ export async function extractAndSaveProposals(
 
   // Ce que la réunion a déjà tranché, toutes natures confondues : ces
   // lignes restent, et rien d'équivalent ne sera reposé (cf. le filtre
-  // avant insertion). Seules les propositions encore en attente sont
-  // effacées puis réinjectées.
+  // avant insertion). Seules les propositions encore en attente, ou
+  // périmées sans décision, sont effacées puis réinjectées.
   const decided = new DecidedProposals(
     await conn
       .select({
@@ -106,7 +106,12 @@ export async function extractAndSaveProposals(
   );
   await conn
     .delete(meetingProposals)
-    .where(and(eq(meetingProposals.meetingId, meeting.id), eq(meetingProposals.status, "pending")));
+    .where(
+      and(
+        eq(meetingProposals.meetingId, meeting.id),
+        inArray(meetingProposals.status, ["pending", "expired"]),
+      ),
+    );
 
   const proposalsRows: {
     meetingId: string;

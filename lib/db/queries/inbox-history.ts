@@ -173,7 +173,7 @@ export async function getInboxHistory(
           .innerJoin(meetings, eq(meetings.id, meetingProposals.meetingId))
           .leftJoin(projects, eq(projects.id, meetings.projectId))
           .leftJoin(users, eq(users.id, meetingProposals.decidedBy))
-          .where(ne(meetingProposals.status, "pending"))
+          .where(notInArray(meetingProposals.status, ["pending", "expired"]))
           .orderBy(
             desc(sql`coalesce(${meetingProposals.decidedAt}, ${meetingProposals.createdAt})`),
           )

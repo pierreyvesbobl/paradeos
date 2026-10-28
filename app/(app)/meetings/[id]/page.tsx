@@ -1,5 +1,5 @@
 import { FileText } from "@phosphor-icons/react/dist/ssr";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "@/components/delete-button";
 import { MeetingParticipantsField } from "@/components/meetings/meeting-participants-field";
@@ -70,7 +70,8 @@ export default async function MeetingDetailPage({ params }: { params: Params }) 
     conn
       .select()
       .from(meetingProposals)
-      .where(eq(meetingProposals.meetingId, id))
+      // Une proposition périmée n'a été ni acceptée ni refusée : rien à montrer.
+      .where(and(eq(meetingProposals.meetingId, id), ne(meetingProposals.status, "expired")))
       .orderBy(asc(meetingProposals.kind), asc(meetingProposals.createdAt)),
     getMeetingParticipants(conn, id),
     conn
