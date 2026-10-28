@@ -1,6 +1,7 @@
 import { EnvelopeOpen } from "@phosphor-icons/react/dist/ssr";
 import { Suspense } from "react";
 import { type Bucket, EmailsListPane, type InvoiceDir } from "@/components/emails/emails-list-pane";
+import { GmailAutoRefresh } from "@/components/emails/gmail-auto-refresh";
 import { EmailThreadDetail } from "@/components/emails/thread-detail";
 import { ThreadDetailSkeleton } from "@/components/emails/thread-detail-skeleton";
 import { requireUser } from "@/lib/auth/server";
@@ -65,6 +66,7 @@ export default async function EmailsPage({ searchParams }: { searchParams: Searc
 
   return (
     <div className="-m-6 flex h-[calc(100vh-58px)] w-full overflow-hidden">
+      <GmailAutoRefresh />
       <EmailsListPane
         threads={threads}
         counts={counts}

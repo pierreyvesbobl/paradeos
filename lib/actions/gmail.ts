@@ -18,7 +18,12 @@ import {
   unlinkThread,
 } from "@/lib/gmail/links";
 import { pullLabeledThreadsFromGmail } from "@/lib/gmail/pull-labels";
-import { cleanupSpamThreads, purgeGmailData, syncIncremental } from "@/lib/gmail/sync";
+import {
+  cleanupSpamThreads,
+  LLM_ITEM_RESERVE_MS,
+  purgeGmailData,
+  syncIncremental,
+} from "@/lib/gmail/sync";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
 import { SETTING_KEYS, setSetting } from "@/lib/settings";
 
@@ -64,6 +69,47 @@ export const triggerGmailSync = action(z.object({}), async ({ user }) => {
     hasMore: result.hasMore,
     errors: result.errors,
   };
+});
+
+/**
+ * Au-delà de ce délai sans passage de la sync, l'ouverture de `/emails`
+ * en relance une courte. Aligné sur la cadence visée des crons externes.
+ */
+const GMAIL_STALE_AFTER_MS = 15 * 60_000;
+
+/**
+ * Budget de la sync déclenchée par l'ouverture de la page : sous la marge
+ * d'un élément LLM, donc nouveaux messages, liaisons et libellés
+ * seulement. Extractions, factures et candidatures attendent le cron.
+ */
+const GMAIL_OPEN_BUDGET_MS = LLM_ITEM_RESERVE_MS - 5_000;
+
+/**
+ * Filet pour la relève des mails : la planification GitHub (quart d'heure) ne
+ * tourne en pratique que 6 à 7 fois par jour (cf. docs/cron-external.md).
+ * Appelée à l'ouverture de `/emails`, elle ne fait rien si la sync est
+ * passée il y a moins d'un quart d'heure ou si un run est déjà en cours.
+ */
+export const refreshGmailIfStale = action(z.object({}), async ({ user }) => {
+  const targetUserId = (await getGmailUserId(user.id)) ?? user.id;
+  const conn = await db();
+  const [state] = await conn
+    .select({ lastIncrementalAt: gmailSyncState.lastIncrementalAt })
+    .from(gmailSyncState)
+    .where(eq(gmailSyncState.userId, targetUserId))
+    .limit(1);
+  const last = state?.lastIncrementalAt?.getTime() ?? 0;
+  if (Date.now() - last < GMAIL_STALE_AFTER_MS) {
+    return { ran: false as const, inserted: 0 };
+  }
+  const result = await syncIncremental(targetUserId, {
+    deadline: Date.now() + GMAIL_OPEN_BUDGET_MS,
+  });
+  if (result.skipped === "already_running") {
+    return { ran: false as const, inserted: 0 };
+  }
+  if (result.inserted > 0) revalidatePath("/emails");
+  return { ran: true as const, inserted: result.inserted, hasMore: result.hasMore };
 });
 
 // ─── Liaison projet d'un thread ───────────────────────────────────────

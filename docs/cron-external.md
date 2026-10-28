@@ -35,6 +35,12 @@ déjà bien mieux que le passage quotidien de Vercel Hobby, mais pour un vrai
 quart d'heure il faut passer par cron-job.org (option 2 ci-dessous) ou par
 Vercel Pro.
 
+Filet côté app : l'ouverture de `/emails` relance une sync Gmail courte
+(60 s de budget) quand le dernier passage date de plus d'un quart d'heure
+(`lib/actions/gmail.ts:refreshGmailIfStale`). Les mails sont donc là quand
+on regarde, même si GitHub n'est pas passé ; les libellés Gmail et les
+extractions LLM qui n'ont pas tenu dans le budget attendent le run suivant.
+
 Pourquoi 15 et pas 30 : la dérive GitHub s'ajoute à l'intervalle, donc à
 `*/30` un transcript déposé par Meet pouvait attendre 40 minutes. Un run à
 vide ne coûte que deux requêtes HTTP.
