@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { index, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  pgTable,
+  real,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import type { RoadmapLinkStatus } from "./repo-roadmaps";
 import { tasks } from "./tasks";
 
@@ -48,6 +57,8 @@ export const taskCommitLinks = pgTable(
     reason: text("reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
+    /** Confirmé par la synchro (confiance au-dessus du seuil), pas par un humain. */
+    auto: boolean("auto").notNull().default(false),
   },
   (table) => ({
     pairUnique: uniqueIndex("task_commit_links_pair_unique").on(

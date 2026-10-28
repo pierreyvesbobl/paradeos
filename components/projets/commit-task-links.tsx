@@ -83,6 +83,15 @@ export function CommitTaskLinks({ remote, sha, links, openTasks }: Props) {
           <span className="shrink-0 text-[11px] opacity-80">
             {taskStatusLabels[l.taskStatus as TaskStatus] ?? l.taskStatus}
           </span>
+          {l.auto ? (
+            <span
+              className="shrink-0 rounded-sm px-1 py-0.5 text-[10px] uppercase tracking-wide"
+              style={{ background: "var(--ds-tint-green-bg)", color: "var(--ds-tint-green-text)" }}
+              title={`Confirmé automatiquement${typeof l.confidence === "number" ? ` (${Math.round(l.confidence * 100)} %)` : ""}${l.reason ? ` : ${l.reason}` : ""}`}
+            >
+              auto
+            </span>
+          ) : null}
           <Button
             type="button"
             variant="ghost"

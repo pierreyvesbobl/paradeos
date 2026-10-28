@@ -5,6 +5,7 @@ import type { Database } from "@/db/client";
 import { projectRepos } from "@/db/schema/project-repos";
 import { repoCommits, taskCommitLinks } from "@/db/schema/repo-commits";
 import { tasks } from "@/db/schema/tasks";
+import { autoConfirmCommitLinks, getAutoConfirmMin } from "@/lib/dev/auto-confirm";
 import { listCommitsSince } from "@/lib/github/commits";
 import { parseGithubRepo } from "@/lib/github/remote";
 import { upsertCommits } from "@/lib/repos/commits";
@@ -27,6 +28,8 @@ export type CommitSyncResult = {
   added: number;
   /** Nouvelles suggestions commit ↔ tâche. */
   suggested: number;
+  /** Suggestions confirmées sans clic (seuil de confiance). */
+  autoConfirmed: number;
 };
 
 /** Dépôts GitHub suivis : feuille de route ou projection d'issues activée. */
@@ -143,12 +146,14 @@ export async function syncRepoCommits(conn: Conn, repo: FollowedRepo): Promise<C
   } catch (err) {
     message = `Rapprochement non fait : ${err instanceof Error ? err.message : String(err)}`;
   }
+  const autoConfirmed = await autoConfirmCommitLinks(conn, repo.remote, await getAutoConfirmMin());
   return {
     remote: repo.remote,
     status: pulled.error ? "error" : "ok",
     message,
     added: pulled.added,
     suggested,
+    autoConfirmed,
   };
 }
 
@@ -165,6 +170,7 @@ export async function syncCommits(conn: Conn, projectId?: string): Promise<Commi
         message: err instanceof Error ? err.message : String(err),
         added: 0,
         suggested: 0,
+        autoConfirmed: 0,
       });
     }
   }

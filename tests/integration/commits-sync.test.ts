@@ -19,9 +19,13 @@ import { actAs, useTestDb } from "./setup";
  */
 
 vi.mock("@/lib/settings", () => ({
-  SETTING_KEYS: { GITHUB_TOKEN: "GITHUB_TOKEN" },
-  getSetting: async (key: string) => (key === "GITHUB_TOKEN" ? "token-test" : null),
+  SETTING_KEYS: { GITHUB_TOKEN: "GITHUB_TOKEN", DEV_AUTO_CONFIRM_MIN: "DEV_AUTO_CONFIRM_MIN" },
+  getSetting: async (key: string) =>
+    key === "GITHUB_TOKEN" ? "token-test" : key === "DEV_AUTO_CONFIRM_MIN" ? autoMin : null,
 }));
+
+/** Seuil de confirmation sans clic, piloté par les tests. */
+let autoMin = "off";
 
 const matchMock = vi.fn(
   async (
@@ -172,5 +176,39 @@ describe("commits des dépôts suivis", () => {
       .from(tasks)
       .where(eq(tasks.id, alertes));
     expect(task?.status).toBe("done");
+  });
+});
+
+describe("confirmation sans clic", () => {
+  it("au-dessus du seuil, la synchro confirme seule et termine la tâche", async () => {
+    autoMin = "0.9";
+    const livraison = await createTask("Heartbeat email à l'exploitant");
+    await upsertCommits(
+      db,
+      repo.remote,
+      [
+        {
+          sha: "d".repeat(40),
+          subject: "Heartbeat : email à OPS_ALERT_EMAIL (exploitant)",
+          committedAt: "2026-10-28T09:00:00Z",
+        },
+      ],
+      "claude_code",
+    );
+    const result = await syncRepoCommits(db, repo);
+    expect(result.suggested).toBe(1);
+    // « d », plus la suggestion « c » restée en attente depuis le test précédent.
+    expect(result.autoConfirmed).toBe(2);
+    const [link] = await db
+      .select({ status: taskCommitLinks.status, auto: taskCommitLinks.auto })
+      .from(taskCommitLinks)
+      .where(eq(taskCommitLinks.sha, "d".repeat(40)));
+    expect(link).toEqual({ status: "confirmed", auto: true });
+    const [task] = await db
+      .select({ status: tasks.status })
+      .from(tasks)
+      .where(eq(tasks.id, livraison));
+    expect(task?.status).toBe("done");
+    autoMin = "off";
   });
 });

@@ -12,6 +12,8 @@ export type RoadmapLinkRow = {
   status: RoadmapLinkStatus;
   confidence: number | null;
   reason: string | null;
+  /** Confirmé par la synchro, pas par un humain. */
+  auto: boolean;
   taskTitle: string;
   taskStatus: string;
 };
@@ -55,6 +57,7 @@ export async function getProjectRoadmaps(projectId: string): Promise<ProjectRoad
         status: taskRoadmapLinks.status,
         confidence: taskRoadmapLinks.confidence,
         reason: taskRoadmapLinks.reason,
+        auto: taskRoadmapLinks.auto,
         taskTitle: tasks.title,
         taskStatus: tasks.status,
       })

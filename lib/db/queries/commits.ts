@@ -11,6 +11,8 @@ export type CommitLinkRow = {
   status: RoadmapLinkStatus;
   confidence: number | null;
   reason: string | null;
+  /** Confirmé par la synchro, pas par un humain. */
+  auto: boolean;
   taskTitle: string;
   taskStatus: string;
 };
@@ -77,6 +79,7 @@ export async function getProjectCommits(projectId: string): Promise<ProjectCommi
       status: taskCommitLinks.status,
       confidence: taskCommitLinks.confidence,
       reason: taskCommitLinks.reason,
+      auto: taskCommitLinks.auto,
       taskTitle: tasks.title,
       taskStatus: tasks.status,
     })

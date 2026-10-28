@@ -25,11 +25,12 @@ export function RoadmapSyncButton({ projectId }: { projectId: string }) {
       } else {
         const changed = res.data.reduce((n, r) => n + r.changedTasks, 0);
         const suggested = res.data.reduce((n, r) => n + r.suggested, 0);
+        const auto = res.data.reduce((n, r) => n + r.autoConfirmed, 0);
         const notes = res.data.map((r) => r.message).filter(Boolean);
         toast.success(
           `Feuille de route relue : ${changed} tâche${changed > 1 ? "s" : ""} alignée${
             changed > 1 ? "s" : ""
-          }, ${suggested} suggestion${suggested > 1 ? "s" : ""}.${
+          }, ${suggested} suggestion${suggested > 1 ? "s" : ""}${auto > 0 ? `, ${auto} confirmée${auto > 1 ? "s" : ""} sans clic` : ""}.${
             notes.length ? ` ${notes.join(" ")}` : ""
           }`,
         );

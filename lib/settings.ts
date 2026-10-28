@@ -145,6 +145,13 @@ export const SETTING_KEYS = {
    */
   GITHUB_TOKEN: "GITHUB_TOKEN",
   /**
+   * Seuil de confiance (0 à 1, texte) au-dessus duquel une suggestion de
+   * rapprochement dev (tâche ↔ item de feuille de route, tâche ↔ commit)
+   * est confirmée par la synchro sans clic. Absent = 0.9 ; "off" = tout
+   * reste à valider à la main.
+   */
+  DEV_AUTO_CONFIRM_MIN: "DEV_AUTO_CONFIRM_MIN",
+  /**
    * Mode démo global : si "true", l'UI affiche des alias déterministes pour
    * les noms d'entreprises, contacts, projets, et applique un facteur (~×1)
    * aux montants. Les données en base restent intactes. Les exports

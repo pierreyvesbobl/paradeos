@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   index,
   jsonb,
   pgTable,
@@ -54,6 +55,8 @@ export const taskRoadmapLinks = pgTable(
     reason: text("reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
+    /** Confirmé par la synchro (confiance au-dessus du seuil), pas par un humain. */
+    auto: boolean("auto").notNull().default(false),
   },
   (table) => ({
     pairUnique: uniqueIndex("task_roadmap_links_pair_unique").on(

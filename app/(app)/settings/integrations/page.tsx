@@ -12,6 +12,7 @@ import { ApiTokensSection } from "./api-tokens-section";
 import { BrandLogosSection } from "./brand-logos-section";
 import { CandidaturesSection } from "./candidatures-section";
 import { CoworkingAutoSendSection } from "./coworking-autosend-section";
+import { DevAutoConfirmSection } from "./dev-auto-confirm-section";
 import { DougsSection } from "./dougs-section";
 import { DriveTranscriptsSection } from "./drive-transcripts-section";
 import { EmailTranscriptsSection } from "./email-transcripts-section";
@@ -101,6 +102,7 @@ export default async function IntegrationsSettingsPage({
       <InvoiceFilingSection userId={user.id} />
       {isAdmin ? <CandidaturesSection userId={user.id} /> : null}
       {isAdmin ? <TaskCompletionSection /> : null}
+      {isAdmin ? <DevAutoConfirmSection /> : null}
       {isAdmin ? <DriveTranscriptsSection /> : null}
       {isAdmin ? <EmailTranscriptsSection userId={user.id} /> : null}
     </>

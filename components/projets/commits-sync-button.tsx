@@ -25,11 +25,12 @@ export function CommitsSyncButton({ projectId }: { projectId: string }) {
       } else {
         const added = res.data.reduce((n, r) => n + r.added, 0);
         const suggested = res.data.reduce((n, r) => n + r.suggested, 0);
+        const auto = res.data.reduce((n, r) => n + r.autoConfirmed, 0);
         const notes = res.data.map((r) => r.message).filter(Boolean);
         toast.success(
           `${added} commit${added > 1 ? "s" : ""} nouveau${added > 1 ? "x" : ""}, ${suggested} suggestion${
             suggested > 1 ? "s" : ""
-          }.${notes.length ? ` ${notes.join(" ")}` : ""}`,
+          }${auto > 0 ? `, ${auto} tâche${auto > 1 ? "s" : ""} terminée${auto > 1 ? "s" : ""} sans clic` : ""}.${notes.length ? ` ${notes.join(" ")}` : ""}`,
         );
       }
       router.refresh();

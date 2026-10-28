@@ -20,9 +20,13 @@ import { actAs, useTestDb } from "./setup";
  */
 
 vi.mock("@/lib/settings", () => ({
-  SETTING_KEYS: { GITHUB_TOKEN: "GITHUB_TOKEN" },
-  getSetting: async (key: string) => (key === "GITHUB_TOKEN" ? "token-test" : null),
+  SETTING_KEYS: { GITHUB_TOKEN: "GITHUB_TOKEN", DEV_AUTO_CONFIRM_MIN: "DEV_AUTO_CONFIRM_MIN" },
+  getSetting: async (key: string) =>
+    key === "GITHUB_TOKEN" ? "token-test" : key === "DEV_AUTO_CONFIRM_MIN" ? autoMin : null,
 }));
+
+/** Seuil de confirmation sans clic, piloté par les tests. */
+const autoMin = "off";
 
 const matchMock = vi.fn(
   async (candidates: { id: string; title: string }[], items: { id: string; title: string }[]) => {
