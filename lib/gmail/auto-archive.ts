@@ -9,6 +9,7 @@ import { db } from "@/lib/db/server";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { archiveThread } from "./archive";
 import { isAutomatedSender } from "./automated-sender";
+import { isCalendarMail } from "./calendar-mail";
 
 /**
  * Archivage automatique de la boîte de réception : retirer de l'inbox,
@@ -19,7 +20,9 @@ import { isAutomatedSender } from "./automated-sender";
  *    au moins une est terminée, et rien n'est arrivé dans le fil depuis.
  *    Le fil est lu, et aucune proposition n'y attend une décision.
  *  - `automated` : tous les messages viennent d'expéditeurs machines
- *    (cf. automated-sender.ts) et le dernier a plus de N jours.
+ *    (cf. automated-sender.ts) et le dernier a plus de N jours. Les mails
+ *    d'agenda (invitations, rappels, confirmations de rendez-vous, cf.
+ *    calendar-mail.ts) restent en boîte quoi qu'il arrive.
  *
  * Un fil déjà archivé par ici n'est repris que si un message plus récent
  * est arrivé : remettre un fil en boîte à la main tient.
@@ -206,6 +209,7 @@ export async function selectAutomatedThreads(
       threadId: gmailMessages.threadId,
       fromEmail: gmailMessages.fromEmail,
       fromName: gmailMessages.fromName,
+      subject: gmailMessages.subject,
     })
     .from(gmailMessages)
     .where(
@@ -214,15 +218,16 @@ export async function selectAutomatedThreads(
         fresh.map((t) => t.id),
       ),
     );
-  const humanThreads = new Set<string>();
+  // Un seul message humain, ou un seul mail d'agenda, et le fil reste.
+  const keep = new Set<string>();
   const seen = new Set<string>();
   for (const m of senders) {
     seen.add(m.threadId);
-    if (!isAutomatedSender(m)) humanThreads.add(m.threadId);
+    if (!isAutomatedSender(m) || isCalendarMail(m)) keep.add(m.threadId);
   }
   const limit = opts.limit ?? MAX_ARCHIVES_PER_RUN;
   return fresh
-    .filter((t) => seen.has(t.id) && !humanThreads.has(t.id))
+    .filter((t) => seen.has(t.id) && !keep.has(t.id))
     .slice(0, limit)
     .map((t) => ({ threadId: t.id, reason: "automated" as const }));
 }

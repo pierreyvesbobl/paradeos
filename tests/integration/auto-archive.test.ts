@@ -152,7 +152,7 @@ describe("fils aux tâches terminées", () => {
 });
 
 describe("notifications de robots", () => {
-  it("retient les fils sans humain au-delà de l'âge, pas ceux où quelqu'un a écrit", async () => {
+  it("retient les fils sans humain au-delà de l'âge, ni humain ni agenda", async () => {
     const old = await insertThread({
       subject: "Reçu",
       messages: [{ from: "notifications@stripe.com", at: daysAgo(10) }],
@@ -169,12 +169,23 @@ describe("notifications de robots", () => {
         { from: "comptable@cabinet.fr", at: daysAgo(10) },
       ],
     });
+    const reminder = await insertThread({
+      subject: "Notification: Faire les volets sociaux - dim. 25 oct. 2026 11:00",
+      messages: [{ from: "calendar-notification@google.com", at: daysAgo(20) }],
+    });
+    const booking = await insertThread({
+      subject: "Rendez-vous de 30 min between Pierre-Yves Sage and mamura",
+      messages: [{ from: "hello@cal.com", at: daysAgo(20) }],
+    });
 
     const picked = await selectAutomatedThreads(db, { userId: actor.id, days: 7 });
     const ids = new Set(picked.map((c) => c.threadId));
     expect(ids.has(old.threadId)).toBe(true);
     expect(ids.has(recent.threadId)).toBe(false);
     expect(ids.has(withHuman.threadId)).toBe(false);
+    // Un rappel d'agenda ou une confirmation de rendez-vous reste en boîte.
+    expect(ids.has(reminder.threadId)).toBe(false);
+    expect(ids.has(booking.threadId)).toBe(false);
   });
 });
 

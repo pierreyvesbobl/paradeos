@@ -180,7 +180,9 @@ mails (`lib/gmail/`) :
   arrivé après la clôture.
 - `GMAIL_ARCHIVE_AUTOMATED_DAYS` (`off` par défaut, 3/7/14) : un fil où
   seuls des expéditeurs machines ont écrit, lu ou non, dont le dernier
-  message a plus de N jours. 100 fils par relève.
+  message a plus de N jours. 100 fils par relève. Les mails d'agenda
+  (invitations, rappels, confirmations de rendez-vous,
+  `lib/gmail/calendar-mail.ts`) restent en boîte.
 
 La trace est sur `gmail_threads.auto_archived_at` / `auto_archive_reason`
 (migration `0098`) : un fil remis en boîte à la main n'est pas repris tant

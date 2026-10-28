@@ -75,7 +75,8 @@ export async function GmailAutoArchiveSection({ userId }: { userId: string }) {
               <h3 className="font-medium text-xs">Notifications de robots</h3>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
                 Reçus, alertes, notifications : un fil où personne d'humain n'a écrit, lu ou non,
-                une fois le dernier message assez vieux. {automatedCandidates.length} fil
+                une fois le dernier message assez vieux. Les invitations, rappels d'agenda et
+                confirmations de rendez-vous restent en boîte. {automatedCandidates.length} fil
                 {automatedCandidates.length > 1 ? "s" : ""} de plus de {settings.automatedDays ?? 7}{" "}
                 jours aujourd'hui · {archivedByReason.get("automated") ?? 0} déjà archivé
                 {(archivedByReason.get("automated") ?? 0) > 1 ? "s" : ""}. 100 fils au plus par
