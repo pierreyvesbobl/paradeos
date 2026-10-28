@@ -30,6 +30,7 @@ export * from "@/db/schema/project-repos";
 export * from "@/db/schema/project-secrets";
 export * from "@/db/schema/projects";
 export * from "@/db/schema/purchase-matching";
+export * from "@/db/schema/repo-commits";
 export * from "@/db/schema/repo-roadmaps";
 export * from "@/db/schema/tags";
 export * from "@/db/schema/task-assignees";

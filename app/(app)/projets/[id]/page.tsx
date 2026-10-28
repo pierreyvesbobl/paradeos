@@ -20,6 +20,7 @@ import Link from "@/components/link";
 import { NoteList } from "@/components/notes/note-list";
 import { PageHeader } from "@/components/page-header";
 import { ProjectEntityField } from "@/components/projects/project-entity-field";
+import { ProjectCommits } from "@/components/projets/project-commits";
 import { ProjectIssueBoard } from "@/components/projets/project-issue-board";
 import { ProjectIssuesSection } from "@/components/projets/project-issues-section";
 import { ProjectMeetingsSection } from "@/components/projets/project-meetings-section";
@@ -221,12 +222,20 @@ export default async function ProjectDetailPage({ params }: { params: Params }) 
   // un dépôt projette ses issues, le tableau des issues en dessous.
   const hasRoadmap = projectRepoRows.some((r) => r.roadmapPath);
   const hasIssueBoard = projectRepoRows.some((r) => r.syncIssues && parseGithubRepo(r.remote));
+  const hasCommits = projectRepoRows.some(
+    (r) => (r.roadmapPath || r.syncIssues) && parseGithubRepo(r.remote),
+  );
   const devContent =
-    hasRoadmap || hasIssueBoard ? (
+    hasRoadmap || hasIssueBoard || hasCommits ? (
       <div className="space-y-8">
         {hasRoadmap ? (
           <Suspense fallback={<TabSkeleton lines={6} />}>
             <ProjectRoadmap projectId={id} />
+          </Suspense>
+        ) : null}
+        {hasCommits ? (
+          <Suspense fallback={<TabSkeleton lines={4} />}>
+            <ProjectCommits projectId={id} />
           </Suspense>
         ) : null}
         {hasIssueBoard ? (

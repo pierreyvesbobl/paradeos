@@ -45,3 +45,31 @@ export function pickSuggestions(
   }
   return [...best.values()];
 }
+
+export type CommitSuggestion = {
+  taskId: string;
+  sha: string;
+  confidence: number;
+  reason: string;
+};
+
+/**
+ * Même tri pour les commits, dans l'autre sens : un commit livre une tâche
+ * au plus (la plus sûre), plusieurs commits peuvent livrer la même tâche.
+ */
+export function pickCommitSuggestions(
+  raw: { pairs: { taskId: string; itemId: string; confidence: number; reason: string }[] },
+  known: { taskIds: Set<string>; shas: Set<string> },
+): CommitSuggestion[] {
+  const best = new Map<string, CommitSuggestion>();
+  for (const p of raw.pairs) {
+    if (!known.taskIds.has(p.taskId) || !known.shas.has(p.itemId)) continue;
+    const confidence = Math.max(0, Math.min(1, p.confidence));
+    if (confidence < MIN_CONFIDENCE) continue;
+    const current = best.get(p.itemId);
+    if (!current || current.confidence < confidence) {
+      best.set(p.itemId, { taskId: p.taskId, sha: p.itemId, confidence, reason: p.reason });
+    }
+  }
+  return [...best.values()];
+}

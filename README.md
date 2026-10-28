@@ -207,6 +207,22 @@ test ou en attente → en attente client, en cours → en cours
 GitHub, une fois par jour par Vercel, ou « Relire » sur la fiche ; migration
 `0093`.
 
+### Ce que Claude Code fait vraiment (`repo_commits`, `task_commit_links`, mod)
+
+La feuille de route ne dit pas tout : ce qui a été fait, c'est ce qui a été
+commité. Les commits des dépôts suivis (feuille de route ou projection
+d'issues) arrivent par deux chemins dans `repo_commits` : relus sur GitHub
+toutes les quinze minutes (`lib/repos/commits-sync.ts`, jeton « Contents :
+lecture »), et poussés par le mod Claude Code dès qu'un `git commit` passe
+en session (`report_commits`, poussé ou non). Le LLM dit quelle tâche
+ouverte chaque commit livre (`lib/repos/match-commits.ts`, chaque commit
+examiné une fois) ; la suggestion se tranche sous le commit dans l'onglet
+Développement, confirmer termine la tâche. Dans l'autre sens, le mod
+demande à Parade OS le contexte du dépôt au démarrage de la session
+(`repo_context` : projet, tâches ouvertes, feuille de route) et l'ajoute au
+prompt système avec la consigne de signaler l'avancement par
+`report_task_progress` (statut + note sur la tâche). Migration `0094`.
+
 ## Tests
 
 - `pnpm test` : unitaires (Vitest), fonctions pures de `lib/`, ~1 s.

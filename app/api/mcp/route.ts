@@ -88,6 +88,12 @@ import {
   PROMPTS,
   RESOURCE_TEMPLATES,
   readResource,
+  repoContext,
+  repoContextSchema,
+  reportCommits,
+  reportCommitsSchema,
+  reportTaskProgress,
+  reportTaskProgressSchema,
   resolveRepo,
   resolveRepoSchema,
   searchAll,
@@ -298,6 +304,26 @@ const TOOL_REGISTRY: Record<
       "Blocs d'activité Claude Code à imputer (séances fusionnées, par projet ou dépôt) pour un jour (Europe/Paris, défaut aujourd'hui) ou une période. Sert à consolider sa journée : chaque bloc devient un créneau via log_time + claudeSegmentIds.",
     schema: listClaudeActivitySchema,
     handler: (a, ctx) => listClaudeActivity(a as never, ctx as never),
+  },
+  repo_context: {
+    description:
+      "Contexte Parade OS d'un dépôt (remote git) : projet rattaché, tâches ouvertes du projet, feuille de route (items et tâches liées), derniers commits connus. Injecté par le mod Claude Code dans le prompt système ; utile aussi pour savoir sur quoi on travaille.",
+    schema: repoContextSchema,
+    handler: (a) => repoContext(a as never),
+  },
+  report_task_progress: {
+    write: true,
+    description:
+      "L'agent de code dit où en est une tâche Parade OS : `taskId`, `status` (todo, in_progress, awaiting_client, blocked, done) et `note` facultative (ce qui a été fait, ce qui bloque), gardée en note sur la tâche. À appeler quand on avance, livre ou bloque une tâche listée dans le contexte du dépôt.",
+    schema: reportTaskProgressSchema,
+    handler: (a, ctx) => reportTaskProgress(a as never, ctx as never),
+  },
+  report_commits: {
+    write: true,
+    description:
+      "Le mod Claude Code pousse les commits faits en session (remote + liste sha/subject/body/author/committedAt). Idempotent par sha ; Parade OS les rapproche ensuite des tâches.",
+    schema: reportCommitsSchema,
+    handler: (a) => reportCommits(a as never),
   },
   track_claude_time: {
     write: true,

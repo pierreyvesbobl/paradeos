@@ -86,7 +86,20 @@ aussi depuis la fiche projet, section « Dépôts git ».
 ## Ce qui quitte la machine
 
 Horodatages, remote git (ou, sans dépôt, le nom du dossier de travail),
-numéro de segment. Jamais le contenu des échanges ni les noms de fichiers.
+numéro de segment. Sur un dépôt rattaché à un projet : les sha, sujets,
+corps, auteurs et dates des vingt derniers commits, au démarrage et après
+chaque tour où un `git commit` est passé (`report_commits`). Jamais le
+contenu des échanges ni les noms de fichiers.
+
+## Contexte du projet dans la session
+
+Au démarrage, sur un dépôt rattaché, le mod demande `repo_context` à
+Parade OS (projet, tâches ouvertes, feuille de route, derniers commits) et
+l'ajoute au prompt système (`prompt.compose`, section
+`paradeos-temps:context`) avec la consigne d'appeler `report_task_progress`
+quand une tâche avance, se livre ou bloque. Parade OS affiche ces commits
+et rapproche chacun d'une tâche dans l'onglet Développement de la fiche
+projet.
 
 ## Développement
 

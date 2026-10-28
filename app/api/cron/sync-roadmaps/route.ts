@@ -1,7 +1,9 @@
 /**
  * Relit la feuille de route (`roadmap.json`) des dépôts suivis, aligne les
  * tâches liées sur le statut de leur item et propose de nouveaux
- * rapprochements quand quelque chose a bougé (cf. lib/roadmap/sync.ts).
+ * rapprochements quand quelque chose a bougé (cf. lib/roadmap/sync.ts) ;
+ * puis lit les nouveaux commits des dépôts suivis et propose quelle tâche
+ * chacun livre (cf. lib/repos/commits-sync.ts).
  *
  * Auth : `Authorization: Bearer <CRON_SECRET>`. Déclenché toutes les
  * quinze minutes par `.github/workflows/crons.yml`, une fois par jour par
@@ -11,6 +13,7 @@
 
 import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { db } from "@/lib/db/server";
+import { syncCommits } from "@/lib/repos/commits-sync";
 import { syncRoadmaps } from "@/lib/roadmap/sync";
 
 export const maxDuration = 300;
@@ -20,13 +23,23 @@ export async function GET(request: Request) {
   const unauthorized = cronUnauthorized(request);
   if (unauthorized) return unauthorized;
 
-  const results = await syncRoadmaps(await db());
-  const errors = results.filter((r) => r.status === "error");
+  const conn = await db();
+  const roadmaps = await syncRoadmaps(conn);
+  const commits = await syncCommits(conn);
+  const errors = [...roadmaps, ...commits].filter((r) => r.status === "error");
   return cronResponse({
-    repos: results.length,
-    changedTasks: results.reduce((n, r) => n + r.changedTasks, 0),
-    suggested: results.reduce((n, r) => n + r.suggested, 0),
-    results,
+    roadmaps: {
+      repos: roadmaps.length,
+      changedTasks: roadmaps.reduce((n, r) => n + r.changedTasks, 0),
+      suggested: roadmaps.reduce((n, r) => n + r.suggested, 0),
+      results: roadmaps,
+    },
+    commits: {
+      repos: commits.length,
+      added: commits.reduce((n, r) => n + r.added, 0),
+      suggested: commits.reduce((n, r) => n + r.suggested, 0),
+      results: commits,
+    },
     failed: errors.length,
     errors,
   });

@@ -10,6 +10,7 @@
 export * from "./tools/claude-time";
 export * from "./tools/coworking";
 export * from "./tools/crm";
+export * from "./tools/dev";
 export * from "./tools/emails";
 export * from "./tools/meetings";
 export * from "./tools/notes";
