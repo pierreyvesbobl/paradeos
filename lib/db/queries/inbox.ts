@@ -83,6 +83,11 @@ export type InboxItem = {
   detail: string | null;
   /** D'où vient l'extraction — "Email : Devis signé" / "Meeting : Kickoff" / "Facture fournisseur". */
   sourceLabel: string;
+  /**
+   * Regroupement dans la file : un même mail ou une même réunion donne
+   * souvent plusieurs propositions, qui se tranchent ensemble.
+   */
+  groupKey: string;
   /** URL cible : ouvre la page où on peut accepter/rejeter la proposition. */
   href: string;
   /** Confiance du match LLM si applicable (0..1). */
@@ -464,6 +469,7 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
         id: `email:${r.id}`,
         sourceId: r.id,
         source: "email",
+        groupKey: `email:${r.messageId}`,
         kind,
         title,
         detail,
@@ -553,6 +559,7 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
         id: `meeting:${r.id}`,
         sourceId: r.id,
         source: "meeting",
+        groupKey: `meeting:${r.meetingId}`,
         kind,
         title,
         detail,
@@ -582,6 +589,7 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
         id: `filing:${r.id}`,
         sourceId: r.id,
         source: "filing",
+        groupKey: `filing:${r.id}`,
         kind: "invoice_filing",
         title: supplier,
         detail: detailParts.join(" · ") || null,
@@ -632,6 +640,7 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
         id: `reconciliation:quote:${s.dougs.id}`,
         sourceId: s.dougs.id,
         source: "reconciliation",
+        groupKey: `reconciliation:quote:${s.dougs.id}`,
         kind: "quote_reconciliation",
         title,
         detail: `→ Rattacher au projet ${top.projectName}`,
@@ -729,6 +738,7 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
         id: `reconciliation:invoice:${s.dougs.id}`,
         sourceId: s.dougs.id,
         source: "reconciliation",
+        groupKey: `reconciliation:invoice:${s.dougs.id}`,
         kind: "invoice_reconciliation",
         title,
         detail,
@@ -763,6 +773,7 @@ export async function getInboxItems(userId: string): Promise<InboxData> {
         id: `linkedin:${r.id}`,
         sourceId: r.id,
         source: "linkedin",
+        groupKey: `linkedin:${r.id}`,
         kind: "contact_match",
         title: name,
         detail,

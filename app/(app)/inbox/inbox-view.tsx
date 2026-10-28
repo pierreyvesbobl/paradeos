@@ -4,6 +4,8 @@ import {
   ArrowSquareOut,
   Buildings,
   CalendarBlank,
+  CaretDown,
+  CaretRight,
   Check,
   CheckCircle,
   Envelope,
@@ -162,17 +164,27 @@ export function InboxView({
     });
   }
 
-  async function bulkDecide(action: "accept" | "reject") {
-    if (visible.length === 0) return;
+  /**
+   * Tranche plusieurs lignes d'un coup : la barre globale (avec
+   * confirmation, elle peut viser des dizaines de lignes) et l'en-tête
+   * d'un groupe (sans : c'est précisément le geste qu'on veut rendre
+   * court, et un refus se corrige depuis l'historique).
+   */
+  function decideMany(
+    action: "accept" | "reject",
+    targets: InboxItem[],
+    opts: { confirm: boolean },
+  ) {
+    if (targets.length === 0) return;
     if (
+      opts.confirm &&
       !window.confirm(
         action === "accept"
-          ? `Créer les ${visible.length} extractions visibles ?`
-          : `Rejeter les ${visible.length} extractions visibles ?`,
+          ? `Créer les ${targets.length} extractions visibles ?`
+          : `Rejeter les ${targets.length} extractions visibles ?`,
       )
     )
       return;
-    const targets = [...visible];
     startBulk(async () => {
       const results = await Promise.allSettled(
         targets.map((it) =>
@@ -212,6 +224,20 @@ export function InboxView({
     });
   }
 
+  // Une ligne par proposition noyait la décision réelle : le mail
+  // d'Antonio, c'est cinq fonctionnalités à prendre ou laisser ensemble,
+  // pas cinq cartes. On regroupe par source (message, réunion) en gardant
+  // l'ordre d'arrivée ; une source seule reste une ligne ordinaire.
+  const groups = useMemo(() => {
+    const map = new Map<string, InboxItem[]>();
+    for (const it of visible) {
+      const arr = map.get(it.groupKey) ?? [];
+      arr.push(it);
+      map.set(it.groupKey, arr);
+    }
+    return [...map.entries()].map(([key, items]) => ({ key, items }));
+  }, [visible]);
+
   if (remainingTotal === 0) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-xl border border-ds-border border-dashed bg-ds-app px-6 py-16 text-center">
@@ -237,7 +263,7 @@ export function InboxView({
         <span className="flex-1" />
         <button
           type="button"
-          onClick={() => bulkDecide("reject")}
+          onClick={() => decideMany("reject", visible, { confirm: true })}
           disabled={bulkPending || visible.length === 0}
           className="inline-flex items-center gap-1.5 rounded-md border border-tint-red-bg bg-tint-red-bg px-2.5 py-1 font-medium text-[12px] text-tint-red-text transition-colors hover:border-tint-red-dot disabled:opacity-40"
         >
@@ -246,7 +272,7 @@ export function InboxView({
         </button>
         <button
           type="button"
-          onClick={() => bulkDecide("accept")}
+          onClick={() => decideMany("accept", visible, { confirm: true })}
           disabled={bulkPending || visible.length === 0}
           className="inline-flex items-center gap-1.5 rounded-md border border-tint-green-dot bg-tint-green-bg px-2.5 py-1 font-medium text-[12px] text-tint-green-text transition-colors hover:bg-tint-green-dot hover:text-white disabled:opacity-40"
         >
@@ -313,32 +339,175 @@ export function InboxView({
         </div>
       ) : null}
 
-      {/* Liste plate */}
+      {/* Liste : une ligne par source seule, un groupe dépliable sinon */}
       <div className="overflow-hidden rounded-[10px] border border-ds-border bg-ds-app">
         {visible.length === 0 ? (
           <div className="px-4 py-6 text-center text-ds-text-tertiary text-sm">
             Aucune extraction ne correspond à ces filtres.
           </div>
         ) : (
-          visible.map((it, i) => (
-            <InboxRow
-              key={it.id}
-              item={it}
-              isLast={i === visible.length - 1}
-              coworkingInvoiceOptions={coworkingInvoiceOptions}
-              contactOptions={contactOptions}
-              linkOptions={linkOptions}
-              onDismiss={(id) => {
-                dismissLocally(id);
-                if (previewItem?.id === id) setPreviewItem(null);
-              }}
-              onOpenPreview={() => setPreviewItem(it)}
-            />
-          ))
+          groups.map((g, gi) => {
+            const isLastGroup = gi === groups.length - 1;
+            const single = g.items.length === 1 ? g.items[0] : null;
+            if (single) {
+              return (
+                <InboxRow
+                  key={single.id}
+                  item={single}
+                  isLast={isLastGroup}
+                  coworkingInvoiceOptions={coworkingInvoiceOptions}
+                  contactOptions={contactOptions}
+                  linkOptions={linkOptions}
+                  onDismiss={(id) => {
+                    dismissLocally(id);
+                    if (previewItem?.id === id) setPreviewItem(null);
+                  }}
+                  onOpenPreview={() => setPreviewItem(single)}
+                />
+              );
+            }
+            return (
+              <InboxGroup
+                key={g.key}
+                items={g.items}
+                isLast={isLastGroup}
+                busy={bulkPending}
+                onDecideAll={(action) => decideMany(action, g.items, { confirm: false })}
+                renderRow={(it, isLast) => (
+                  <InboxRow
+                    key={it.id}
+                    item={it}
+                    isLast={isLast}
+                    coworkingInvoiceOptions={coworkingInvoiceOptions}
+                    contactOptions={contactOptions}
+                    linkOptions={linkOptions}
+                    onDismiss={(id) => {
+                      dismissLocally(id);
+                      if (previewItem?.id === id) setPreviewItem(null);
+                    }}
+                    onOpenPreview={() => setPreviewItem(it)}
+                  />
+                )}
+              />
+            );
+          })
         )}
       </div>
 
       <PreviewSheet item={previewItem} onClose={() => setPreviewItem(null)} />
+    </div>
+  );
+}
+
+/** « 5 tâches », « 1 contact » : le libellé du type, au nombre. */
+function kindCountLabel(kind: InboxExtractionKind, n: number): string {
+  const label = (KIND_BY_KEY[kind]?.label ?? "propositions").toLowerCase();
+  // Au singulier, on retire les marques du pluriel (« tâches terminées » →
+  // « tâche terminée ») sans toucher aux mots en -is (« devis »).
+  return `${n} ${n === 1 ? label.replace(/(?<!i)s\b/g, "") : label}`;
+}
+
+/**
+ * Une source qui a produit plusieurs propositions : un en-tête replié par
+ * défaut, qui dit d'où ça vient et combien de quoi, avec tout accepter ou
+ * tout refuser d'un geste ; déplié, les lignes habituelles.
+ */
+function InboxGroup({
+  items,
+  isLast,
+  busy,
+  onDecideAll,
+  renderRow,
+}: {
+  items: InboxItem[];
+  isLast: boolean;
+  busy: boolean;
+  onDecideAll: (action: "accept" | "reject") => void;
+  renderRow: (item: InboxItem, isLast: boolean) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const first = items[0];
+  if (!first) return null;
+  const SourceIcon = SOURCE_ICON[first.source];
+  const byKind = new Map<InboxExtractionKind, number>();
+  for (const it of items) byKind.set(it.kind, (byKind.get(it.kind) ?? 0) + 1);
+  const Caret = open ? CaretDown : CaretRight;
+
+  return (
+    <div className={cn(!isLast && "border-ds-border border-b", busy && "opacity-50")}>
+      <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-ds-hover">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label={open ? "Replier" : "Déplier"}
+          className="mt-0.5 flex size-8 flex-none items-center justify-center rounded-md bg-ds-hover text-ds-text-muted transition-colors hover:text-ds-text"
+        >
+          <Caret weight="bold" className="size-3.5" />
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <SourceIcon weight="duotone" className="size-4 shrink-0 text-ds-text-muted" />
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              className="min-w-0 truncate text-left font-medium text-ds-text text-sm hover:underline focus:outline-hidden focus-visible:underline"
+            >
+              {first.sourceLabel}
+            </button>
+            <span className="shrink-0 rounded-full bg-ds-hover px-1.5 py-0 font-mono text-[10px] text-ds-text-tertiary">
+              {items.length}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {[...byKind.entries()].map(([kind, n]) => {
+              const def = KIND_BY_KEY[kind];
+              const Icon = def?.icon ?? User;
+              return (
+                <span
+                  key={kind}
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0 text-[10px]"
+                  style={{ background: def?.bg, color: def?.textColor }}
+                >
+                  <Icon weight="duotone" className="size-3" />
+                  {kindCountLabel(kind, n)}
+                </span>
+              );
+            })}
+            {first.dateLabel ? (
+              <span className="text-[11px] text-ds-text-tertiary">{first.dateLabel}</span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex flex-none items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onDecideAll("reject")}
+            disabled={busy}
+            className="inline-flex items-center gap-1 rounded-md border border-transparent bg-tint-red-bg px-2 py-1 font-medium text-[11px] text-tint-red-text transition-colors hover:border-tint-red-dot disabled:opacity-40"
+          >
+            <X weight="bold" className="size-3" />
+            Tout refuser
+          </button>
+          <button
+            type="button"
+            onClick={() => onDecideAll("accept")}
+            disabled={busy}
+            className="inline-flex items-center gap-1 rounded-md border border-transparent bg-tint-green-bg px-2 py-1 font-medium text-[11px] text-tint-green-text transition-colors hover:border-tint-green-dot disabled:opacity-40"
+          >
+            <Check weight="bold" className="size-3" />
+            Tout accepter
+          </button>
+        </div>
+      </div>
+
+      {open ? (
+        <div className="border-ds-border border-t bg-ds-surface pl-6">
+          {items.map((it, i) => renderRow(it, i === items.length - 1))}
+        </div>
+      ) : null}
     </div>
   );
 }
