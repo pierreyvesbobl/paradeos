@@ -5,11 +5,12 @@ import { gmailMessages, gmailThreads } from "@/db/schema/gmail";
 import { taskSources } from "@/db/schema/task-sources";
 import { tasks } from "@/db/schema/tasks";
 import {
+  reconcileInboxMirror,
   runAutoArchive,
   selectAutomatedThreads,
   selectDoneTaskThreads,
 } from "@/lib/gmail/auto-archive";
-import { modifyThreadLabels } from "@/lib/google/gmail-api";
+import { listThreadsByLabel, modifyThreadLabels } from "@/lib/google/gmail-api";
 import { createTestDb, seedUser, type TestUser } from "./db";
 import { actAs, useTestDb } from "./setup";
 
@@ -21,7 +22,12 @@ import { actAs, useTestDb } from "./setup";
 
 vi.mock("@/lib/google/gmail-api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/google/gmail-api")>();
-  return { ...original, modifyThreadLabels: vi.fn(async () => ({})) };
+  return {
+    ...original,
+    modifyThreadLabels: vi.fn(async () => ({})),
+    // Par défaut, Gmail confirme tout ce que le miroir croit en boîte.
+    listThreadsByLabel: vi.fn(async () => ({ threads: [], nextPageToken: undefined })),
+  };
 });
 vi.mock("@/lib/settings", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/settings")>();
@@ -58,11 +64,12 @@ async function insertThread(opts: {
     (m, x) => (x.at > m ? x.at : m),
     opts.messages[0]?.at ?? new Date(),
   );
+  const gmailThreadId = `gt-${crypto.randomUUID()}`;
   const [thread] = await db
     .insert(gmailThreads)
     .values({
       userId: actor.id,
-      gmailThreadId: `gt-${crypto.randomUUID()}`,
+      gmailThreadId,
       subject: opts.subject,
       lastMessageAt: last,
       hasUnread: opts.hasUnread ?? false,
@@ -88,7 +95,7 @@ async function insertThread(opts: {
     if (!row) throw new Error("insert message");
     ids.push(row.id);
   }
-  return { threadId: thread.id, messageIds: ids };
+  return { threadId: thread.id, gmailThreadId, messageIds: ids };
 }
 
 async function linkTask(messageId: string, opts: { status: "todo" | "done"; completedAt?: Date }) {
@@ -201,6 +208,47 @@ describe("notifications de robots", () => {
     expect(ids.has(booking.threadId)).toBe(false);
     // Un robot qui demande un geste reste aussi.
     expect(ids.has(failedPayment.threadId)).toBe(false);
+  });
+});
+
+describe("miroir de la boîte", () => {
+  it("retire INBOX localement aux fils que Gmail n'a plus en boîte, et ne touche à rien si la liste est incomplète", async () => {
+    const kept = await insertThread({
+      subject: "Toujours en boîte",
+      messages: [{ from: "vittorio@gpasplus.com", at: daysAgo(3) }],
+    });
+    const gone = await insertThread({
+      subject: "Rangé à la main dans Gmail",
+      messages: [{ from: "vittorio@gpasplus.com", at: daysAgo(40) }],
+    });
+
+    // Liste incomplète (page suivante annoncée au-delà du plafond) : rien ne bouge.
+    vi.mocked(listThreadsByLabel).mockResolvedValue({ threads: [], nextPageToken: "encore" });
+    const partial = await reconcileInboxMirror(db, { userId: actor.id, accessToken: "token" });
+    expect(partial.complete).toBe(false);
+
+    vi.mocked(listThreadsByLabel).mockImplementation(async () => ({
+      threads: [{ id: kept.gmailThreadId }],
+      nextPageToken: undefined,
+    }));
+    const r = await reconcileInboxMirror(db, { userId: actor.id, accessToken: "token" });
+    expect(r.complete).toBe(true);
+    expect(r.forgotten).toBeGreaterThanOrEqual(1);
+
+    const labelsOf = async (threadId: string) =>
+      (
+        await db
+          .select({ labels: gmailMessages.labels })
+          .from(gmailMessages)
+          .where(eq(gmailMessages.threadId, threadId))
+      ).map((m) => m.labels);
+    expect((await labelsOf(gone.threadId)).every((l) => !l.includes("INBOX"))).toBe(true);
+    expect((await labelsOf(kept.threadId)).some((l) => l.includes("INBOX"))).toBe(true);
+    // Restaure le comportement neutre pour les tests suivants.
+    vi.mocked(listThreadsByLabel).mockImplementation(async () => ({
+      threads: [],
+      nextPageToken: "plafond",
+    }));
   });
 });
 

@@ -180,7 +180,7 @@ mails (`lib/gmail/`) :
   arrivé après la clôture.
 - `GMAIL_ARCHIVE_AUTOMATED_DAYS` (`off` par défaut, 3/7/14) : un fil où
   seuls des expéditeurs machines ont écrit, lu ou non, dont le dernier
-  message a plus de N jours. 100 fils par relève. Les mails d'agenda
+  message a plus de N jours. 60 fils par relève, avant les phases LLM. Les mails d'agenda
   (invitations, rappels, confirmations de rendez-vous,
   `lib/gmail/calendar-mail.ts`) restent en boîte.
 
@@ -189,6 +189,11 @@ Dans les deux cas, un fil où un message attend une action reste en boîte :
 l'annonce (`lib/gmail/action-required.ts` : paiement refusé, pièce à
 signer, compte à confirmer, expiration, suspension…). Les frontières de
 mots passent par `lib/gmail/word-match.ts` (`\b` ignore les accents).
+
+Avant de choisir, la relève remet le miroir local d'accord avec Gmail sur
+ce qui est en boîte (`reconcileInboxMirror`, `threads.list` sur `INBOX`) :
+un fil rangé à la main il y a des mois n'est plus compté ni retenté. Un
+fil disparu de Gmail (404) est sorti de la boîte locale sans trace.
 
 La trace est sur `gmail_threads.auto_archived_at` / `auto_archive_reason`
 (migration `0098`) : un fil remis en boîte à la main n'est pas repris tant

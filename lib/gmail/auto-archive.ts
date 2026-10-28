@@ -6,6 +6,7 @@ import { emailProposals, gmailMessages, gmailThreads } from "@/db/schema/gmail";
 import { taskSources } from "@/db/schema/task-sources";
 import { tasks } from "@/db/schema/tasks";
 import { db } from "@/lib/db/server";
+import { listThreadsByLabel } from "@/lib/google/gmail-api";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { requiresAction } from "./action-required";
 import { archiveThread } from "./archive";
@@ -44,8 +45,12 @@ export const AUTOMATED_DAYS_CHOICES: { value: string; label: string }[] = [
   { value: "14", label: "Après 14 jours" },
 ];
 
-/** Borne les appels Gmail d'un run ; le reste attend la relève suivante. */
-export const MAX_ARCHIVES_PER_RUN = 100;
+/**
+ * Borne les appels Gmail d'un run ; le reste attend la relève suivante
+ * (toutes les 15 min). Assez pour vider un arriéré en une soirée, assez
+ * peu pour laisser leur budget aux extractions LLM qui suivent.
+ */
+export const MAX_ARCHIVES_PER_RUN = 60;
 
 export type AutoArchiveSettings = {
   doneTasks: boolean;
@@ -296,23 +301,75 @@ export async function selectThreadsToArchive(
   return out.slice(0, MAX_ARCHIVES_PER_RUN);
 }
 
+/** Pages de `threads.list` lues au plus pour relever la boîte : 20 × 500 fils. */
+const INBOX_LIST_MAX_PAGES = 20;
+
+/**
+ * Remet le miroir local d'accord avec Gmail sur ce qui est en boîte. La
+ * relève incrémentale ne voit pas toujours un fil rangé à la main il y a
+ * des mois ; le miroir le croyait encore en boîte, les aperçus comptaient
+ * faux et chaque relève tentait d'archiver du déjà archivé. On lit la
+ * liste réelle des fils en boîte et on retire `INBOX` localement aux
+ * autres. Si la lecture échoue ou s'arrête avant la fin, on ne touche à
+ * rien : une liste incomplète ferait disparaître des fils bien en boîte.
+ */
+export async function reconcileInboxMirror(
+  conn: Database,
+  args: { userId: string; accessToken: string },
+): Promise<{ forgotten: number; complete: boolean }> {
+  const inGmail = new Set<string>();
+  let pageToken: string | undefined;
+  let pages = 0;
+  do {
+    const page = await listThreadsByLabel(args.accessToken, "INBOX", {
+      pageToken,
+      maxResults: 500,
+    });
+    for (const t of page.threads ?? []) inGmail.add(t.id);
+    pageToken = page.nextPageToken;
+    pages++;
+  } while (pageToken && pages < INBOX_LIST_MAX_PAGES);
+  if (pageToken) return { forgotten: 0, complete: false };
+
+  const local = await conn
+    .select({ id: gmailThreads.id, gmailThreadId: gmailThreads.gmailThreadId })
+    .from(gmailThreads)
+    .where(
+      and(
+        eq(gmailThreads.userId, args.userId),
+        inArray(gmailThreads.id, inboxThreadIds(conn, args.userId)),
+      ),
+    );
+  const stale = local.filter((t) => !inGmail.has(t.gmailThreadId));
+  for (const t of stale) await forgetInbox(conn, t.id);
+  return { forgotten: stale.length, complete: true };
+}
+
 /** Applique l'archivage à la relève : Gmail d'abord, puis la trace locale. */
 export async function runAutoArchive(args: {
   userId: string;
   accessToken: string;
   now?: Date;
   shouldStop?: () => boolean;
-}): Promise<{ archived: number; errors: string[] }> {
+}): Promise<{ archived: number; forgotten: number; errors: string[] }> {
   const settings = await getAutoArchiveSettings();
-  if (!settings.doneTasks && settings.automatedDays === null) return { archived: 0, errors: [] };
+  if (!settings.doneTasks && settings.automatedDays === null) {
+    return { archived: 0, forgotten: 0, errors: [] };
+  }
   const conn = await db();
+  const errors: string[] = [];
+  let forgotten = 0;
+  try {
+    forgotten = (await reconcileInboxMirror(conn, args)).forgotten;
+  } catch (err) {
+    errors.push(`inbox mirror: ${err instanceof Error ? err.message : String(err)}`);
+  }
   const candidates = await selectThreadsToArchive(conn, {
     userId: args.userId,
     settings,
     now: args.now,
   });
   let archived = 0;
-  const errors: string[] = [];
   for (const c of candidates) {
     if (args.shouldStop?.()) break;
     try {
@@ -324,8 +381,29 @@ export async function runAutoArchive(args: {
         .where(eq(gmailThreads.id, c.threadId));
       archived++;
     } catch (err) {
-      errors.push(`archive ${c.threadId}: ${err instanceof Error ? err.message : String(err)}`);
+      const message = err instanceof Error ? err.message : String(err);
+      // Le fil n'existe plus chez Gmail (supprimé, corbeille vidée) : le
+      // miroir local le croyait encore en boîte. On le sort de la boîte
+      // locale pour ne pas le retenter à chaque relève, sans trace
+      // d'archivage puisqu'on n'a rien archivé.
+      if (/Gmail API 404\b/.test(message)) {
+        await forgetInbox(conn, c.threadId);
+        continue;
+      }
+      errors.push(`archive ${c.threadId}: ${message}`);
     }
   }
-  return { archived, errors };
+  return { archived, forgotten, errors };
+}
+
+/** Retire `INBOX` du miroir local d'un fil, sans toucher à Gmail. */
+async function forgetInbox(conn: Database, threadId: string): Promise<void> {
+  await conn
+    .update(gmailThreads)
+    .set({ labels: sql`array_remove(${gmailThreads.labels}, 'INBOX')` })
+    .where(eq(gmailThreads.id, threadId));
+  await conn
+    .update(gmailMessages)
+    .set({ labels: sql`array_remove(${gmailMessages.labels}, 'INBOX')` })
+    .where(eq(gmailMessages.threadId, threadId));
 }

@@ -80,7 +80,7 @@ export async function GmailAutoArchiveSection({ userId }: { userId: string }) {
                 confirmations de rendez-vous restent en boîte. {automatedCandidates.length} fil
                 {automatedCandidates.length > 1 ? "s" : ""} de plus de {settings.automatedDays ?? 7}{" "}
                 jours aujourd'hui · {archivedByReason.get("automated") ?? 0} déjà archivé
-                {(archivedByReason.get("automated") ?? 0) > 1 ? "s" : ""}. 100 fils au plus par
+                {(archivedByReason.get("automated") ?? 0) > 1 ? "s" : ""}. 60 fils au plus par
                 relève.
               </p>
             </div>

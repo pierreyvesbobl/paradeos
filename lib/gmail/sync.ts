@@ -141,6 +141,8 @@ export type GmailSyncResult = {
   proposalsExpired: number;
   /** Fils retirés de la boîte de réception par l'archivage automatique. */
   threadsArchived: number;
+  /** Fils que le miroir local croyait en boîte et que Gmail n'y a plus : miroir corrigé. */
+  inboxMirrorFixed: number;
   /** Messages ingérés pour leurs PJ sur le seul signal facture (sujet, expéditeur, libellé). */
   invoiceCandidatesIngested: number;
   /** Mails à PDF repris par le rattrapage factures (cf. `recoverMissedInvoices`). */
@@ -645,6 +647,7 @@ function emptySyncResult(): GmailSyncResult {
     tasksAutoCompleted: 0,
     proposalsExpired: 0,
     threadsArchived: 0,
+    inboxMirrorFixed: 0,
     invoiceCandidatesIngested: 0,
     invoicesRecovered: 0,
     invoicesFiled: 0,
@@ -678,6 +681,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
     tasksAutoCompleted: 0,
     proposalsExpired: 0,
     threadsArchived: 0,
+    inboxMirrorFixed: 0,
     invoiceCandidatesIngested: 0,
     invoicesRecovered: 0,
     invoicesFiled: 0,
@@ -981,6 +985,29 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
 
   endPhase("link");
 
+  // ─── 4bis-a. Archivage automatique (réglages) ──────────────────────
+  // Fils dont toutes les tâches liées sont terminées, fils de robots
+  // anciens : retirés de la boîte de réception, jamais supprimés. Placé
+  // avant les phases LLM : elles mangent tout le budget qui reste, et
+  // en fin de run il ne restait que le temps de quelques appels Gmail.
+  // Borné par MAX_ARCHIVES_PER_RUN et par la réserve LLM.
+  if (!outOfTime(LLM_ITEM_RESERVE_MS)) {
+    try {
+      const r = await runAutoArchive({
+        userId,
+        accessToken,
+        shouldStop: () => outOfTime(LLM_ITEM_RESERVE_MS),
+      });
+      result.threadsArchived += r.archived;
+      result.inboxMirrorFixed += r.forgotten;
+      result.errors.push(...r.errors);
+    } catch (err) {
+      result.errors.push(`auto-archive: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  endPhase("autoArchive");
+
   // ─── 4bis. Extraction LLM des messages en `pending` ────────────────
   // On limite à MAX_EXTRACTIONS_PER_RUN et au budget de temps pour borner
   // le coût et la durée. Les messages non-traités cette fois seront repris
@@ -1070,22 +1097,6 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
   }
 
   endPhase("candidatures");
-
-  // ─── 4quinquies. Archivage automatique (réglages) ─────────────────
-  // Fils dont toutes les tâches liées sont terminées, fils de robots
-  // anciens : retirés de la boîte de réception, jamais supprimés. Pas de
-  // LLM, quelques appels Gmail au plus.
-  if (!outOfTime()) {
-    try {
-      const r = await runAutoArchive({ userId, accessToken, shouldStop: () => outOfTime() });
-      result.threadsArchived += r.archived;
-      result.errors.push(...r.errors);
-    } catch (err) {
-      result.errors.push(`auto-archive: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  endPhase("autoArchive");
 
   // ─── 5. Persiste l'état de sync ────────────────────────────────────
   // Calcule les valeurs finales d'abord (sans interpolation SQL avec
