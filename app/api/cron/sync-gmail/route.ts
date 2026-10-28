@@ -12,25 +12,29 @@
  * `lib/actions/gmail.ts:triggerGmailSync`).
  */
 
-import { eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { gmailSyncState } from "@/db/schema/gmail";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { users } from "@/db/schema/users";
 import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
 import { db } from "@/lib/db/server";
-import { syncIncremental } from "@/lib/gmail/sync";
+import { SYNC_TIME_BUDGET_MS, syncIncremental } from "@/lib/gmail/sync";
 import { hasRequiredGmailScopes } from "@/lib/google/oauth";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 /**
- * Budget total du run, sous `maxDuration` avec de la marge pour la
- * persistance de l'état et la réponse. Réparti entre les utilisateurs :
- * chacun reçoit une part égale du temps restant, et ce qu'un run rapide
- * n'a pas consommé profite au suivant.
+ * Budget total du run, sous `maxDuration` avec la place pour le
+ * débordement d'un dernier appel LLM et la persistance de l'état (cf.
+ * `SYNC_TIME_BUDGET_MS`). Réparti entre les utilisateurs : chacun reçoit
+ * une part égale du temps restant, et ce qu'un run rapide n'a pas
+ * consommé profite au suivant. Avant cette marge, un utilisateur pouvait
+ * entamer une extraction à la dernière seconde, la fonction mourait à
+ * 300 s et la boîte suivante n'était jamais relue.
  */
-const RUN_BUDGET_MS = 270_000;
+const RUN_BUDGET_MS = SYNC_TIME_BUDGET_MS;
 
 export async function GET(request: Request) {
   const unauthorized = cronUnauthorized(request);
@@ -38,11 +42,15 @@ export async function GET(request: Request) {
 
   try {
     const conn = await db();
+    // La boîte relue il y a le plus longtemps passe en premier : si le
+    // run manque de temps, c'est la plus fraîche qui attend.
     const candidates = await conn
       .select({ userId: users.id, scopes: googleAccounts.scopes })
       .from(users)
       .innerJoin(googleAccounts, eq(googleAccounts.userId, users.id))
-      .where(eq(users.role, "admin"));
+      .leftJoin(gmailSyncState, eq(gmailSyncState.userId, users.id))
+      .where(eq(users.role, "admin"))
+      .orderBy(sql`${gmailSyncState.lastIncrementalAt} asc nulls first`, asc(users.createdAt));
     const targets = candidates.filter((c) => hasRequiredGmailScopes(c.scopes));
 
     if (targets.length === 0) {

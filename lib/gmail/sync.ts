@@ -18,6 +18,7 @@ import {
   listMessages,
   parseAddressList,
 } from "@/lib/google/gmail-api";
+import { LLM_BUDGET_MS } from "@/lib/llm/timeout";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { looksLikeCandidatureMessage } from "./candidature-detect";
 import {
@@ -60,15 +61,32 @@ const MAX_CANDIDATURE_REPLIES_PER_RUN = 10;
 /** Cap rattrapage des candidatures déjà en base (un `format=full` chacune). */
 const MAX_CANDIDATURE_RECOVERIES_PER_RUN = 20;
 /**
- * Budget de temps par défaut d'un run. Les caps ci-dessus comptent des
- * éléments, pas des secondes : avec un modèle lent (DeepSeek ~20-30 s
- * par extraction) dix extractions plus quelques classements et réponses
- * dépassaient les 300 s de la fonction Vercel, qui tuait le run avant la
- * persistance de l'état — et le libellé Gmail des fils attendait le run
- * suivant. Passé le budget, les phases LLM s'arrêtent, l'état est
- * persisté, et `hasMore` signale qu'il reste du travail.
+ * Marge exigée avant d'entamer un élément LLM (extraction, classement de
+ * facture, réponse à une candidature). Avec le modèle en base une
+ * extraction prend 20 à 35 s ; passé cette marge on n'en lance plus et le
+ * reste attend le run suivant. Le pire cas reste un appel abandonné à
+ * `LLM_BUDGET_MS.emailExtraction` : il déborde du budget de
+ * `LLM_ITEM_OVERRUN_MS`, que les appelants absorbent dans leur propre
+ * budget pour rester sous les 300 s de la fonction Vercel.
  */
-export const SYNC_TIME_BUDGET_MS = 240_000;
+export const LLM_ITEM_RESERVE_MS = 45_000;
+export const LLM_ITEM_OVERRUN_MS = LLM_BUDGET_MS.emailExtraction - LLM_ITEM_RESERVE_MS;
+/** Marge pour persister l'état et répondre une fois le budget épuisé. */
+const SYNC_TAIL_MS = 30_000;
+/** Limite d'exécution des routes et pages qui hébergent la sync. */
+const VERCEL_MAX_DURATION_MS = 300_000;
+
+/**
+ * Budget de temps par défaut d'un run. Les caps ci-dessus comptent des
+ * éléments, pas des secondes : avec un modèle lent dix extractions plus
+ * quelques classements et réponses dépassaient les 300 s de la fonction
+ * Vercel, qui tuait le run avant la persistance de l'état — et le libellé
+ * Gmail des fils attendait le run suivant. Passé le budget, les phases LLM
+ * s'arrêtent, l'état est persisté, et `hasMore` signale qu'il reste du
+ * travail. Le budget laisse la place au débordement d'un dernier appel
+ * LLM et à la persistance.
+ */
+export const SYNC_TIME_BUDGET_MS = VERCEL_MAX_DURATION_MS - LLM_ITEM_OVERRUN_MS - SYNC_TAIL_MS;
 
 /**
  * Rattrapage des factures passées entre les mailles : mails à PDF de la
@@ -668,8 +686,8 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
   };
   // Lecture du budget : une fois dépassé, chaque phase LLM s'interrompt
   // entre deux éléments et le reste attend le run suivant.
-  const outOfTime = () => {
-    if (Date.now() < deadline) return false;
+  const outOfTime = (reserveMs = 0) => {
+    if (Date.now() + reserveMs < deadline) return false;
     result.budgetExhausted = true;
     result.hasMore = true;
     return true;
@@ -958,14 +976,14 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
   // le coût et la durée. Les messages non-traités cette fois seront repris
   // au sync suivant (extraction_status='pending' reste indexé).
   const extractionEnabled = (await getSetting(SETTING_KEYS.GMAIL_EXTRACTION_ENABLED)) !== "false";
-  if (extractionEnabled && !outOfTime()) {
+  if (extractionEnabled && !outOfTime(LLM_ITEM_RESERVE_MS)) {
     const pendingMessages = await conn
       .select({ id: gmailMessages.id })
       .from(gmailMessages)
       .where(and(eq(gmailMessages.userId, userId), eq(gmailMessages.extractionStatus, "pending")))
       .limit(MAX_EXTRACTIONS_PER_RUN);
     for (const pm of pendingMessages) {
-      if (outOfTime()) break;
+      if (outOfTime(LLM_ITEM_RESERVE_MS)) break;
       try {
         const r = await extractAndSaveEmailProposals(pm.id);
         if (r.skipped) {
@@ -986,7 +1004,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
 
   // ─── 4ter. Classement automatique des factures (kill switch) ─────
   const filingEnabled = (await getSetting(SETTING_KEYS.INVOICE_FILING_ENABLED)) !== "false";
-  if (filingEnabled && !outOfTime()) {
+  if (filingEnabled && !outOfTime(LLM_ITEM_RESERVE_MS)) {
     // Les `pending` déjà passés au LLM (confiance faible) attendent une
     // validation manuelle dans l'inbox : les reprendre ici les ferait
     // repasser au LLM à chaque run et boucherait la file pour les autres.
@@ -1003,7 +1021,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
       .orderBy(invoiceFilings.createdAt)
       .limit(MAX_INVOICE_FILINGS_PER_RUN);
     for (const pf of pendingFilings) {
-      if (outOfTime()) break;
+      if (outOfTime(LLM_ITEM_RESERVE_MS)) break;
       try {
         const r = await processInvoiceFiling(pf.id);
         if (r.direction === "sale") result.invoiceSalesDetected++;
@@ -1022,8 +1040,10 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
   endPhase("fileInvoices");
 
   // ─── 4quater. Réponse automatique aux candidatures (kill switch) ──
-  if (!outOfTime() && (await isCandidatureAutoReplyEnabled())) {
-    const r = await processPendingCandidatures(userId, MAX_CANDIDATURE_REPLIES_PER_RUN, outOfTime);
+  if (!outOfTime(LLM_ITEM_RESERVE_MS) && (await isCandidatureAutoReplyEnabled())) {
+    const r = await processPendingCandidatures(userId, MAX_CANDIDATURE_REPLIES_PER_RUN, () =>
+      outOfTime(LLM_ITEM_RESERVE_MS),
+    );
     result.candidaturesReplied += r.replied;
     result.candidaturesRejected += r.rejected;
     result.candidaturesErrored += r.errored;
