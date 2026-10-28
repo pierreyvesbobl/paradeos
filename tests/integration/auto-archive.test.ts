@@ -51,7 +51,7 @@ const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000);
 
 async function insertThread(opts: {
   subject: string;
-  messages: { from: string; at: Date; labels?: string[] }[];
+  messages: { from: string; at: Date; labels?: string[]; needsReply?: boolean }[];
   hasUnread?: boolean;
 }) {
   const last = opts.messages.reduce(
@@ -82,6 +82,7 @@ async function insertThread(opts: {
         subject: opts.subject,
         internalDate: m.at,
         labels: m.labels ?? ["INBOX"],
+        extractionMeta: m.needsReply === undefined ? null : { needsReply: m.needsReply },
       })
       .returning({ id: gmailMessages.id });
     if (!row) throw new Error("insert message");
@@ -142,12 +143,20 @@ describe("fils aux tâches terminées", () => {
     });
     await linkTask(unread.messageIds[0] as string, { status: "done", completedAt: daysAgo(3) });
 
+    const awaiting = await insertThread({
+      subject: "Export : peux-tu confirmer le format ?",
+      messages: [{ from: "vittorio@gpasplus.com", at: daysAgo(5), needsReply: true }],
+    });
+    await linkTask(awaiting.messageIds[0] as string, { status: "done", completedAt: daysAgo(3) });
+
     const picked = await selectDoneTaskThreads(db, { userId: actor.id });
     const ids = new Set(picked.map((c) => c.threadId));
     expect(ids.has(done.threadId)).toBe(true);
     expect(ids.has(stillOpen.threadId)).toBe(false);
     expect(ids.has(reopened.threadId)).toBe(false);
     expect(ids.has(unread.threadId)).toBe(false);
+    // Tâche close, mais le mail attend une réponse : il reste.
+    expect(ids.has(awaiting.threadId)).toBe(false);
   });
 });
 
@@ -177,6 +186,10 @@ describe("notifications de robots", () => {
       subject: "Rendez-vous de 30 min between Pierre-Yves Sage and mamura",
       messages: [{ from: "hello@cal.com", at: daysAgo(20) }],
     });
+    const failedPayment = await insertThread({
+      subject: "Votre paiement a échoué : action requise",
+      messages: [{ from: "notifications@stripe.com", at: daysAgo(20) }],
+    });
 
     const picked = await selectAutomatedThreads(db, { userId: actor.id, days: 7 });
     const ids = new Set(picked.map((c) => c.threadId));
@@ -186,6 +199,8 @@ describe("notifications de robots", () => {
     // Un rappel d'agenda ou une confirmation de rendez-vous reste en boîte.
     expect(ids.has(reminder.threadId)).toBe(false);
     expect(ids.has(booking.threadId)).toBe(false);
+    // Un robot qui demande un geste reste aussi.
+    expect(ids.has(failedPayment.threadId)).toBe(false);
   });
 });
 

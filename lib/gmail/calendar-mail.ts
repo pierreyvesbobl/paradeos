@@ -1,3 +1,5 @@
+import { words, wordsThen } from "./word-match";
+
 /**
  * Mails d'agenda : invitations, mises à jour, acceptations, rappels
  * d'événement, confirmations de rendez-vous (Google Agenda, Cal.com,
@@ -15,15 +17,16 @@ const SENDER_PATTERNS = [
   /@calendar\.google\.com$/i,
 ];
 
-const SUBJECT_PATTERNS = [
-  /\binvitations?\b/i,
-  /\binvitation mise à jour\b/i,
-  /\bupdated invitation\b/i,
-  /^(re: |fwd?: |tr: )?(rappel|reminder|notification)\s*:/i,
-  /^(re: |fwd?: |tr: )?(accept[ée]|accepted|refus[ée]|declined|annul[ée]|cancel+ed|tentative|peut-être|maybe)\s*:/i,
-  /\b(rendez-vous|rdv|appointment|booking|meeting)\b.*\b(between|entre|avec|with|confirm)/i,
-  /\b(nouvel événement|new event|event (updated|cancel+ed|reminder)|événement (mis à jour|annulé))\b/i,
-  /\bzoom meeting\b/i,
+const SUBJECT_PATTERNS: RegExp[] = [
+  words("invitations?"),
+  words("invitation mise à jour|updated invitation"),
+  /^(?:re: |fwd?: |tr: )?(?:rappel|reminder|notification)\s*:/iu,
+  /^(?:re: |fwd?: |tr: )?(?:accept[ée]e?|accepted|refus[ée]e?|declined|annul[ée]e?|cancel+ed|tentative|peut-être|maybe)\s*:/iu,
+  wordsThen("rendez-vous|rdv|appointment|booking|meeting", "between|entre|avec|with|confirm"),
+  words(
+    "nouvel événement|new event|event (?:updated|cancel+ed|reminder)|événement (?:mis à jour|annulé)",
+  ),
+  words("zoom meeting"),
 ];
 
 export type MailLike = { fromEmail: string | null | undefined; subject: string | null | undefined };

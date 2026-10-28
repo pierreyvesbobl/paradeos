@@ -7,6 +7,7 @@ import { taskSources } from "@/db/schema/task-sources";
 import { tasks } from "@/db/schema/tasks";
 import { db } from "@/lib/db/server";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import { requiresAction } from "./action-required";
 import { archiveThread } from "./archive";
 import { isAutomatedSender } from "./automated-sender";
 import { isCalendarMail } from "./calendar-mail";
@@ -23,6 +24,12 @@ import { isCalendarMail } from "./calendar-mail";
  *    (cf. automated-sender.ts) et le dernier a plus de N jours. Les mails
  *    d'agenda (invitations, rappels, confirmations de rendez-vous, cf.
  *    calendar-mail.ts) restent en boîte quoi qu'il arrive.
+ *
+ * Dans les deux cas, un fil où un message attend une action de
+ * l'utilisateur reste en boîte : « réponse attendue » posé par l'extraction
+ * (`extraction_meta.needsReply`), ou un objet qui l'annonce (cf.
+ * action-required.ts : paiement refusé, pièce à signer, compte à
+ * confirmer, expiration…).
  *
  * Un fil déjà archivé par ici n'est repris que si un message plus récent
  * est arrivé : remettre un fil en boîte à la main tient.
@@ -68,6 +75,28 @@ function inboxThreadIds(conn: Database, userId: string) {
     .selectDistinct({ id: gmailMessages.threadId })
     .from(gmailMessages)
     .where(and(eq(gmailMessages.userId, userId), inInbox));
+}
+
+/** Vrai si un message du fil attend un geste : drapeau de l'extraction, ou objet explicite. */
+function demandsAction(m: { subject: string | null; extractionMeta: unknown }): boolean {
+  const meta = (m.extractionMeta ?? null) as { needsReply?: unknown } | null;
+  return meta?.needsReply === true || requiresAction(m);
+}
+
+/** Parmi `threadIds`, ceux où au moins un message attend une action. */
+async function threadsDemandingAction(conn: Database, threadIds: string[]): Promise<Set<string>> {
+  if (threadIds.length === 0) return new Set();
+  const rows = await conn
+    .select({
+      threadId: gmailMessages.threadId,
+      subject: gmailMessages.subject,
+      extractionMeta: gmailMessages.extractionMeta,
+    })
+    .from(gmailMessages)
+    .where(inArray(gmailMessages.threadId, threadIds));
+  const out = new Set<string>();
+  for (const r of rows) if (demandsAction(r)) out.add(r.threadId);
+  return out;
 }
 
 /** Fils dont toutes les tâches liées sont closes et dont rien n'est arrivé depuis. */
@@ -176,7 +205,12 @@ export async function selectDoneTaskThreads(
     if (thread.lastMessageAt && thread.lastMessageAt > lastDone) continue;
     out.push({ threadId, reason: "task_done" });
   }
-  return out;
+  // Tâche close ou pas, un message qui attend une réponse garde le fil.
+  const demanding = await threadsDemandingAction(
+    conn,
+    out.map((c) => c.threadId),
+  );
+  return out.filter((c) => !demanding.has(c.threadId));
 }
 
 /** Fils de robots dont le dernier message a plus de `days` jours. */
@@ -210,6 +244,7 @@ export async function selectAutomatedThreads(
       fromEmail: gmailMessages.fromEmail,
       fromName: gmailMessages.fromName,
       subject: gmailMessages.subject,
+      extractionMeta: gmailMessages.extractionMeta,
     })
     .from(gmailMessages)
     .where(
@@ -218,12 +253,12 @@ export async function selectAutomatedThreads(
         fresh.map((t) => t.id),
       ),
     );
-  // Un seul message humain, ou un seul mail d'agenda, et le fil reste.
+  // Un seul message humain, d'agenda, ou qui attend une action, et le fil reste.
   const keep = new Set<string>();
   const seen = new Set<string>();
   for (const m of senders) {
     seen.add(m.threadId);
-    if (!isAutomatedSender(m) || isCalendarMail(m)) keep.add(m.threadId);
+    if (!isAutomatedSender(m) || isCalendarMail(m) || demandsAction(m)) keep.add(m.threadId);
   }
   const limit = opts.limit ?? MAX_ARCHIVES_PER_RUN;
   return fresh

@@ -184,6 +184,12 @@ mails (`lib/gmail/`) :
   (invitations, rappels, confirmations de rendez-vous,
   `lib/gmail/calendar-mail.ts`) restent en boîte.
 
+Dans les deux cas, un fil où un message attend une action reste en boîte :
+`extraction_meta.needsReply` posé par l'extraction, ou un objet qui
+l'annonce (`lib/gmail/action-required.ts` : paiement refusé, pièce à
+signer, compte à confirmer, expiration, suspension…). Les frontières de
+mots passent par `lib/gmail/word-match.ts` (`\b` ignore les accents).
+
 La trace est sur `gmail_threads.auto_archived_at` / `auto_archive_reason`
 (migration `0098`) : un fil remis en boîte à la main n'est pas repris tant
 qu'aucun message plus récent n'arrive.

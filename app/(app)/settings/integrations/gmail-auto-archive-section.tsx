@@ -40,8 +40,9 @@ export async function GmailAutoArchiveSection({ userId }: { userId: string }) {
           <h2 className="font-medium text-sm">Archivage automatique de la boîte</h2>
           <p className="mt-1 text-muted-foreground text-xs">
             À chaque relève, les fils qui n'ont plus rien à faire dans la boîte de réception en sont
-            retirés, jamais supprimés. Un fil remis en boîte à la main y reste tant qu'aucun message
-            plus récent n'arrive.
+            retirés, jamais supprimés. Tout ce qui attend une action reste : réponse attendue,
+            paiement refusé, pièce à signer, compte à confirmer, expiration. Un fil remis en boîte à
+            la main y reste tant qu'aucun message plus récent n'arrive.
           </p>
         </div>
         <span
