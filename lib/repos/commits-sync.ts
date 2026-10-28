@@ -17,8 +17,8 @@ export type FollowedRepo = { remote: string; projectId: string };
 
 /** Fenêtre lue à la première passe sur un dépôt. */
 const FIRST_SYNC_DAYS = 30;
-/** Commits examinés par passe de rapprochement. */
-const MATCH_BATCH = 40;
+/** Commits examinés par passe de rapprochement : au-delà, deepseek-v4-pro dépasse le budget. */
+const MATCH_BATCH = 15;
 
 export type CommitSyncResult = {
   remote: string;

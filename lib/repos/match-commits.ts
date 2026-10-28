@@ -53,7 +53,7 @@ export async function suggestCommitLinks(
   ].join("\n");
 
   const raw = await withLlmTimeout(
-    { budgetMs: 120_000, modelId, label: "le rapprochement des commits" },
+    { budgetMs: 150_000, modelId, label: "le rapprochement des commits" },
     (signal) =>
       generateStructured({
         abortSignal: signal,
