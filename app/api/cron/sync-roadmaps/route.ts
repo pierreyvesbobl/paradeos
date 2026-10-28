@@ -11,7 +11,7 @@
  * GitHub ; le LLM ne tourne que si le fichier ou les tâches ont changé.
  */
 
-import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
+import { cronResponse, cronRun, cronUnauthorized } from "@/lib/cron/auth";
 import { db } from "@/lib/db/server";
 import { syncCommits } from "@/lib/repos/commits-sync";
 import { syncRoadmaps } from "@/lib/roadmap/sync";
@@ -19,7 +19,7 @@ import { syncRoadmaps } from "@/lib/roadmap/sync";
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+async function run(request: Request): Promise<Response> {
   const unauthorized = cronUnauthorized(request);
   if (unauthorized) return unauthorized;
 
@@ -43,4 +43,9 @@ export async function GET(request: Request) {
     failed: errors.length,
     errors,
   });
+}
+
+/** `?detach=1` : répond tout de suite, le travail continue (cf. `cronRun`). */
+export function GET(request: Request) {
+  return cronRun(request, () => run(request));
 }

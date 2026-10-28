@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
+import { cronResponse, cronRun, cronUnauthorized } from "@/lib/cron/auth";
 import { ingestDriveTranscripts } from "@/lib/meetings/ingest-from-drive";
 
 export const maxDuration = 300;
@@ -9,7 +9,7 @@ export const maxDuration = 300;
  * transcripts et lance l'extraction LLM. Limite à 5 fichiers par run
  * (cf. MAX_FILES_PER_RUN) pour rester sous le timeout Vercel.
  */
-export async function GET(request: Request) {
+async function run(request: Request): Promise<Response> {
   const unauthorized = cronUnauthorized(request);
   if (unauthorized) return unauthorized;
   try {
@@ -22,4 +22,9 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
+}
+
+/** `?detach=1` : répond tout de suite, le travail continue (cf. `cronRun`). */
+export function GET(request: Request) {
+  return cronRun(request, () => run(request));
 }

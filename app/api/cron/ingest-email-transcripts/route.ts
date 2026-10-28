@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cronResponse, cronUnauthorized } from "@/lib/cron/auth";
+import { cronResponse, cronRun, cronUnauthorized } from "@/lib/cron/auth";
 import { ingestEmailTranscripts } from "@/lib/meetings/ingest-from-email";
 
 export const maxDuration = 300;
@@ -11,7 +11,7 @@ export const maxDuration = 300;
  * 3 messages par run (cf. MAX_MESSAGES_PER_RUN) pour rester sous le
  * timeout Vercel.
  */
-export async function GET(request: Request) {
+async function run(request: Request): Promise<Response> {
   const unauthorized = cronUnauthorized(request);
   if (unauthorized) return unauthorized;
   try {
@@ -24,4 +24,9 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
+}
+
+/** `?detach=1` : répond tout de suite, le travail continue (cf. `cronRun`). */
+export function GET(request: Request) {
+  return cronRun(request, () => run(request));
 }

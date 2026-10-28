@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 /**
  * Authentification des routes `/api/cron/*` : `Authorization: Bearer
@@ -32,4 +32,30 @@ export function cronUnauthorized(request: Request): NextResponse | null {
 export function cronResponse<T extends { failed?: number; errors?: unknown[] }>(body: T) {
   const failed = body.failed ?? body.errors?.length ?? 0;
   return NextResponse.json({ ok: failed === 0, ...body }, { status: failed === 0 ? 200 : 500 });
+}
+
+/**
+ * Exécute un cron en répondant tout de suite quand l'appelant passe
+ * `?detach=1` : le travail continue après la réponse (`after`, dans la
+ * limite de `maxDuration` de la route). C'est pour les déclencheurs qui
+ * coupent la connexion au bout de 30 s, cron-job.org en tête — la sync
+ * Gmail ou une transcription peuvent prendre plusieurs minutes. GitHub
+ * Actions et Vercel Cron gardent le mode synchrone et son code d'erreur.
+ * L'authentification se fait avant de détacher : un appel sans secret
+ * reçoit son 401, jamais un 202.
+ */
+export async function cronRun(request: Request, work: () => Promise<Response>): Promise<Response> {
+  const unauthorized = cronUnauthorized(request);
+  if (unauthorized) return unauthorized;
+  const url = new URL(request.url);
+  if (url.searchParams.get("detach") !== "1") return work();
+  after(async () => {
+    try {
+      const res = await work();
+      if (!res.ok) console.error(`[cron ${url.pathname}] ${res.status} ${await res.text()}`);
+    } catch (err) {
+      console.error(`[cron ${url.pathname}]`, err);
+    }
+  });
+  return NextResponse.json({ ok: true, detached: true }, { status: 202 });
 }

@@ -75,13 +75,27 @@ bouton **Sync now**. Pour Calendar : section « Google Calendar » → bouton
 
 ### 2. cron-job.org (gratuit, recommandé)
 
-1. Crée un compte sur https://cron-job.org
-2. Nouveau cron :
-   - URL : `https://<ton-domaine>/api/cron/refresh-calendar-events`
-   - Schedule : `*/15 * * * *`
-   - Header : `Authorization: Bearer <CRON_SECRET>`
-3. Idem pour `/api/cron/ingest-drive-transcripts` et
-   `/api/cron/ingest-email-transcripts` avec `*/15 * * * *`
+cron-job.org coupe la connexion au bout de 30 s (plan gratuit). Nos
+endpoints répondent donc tout de suite quand l'URL porte `?detach=1` : le
+travail continue côté Vercel après la réponse (`lib/cron/auth.ts:cronRun`),
+et l'issue se lit en base (`gmail_sync_state.last_error`, page des
+réunions) plutôt que dans le code HTTP.
+
+Le secret est stocké en clair chez eux (leur politique de confidentialité
+le dit). Ce qu'il ouvre : déclencher nos crons, tous idempotents — au pire
+du coût LLM et un digest envoyé deux fois. Il se change en trois endroits
+si besoin : variable Vercel `CRON_SECRET`, secret GitHub, en-tête des jobs.
+
+1. Crée un compte sur https://cron-job.org (toi, pas un agent : un compte
+   et un secret ne se délèguent pas).
+2. Un job par URL, schedule `*/15 * * * *`, en-tête
+   `Authorization: Bearer <CRON_SECRET>`, timeout 30 s :
+   - `https://paradeos.vercel.app/api/cron/sync-gmail?detach=1`
+   - `https://paradeos.vercel.app/api/cron/ingest-email-transcripts?detach=1`
+   - `https://paradeos.vercel.app/api/cron/ingest-drive-transcripts?detach=1`
+   - `https://paradeos.vercel.app/api/cron/sync-roadmaps?detach=1`
+3. Garde le workflow GitHub : il reste un filet, le verrou en base évite
+   le double travail.
 
 Free tier suffit largement (jusqu'à 50 crons, exécution illimitée).
 
