@@ -28,6 +28,7 @@ import {
   recoverMissedCandidatures,
 } from "./candidature-filer";
 import { domainFromEmail, extractDomain, GENERIC_EMAIL_DOMAINS } from "./domain";
+import { expireStaleEmailProposals } from "./expire-proposals";
 import { extractAndSaveEmailProposals } from "./extract-and-save";
 import { looksLikeInvoiceMessage } from "./invoice-detect";
 import { processInvoiceFiling, queueInvoiceCandidates } from "./invoice-filer";
@@ -135,6 +136,8 @@ export type GmailSyncResult = {
   proposalsCreated: number;
   /** Tâches passées en done sans clic par les extractions de ce run. */
   tasksAutoCompleted: number;
+  /** Propositions email passées en `expired` : jamais tranchées en sept jours. */
+  proposalsExpired: number;
   /** Messages ingérés pour leurs PJ sur le seul signal facture (sujet, expéditeur, libellé). */
   invoiceCandidatesIngested: number;
   /** Mails à PDF repris par le rattrapage factures (cf. `recoverMissedInvoices`). */
@@ -637,6 +640,7 @@ function emptySyncResult(): GmailSyncResult {
     extractionsSkipped: 0,
     proposalsCreated: 0,
     tasksAutoCompleted: 0,
+    proposalsExpired: 0,
     invoiceCandidatesIngested: 0,
     invoicesRecovered: 0,
     invoicesFiled: 0,
@@ -668,6 +672,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
     extractionsSkipped: 0,
     proposalsCreated: 0,
     tasksAutoCompleted: 0,
+    proposalsExpired: 0,
     invoiceCandidatesIngested: 0,
     invoicesRecovered: 0,
     invoicesFiled: 0,
@@ -998,6 +1003,14 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
         result.errors.push(`extract ${pm.id}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+  }
+
+  // Ce que personne n'a tranché en sept jours sort de la file (cf.
+  // lib/gmail/expire-proposals.ts). Hors budget LLM : une mise à jour.
+  try {
+    result.proposalsExpired += await expireStaleEmailProposals(conn, { userId });
+  } catch (err) {
+    result.errors.push(`expire proposals: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   endPhase("extract");

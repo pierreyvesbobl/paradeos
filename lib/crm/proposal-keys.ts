@@ -40,7 +40,7 @@ export function payloadKey(kind: ProposalKind, payload: unknown): string {
   return proposalDedupeKey.task(str(p.title), str(p.projectId));
 }
 
-/** Ligne de proposition déjà tranchée (`accepted` / `rejected`) d'une source. */
+/** Ligne de proposition d'une source ; seules `accepted` / `rejected` comptent. */
 export type DecidedProposalRow = {
   kind: string;
   payload: unknown;
@@ -91,7 +91,8 @@ export class DecidedProposals {
 
   constructor(rows: DecidedProposalRow[]) {
     for (const r of rows) {
-      if (r.status === "pending") continue;
+      // Une proposition périmée n'a pas été tranchée : elle ne bloque rien.
+      if (r.status === "pending" || r.status === "expired") continue;
       const key = anyProposalKey(r.kind, r.payload, r.matchedId);
       const decided = { status: r.status, createdEntityId: r.createdEntityId };
       if (!this.byKey.has(key)) this.byKey.set(key, decided);

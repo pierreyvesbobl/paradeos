@@ -28,6 +28,7 @@ export const STATUS_ORDER: Record<ProposalStatus, number> = {
   pending: 0,
   accepted: 1,
   rejected: 2,
+  expired: 3,
 };
 
 export const PRIORITY_TINT: Record<string, { tint: "yellow" | "red" | "gray"; label: string }> = {

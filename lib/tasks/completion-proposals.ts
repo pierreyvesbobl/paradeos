@@ -24,7 +24,8 @@ import { markTaskDone, restoreTaskStatus, type TaskStatus } from "@/lib/tasks/co
 
 export type ExistingCompletion = {
   taskId: string | null;
-  status: "pending" | "accepted" | "rejected";
+  /** `expired` : jamais tranchée, elle ne compte pas plus qu'une absence. */
+  status: "pending" | "accepted" | "rejected" | "expired";
 };
 
 export type TaskCompletionPlan = ResolvedTaskCompletion & {
@@ -68,6 +69,7 @@ export async function planTaskCompletions(
 
   const priorByTask = new Map<string, ExistingCompletion["status"]>();
   for (const e of opts.existing) {
+    if (e.status === "expired") continue;
     if (!e.taskId) continue;
     // Une décision prime sur une ligne pending restée sans suite.
     const prev = priorByTask.get(e.taskId);

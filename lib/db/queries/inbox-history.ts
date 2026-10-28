@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne, notInArray, sql } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
 import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages, gmailTags } from "@/db/schema/gmail";
@@ -136,7 +136,9 @@ export async function getInboxHistory(
           .where(
             and(
               eq(gmailMessages.userId, userId),
-              ne(emailProposals.status, "pending"),
+              // Une proposition périmée n'a été ni acceptée ni refusée :
+              // rien à corriger après coup, elle n'a pas sa place ici.
+              notInArray(emailProposals.status, ["pending", "expired"]),
               // Les brouillons se décident depuis le thread — ils ne sont
               // jamais passés par l'inbox, ils n'y ont pas d'historique.
               ne(emailProposals.kind, "draft_reply"),

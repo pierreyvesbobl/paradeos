@@ -231,6 +231,11 @@ export const emailProposalStatus = pgEnum("email_proposal_status", [
   "pending",
   "accepted",
   "rejected",
+  /**
+   * Jamais tranchée en 7 jours (cf. lib/gmail/expire-proposals.ts) : sortie
+   * de la file sans compter pour un refus, reposable par ré-extraction.
+   */
+  "expired",
 ]);
 
 export const emailProposals = pgTable(

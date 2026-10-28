@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { entities } from "@/db/schema/entities";
-import { emailProposals, gmailMessages, gmailTags, gmailThreads } from "@/db/schema/gmail";
+import { emailProposals, gmailMessages, gmailTags } from "@/db/schema/gmail";
 import { projectContacts } from "@/db/schema/project-contacts";
 import { projects } from "@/db/schema/projects";
 import {
@@ -18,6 +18,7 @@ import { hasPendingProposalElsewhere, proposalDedupeKey } from "@/lib/crm/propos
 import { DecidedProposals } from "@/lib/crm/proposal-keys";
 import { db } from "@/lib/db/server";
 import { sanitizeNameInput } from "@/lib/format";
+import { isAutomatedSender } from "@/lib/gmail/automated-sender";
 import { extractEmail } from "@/lib/gmail/extract";
 import { computeThreadLinkSignals, linkThread } from "@/lib/gmail/links";
 import { getProjectsForThreads } from "@/lib/gmail/queries";
@@ -39,6 +40,12 @@ type ProposalKind =
   | "project"
   | "draft_reply"
   | "task_completion";
+
+/**
+ * Au-delà, une proposition de rattachement sans projet nommé dans le mail
+ * ne se tranche jamais : le fil se rattache à la main depuis sa page.
+ */
+const MAX_PROJECT_LINK_CANDIDATES = 5;
 
 type ProposalRow = {
   messageId: string;
@@ -103,6 +110,23 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     };
   }
 
+  // Un expéditeur machine (reçu, alerte, notes automatiques) ne porte rien
+  // à proposer au CRM : pas d'appel LLM, le message est marqué `skipped`.
+  // Le classement des factures, lui, a déjà lu ses pièces jointes.
+  if (isAutomatedSender(msg)) {
+    await conn
+      .update(gmailMessages)
+      .set({ extractionStatus: "skipped" })
+      .where(eq(gmailMessages.id, messageId));
+    return {
+      count: 0,
+      autoAppliedProjectLinks: 0,
+      autoCompletedTasks: 0,
+      skipped: true,
+      reason: "expéditeur automatique",
+    };
+  }
+
   // Signaux de liaison du fil, calculés avant l'appel LLM : le projet du
   // fil (lié, ou seul candidat par contacts/entité) fait remonter ses
   // tâches ouvertes en tête du vocabulaire.
@@ -164,8 +188,8 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
 
   // Ce que le message a déjà tranché, toutes natures confondues : ces
   // lignes restent, et rien d'équivalent ne sera reposé (cf. le filtre
-  // avant insertion). Seules les propositions encore en attente sont
-  // effacées puis réinjectées.
+  // avant insertion). Seules les propositions encore en attente, ou
+  // périmées sans décision, sont effacées puis réinjectées.
   const decided = new DecidedProposals(
     await conn
       .select({
@@ -180,7 +204,12 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   );
   await conn
     .delete(emailProposals)
-    .where(and(eq(emailProposals.messageId, messageId), eq(emailProposals.status, "pending")));
+    .where(
+      and(
+        eq(emailProposals.messageId, messageId),
+        inArray(emailProposals.status, ["pending", "expired"]),
+      ),
+    );
 
   const rows: ProposalRow[] = [];
 
@@ -195,6 +224,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     completionDone: 0,
     completionDecided: 0,
     completionPendingElsewhere: 0,
+    tooManyCandidates: 0,
   };
   // Ce que le mail dit des tâches (lib/tasks/task-sources.ts) : on repart
   // de zéro pour ce message, les lignes `origin` posées à l'acceptation
@@ -319,9 +349,21 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       llmMatched: llmProjectMatch?.id === p.id,
     }));
 
-    // Cas trivial : 1 seul candidat clair → liaison posée si le libellé projet existe déjà.
-    if (candidateList.length === 1 && candidateList[0]) {
-      const projectId = candidateList[0];
+    // Liaison posée sans proposition quand le projet est sûr : un seul
+    // candidat, ou bien le projet que le mail nomme en toutes lettres est
+    // aussi l'un de ceux que les participants désignent (deux signaux
+    // indépendants d'accord). Une liaison se défait en un clic depuis le
+    // fil ; une proposition parmi vingt candidats ne se tranchait jamais.
+    const doubleSignalProjectId =
+      llmProjectMatch &&
+      isCertainMatch(llmProjectMatch) &&
+      (signals?.candidateProjectIds ?? []).includes(llmProjectMatch.id)
+        ? llmProjectMatch.id
+        : null;
+    const sureProjectId =
+      candidateList.length === 1 ? (candidateList[0] ?? null) : doubleSignalProjectId;
+    if (sureProjectId) {
+      const projectId = sureProjectId;
       autoLinkedProjectId = projectId;
       const [projectLabel] = await conn
         .select({ id: gmailTags.id })
@@ -347,6 +389,11 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
           // Push Gmail peut échouer (token/quota) — la liaison reste posée.
         }
       }
+    } else if (!llmProjectMatch && candidateList.length > MAX_PROJECT_LINK_CANDIDATES) {
+      // Le mail ne nomme aucun projet et les participants en désignent
+      // trop (un contact actif sur vingt projets) : personne ne choisit
+      // dans une telle liste.
+      skipped.tooManyCandidates++;
     } else {
       // N candidats → proposition à valider.
       // suggested = LLM match si présent, sinon premier candidat (le user pourra changer).
@@ -562,28 +609,9 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     });
   }
 
-  // 7. Brouillon de réponse — seulement si le LLM a détecté un besoin
-  //    d'action et fourni un draft. Le push vers Gmail se fait à
-  //    l'acceptation (cf. acceptEmailProposal).
-  if (result.needsReply && result.replyDraft) {
-    const [thread] = await conn
-      .select({ gmailThreadId: gmailThreads.gmailThreadId })
-      .from(gmailThreads)
-      .where(eq(gmailThreads.id, msg.threadId))
-      .limit(1);
-    rows.push({
-      messageId,
-      kind: "draft_reply",
-      payload: {
-        subject: result.replyDraft.subject,
-        body: result.replyDraft.body,
-        gmailThreadId: thread?.gmailThreadId ?? null,
-        gmailMessageId: msg.gmailMessageId,
-      },
-      matchedId: null,
-      matchConfidence: null,
-    });
-  }
+  // 7. Plus de brouillon de réponse généré d'office : quarante-trois
+  //    attendaient sans qu'aucun ne soit jamais tranché. `needsReply`
+  //    reste porté par le message (badge « Réponse attendue »).
 
   // 1b. Clôtures de tâches : la tâche doit être encore ouverte, ce message
   //     ne doit pas l'avoir déjà tranchée, aucune autre source ne doit
@@ -641,7 +669,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   }
   if (Object.values(skipped).some((n) => n > 0)) {
     console.info(
-      `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.decidedHere} déjà tranchée(s) sur ce message ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
+      `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.decidedHere} déjà tranchée(s) sur ce message, ${skipped.tooManyCandidates} rattachement(s) sans projet nommé parmi trop de candidats ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
     );
   }
 

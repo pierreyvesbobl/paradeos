@@ -18,7 +18,8 @@ export type ProposalKind =
   | "draft_reply"
   | "task_completion";
 
-export type ProposalStatus = "pending" | "accepted" | "rejected";
+/** `expired` n'atteint pas le panneau (filtré à la lecture du fil) : porté pour le typage. */
+export type ProposalStatus = "pending" | "accepted" | "rejected" | "expired";
 
 /**
  * Forme structurelle commune à `EmailProposal` et `MeetingProposal`. Les

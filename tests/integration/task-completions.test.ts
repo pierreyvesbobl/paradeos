@@ -50,7 +50,6 @@ const emptyEmailExtraction = {
   proposedContacts: [],
   proposedProjects: [],
   needsReply: false,
-  replyDraft: null,
   sensitiveDetected: false,
   mentionedTasks: [],
   completedTasks: [] as ResolvedTaskCompletion[],

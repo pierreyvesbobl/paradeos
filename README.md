@@ -135,7 +135,7 @@ n'applique plus jamais d'office une tâche déjà proposée une fois. Les enums
 ### Ré-extraire une source déjà triée
 
 Relancer l'extraction d'une réunion ou d'un mail n'efface que ses
-propositions encore `pending`. Celles déjà tranchées restent, et la nouvelle
+propositions encore `pending` ou `expired`. Celles déjà tranchées restent, et la nouvelle
 passe ne repose rien d'équivalent (`DecidedProposals` dans
 `lib/crm/proposal-keys.ts`, clé par nature : titre + projet pour une tâche,
 cible pour une liaison, une seule par source pour un brouillon de réponse) :
@@ -143,6 +143,34 @@ un refus ne revient pas dans l'inbox, une acceptation n'est pas reproposée.
 La tâche née d'une acceptation reçoit tout de même les passages de la
 nouvelle passe, en `origin`. On peut donc relancer les réunions anciennes
 pour poser « ce qui a été dit » sans rien retrier.
+
+### Garder la file /inbox digeste
+
+Une ligne par proposition et un humain qui refuse 80 % de ce qu'on lui
+montre : la file servait de filtre, pas de validation. Quatre règles, côté
+mails (`lib/gmail/`) :
+
+- **Expéditeurs machines** (`automated-sender.ts`) : reçus, alertes, notes
+  automatiques, services SaaS. Pas d'appel LLM, le message passe en
+  `extraction_status = skipped`. Le classement des factures lit ses pièces
+  jointes comme avant.
+- **Péremption** (`expire-proposals.ts`) : une proposition email `pending`
+  depuis plus de 7 jours passe en `expired` à la relève Gmail suivante.
+  Ce n'est pas un refus : absente de l'historique, elle est reposée si on
+  ré-extrait le message (migration `0096`).
+- **Regroupement** : /inbox affiche une ligne par source seule et un groupe
+  replié par message ou réunion dès deux propositions, avec « Tout
+  accepter » / « Tout refuser » sans confirmation (`groupKey` sur
+  `InboxItem`).
+- **Rattachement projet sans clic** : quand le projet nommé dans le mail
+  (match certain) est aussi l'un de ceux que désignent les participants, la
+  liaison est posée comme pour un candidat unique. Sans projet nommé et
+  avec plus de 5 candidats, rien n'est proposé : le fil se rattache depuis
+  sa page.
+
+Les brouillons de réponse ne sont plus générés d'office (`needsReply`
+reste porté par le message). Les propositions de réunion ne sont pas
+concernées par la péremption.
 
 ### Ce qui a été dit d'une tâche (`task_sources`)
 

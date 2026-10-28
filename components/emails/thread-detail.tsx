@@ -1,5 +1,5 @@
 import { ArrowDownLeft, ArrowSquareOut, ArrowUpRight } from "@phosphor-icons/react/dist/ssr";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { MessageCard } from "@/components/emails/message-card";
 import { ProjectLinkBadge } from "@/components/emails/project-link-badge";
 import { EmailProposalsPanel } from "@/components/emails/proposals-panel";
@@ -62,8 +62,18 @@ export async function EmailThreadDetail({ threadId }: { threadId: string }) {
   // Étape 2 : propositions du thread + lookup du projet lié, en parallèle
   // (indépendants entre eux, tous deux dépendent seulement de `detail`).
   const [proposalRowsRaw, linkedProjectRow, filingRows] = await Promise.all([
+    // Une proposition périmée n'a été ni acceptée ni refusée : rien à
+    // montrer, ni à trancher ni en historique.
     messageIds.length > 0
-      ? conn.select().from(emailProposals).where(inArray(emailProposals.messageId, messageIds))
+      ? conn
+          .select()
+          .from(emailProposals)
+          .where(
+            and(
+              inArray(emailProposals.messageId, messageIds),
+              ne(emailProposals.status, "expired"),
+            ),
+          )
       : Promise.resolve([] as (typeof emailProposals.$inferSelect)[]),
     projectLink?.targetId
       ? conn

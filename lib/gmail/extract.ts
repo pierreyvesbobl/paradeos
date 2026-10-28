@@ -127,16 +127,6 @@ const extractionSchema = z.object({
    * les emails purement informatifs (newsletters, notifications, cc-info…).
    */
   needsReply: z.boolean(),
-  /**
-   * Brouillon de réponse suggéré. Rempli **uniquement** quand `needsReply`
-   * est vrai. En français, ton naturel, signé "Pierre-Yves".
-   */
-  replyDraft: z
-    .object({
-      subject: z.string(),
-      body: z.string(),
-    })
-    .nullable(),
   sensitiveDetected: z.boolean(),
   /**
    * Tâches ouvertes du vocabulaire que le mail donne pour faites (cf.
@@ -193,7 +183,6 @@ function buildSystemPrompt(args: {
 5. Les tâches à faire qui ressortent
 6. Les tâches ouvertes déjà connues que le mail donne pour faites
 7. Les entités, contacts et projets NOUVEAUX évoqués (à créer dans le CRM)
-8. Un brouillon de réponse si le mail attend une action
 
 Règles générales :
 - Reste factuel. Pas de paraphrase, pas d'extrapolation.
@@ -211,17 +200,10 @@ Classifie l'affaire portée par cet email :
 - **project** : delivery/opérationnel — le deal est signé, on parle exécution, livraison, planning, retour, ajustement.
 - **none** : pas de dimension commerciale (compta, admin, info interne, newsletter, notification, …).
 
-# Réponse attendue (needsReply / replyDraft)
+# Réponse attendue (needsReply)
 
 - **needsReply=true** quand le mail attend une action de ta part : question directe, décision à prendre, relance à faire, choix à valider, RDV à confirmer.
 - **needsReply=false** pour les mails purement informatifs (Cc pour info, notification automatique, réponse "OK reçu" sans suite).
-- Si **needsReply=true**, produis un **replyDraft** :
-  - En français, ton naturel et concis (3 à 6 phrases max).
-  - Signé "Pierre-Yves" en fin de mail.
-  - subject préfixé "Re: " s'il ne l'est pas déjà.
-  - **Aucune affirmation** qui ne soit pas vérifiable depuis le mail d'origine. Si un chiffre/nom/date est incertain, laisse un placeholder \`[À compléter]\`.
-  - Ne t'engage pas à la place de l'utilisateur — propose des tournures ouvertes ("je te reviens sur", "je te propose de", "peux-tu me confirmer…").
-- Si **needsReply=false**, replyDraft = null.
 
 ${COMPLETED_TASKS_PROMPT_RULES}
 
