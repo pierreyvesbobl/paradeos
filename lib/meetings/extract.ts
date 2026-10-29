@@ -13,6 +13,8 @@ import {
   assignTaskRefs,
   COMPLETED_TASKS_PROMPT_RULES,
   formatTaskVocabulary,
+  PROPOSAL_REF_PREFIX,
+  PROPOSED_STATUS,
   type ResolvedTaskCompletion,
   resolveCompletedTasks,
   type TaskVocabularyEntry,
@@ -208,9 +210,22 @@ type OpenTaskRow = {
   updatedAt: Date;
 };
 
+export type PendingProposalEntry = {
+  id: string;
+  title: string;
+  projectId: string | null;
+  projectName: string | null;
+};
+
 export async function getKnownVocabulary(opts?: {
   /** Les tâches ouvertes de ce projet sont toutes chargées et listées d'abord. */
   priorityProjectId?: string | null;
+  /**
+   * Propositions de tâche encore en attente, nées des messages précédents
+   * du fil : le modèle les voit comme des tâches à clore (cf.
+   * PROPOSAL_REF_PREFIX), pour qu'une réponse déjà donnée les emporte.
+   */
+  pendingProposals?: PendingProposalEntry[];
 }): Promise<Vocabulary> {
   const conn = await db();
   const priorityProjectId = opts?.priorityProjectId ?? null;
@@ -307,13 +322,23 @@ export async function getKnownVocabulary(opts?: {
     ]);
 
   const seenTaskIds = new Set<string>();
-  // Les terminées après les ouvertes : les références restent stables pour
-  // les ouvertes, et le bloc « terminées » se lit à part dans le prompt.
-  const orderedTasks = [...priorityTaskRows, ...taskRows, ...doneTaskRows].filter((t) => {
-    if (seenTaskIds.has(t.id)) return false;
-    seenTaskIds.add(t.id);
-    return true;
-  });
+  const proposalRows: OpenTaskRow[] = (opts?.pendingProposals ?? []).map((p) => ({
+    id: `${PROPOSAL_REF_PREFIX}${p.id}`,
+    title: p.title,
+    status: PROPOSED_STATUS,
+    projectId: p.projectId,
+    projectName: p.projectName,
+    updatedAt: new Date(0),
+  }));
+  // Les terminées puis les proposées après les ouvertes : les références
+  // restent stables pour les ouvertes, et chaque bloc se lit à part.
+  const orderedTasks = [...priorityTaskRows, ...taskRows, ...doneTaskRows, ...proposalRows].filter(
+    (t) => {
+      if (seenTaskIds.has(t.id)) return false;
+      seenTaskIds.add(t.id);
+      return true;
+    },
+  );
 
   return {
     entities: entityRows.map((r) => ({ name: r.name, kind: r.kind })),

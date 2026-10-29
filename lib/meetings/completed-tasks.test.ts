@@ -89,4 +89,26 @@ describe("formatTaskVocabulary", () => {
   it("ne renvoie rien sans tâche", () => {
     expect(formatTaskVocabulary([], "p1")).toBe("");
   });
+
+  it("sépare les terminées et les propositions du fil dans leurs propres blocs", () => {
+    const withExtras = assignTaskRefs([
+      { id: "a", title: "Envoyer le devis", projectId: "p1", projectName: "Bobl", status: "todo" },
+      { id: "d", title: "Export des prix", projectId: "p1", projectName: "Bobl", status: "done" },
+      {
+        id: "proposal:x",
+        title: "Répondre à Frédéric",
+        projectId: null,
+        projectName: null,
+        status: "proposed",
+      },
+    ]);
+    const text = formatTaskVocabulary(withExtras, "p1");
+    expect(text).toContain("Tâches ouvertes du projet concerné :\n- [T1] Envoyer le devis");
+    expect(text).toContain("Tâches terminées récemment du projet concerné");
+    expect(text).toContain("[T2] Export des prix");
+    expect(text).toContain("Tâches proposées d'après les messages précédents de ce fil");
+    expect(text).toContain("[T3] Répondre à Frédéric");
+    // Une proposition n'est ni ouverte ni terminée : absente des deux autres blocs.
+    expect(text.split("Tâches proposées")[0]).not.toContain("Répondre à Frédéric");
+  });
 });

@@ -255,6 +255,60 @@ describe("fil déjà répondu", () => {
     });
   });
 
+  it("le message suivant clôt une proposition du fil qu'il rend sans objet, sans toucher aux autres", async () => {
+    const { asked, threadId } = await threadWithReply();
+    const [moot, kept] = await db
+      .insert(emailProposals)
+      .values([
+        { messageId: asked, kind: "task", payload: { title: "Envoyer le devis à Frédéric" } },
+        // Titre distinct des autres tests : une proposition équivalente déjà
+        // en attente ailleurs serait écartée par la dédup inter-messages.
+        { messageId: asked, kind: "task", payload: { title: "Préparer le dossier Auditex" } },
+      ])
+      .returning({ id: emailProposals.id });
+    if (!moot || !kept) throw new Error("insert proposals");
+    const reply = await insertMessage({
+      userId: actor.id,
+      fromEmail: "pierreyves@automato.tech",
+      subject: "Re: Demande d'agrément CII",
+      threadId,
+      internalDate: new Date("2026-10-28T12:00:00Z"),
+      labels: ["SENT"],
+    });
+    // Le modèle a vu la proposition sous sa référence et la donne pour faite.
+    mockedExtractEmail.mockResolvedValueOnce({
+      ...emptyEmailExtraction,
+      completedTasks: [
+        {
+          taskId: `proposal:${moot.id}`,
+          taskTitle: "Envoyer le devis à Frédéric",
+          projectId: null,
+          projectName: null,
+          evidence: "voici le devis en pièce jointe",
+          confidence: "certain" as const,
+        },
+      ],
+    });
+
+    const r = await extractAndSaveEmailProposals(reply);
+    expect(r).toMatchObject({ skipped: false, proposalsResolved: 1 });
+    const status = async (id: string) =>
+      (
+        await db
+          .select({ s: emailProposals.status })
+          .from(emailProposals)
+          .where(eq(emailProposals.id, id))
+      )[0]?.s;
+    expect(await status(moot.id)).toBe("expired");
+    expect(await status(kept.id)).toBe("pending");
+    // Aucune clôture de tâche ni passage n'a été posé sur une proposition.
+    const completions = await db
+      .select({ id: emailProposals.id })
+      .from(emailProposals)
+      .where(and(eq(emailProposals.messageId, reply), eq(emailProposals.kind, "task_completion")));
+    expect(completions).toHaveLength(0);
+  });
+
   it("l'extraction d'un mail déjà répondu ne propose pas « Répondre » et n'attend plus de réponse", async () => {
     const { asked } = await threadWithReply();
     const task = (title: string) => ({

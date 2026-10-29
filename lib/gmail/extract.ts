@@ -10,7 +10,11 @@ import {
   type ResolvedTaskCompletion,
   resolveCompletedTasks,
 } from "@/lib/meetings/completed-tasks";
-import { formatVocabulary, getKnownVocabulary } from "@/lib/meetings/extract";
+import {
+  formatVocabulary,
+  getKnownVocabulary,
+  type PendingProposalEntry,
+} from "@/lib/meetings/extract";
 import { DEFAULT_LLM_MODEL } from "@/lib/schemas/integrations";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { TASK_KIND_PROMPT_RULES } from "@/lib/tasks/task-kind";
@@ -281,6 +285,8 @@ export async function extractEmail(
   options?: {
     /** Projet du fil : ses tâches ouvertes sont listées en premier. */
     priorityProjectId?: string | null;
+    /** Propositions de tâche en attente nées des messages précédents du fil. */
+    pendingProposals?: PendingProposalEntry[];
   },
 ): Promise<EmailExtraction> {
   const apiKey = await getSetting(SETTING_KEYS.OPENROUTER_API_KEY);
@@ -289,7 +295,10 @@ export async function extractEmail(
   }
   const modelId = (await getSetting(SETTING_KEYS.LLM_MODEL)) ?? DEFAULT_LLM_MODEL;
 
-  const vocab = await getKnownVocabulary({ priorityProjectId: options?.priorityProjectId });
+  const vocab = await getKnownVocabulary({
+    priorityProjectId: options?.priorityProjectId,
+    pendingProposals: options?.pendingProposals,
+  });
 
   const openrouter = createOpenAI({
     apiKey,

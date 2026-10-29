@@ -19,6 +19,18 @@ export type TaskVocabularyEntry = {
 
 export type CompletionConfidence = "certain" | "probable";
 
+/**
+ * Une proposition en attente passée au vocabulaire porte cet identifiant
+ * préfixé : le modèle la voit comme une tâche, et la persistance sait
+ * qu'il s'agit d'une ligne `email_proposals` à clore, pas d'une tâche.
+ */
+export const PROPOSAL_REF_PREFIX = "proposal:";
+export const PROPOSED_STATUS = "proposed";
+
+export function proposalIdFromTaskId(taskId: string): string | null {
+  return taskId.startsWith(PROPOSAL_REF_PREFIX) ? taskId.slice(PROPOSAL_REF_PREFIX.length) : null;
+}
+
 /** Sortie brute du modèle, avant résolution des références. */
 export type RawCompletedTask = {
   taskRef: string;
@@ -59,8 +71,11 @@ export function formatTaskVocabulary(
     bits.push(`[${t.status}]`);
     return `- ${bits.join(" ")}`;
   };
-  const open = tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
+  const open = tasks.filter(
+    (t) => t.status !== "done" && t.status !== "cancelled" && t.status !== PROPOSED_STATUS,
+  );
   const done = tasks.filter((t) => t.status === "done");
+  const proposed = tasks.filter((t) => t.status === PROPOSED_STATUS);
   const priority = priorityProjectId ? open.filter((t) => t.projectId === priorityProjectId) : [];
   const others = priorityProjectId ? open.filter((t) => t.projectId !== priorityProjectId) : open;
 
@@ -87,6 +102,13 @@ export function formatTaskVocabulary(
         .join("\n")}`,
     );
   }
+  if (proposed.length > 0) {
+    blocks.push(
+      `Tâches proposées d'après les messages précédents de ce fil, pas encore acceptées (jamais dans proposedTasks ; dans completedTasks si ce message les donne pour faites OU les rend sans objet, par exemple une réponse déjà envoyée, une question déjà réglée, un besoin abandonné) :\n${proposed
+        .map(line)
+        .join("\n")}`,
+    );
+  }
   return blocks.join("\n\n");
 }
 
@@ -97,6 +119,7 @@ Parmi les « Tâches ouvertes déjà connues » du vocabulaire, signale celles q
 - confidence="certain" : la personne en charge déclare l'action accomplie, au passé (« j'ai envoyé le devis », « c'est livré », « le contrat est signé »), ou le livrable attendu est reçu / joint.
 - confidence="probable" : la clôture se déduit sans être dite (on passe à l'étape suivante alors que la tâche en était le prérequis, un tiers rapporte que c'est fait).
 - Jamais pour une intention ou une promesse (« je vais envoyer », « je m'en occupe demain »), ni pour une tâche seulement mentionnée ou discutée.
+- Pour les « Tâches proposées d'après les messages précédents de ce fil » : aussi quand ce message les rend sans objet (la réponse attendue est donnée, la question est réglée, le besoin est abandonné), confidence="certain" si c'est explicite.
 - taskRef = la référence exacte entre crochets (ex. T12), jamais le titre.
 - evidence = citation courte et verbatim du passage qui le prouve.
 - Tableau vide si rien n'indique qu'une tâche est faite.`;

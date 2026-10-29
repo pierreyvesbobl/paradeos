@@ -1024,10 +1024,13 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
   // au sync suivant (extraction_status='pending' reste indexé).
   const extractionEnabled = (await getSetting(SETTING_KEYS.GMAIL_EXTRACTION_ENABLED)) !== "false";
   if (extractionEnabled && !outOfTime(LLM_ITEM_RESERVE_MS)) {
+    // Dans l'ordre d'arrivée : la réponse de l'utilisateur doit être lue
+    // après le mail qui la demandait, pour pouvoir clore ce qu'il a proposé.
     const pendingMessages = await conn
       .select({ id: gmailMessages.id })
       .from(gmailMessages)
       .where(and(eq(gmailMessages.userId, userId), eq(gmailMessages.extractionStatus, "pending")))
+      .orderBy(gmailMessages.internalDate)
       .limit(MAX_EXTRACTIONS_PER_RUN);
     for (const pm of pendingMessages) {
       if (outOfTime(LLM_ITEM_RESERVE_MS)) break;

@@ -160,7 +160,13 @@ mails (`lib/gmail/`) :
   attendre, de même qu'un « Répondre à X » ou un brouillon de réponse dont
   le fil a reçu un message envoyé (`SENT`) après le mail d'origine
   (`lib/gmail/reply-tasks.ts`). L'extraction d'un mail déjà répondu ne
-  propose pas « Répondre » et ne le marque pas « réponse attendue ». Ce n'est pas un refus : absente de l'historique et des
+  propose pas « Répondre » et ne le marque pas « réponse attendue ».
+  Plus généralement, les propositions de tâche en attente nées des
+  messages précédents du fil entrent dans le vocabulaire du LLM
+  (`PROPOSAL_REF_PREFIX`, bloc « Tâches proposées… ») : un message qui
+  les donne pour faites ou sans objet les clôt (`expired`, pas un refus).
+  La relève extrait les messages dans l'ordre d'arrivée pour que la
+  réponse soit lue après la demande. Ce n'est pas un refus : absente de l'historique et des
   pages source, elle est reposée si on ré-extrait (migrations `0096`,
   `0097`).
 - **Regroupement** : /inbox affiche une ligne par source seule et un groupe
