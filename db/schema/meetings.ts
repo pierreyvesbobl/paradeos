@@ -106,6 +106,14 @@ export const meetings = pgTable(
     contentFingerprint: text("content_fingerprint"),
     /** Lien optionnel vers un projet (couvre aussi les anciens deals/opps). */
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    /**
+     * Rattachement sans clic (cf. lib/meetings/project-attach.ts) : quand,
+     * et sur quels indices. Une réunion visée une fois puis détachée à la
+     * main n'est plus rattachée d'office.
+     */
+    projectAutoAt: timestamp("project_auto_at", { withTimezone: true }),
+    projectAutoReason: text("project_auto_reason"),
+    projectAutoCheckedAt: timestamp("project_auto_checked_at", { withTimezone: true }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),

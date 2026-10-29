@@ -132,6 +132,21 @@ n'applique plus jamais d'office une tâche déjà proposée une fois. Les enums
 `*_proposal_kind` ne se réduisent pas (`ADD VALUE` sans retour) : migration
 `0090`.
 
+### Rattachement automatique des réunions à un projet
+
+`lib/meetings/project-signals.ts` (règles pures) et
+`lib/meetings/project-attach.ts` (indices en base). Chaque indice pèse :
+projet reconnu à coup sûr dans le transcript 0,8, nom du projet dans le
+titre 0,8, nom d'un client à projet unique dans le titre 0,6 (0,5 réparti
+sinon), trois quarts des tâches proposées sur le projet 0,5, participants
+contacts du projet 0,4 réparti. On rattache dès 0,8, si aucun autre
+projet ne dépasse 0,3 : une réunion transverse reste sans projet. Projets
+perdus, terminés et archivés exclus. Appelé en fin d'extraction et par le
+cron des transcripts Drive (40 réunions sans projet par passage, une
+réévaluation par jour). Trace sur `meetings.project_auto_at` /
+`project_auto_reason` (migration `0099`) : une réunion détachée à la main
+après un rattachement automatique n'est plus jamais rattachée d'office.
+
 ### Ré-extraire une source déjà triée
 
 Relancer l'extraction d'une réunion ou d'un mail n'efface que ses

@@ -22,6 +22,7 @@ import { db } from "@/lib/db/server";
 import { formatPersonName, sanitizeNameInput } from "@/lib/format";
 import { extractMeeting, type ProjectContext } from "@/lib/meetings/extract";
 import { getParticipantContext, syncParticipantsFromAttendees } from "@/lib/meetings/participants";
+import { attachMeetingIfConfident } from "@/lib/meetings/project-attach";
 import {
   buildCompletionProposal,
   isTaskAutocompleteEnabled,
@@ -420,25 +421,24 @@ export async function extractAndSaveProposals(
     await conn.insert(meetingProposals).values(rowsToInsert);
   }
 
-  // Rattachement automatique : uniquement si la réunion n'a pas déjà un
-  // projet, et uniquement si le transcript n'en a reconnu **qu'un** à
-  // coup sûr. Deux projets certains, c'est une réunion transverse — la
-  // rattacher à l'un des deux serait un choix arbitraire, et un mauvais
-  // rattachement se voit moins qu'une absence de rattachement.
-  const autoProjectId =
-    meeting.projectId === null && certainProjectIds.size === 1
-      ? ([...certainProjectIds][0] as string)
-      : null;
-
   await conn
     .update(meetings)
     .set({
       summary: result.summary,
       occurredAt: meeting.occurredAt ?? (result.occurredAt ? new Date(result.occurredAt) : null),
-      ...(autoProjectId ? { projectId: autoProjectId } : {}),
       status: "extracted",
     })
     .where(eq(meetings.id, meeting.id));
+
+  // Rattachement automatique quand les indices concordent : projet reconnu
+  // à coup sûr dans le transcript, titre, projets des tâches proposées,
+  // contacts des participants (cf. lib/meetings/project-attach.ts). Une
+  // réunion transverse disperse ses indices et reste sans projet.
+  if (meeting.projectId === null) {
+    await attachMeetingIfConfident(conn, meeting.id, {
+      namedProjectIds: [...certainProjectIds],
+    });
+  }
 
   return { count: proposalsRows.length, autoCompletedTasks };
 }
