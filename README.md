@@ -182,7 +182,13 @@ mails (`lib/gmail/`) :
   (`PROPOSAL_REF_PREFIX`, bloc « Tâches proposées… ») : un message qui
   les donne pour faites ou sans objet les clôt (`expired`, pas un refus).
   La relève extrait les messages dans l'ordre d'arrivée pour que la
-  réponse soit lue après la demande. Ce n'est pas un refus : absente de l'historique et des
+  réponse soit lue après la demande. Rattrapage de l'existant à chaque relève
+  (`requeueThreadsWithPendingProposals`) : 3 fils par passage dont un
+  message plus récent n'a pas revu les propositions en attente sont
+  rejoués en mode passages seuls (`requeuedForPendingProposals`, marqueur
+  `pendingProposalsSeen`). Ce mode ne pose ni n'efface aucune proposition
+  du message rejoué. Les rattachements d'avant la règle des 5 candidats
+  expirent (`expireUndecidableProjectLinks`). Ce n'est pas un refus : absente de l'historique et des
   pages source, elle est reposée si on ré-extrait (migrations `0096`,
   `0097`).
 - **Regroupement** : /inbox affiche une ligne par source seule et un groupe

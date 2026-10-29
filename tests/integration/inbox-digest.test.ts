@@ -12,6 +12,10 @@ import {
   expireStaleMeetingProposals,
   PROPOSAL_TTL_DAYS,
 } from "@/lib/crm/expire-proposals";
+import {
+  expireUndecidableProjectLinks,
+  requeueThreadsWithPendingProposals,
+} from "@/lib/crm/pending-proposals";
 import { extractEmail } from "@/lib/gmail/extract";
 import { extractAndSaveEmailProposals } from "@/lib/gmail/extract-and-save";
 import type { ResolvedTaskCompletion } from "@/lib/meetings/completed-tasks";
@@ -343,6 +347,87 @@ describe("fil déjà répondu", () => {
       .from(gmailMessages)
       .where(eq(gmailMessages.id, asked));
     expect((m?.meta as { needsReply?: boolean } | null)?.needsReply).toBe(false);
+  });
+});
+
+describe("rattrapage des propositions en attente", () => {
+  it("rejoue le dernier message du fil une fois, sans effacer ses propres propositions", async () => {
+    const asked = await insertMessage({
+      userId: actor.id,
+      fromEmail: "julien@cephalopode.com",
+      subject: "Accès API",
+      internalDate: new Date("2026-10-20T09:00:00Z"),
+    });
+    const [row] = await db
+      .select({ threadId: gmailMessages.threadId })
+      .from(gmailMessages)
+      .where(eq(gmailMessages.id, asked));
+    const threadId = row?.threadId as string;
+    const later = await insertMessage({
+      userId: actor.id,
+      fromEmail: "julien@cephalopode.com",
+      subject: "Re: Accès API",
+      threadId,
+      internalDate: new Date("2026-10-21T09:00:00Z"),
+    });
+    await db
+      .update(gmailMessages)
+      .set({ extractionStatus: "extracted" })
+      .where(eq(gmailMessages.id, later));
+    const [moot, own] = await db
+      .insert(emailProposals)
+      .values([
+        { messageId: asked, kind: "task", payload: { title: "Créer la clé API Cephalopode" } },
+        { messageId: later, kind: "task", payload: { title: "Documenter le quota Cephalopode" } },
+      ])
+      .returning({ id: emailProposals.id });
+    if (!moot || !own) throw new Error("insert");
+
+    expect(await requeueThreadsWithPendingProposals(db, { userId: actor.id })).toBe(1);
+    mockedExtractEmail.mockResolvedValueOnce({
+      ...emptyEmailExtraction,
+      completedTasks: [
+        {
+          taskId: `proposal:email:${moot.id}`,
+          taskTitle: "Créer la clé API Cephalopode",
+          projectId: null,
+          projectName: null,
+          evidence: "la clé est créée",
+          confidence: "certain" as const,
+        },
+      ],
+    });
+    await extractAndSaveEmailProposals(later);
+
+    const status = async (id: string) =>
+      (
+        await db
+          .select({ s: emailProposals.status })
+          .from(emailProposals)
+          .where(eq(emailProposals.id, id))
+      )[0]?.s;
+    expect(await status(moot.id)).toBe("expired");
+    expect(await status(own.id)).toBe("pending");
+    // Revu une fois : pas rejoué de nouveau.
+    expect(await requeueThreadsWithPendingProposals(db, { userId: actor.id })).toBe(0);
+  });
+
+  it("fait expirer un rattachement sans projet nommé parmi plus de cinq candidats", async () => {
+    const msgId = await insertMessage({ userId: actor.id, fromEmail: "client@acme.fr" });
+    const candidates = Array.from({ length: 21 }, (_, i) => ({ id: `p${i}`, name: `P${i}` }));
+    const [wide, narrow] = await db
+      .insert(emailProposals)
+      .values([
+        { messageId: msgId, kind: "project_link", payload: { candidates, llmMentionedName: null } },
+        {
+          messageId: msgId,
+          kind: "project_link",
+          payload: { candidates: candidates.slice(0, 3), llmMentionedName: null },
+        },
+      ])
+      .returning({ id: emailProposals.id });
+    if (!wide || !narrow) throw new Error("insert");
+    expect(await expireUndecidableProjectLinks(db, { userId: actor.id })).toBe(1);
   });
 });
 

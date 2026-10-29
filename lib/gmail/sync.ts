@@ -11,6 +11,10 @@ import {
   expireStaleEmailProposals,
   expireStaleMeetingProposals,
 } from "@/lib/crm/expire-proposals";
+import {
+  expireUndecidableProjectLinks,
+  requeueThreadsWithPendingProposals,
+} from "@/lib/crm/pending-proposals";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import {
@@ -1056,6 +1060,10 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
     result.proposalsExpired += await expireStaleEmailProposals(conn, { userId });
     result.proposalsExpired += await expireAutomatedSenderProposals(conn, { userId });
     result.proposalsExpired += await expireAnsweredProposals(conn, { userId });
+    result.proposalsExpired += await expireUndecidableProjectLinks(conn, { userId });
+    // Fils dont un message plus récent n'a pas encore revu les propositions :
+    // rejoués à la relève suivante, en mode passages seuls.
+    result.threadsRequeued += await requeueThreadsWithPendingProposals(conn, { userId });
     result.proposalsExpired += await expireStaleMeetingProposals(conn);
   } catch (err) {
     result.errors.push(`expire proposals: ${err instanceof Error ? err.message : String(err)}`);

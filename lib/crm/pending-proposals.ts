@@ -181,3 +181,81 @@ export async function resolvePendingProposals<
     mentionedTasks: lists.mentionedTasks.filter((m) => isTask(m.taskId)),
   };
 }
+
+/** Messages rejoués par relève pour revoir les propositions de leur fil : un appel LLM chacun. */
+const REQUEUE_PENDING_PER_RUN = 3;
+
+/**
+ * Propositions de tâche en attente dans un fil qui a reçu un message plus
+ * récent, lu avant que l'extraction ne voie les propositions du fil :
+ * personne n'a vérifié si ce message les rendait sans objet. On remet en
+ * file le dernier message du fil, en mode passages seuls
+ * (`requeuedForPendingProposals`) : il peut clore des propositions, il
+ * n'en pose aucune.
+ */
+export async function requeueThreadsWithPendingProposals(
+  conn: Database,
+  opts: { userId: string; limit?: number },
+): Promise<number> {
+  const res = await conn.execute(sql`
+    select distinct on (later.thread_id) later.id
+    from ${emailProposals} p
+    join ${gmailMessages} src on src.id = p.message_id
+    join ${gmailMessages} later on later.thread_id = src.thread_id and later.internal_date > src.internal_date
+    where p.status = 'pending' and p.kind = 'task'
+      and src.user_id = ${opts.userId}
+      and later.extraction_status = 'extracted'
+      and later.body_text is not null
+      and coalesce((later.extraction_meta->>'pendingProposalsSeen')::boolean, false) = false
+    order by later.thread_id, later.internal_date desc
+    limit ${opts.limit ?? REQUEUE_PENDING_PER_RUN}
+  `);
+  // postgres-js renvoie un tableau, PGlite un objet `{ rows }`.
+  const rows = (Array.isArray(res) ? res : (res as { rows: unknown[] }).rows) as { id: string }[];
+  for (const r of rows) {
+    await conn
+      .update(gmailMessages)
+      .set({
+        extractionStatus: "pending",
+        extractionMeta: sql`coalesce(${gmailMessages.extractionMeta}, '{}'::jsonb) || '{"requeuedForPendingProposals": true}'::jsonb`,
+      })
+      .where(eq(gmailMessages.id, r.id));
+  }
+  return rows.length;
+}
+
+/**
+ * Rattachements de fil à un projet que personne ne peut trancher : aucun
+ * projet nommé dans le mail et plus de `maxCandidates` candidats. La règle
+ * vaut à l'extraction depuis le 28/10 ; celles d'avant expirent ici.
+ */
+export async function expireUndecidableProjectLinks(
+  conn: Database,
+  opts: { userId: string; maxCandidates?: number; now?: Date },
+): Promise<number> {
+  const max = opts.maxCandidates ?? 5;
+  const rows = await conn
+    .select({ id: emailProposals.id })
+    .from(emailProposals)
+    .innerJoin(gmailMessages, eq(gmailMessages.id, emailProposals.messageId))
+    .where(
+      and(
+        eq(emailProposals.status, "pending"),
+        eq(emailProposals.kind, "project_link"),
+        eq(gmailMessages.userId, opts.userId),
+        sql`${emailProposals.payload}->>'llmMentionedName' is null`,
+        sql`jsonb_array_length(coalesce(${emailProposals.payload}->'candidates', '[]'::jsonb)) > ${max}`,
+      ),
+    );
+  if (rows.length === 0) return 0;
+  await conn
+    .update(emailProposals)
+    .set({ status: "expired", decidedAt: opts.now ?? new Date() })
+    .where(
+      inArray(
+        emailProposals.id,
+        rows.map((r) => r.id),
+      ),
+    );
+  return rows.length;
+}

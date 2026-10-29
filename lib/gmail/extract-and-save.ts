@@ -220,14 +220,26 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       .from(emailProposals)
       .where(and(eq(emailProposals.messageId, messageId), ne(emailProposals.status, "pending"))),
   );
-  await conn
-    .delete(emailProposals)
-    .where(
-      and(
-        eq(emailProposals.messageId, messageId),
-        inArray(emailProposals.status, ["pending", "expired"]),
-      ),
-    );
+  // Message rejoué (tâches terminées, propositions du fil à revoir) : on
+  // garde les passages et les clôtures de propositions, sans repose ni
+  // effacement de ses propres propositions, le mail a déjà été trié.
+  const sourcesOnly = (() => {
+    const meta = (msg.extractionMeta ?? null) as {
+      requeuedForDoneTasks?: unknown;
+      requeuedForPendingProposals?: unknown;
+    } | null;
+    return meta?.requeuedForDoneTasks === true || meta?.requeuedForPendingProposals === true;
+  })();
+  if (!sourcesOnly) {
+    await conn
+      .delete(emailProposals)
+      .where(
+        and(
+          eq(emailProposals.messageId, messageId),
+          inArray(emailProposals.status, ["pending", "expired"]),
+        ),
+      );
+  }
 
   const rows: ProposalRow[] = [];
 
@@ -268,13 +280,6 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       excerpts: [{ quote: c.evidence, speaker: msg.fromName ?? msg.fromEmail ?? null }],
     });
   }
-
-  // Fil rejoué pour relier ses messages aux tâches terminées (cf.
-  // lib/gmail/auto-archive.ts) : on garde les passages, pas de nouvelle
-  // proposition, le mail a déjà été trié une fois.
-  const sourcesOnly =
-    ((msg.extractionMeta ?? null) as { requeuedForDoneTasks?: unknown } | null)
-      ?.requeuedForDoneTasks === true;
 
   // L'utilisateur a déjà envoyé un message dans ce fil après celui-ci :
   // le mail a été lu plus tard qu'il n'a été traité (relève en retard,
@@ -741,6 +746,9 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
         // Le vocabulaire a listé les tâches terminées du projet : inutile
         // de rejouer ce message pour les relier (cf. auto-archive.ts).
         doneTasksSeen: priorityProjectId !== null,
+        // Ce message a été lu avec les propositions en attente du fil et
+        // du projet : inutile de le rejouer pour elles.
+        pendingProposalsSeen: true,
       },
     })
     .where(eq(gmailMessages.id, messageId));
