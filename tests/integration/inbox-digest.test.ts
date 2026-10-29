@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
 import { emailProposals, gmailMessages, gmailThreads } from "@/db/schema/gmail";
@@ -6,6 +6,7 @@ import { meetingProposals, meetings } from "@/db/schema/meetings";
 import { taskSources } from "@/db/schema/task-sources";
 import { tasks } from "@/db/schema/tasks";
 import {
+  expireAnsweredProposals,
   expireAutomatedSenderProposals,
   expireStaleEmailProposals,
   expireStaleMeetingProposals,
@@ -68,24 +69,33 @@ async function insertMessage(opts: {
   fromName?: string;
   subject?: string;
   extractionMeta?: Record<string, unknown>;
+  /** Fil existant où ranger le message (sinon un fil neuf). */
+  threadId?: string;
+  internalDate?: Date;
+  labels?: string[];
 }) {
   const subject = opts.subject ?? "Sujet";
-  const [thread] = await db
-    .insert(gmailThreads)
-    .values({ userId: opts.userId, gmailThreadId: `gt-${crypto.randomUUID()}`, subject })
-    .returning({ id: gmailThreads.id });
-  if (!thread) throw new Error("insert thread");
+  let threadId = opts.threadId;
+  if (!threadId) {
+    const [thread] = await db
+      .insert(gmailThreads)
+      .values({ userId: opts.userId, gmailThreadId: `gt-${crypto.randomUUID()}`, subject })
+      .returning({ id: gmailThreads.id });
+    if (!thread) throw new Error("insert thread");
+    threadId = thread.id;
+  }
   const [msg] = await db
     .insert(gmailMessages)
     .values({
-      threadId: thread.id,
+      threadId,
       userId: opts.userId,
       gmailMessageId: `gm-${crypto.randomUUID()}`,
       fromEmail: opts.fromEmail,
       fromName: opts.fromName ?? null,
       subject,
       bodyText: "Corps du message.",
-      internalDate: new Date("2026-10-20T09:00:00Z"),
+      internalDate: opts.internalDate ?? new Date("2026-10-20T09:00:00Z"),
+      labels: opts.labels ?? [],
       extractionStatus: "pending",
       extractionMeta: opts.extractionMeta ?? null,
     })
@@ -175,6 +185,110 @@ describe("fil rejoué pour ses tâches terminées", () => {
       .from(gmailMessages)
       .where(eq(gmailMessages.id, messageId));
     expect((m?.meta as { doneTasksSeen?: boolean } | null)?.doneTasksSeen).toBe(false);
+  });
+});
+
+describe("fil déjà répondu", () => {
+  async function threadWithReply() {
+    const asked = await insertMessage({
+      userId: actor.id,
+      fromEmail: "m.frederic@gpasplus.com",
+      subject: "Demande d'agrément CII",
+      internalDate: new Date("2026-10-28T09:05:00Z"),
+    });
+    const [row] = await db
+      .select({ threadId: gmailMessages.threadId })
+      .from(gmailMessages)
+      .where(eq(gmailMessages.id, asked));
+    const threadId = row?.threadId as string;
+    await insertMessage({
+      userId: actor.id,
+      fromEmail: "pierreyves@automato.tech",
+      subject: "Re: Demande d'agrément CII",
+      threadId,
+      internalDate: new Date("2026-10-28T11:19:00Z"),
+      labels: ["SENT"],
+    });
+    return { asked, threadId };
+  }
+
+  it("la relève fait expirer « Répondre à X » et le brouillon, pas les autres tâches", async () => {
+    const { asked } = await threadWithReply();
+    const inserted = await db
+      .insert(emailProposals)
+      .values([
+        {
+          messageId: asked,
+          kind: "task",
+          payload: {
+            title: "Répondre à Frédéric pour indiquer si l'on souhaite être mis en relation",
+          },
+        },
+        {
+          messageId: asked,
+          kind: "task",
+          payload: { title: "Faire la demande d'agrément CII pour Automato" },
+        },
+        { messageId: asked, kind: "draft_reply", payload: { subject: "Re:", body: "…" } },
+      ])
+      .returning({
+        id: emailProposals.id,
+        kind: emailProposals.kind,
+        payload: emailProposals.payload,
+      });
+
+    expect(await expireAnsweredProposals(db, { userId: actor.id })).toBe(2);
+    const byTitle: Record<string, string> = {};
+    for (const row of inserted) {
+      const [r] = await db
+        .select({ status: emailProposals.status })
+        .from(emailProposals)
+        .where(eq(emailProposals.id, row.id));
+      const key =
+        row.kind === "draft_reply" ? "brouillon" : String((row.payload as { title: string }).title);
+      byTitle[key] = r?.status ?? "?";
+    }
+    expect(byTitle).toEqual({
+      "Répondre à Frédéric pour indiquer si l'on souhaite être mis en relation": "expired",
+      "Faire la demande d'agrément CII pour Automato": "pending",
+      brouillon: "expired",
+    });
+  });
+
+  it("l'extraction d'un mail déjà répondu ne propose pas « Répondre » et n'attend plus de réponse", async () => {
+    const { asked } = await threadWithReply();
+    const task = (title: string) => ({
+      title,
+      dueDate: null,
+      projectName: null,
+      assigneeName: null,
+      priority: null,
+      kind: null,
+      excerpts: [{ quote: "merci de me dire", speaker: "Frédéric" }],
+    });
+    mockedExtractEmail.mockResolvedValueOnce({
+      ...emptyEmailExtraction,
+      needsReply: true,
+      proposedTasks: [
+        task("Répondre à Frédéric sur Auditex"),
+        task("Faire la demande d'agrément CII"),
+      ],
+    });
+
+    await extractAndSaveEmailProposals(asked);
+
+    const rows = await db
+      .select({ payload: emailProposals.payload })
+      .from(emailProposals)
+      .where(and(eq(emailProposals.messageId, asked), eq(emailProposals.kind, "task")));
+    expect(rows.map((r) => (r.payload as { title: string }).title)).toEqual([
+      "Faire la demande d'agrément CII",
+    ]);
+    const [m] = await db
+      .select({ meta: gmailMessages.extractionMeta })
+      .from(gmailMessages)
+      .where(eq(gmailMessages.id, asked));
+    expect((m?.meta as { needsReply?: boolean } | null)?.needsReply).toBe(false);
   });
 });
 

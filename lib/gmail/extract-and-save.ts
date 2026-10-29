@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages, gmailTags } from "@/db/schema/gmail";
 import { projectContacts } from "@/db/schema/project-contacts";
@@ -22,6 +22,7 @@ import { isAutomatedSender } from "@/lib/gmail/automated-sender";
 import { extractEmail } from "@/lib/gmail/extract";
 import { computeThreadLinkSignals, linkThread } from "@/lib/gmail/links";
 import { getProjectsForThreads } from "@/lib/gmail/queries";
+import { isReplyTask } from "@/lib/gmail/reply-tasks";
 import {
   buildCompletionProposal,
   isTaskAutocompleteEnabled,
@@ -225,6 +226,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     completionDecided: 0,
     completionPendingElsewhere: 0,
     tooManyCandidates: 0,
+    answered: 0,
   };
   // Ce que le mail dit des tâches (lib/tasks/task-sources.ts) : on repart
   // de zéro pour ce message, les lignes `origin` posées à l'acceptation
@@ -257,8 +259,31 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     ((msg.extractionMeta ?? null) as { requeuedForDoneTasks?: unknown } | null)
       ?.requeuedForDoneTasks === true;
 
+  // L'utilisateur a déjà envoyé un message dans ce fil après celui-ci :
+  // le mail a été lu plus tard qu'il n'a été traité (relève en retard,
+  // extraction lente). « Répondre à X » est fait par construction, et le
+  // mail n'attend plus de réponse.
+  const answeredLater = msg.internalDate
+    ? (
+        await conn
+          .select({ id: gmailMessages.id })
+          .from(gmailMessages)
+          .where(
+            and(
+              eq(gmailMessages.threadId, msg.threadId),
+              gt(gmailMessages.internalDate, msg.internalDate),
+              sql`'SENT' = any(${gmailMessages.labels})`,
+            ),
+          )
+          .limit(1)
+      ).length > 0
+    : false;
+  if (answeredLater)
+    skipped.answered = result.proposedTasks.filter((t) => isReplyTask(t.title)).length;
+
   const seenTaskKeys = new Set<string>();
   for (const t of result.proposedTasks) {
+    if (answeredLater && isReplyTask(t.title)) continue;
     const projectMatch = t.projectName ? await fuzzyMatchProject(t.projectName) : null;
     const taskProjectId = projectMatch?.id ?? null;
 
@@ -676,7 +701,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   }
   if (Object.values(skipped).some((n) => n > 0)) {
     console.info(
-      `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.decidedHere} déjà tranchée(s) sur ce message, ${skipped.tooManyCandidates} rattachement(s) sans projet nommé parmi trop de candidats ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
+      `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.decidedHere} déjà tranchée(s) sur ce message, ${skipped.tooManyCandidates} rattachement(s) sans projet nommé parmi trop de candidats, ${skipped.answered} « répondre » déjà répondu(s) ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
     );
   }
 
@@ -695,7 +720,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
         summary: result.summary,
         intent: result.intent,
         pipelineStage: result.pipelineStage,
-        needsReply: result.needsReply,
+        needsReply: result.needsReply && !answeredLater,
         // Le vocabulaire a listé les tâches terminées du projet : inutile
         // de rejouer ce message pour les relier (cf. auto-archive.ts).
         doneTasksSeen: priorityProjectId !== null,

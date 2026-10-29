@@ -1,10 +1,11 @@
 import "server-only";
 
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, exists, inArray, lt, sql } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { emailProposals, gmailMessages } from "@/db/schema/gmail";
 import { meetingProposals } from "@/db/schema/meetings";
 import { isAutomatedSender } from "@/lib/gmail/automated-sender";
+import { isReplyTask } from "@/lib/gmail/reply-tasks";
 
 /**
  * Au-delà de ce délai, une proposition que personne n'a tranchée n'a plus
@@ -73,6 +74,54 @@ export async function expireAutomatedSenderProposals(
     .innerJoin(gmailMessages, eq(gmailMessages.id, emailProposals.messageId))
     .where(and(eq(emailProposals.status, "pending"), eq(gmailMessages.userId, opts.userId)));
   const ids = rows.filter((r) => isAutomatedSender(r)).map((r) => r.id);
+  if (ids.length === 0) return 0;
+  await conn
+    .update(emailProposals)
+    .set({ status: "expired", decidedAt: opts.now ?? new Date() })
+    .where(inArray(emailProposals.id, ids));
+  return ids.length;
+}
+
+/**
+ * « Répondre à Frédéric » proposé d'après un mail auquel l'utilisateur a
+ * répondu depuis : fait par construction. Idem pour un brouillon de
+ * réponse. On regarde les messages envoyés (libellé Gmail `SENT`) plus
+ * récents que celui qui a fait naître la proposition. Les autres tâches
+ * du même mail (« faire la demande d'agrément ») ne sont pas touchées.
+ */
+export async function expireAnsweredProposals(
+  conn: Database,
+  opts: { userId: string; now?: Date },
+): Promise<number> {
+  const later = conn
+    .select({ id: sql`1` })
+    .from(sql`${gmailMessages} as later`)
+    .where(
+      and(
+        sql`later.thread_id = ${gmailMessages.threadId}`,
+        sql`later.internal_date > ${gmailMessages.internalDate}`,
+        sql`'SENT' = any(later.labels)`,
+      ),
+    );
+  const rows = await conn
+    .select({ id: emailProposals.id, kind: emailProposals.kind, payload: emailProposals.payload })
+    .from(emailProposals)
+    .innerJoin(gmailMessages, eq(gmailMessages.id, emailProposals.messageId))
+    .where(
+      and(
+        eq(emailProposals.status, "pending"),
+        eq(gmailMessages.userId, opts.userId),
+        inArray(emailProposals.kind, ["task", "draft_reply"]),
+        exists(later),
+      ),
+    );
+  const ids = rows
+    .filter(
+      (r) =>
+        r.kind === "draft_reply" ||
+        isReplyTask((r.payload as { title?: unknown } | null)?.title as string | null),
+    )
+    .map((r) => r.id);
   if (ids.length === 0) return 0;
   await conn
     .update(emailProposals)
