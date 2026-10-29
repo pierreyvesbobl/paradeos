@@ -5,7 +5,11 @@ import { entities } from "@/db/schema/entities";
 import { gmailMessages, gmailSyncState, gmailThreads } from "@/db/schema/gmail";
 import { invoiceFilings } from "@/db/schema/invoice-filings";
 import { allKnownContactEmails } from "@/lib/crm/contact-emails";
-import { expireStaleEmailProposals, expireStaleMeetingProposals } from "@/lib/crm/expire-proposals";
+import {
+  expireAutomatedSenderProposals,
+  expireStaleEmailProposals,
+  expireStaleMeetingProposals,
+} from "@/lib/crm/expire-proposals";
 import { db } from "@/lib/db/server";
 import { getValidAccessToken } from "@/lib/google/account";
 import {
@@ -1046,6 +1050,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
   // lib/crm/expire-proposals.ts), mails et réunions. Hors budget LLM.
   try {
     result.proposalsExpired += await expireStaleEmailProposals(conn, { userId });
+    result.proposalsExpired += await expireAutomatedSenderProposals(conn, { userId });
     result.proposalsExpired += await expireStaleMeetingProposals(conn);
   } catch (err) {
     result.errors.push(`expire proposals: ${err instanceof Error ? err.message : String(err)}`);

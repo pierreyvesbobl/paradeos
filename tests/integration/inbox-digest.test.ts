@@ -6,6 +6,7 @@ import { meetingProposals, meetings } from "@/db/schema/meetings";
 import { taskSources } from "@/db/schema/task-sources";
 import { tasks } from "@/db/schema/tasks";
 import {
+  expireAutomatedSenderProposals,
   expireStaleEmailProposals,
   expireStaleMeetingProposals,
   PROPOSAL_TTL_DAYS,
@@ -173,7 +174,7 @@ describe("fil rejoué pour ses tâches terminées", () => {
       .select({ meta: gmailMessages.extractionMeta })
       .from(gmailMessages)
       .where(eq(gmailMessages.id, messageId));
-    expect((m?.meta as { doneTasksSeen?: boolean }).doneTasksSeen).toBe(false);
+    expect((m?.meta as { doneTasksSeen?: boolean } | null)?.doneTasksSeen).toBe(false);
   });
 });
 
@@ -234,6 +235,35 @@ describe("péremption", () => {
       Acceptée: "accepted",
       "Pas à moi": "pending",
     });
+  });
+
+  it("une proposition née d'un mail de robot expire sans attendre", async () => {
+    const robot = await insertMessage({
+      userId: actor.id,
+      fromEmail: "isabelle.tissot@dougs.fr",
+      fromName: "Isabelle de Dougs",
+      subject: "Votre société peut payer ces 10 dépenses à votre place",
+    });
+    const human = await insertMessage({ userId: actor.id, fromEmail: "vittorio@gpasplus.com" });
+    const inserted = await db
+      .insert(emailProposals)
+      .values([
+        { messageId: robot, kind: "entity", payload: { name: "Dougs" } },
+        { messageId: human, kind: "task", payload: { title: "Export", projectId: null } },
+      ])
+      .returning({ id: emailProposals.id, messageId: emailProposals.messageId });
+
+    expect(await expireAutomatedSenderProposals(db, { userId: actor.id })).toBe(1);
+    const statuses = new Map<string, string>();
+    for (const row of inserted) {
+      const [r] = await db
+        .select({ status: emailProposals.status })
+        .from(emailProposals)
+        .where(eq(emailProposals.id, row.id));
+      statuses.set(row.messageId, r?.status ?? "?");
+    }
+    expect(statuses.get(robot)).toBe("expired");
+    expect(statuses.get(human)).toBe("pending");
   });
 
   it("vaut aussi pour les réunions, sans distinction d'utilisateur", async () => {

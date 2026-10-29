@@ -237,7 +237,7 @@ describe("rattrapage des fils sans lien de tâche", () => {
       .from(gmailMessages)
       .where(eq(gmailMessages.id, t.messageIds[0] as string));
     expect(m?.status).toBe("pending");
-    expect((m?.meta as { requeuedForDoneTasks?: boolean }).requeuedForDoneTasks).toBe(true);
+    expect((m?.meta as { requeuedForDoneTasks?: boolean } | null)?.requeuedForDoneTasks).toBe(true);
     // Déjà en file : pas rejoué une seconde fois.
     expect(await requeueThreadsForDoneTasks(db, { userId: actor.id })).toBe(0);
   });

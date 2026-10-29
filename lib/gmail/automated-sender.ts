@@ -19,10 +19,18 @@ const LOCAL_PART_PATTERNS = [
   /^postmaster$/,
   /^bounces?/,
   /^newsletters?$/,
+  /^news$/,
   /^digest$/,
   /^updates?$/,
-  /^receipts?$/,
-  /^billing$/,
+  /^receipts?/,
+  /^billing/,
+  /^invoices?\b/,
+  /^statements?\b/,
+  /^ship$/,
+  /^marketing/,
+  /^(?:no|ne-pas)-?repondre/,
+  /^avisage/,
+  /^powiadomienia$/,
   /^robot$/,
   /^automated?$/,
   /^system$/,
@@ -65,7 +73,23 @@ const AUTOMATED_DOMAINS = [
   "amazon.com",
 ];
 
-const NAME_PATTERNS = [/\bno-?reply\b/i, /\bnotifications?\b/i, /\bne pas r[ée]pondre\b/i];
+/**
+ * Sous-domaines d'envoi : `news.ovhcloud.com`, `info.vercel.com`,
+ * `em1.cloudflare.com`, `newsletter.radiofrance.fr`, `contact.maxicoffee.com`.
+ * Une entreprise qui écrit à la main le fait depuis son domaine nu.
+ */
+const SENDING_SUBDOMAIN =
+  /^(?:news|newsletters?|info|infos|mail|mails|email|emails|e|em\d*|marketing|notifications?|alerts?|alertes?|ship|updates?|go|hi|hello|contact|send|mta\d*|bounce|mailer|m|t)\./;
+
+const NAME_PATTERNS = [
+  /\bno-?reply\b/i,
+  /\bnotifications?\b/i,
+  /\bne pas r[ée]pondre\b/i,
+  /\(via [^)]+\)\s*$/i,
+  // « Isabelle de Dougs », « Marie from Qonto » : la convention des
+  // newsletters, un prénom suivi d'une marque. Une personne signe de son nom.
+  /^[\p{Lu}][\p{L}'-]+ (?:de|from|chez|at|@) [\p{Lu}][\p{L}\d.&-]*$/u,
+];
 
 export type SenderLike = {
   fromEmail: string | null | undefined;
@@ -81,6 +105,7 @@ export function isAutomatedSender(sender: SenderLike): boolean {
     const domain = email.slice(at + 1);
     if (LOCAL_PART_PATTERNS.some((re) => re.test(local))) return true;
     if (AUTOMATED_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`))) return true;
+    if (SENDING_SUBDOMAIN.test(domain)) return true;
   }
   const name = sender.fromName?.trim() ?? "";
   if (name && NAME_PATTERNS.some((re) => re.test(name))) return true;

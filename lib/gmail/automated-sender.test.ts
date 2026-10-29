@@ -16,8 +16,26 @@ describe("isAutomatedSender", () => {
     expect(isAutomatedSender({ fromEmail: "facture@services.ovhcloud.com" })).toBe(true);
   });
 
-  it("reconnaît un nom d'affichage de notification", () => {
+  it("reconnaît un nom d'affichage de notification ou de newsletter", () => {
     expect(isAutomatedSender({ fromEmail: "x@acme.fr", fromName: "Acme (no-reply)" })).toBe(true);
+    expect(
+      isAutomatedSender({ fromEmail: "isabelle.tissot@dougs.fr", fromName: "Isabelle de Dougs" }),
+    ).toBe(true);
+    expect(
+      isAutomatedSender({
+        fromEmail: "data-studio-noreply@google.com",
+        fromName: "Pierre-Yves Sage (via Data Studio)",
+      }),
+    ).toBe(true);
+  });
+
+  it("reconnaît les sous-domaines d'envoi et les adresses de facturation", () => {
+    expect(isAutomatedSender({ fromEmail: "news@newsletter.radiofrance.fr" })).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "info@news.ovhcloud.com" })).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "em@em1.cloudflare.com" })).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "newsletter@contact.maxicoffee.com" })).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "invoice+statements@supabase.com" })).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "avisage-ne-pas-repondre@chronopost.fr" })).toBe(true);
   });
 
   it("laisse passer les humains, même chez un client dont le domaine ressemble", () => {
@@ -26,6 +44,12 @@ describe("isAutomatedSender", () => {
     expect(isAutomatedSender({ fromEmail: "info@le-silex.com", fromName: "Le Silex" })).toBe(false);
     expect(isAutomatedSender({ fromEmail: "comptabilite@avenirfocus.com" })).toBe(false);
     expect(isAutomatedSender({ fromEmail: "pierreyves@automato.tech" })).toBe(false);
+    expect(
+      isAutomatedSender({ fromEmail: "benedicte@mkpdoctor.fr", fromName: "Bénédicte Cassin" }),
+    ).toBe(false);
+    expect(
+      isAutomatedSender({ fromEmail: "isabelle.tissot@dougs.fr", fromName: "Isabelle Tissot" }),
+    ).toBe(false);
     expect(isAutomatedSender({ fromEmail: null })).toBe(false);
   });
 });

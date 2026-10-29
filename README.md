@@ -156,7 +156,8 @@ mails (`lib/gmail/`) :
   jointes comme avant.
 - **Péremption** (`lib/crm/expire-proposals.ts`) : une proposition `pending`
   depuis plus de 7 jours, mail ou réunion, passe en `expired` à la relève
-  Gmail suivante. Ce n'est pas un refus : absente de l'historique et des
+  Gmail suivante ; une proposition née d'un mail de robot expire sans
+  attendre. Ce n'est pas un refus : absente de l'historique et des
   pages source, elle est reposée si on ré-extrait (migrations `0096`,
   `0097`).
 - **Regroupement** : /inbox affiche une ligne par source seule et un groupe

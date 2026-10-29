@@ -4,6 +4,7 @@ import { and, eq, inArray, lt } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import { emailProposals, gmailMessages } from "@/db/schema/gmail";
 import { meetingProposals } from "@/db/schema/meetings";
+import { isAutomatedSender } from "@/lib/gmail/automated-sender";
 
 /**
  * Au-delà de ce délai, une proposition que personne n'a tranchée n'a plus
@@ -49,6 +50,35 @@ export async function expireStaleEmailProposals(
     )
     .returning({ id: emailProposals.id });
   return rows.length;
+}
+
+/**
+ * Les propositions nées d'un mail de robot (reçu, alerte, newsletter)
+ * expirent sans attendre : l'extraction ne les produit plus depuis que les
+ * expéditeurs machines sont écartés, celles-ci datent d'avant, ou d'un
+ * expéditeur que la détection a appris depuis. Jamais un refus : rien à
+ * apprendre d'une proposition que personne n'aurait dû voir.
+ */
+export async function expireAutomatedSenderProposals(
+  conn: Database,
+  opts: { userId: string; now?: Date },
+): Promise<number> {
+  const rows = await conn
+    .select({
+      id: emailProposals.id,
+      fromEmail: gmailMessages.fromEmail,
+      fromName: gmailMessages.fromName,
+    })
+    .from(emailProposals)
+    .innerJoin(gmailMessages, eq(gmailMessages.id, emailProposals.messageId))
+    .where(and(eq(emailProposals.status, "pending"), eq(gmailMessages.userId, opts.userId)));
+  const ids = rows.filter((r) => isAutomatedSender(r)).map((r) => r.id);
+  if (ids.length === 0) return 0;
+  await conn
+    .update(emailProposals)
+    .set({ status: "expired", decidedAt: opts.now ?? new Date() })
+    .where(inArray(emailProposals.id, ids));
+  return ids.length;
 }
 
 /**
