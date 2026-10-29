@@ -31,6 +31,9 @@ const LOCAL_PART_PATTERNS = [
   /^(?:no|ne-pas)-?repondre/,
   /^avisage/,
   /^powiadomienia$/,
+  // Guichets : un ticket, une annonce, un prélèvement. Jamais une demande CRM.
+  /^support\b/,
+  /^(?:pole|service|equipe|team)-/,
   /^robot$/,
   /^automated?$/,
   /^system$/,
@@ -89,6 +92,8 @@ const NAME_PATTERNS = [
   // « Isabelle de Dougs », « Marie from Qonto » : la convention des
   // newsletters, un prénom suivi d'une marque. Une personne signe de son nom.
   /^[\p{Lu}][\p{L}'-]+ (?:de|from|chez|at|@) [\p{Lu}][\p{L}\d.&-]*$/u,
+  // « PROMEOM », « STELLO » : une marque en capitales, sans personne derrière.
+  /^[\p{Lu}\d&.' -]{4,}$/u,
 ];
 
 export type SenderLike = {

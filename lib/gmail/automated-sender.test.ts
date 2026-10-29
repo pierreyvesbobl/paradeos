@@ -36,6 +36,13 @@ describe("isAutomatedSender", () => {
     expect(isAutomatedSender({ fromEmail: "newsletter@contact.maxicoffee.com" })).toBe(true);
     expect(isAutomatedSender({ fromEmail: "invoice+statements@supabase.com" })).toBe(true);
     expect(isAutomatedSender({ fromEmail: "avisage-ne-pas-repondre@chronopost.fr" })).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "support@stello.eu" })).toBe(true);
+    expect(
+      isAutomatedSender({ fromEmail: "pole-partenariat@promeom.fr", fromName: "PROMEOM" }),
+    ).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "zeno@resend.com", fromName: "Zeno from Resend" })).toBe(
+      true,
+    );
   });
 
   it("laisse passer les humains, même chez un client dont le domaine ressemble", () => {
@@ -50,6 +57,19 @@ describe("isAutomatedSender", () => {
     expect(
       isAutomatedSender({ fromEmail: "isabelle.tissot@dougs.fr", fromName: "Isabelle Tissot" }),
     ).toBe(false);
+    expect(
+      isAutomatedSender({
+        fromEmail: "mathis.m@avenirfocus.com",
+        fromName: "AVENIR FOCUS Mathis MICHEL",
+      }),
+    ).toBe(false);
+    expect(
+      isAutomatedSender({
+        fromEmail: "pierreyves@automato.tech",
+        fromName: "Pierre-Yves d'Automato",
+      }),
+    ).toBe(false);
+    expect(isAutomatedSender({ fromEmail: "contact@bobl.fr", fromName: "BOBL" })).toBe(true);
     expect(isAutomatedSender({ fromEmail: null })).toBe(false);
   });
 });
