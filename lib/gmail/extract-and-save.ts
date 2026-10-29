@@ -14,6 +14,7 @@ import {
   isGenericProjectName,
 } from "@/lib/crm/match";
 import { compactNameKey } from "@/lib/crm/name-key";
+import { loadPendingTaskProposals, resolvePendingProposals } from "@/lib/crm/pending-proposals";
 import { hasPendingProposalElsewhere, proposalDedupeKey } from "@/lib/crm/proposal-dedupe";
 import { DecidedProposals } from "@/lib/crm/proposal-keys";
 import { db } from "@/lib/db/server";
@@ -23,7 +24,6 @@ import { extractEmail } from "@/lib/gmail/extract";
 import { computeThreadLinkSignals, linkThread } from "@/lib/gmail/links";
 import { getProjectsForThreads } from "@/lib/gmail/queries";
 import { isReplyTask } from "@/lib/gmail/reply-tasks";
-import { proposalIdFromTaskId } from "@/lib/meetings/completed-tasks";
 import {
   buildCompletionProposal,
   isTaskAutocompleteEnabled,
@@ -143,33 +143,13 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
         ? (signals.candidateProjectIds[0] ?? null)
         : null;
 
-  // Les propositions de tâche encore en attente nées des autres messages
-  // du fil : le modèle peut les clore si ce message les donne pour faites
-  // ou sans objet (une réponse déjà envoyée, une question réglée).
-  const pendingProposals = (
-    await conn
-      .select({ id: emailProposals.id, payload: emailProposals.payload })
-      .from(emailProposals)
-      .innerJoin(gmailMessages, eq(gmailMessages.id, emailProposals.messageId))
-      .where(
-        and(
-          eq(gmailMessages.threadId, msg.threadId),
-          ne(emailProposals.messageId, messageId),
-          eq(emailProposals.kind, "task"),
-          eq(emailProposals.status, "pending"),
-        ),
-      )
-  ).flatMap((p) => {
-    const pl = (p.payload ?? {}) as { title?: unknown; projectId?: unknown; projectName?: unknown };
-    if (typeof pl.title !== "string" || !pl.title.trim()) return [];
-    return [
-      {
-        id: p.id,
-        title: pl.title,
-        projectId: typeof pl.projectId === "string" ? pl.projectId : null,
-        projectName: typeof pl.projectName === "string" ? pl.projectName : null,
-      },
-    ];
+  // Les propositions de tâche encore en attente, nées des autres messages
+  // du fil ou d'ailleurs dans le même projet (mails, réunions) : le modèle
+  // peut les clore si ce message les donne pour faites ou sans objet.
+  const pendingProposals = await loadPendingTaskProposals(conn, {
+    projectId: priorityProjectId,
+    threadId: msg.threadId,
+    excludeMessageId: messageId,
   });
 
   let result: Awaited<ReturnType<typeof extractEmail>>;
@@ -210,26 +190,10 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     };
   }
 
-  // Propositions du fil que ce message rend faites ou sans objet : closes
-  // ici, sans refus (personne n'a tranché) et sans tâche (il n'y en a pas).
-  // Les références de propositions sortent ensuite des listes, qui ne
-  // doivent porter que des tâches.
-  const resolvedProposalIds = result.completedTasks
-    .map((c) => proposalIdFromTaskId(c.taskId))
-    .filter((id): id is string => id !== null);
-  if (resolvedProposalIds.length > 0) {
-    await conn
-      .update(emailProposals)
-      .set({ status: "expired", decidedAt: new Date() })
-      .where(
-        and(inArray(emailProposals.id, resolvedProposalIds), eq(emailProposals.status, "pending")),
-      );
-  }
-  result = {
-    ...result,
-    completedTasks: result.completedTasks.filter((c) => proposalIdFromTaskId(c.taskId) === null),
-    mentionedTasks: result.mentionedTasks.filter((m) => proposalIdFromTaskId(m.taskId) === null),
-  };
+  // Propositions que ce message rend faites ou sans objet : closes ici,
+  // et leurs références sortent des listes, qui ne portent que des tâches.
+  const resolvedProposals = await resolvePendingProposals(conn, result);
+  result = { ...result, ...resolvedProposals };
 
   // Les clôtures de tâche déjà vues par ce message, avant le wipe : une
   // question déjà tranchée (ou déjà posée) ne se repose pas à l'identique.
@@ -781,9 +745,9 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     })
     .where(eq(gmailMessages.id, messageId));
 
-  if (resolvedProposalIds.length > 0) {
+  if (resolvedProposals.resolved > 0) {
     console.info(
-      `[extract email ${messageId}] ${resolvedProposalIds.length} proposition(s) du fil close(s) par ce message.`,
+      `[extract email ${messageId}] ${resolvedProposals.resolved} proposition(s) close(s) par ce message.`,
     );
   }
 
@@ -791,7 +755,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     count: rowsToInsert.length,
     autoAppliedProjectLinks,
     autoCompletedTasks,
-    proposalsResolved: resolvedProposalIds.length,
+    proposalsResolved: resolvedProposals.resolved,
     skipped: false,
   };
 }

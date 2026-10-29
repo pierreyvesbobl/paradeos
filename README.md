@@ -161,8 +161,9 @@ mails (`lib/gmail/`) :
   le fil a reçu un message envoyé (`SENT`) après le mail d'origine
   (`lib/gmail/reply-tasks.ts`). L'extraction d'un mail déjà répondu ne
   propose pas « Répondre » et ne le marque pas « réponse attendue ».
-  Plus généralement, les propositions de tâche en attente nées des
-  messages précédents du fil entrent dans le vocabulaire du LLM
+  Plus généralement, les propositions de tâche en attente du fil et du
+  projet, nées de mails comme de réunions (`lib/crm/pending-proposals.ts`),
+  entrent dans le vocabulaire du LLM de chaque extraction, mail ou réunion
   (`PROPOSAL_REF_PREFIX`, bloc « Tâches proposées… ») : un message qui
   les donne pour faites ou sans objet les clôt (`expired`, pas un refus).
   La relève extrait les messages dans l'ordre d'arrivée pour que la

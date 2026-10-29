@@ -304,3 +304,82 @@ describe("mail déjà trié", () => {
     expect(sources).toEqual([{ relation: "origin", excerpt: "un export quotidien des prix" }]);
   });
 });
+
+describe("réunion qui rend une proposition sans objet", () => {
+  it("clôt la proposition d'un mail du même projet, sans toucher aux autres", async () => {
+    const [thread] = await db
+      .insert(gmailThreads)
+      .values({ userId: actor.id, gmailThreadId: `gt-${crypto.randomUUID()}`, subject: "Auditex" })
+      .returning({ id: gmailThreads.id });
+    if (!thread) throw new Error("insert thread");
+    const [msg] = await db
+      .insert(gmailMessages)
+      .values({
+        threadId: thread.id,
+        userId: actor.id,
+        gmailMessageId: `gm-${crypto.randomUUID()}`,
+        fromEmail: "m.frederic@gpasplus.com",
+        subject: "Auditex",
+        bodyText: "Souhaitez-vous être mis en relation ?",
+        internalDate: new Date("2026-10-28T09:00:00Z"),
+        extractionStatus: "extracted",
+      })
+      .returning({ id: gmailMessages.id });
+    if (!msg) throw new Error("insert message");
+    const [moot, kept] = await db
+      .insert(emailProposals)
+      .values([
+        {
+          messageId: msg.id,
+          kind: "task",
+          payload: { title: "Choisir le cabinet CII", projectId },
+        },
+        { messageId: msg.id, kind: "task", payload: { title: "Rédiger la note CII", projectId } },
+      ])
+      .returning({ id: emailProposals.id });
+    if (!moot || !kept) throw new Error("insert proposals");
+
+    const [m] = await db
+      .insert(meetings)
+      .values({
+        title: "Point CII",
+        transcript: "On part avec Auditex, c'est décidé.",
+        occurredAt: new Date("2026-10-29T10:00:00Z"),
+        projectId,
+        createdBy: actor.id,
+      })
+      .returning({ id: meetings.id });
+    if (!m) throw new Error("insert meeting");
+
+    mockedExtractMeeting.mockResolvedValueOnce({
+      ...emptyMeetingExtraction,
+      completedTasks: [
+        {
+          taskId: `proposal:email:${moot.id}`,
+          taskTitle: "Choisir le cabinet CII",
+          projectId,
+          projectName: "GpasPlus",
+          evidence: "On part avec Auditex, c'est décidé.",
+          confidence: "certain" as const,
+        },
+      ],
+    });
+    await extractAndSaveProposals(m.id);
+
+    const status = async (id: string) =>
+      (
+        await db
+          .select({ s: emailProposals.status })
+          .from(emailProposals)
+          .where(eq(emailProposals.id, id))
+      )[0]?.s;
+    expect(await status(moot.id)).toBe("expired");
+    expect(await status(kept.id)).toBe("pending");
+    // Rien n'a été posé comme clôture de tâche sur la réunion.
+    const completions = await db
+      .select({ id: meetingProposals.id })
+      .from(meetingProposals)
+      .where(eq(meetingProposals.meetingId, m.id));
+    expect(completions).toHaveLength(0);
+  });
+});

@@ -645,6 +645,8 @@ export async function extractMeeting(
     meetingContext?: MeetingContext;
     /** Projet de la réunion : ses tâches ouvertes sont listées en premier. */
     priorityProjectId?: string | null;
+    /** Propositions de tâche en attente du projet, que la réunion peut clore. */
+    pendingProposals?: PendingProposalEntry[];
   },
 ): Promise<MeetingExtraction> {
   const apiKey = await getSetting(SETTING_KEYS.OPENROUTER_API_KEY);
@@ -653,7 +655,10 @@ export async function extractMeeting(
   }
   const modelId = (await getSetting(SETTING_KEYS.LLM_MODEL)) ?? DEFAULT_LLM_MODEL;
 
-  const vocab = await getKnownVocabulary({ priorityProjectId: options?.priorityProjectId });
+  const vocab = await getKnownVocabulary({
+    priorityProjectId: options?.priorityProjectId,
+    pendingProposals: options?.pendingProposals,
+  });
   const systemPrompt = buildSystemPrompt(
     vocab,
     options?.projectContext,

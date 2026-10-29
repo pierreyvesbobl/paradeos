@@ -15,6 +15,7 @@ import {
   isGenericProjectName,
 } from "@/lib/crm/match";
 import { compactNameKey, personCompactKey } from "@/lib/crm/name-key";
+import { loadPendingTaskProposals, resolvePendingProposals } from "@/lib/crm/pending-proposals";
 import { hasPendingProposalElsewhere, proposalDedupeKey } from "@/lib/crm/proposal-dedupe";
 import { DecidedProposals } from "@/lib/crm/proposal-keys";
 import { db } from "@/lib/db/server";
@@ -68,12 +69,27 @@ export async function extractAndSaveProposals(
   // personnes là où le transcript ne dit que « on ». Et si la source a
   // déjà établi la date (horodatage du nom de fichier Drive, directive
   // dans un mail), le modèle la reprend au lieu de la recalculer.
-  const result = await extractMeeting(meeting.transcript, {
+  // Propositions de tâche en attente du même projet, mails et réunions
+  // confondus : le modèle peut les clore si cette réunion les donne pour
+  // faites ou sans objet.
+  const pendingProposals = await loadPendingTaskProposals(conn, {
+    projectId: meeting.projectId,
+    excludeMeetingId: meeting.id,
+  });
+  let result = await extractMeeting(meeting.transcript, {
     projectContext,
     participants,
     meetingContext: { title: meeting.title, occurredAt: meeting.occurredAt },
     priorityProjectId: meeting.projectId,
+    pendingProposals,
   });
+  const resolvedProposals = await resolvePendingProposals(conn, result);
+  result = { ...result, ...resolvedProposals };
+  if (resolvedProposals.resolved > 0) {
+    console.info(
+      `[extract meeting ${meeting.id}] ${resolvedProposals.resolved} proposition(s) close(s) par cette réunion.`,
+    );
+  }
 
   await syncParticipantsFromAttendees(meeting.id, result.attendees);
 

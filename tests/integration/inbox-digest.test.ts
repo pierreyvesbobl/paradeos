@@ -280,7 +280,7 @@ describe("fil déjà répondu", () => {
       ...emptyEmailExtraction,
       completedTasks: [
         {
-          taskId: `proposal:${moot.id}`,
+          taskId: `proposal:email:${moot.id}`,
           taskTitle: "Envoyer le devis à Frédéric",
           projectId: null,
           projectName: null,
