@@ -1,6 +1,6 @@
 /**
- * Service worker : orchestre la synchro LinkedIn et pousse le résultat
- * sur Paradeos. Tourne ici (et non dans la popup) pour survivre à sa
+ * Service worker : orchestre les synchros Dougs (cookie, cf. dougs.js) et
+ * LinkedIn, et pousse le résultat sur Paradeos. Tourne ici (et non dans la popup) pour survivre à sa
  * fermeture et pour porter l'alarme périodique.
  *
  * La synchro n'a lieu que quand Chrome est ouvert — c'est la
@@ -8,6 +8,7 @@
  * plutôt que depuis les fonctions serveur.
  */
 
+import { isDougsAuthCookie, readDougsStatus, syncDougs } from "./dougs.js";
 import {
   diagnose,
   fetchConnections,
@@ -20,6 +21,7 @@ import {
 } from "./voyager.js";
 
 const ALARM = "linkedin-sync";
+const DOUGS_ALARM = "dougs-sync";
 /** Jamais plus d'une synchro par demi-heure, même déclenchée à la main. */
 const MIN_INTERVAL_MS = 30 * 60 * 1000;
 /** L'ingestion serveur borne les lots à 100 items. */
@@ -27,15 +29,34 @@ const BATCH_SIZE = 25;
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create(ALARM, { periodInMinutes: 60 });
+  chrome.alarms.create(DOUGS_ALARM, { periodInMinutes: 60 });
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM) {
     runSync({ trigger: "alarm" }).catch((err) => console.error("[paradeos]", err));
   }
+  if (alarm.name === DOUGS_ALARM) {
+    syncDougs({ trigger: "alarm" }).catch((err) => console.error("[paradeos] dougs", err));
+  }
+});
+
+// Reconnexion sur app.dougs.fr : le nouveau cookie part tout de suite,
+// sans attendre l'alarme ni ouvrir la popup.
+chrome.cookies.onChanged.addListener(({ cookie, removed }) => {
+  if (removed || !isDougsAuthCookie(cookie)) return;
+  syncDougs({ trigger: "cookie" }).catch((err) => console.error("[paradeos] dougs", err));
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type === "dougs-sync") {
+    syncDougs({ trigger: "manual" }).then(sendResponse);
+    return true;
+  }
+  if (msg?.type === "dougs-status") {
+    readDougsStatus().then(sendResponse);
+    return true;
+  }
   if (msg?.type === "linkedin-sync") {
     runSync({ trigger: "manual" }).then(sendResponse);
     return true; // réponse asynchrone

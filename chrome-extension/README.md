@@ -52,8 +52,11 @@ Le token brut n'est affiché qu'une fois.
 
 ## Utilisation
 
-**Dougs** — sois connecté sur `app.dougs.fr`, puis « Sync maintenant ».
-À refaire à chaque expiration du cookie (~24 h).
+**Dougs** — automatique depuis la v2.1 : dès que tu te connectes sur
+`app.dougs.fr`, le nouveau cookie part vers Paradeos, et une alarme
+horaire le renvoie toutes les 6 h tant qu'il est valide. Tant que Chrome
+est ouvert et que tu repasses sur Dougs quand la session expire, il n'y a
+plus rien à faire. « Sync maintenant » force un envoi.
 
 **LinkedIn** — sois connecté sur `linkedin.com`, puis « Sync maintenant ».
 Une alarme relance aussi la synchro périodiquement tant que Chrome
@@ -106,7 +109,8 @@ Tout est concentré dans ce fichier pour que la réparation reste locale.
 | Fichier | Rôle |
 |---|---|
 | `manifest.json` | Permissions et déclaration du service worker |
-| `popup.html` / `popup.js` | UI à deux onglets, config par service, synchro Dougs |
+| `popup.html` / `popup.js` | UI à deux onglets, config par service |
+| `dougs.js` | Synchro du cookie Dougs (changement de cookie, alarme, bouton) |
 | `voyager.js` | Client de l'API interne LinkedIn + parsers + plafonds |
 | `background.js` | Service worker : orchestration, alarme, quota journalier |
 

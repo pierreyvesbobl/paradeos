@@ -1,9 +1,10 @@
 /**
  * Popup multi-service.
  *
- * Dougs : lit tous les cookies de app.dougs.fr (HttpOnly inclus, ce que
- * `document.cookie` ne peut pas faire) et les pousse sur Paradeos, qui
- * les chiffre et s'en sert en server-to-server.
+ * Dougs : le service worker lit les cookies de app.dougs.fr (HttpOnly
+ * inclus, ce que `document.cookie` ne peut pas faire) et les pousse sur
+ * Paradeos tout seul (cf. dougs.js) ; la popup ne sert qu'à configurer
+ * et à forcer une synchro.
  *
  * LinkedIn : rien de tel n'est possible — LinkedIn bloque les IP
  * datacenter et restreint les comptes dont la session change d'origine.
@@ -90,61 +91,25 @@ async function saveConfig(service) {
 // Dougs
 // ---------------------------------------------------------------------
 
-async function getDougsCookieString() {
-  // `getAll({ url })` retourne les cookies que le navigateur enverrait
-  // à cette URL — incluant les cookies de domaine parent (.dougs.fr).
-  const cookies = await chrome.cookies.getAll({ url: "https://app.dougs.fr/" });
-  return {
-    cookieString: cookies.map((c) => `${c.name}=${c.value}`).join("; "),
-    count: cookies.length,
-    names: cookies.map((c) => c.name),
-    hasAuthSession: cookies.some((c) => c.name === "auth_session"),
-  };
+function describeDougsResult(res, lastRunAt) {
+  const when = lastRunAt ? new Date(lastRunAt).toLocaleString("fr-FR") : "";
+  if (!res) return { text: "Jamais synchronisé.", tone: "info" };
+  if (!res.ok) return { text: `${when ? `${when} — ` : ""}${res.error}`, tone: "err" };
+  const expires = res.expiresAt ? new Date(res.expiresAt).toLocaleString("fr-FR") : "inconnu";
+  const how = res.trigger === "manual" ? "à la main" : "automatiquement";
+  return { text: `Synchronisé ${how} le ${when}. Expire vers ${expires}.`, tone: "ok" };
 }
 
+/** La synchro tourne dans le service worker (cf. dougs.js), comme l'auto-sync. */
 async function syncDougs() {
   const status = $("dougs-status");
   $("dougs-sync").disabled = true;
   $("dougs-save").disabled = true;
   try {
     if (!(await saveConfig("dougs"))) return;
-
-    const { cookieString, count, names, hasAuthSession } = await getDougsCookieString();
-    if (count === 0) {
-      showStatus(status, "Aucun cookie pour app.dougs.fr. Connecte-toi d'abord.", "err");
-      return;
-    }
-    if (!hasAuthSession) {
-      showStatus(
-        status,
-        `Cookie auth_session absent (${count} cookies : ${names.join(", ")}). Re-login sur app.dougs.fr.`,
-        "err",
-      );
-      return;
-    }
-
-    const res = await fetch($("dougs-endpoint").value.trim(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${$("dougs-token").value.trim()}`,
-      },
-      body: JSON.stringify({ cookie: cookieString }),
-    });
-
-    let body;
-    try {
-      body = await res.json();
-    } catch {
-      body = { ok: false, error: `HTTP ${res.status} (réponse non-JSON)` };
-    }
-
-    if (body.ok) {
-      const expires = body.expiresAt ? new Date(body.expiresAt).toLocaleString("fr-FR") : "inconnu";
-      showStatus(status, `Synchronisé (${count} cookies). Expire vers ${expires}.`, "ok");
-    } else {
-      showStatus(status, `HTTP ${res.status} : ${body.error || "erreur inconnue"}`, "err");
-    }
+    const res = await chrome.runtime.sendMessage({ type: "dougs-sync" });
+    const { text, tone } = describeDougsResult(res, new Date().toISOString());
+    showStatus(status, text, tone);
   } catch (err) {
     showStatus(status, `Erreur : ${err.message || err}`, "err");
   } finally {
@@ -219,16 +184,13 @@ $("linkedin-diagnose").addEventListener("click", diagnoseLinkedin);
   const { activeTab } = await chrome.storage.local.get("activeTab");
   selectTab(TABS.includes(activeTab) ? activeTab : "dougs");
 
-  // État Dougs
+  // État Dougs : dernier passage du service worker (auto ou manuel).
   try {
-    const { count, hasAuthSession } = await getDougsCookieString();
-    const status = $("dougs-status");
-    if (count === 0) showStatus(status, "Pas connecté sur app.dougs.fr.", "info");
-    else if (!hasAuthSession)
-      showStatus(status, `${count} cookies mais auth_session absent. Re-login Dougs.`, "info");
-    else showStatus(status, `Prêt. ${count} cookies (auth_session inclus).`, "info");
+    const st = await chrome.runtime.sendMessage({ type: "dougs-status" });
+    const { text, tone } = describeDougsResult(st?.lastResult, st?.lastRunAt);
+    showStatus($("dougs-status"), text, tone === "ok" ? "info" : tone);
   } catch {
-    // Sans permission cookies, on n'affiche simplement rien.
+    // Service worker endormi : pas grave, l'état se rafraîchira.
   }
 
   // État LinkedIn

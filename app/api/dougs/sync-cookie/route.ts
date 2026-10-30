@@ -40,7 +40,20 @@ export function OPTIONS() {
 const bodySchema = z.object({
   cookie: z.string().trim().min(20),
   companyId: z.string().trim().regex(/^\d+$/).optional(),
+  /** Expiration réelle de `auth_session` lue par l'extension (v2.1+), si le cookie en a une. */
+  expiresAt: z.iso.datetime().nullish(),
 });
+
+const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Date annoncée par l'extension, bornée ; ~24 h sinon (Dougs ne dit rien). */
+function resolveExpiresAt(announced: string | null | undefined): Date {
+  const now = Date.now();
+  const at = announced ? Date.parse(announced) : Number.NaN;
+  if (Number.isNaN(at) || at <= now) return new Date(now + DEFAULT_TTL_MS);
+  return new Date(Math.min(at, now + MAX_TTL_MS));
+}
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("authorization");
@@ -71,7 +84,7 @@ export async function POST(req: NextRequest) {
   try {
     const conn = await db();
     const encrypted = encryptCookie(parsed.data.cookie);
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const expiresAt = resolveExpiresAt(parsed.data.expiresAt);
     const companyId = parsed.data.companyId ?? "107610";
 
     const [existing] = await conn
