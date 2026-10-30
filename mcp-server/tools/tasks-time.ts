@@ -136,8 +136,12 @@ export async function listMyTime(args: z.infer<typeof listMyTimeSchema>, ctx: Us
       startAt: timeEntries.startAt,
       endAt: timeEntries.endAt,
       title: timeEntries.title,
+      description: timeEntries.description,
       projectId: timeEntries.projectId,
       projectName: projects.name,
+      taskId: timeEntries.taskId,
+      contactId: timeEntries.contactId,
+      source: timeEntries.source,
     })
     .from(timeEntries)
     .leftJoin(projects, eq(projects.id, timeEntries.projectId))
@@ -272,4 +276,83 @@ export async function logTime(args: z.infer<typeof logTimeSchema>, ctx: UserCont
     );
   }
   return row ? { ...row, imputedSegments: segments.length } : row;
+}
+
+const nullableUuid = z.string().uuid().nullable().optional();
+
+export const updateTimeEntriesSchema = z.object({
+  /** Un patch par créneau : seuls les champs fournis changent, `null` vide
+   * un rattachement (projet, tâche, contact) ou un texte. */
+  entries: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        startAt: z.string().optional(),
+        endAt: z.string().optional(),
+        kind: z.enum(["planned", "actual"]).optional(),
+        title: z.string().max(200).nullable().optional(),
+        description: z.string().max(1000).nullable().optional(),
+        projectId: nullableUuid,
+        taskId: nullableUuid,
+        contactId: nullableUuid,
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+
+function parseDate(value: string, field: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) throw new Error(`${field} doit être une date ISO 8601 valide.`);
+  return d;
+}
+
+export async function updateTimeEntries(
+  args: z.infer<typeof updateTimeEntriesSchema>,
+  ctx: UserContext,
+) {
+  const conn = db();
+  const ids = [...new Set(args.entries.map((e) => e.id))];
+  if (ids.length !== args.entries.length) throw new Error("Un même créneau apparaît deux fois.");
+
+  // Seuls les créneaux de l'utilisateur sont modifiables : les autres sont
+  // rendus comme introuvables, sans dire s'ils existent.
+  const existing = await conn
+    .select({ id: timeEntries.id, startAt: timeEntries.startAt, endAt: timeEntries.endAt })
+    .from(timeEntries)
+    .where(and(eq(timeEntries.userId, ctx.userId), inArray(timeEntries.id, ids)));
+  const byId = new Map(existing.map((r) => [r.id, r]));
+
+  // Tout est validé avant la première écriture : un lot passe en entier ou pas du tout.
+  const patches = args.entries.flatMap((e) => {
+    const current = byId.get(e.id);
+    if (!current) return [];
+    const startAt = e.startAt !== undefined ? parseDate(e.startAt, "startAt") : current.startAt;
+    const endAt = e.endAt !== undefined ? parseDate(e.endAt, "endAt") : current.endAt;
+    if (endAt <= startAt) throw new Error(`Créneau ${e.id} : endAt doit être > startAt.`);
+    const set: Partial<typeof timeEntries.$inferInsert> = { updatedAt: new Date() };
+    if (e.startAt !== undefined) set.startAt = startAt;
+    if (e.endAt !== undefined) set.endAt = endAt;
+    if (e.kind !== undefined) set.kind = e.kind;
+    if (e.title !== undefined) set.title = e.title;
+    if (e.description !== undefined) set.description = e.description;
+    if (e.projectId !== undefined) set.projectId = e.projectId;
+    if (e.taskId !== undefined) set.taskId = e.taskId;
+    if (e.contactId !== undefined) set.contactId = e.contactId;
+    return [{ id: e.id, set }];
+  });
+
+  await conn.transaction(async (tx) => {
+    for (const p of patches) {
+      await tx
+        .update(timeEntries)
+        .set(p.set)
+        .where(and(eq(timeEntries.id, p.id), eq(timeEntries.userId, ctx.userId)));
+    }
+  });
+
+  return {
+    updated: patches.map((p) => p.id),
+    notFound: ids.filter((id) => !byId.has(id)),
+  };
 }

@@ -158,6 +158,9 @@ servers. Tu peux maintenant demander à Claude :
 - `log_time` — créneau planned ou actual ; avec `claudeSegmentIds`, impute
   un bloc de `list_claude_activity` (il sort de la liste, et y revient si le
   créneau est supprimé)
+- `update_time_entries` — modifie un lot de créneaux (≤ 200, ids de
+  `list_my_time`) : patch par créneau, `null` vide un rattachement, tout ou
+  rien, seuls les créneaux de l'utilisateur
 - `add_note` — polymorphique (project/contact/etc.)
 - `create_meeting` — réunion depuis un transcript collé (+ participants)
 - `set_meeting_transcript` — pose / complète le transcript d'une réunion

@@ -180,9 +180,9 @@ export function McpSetupGuide({ userId }: { userId: string }) {
           </li>
           <li>
             <strong>Écriture</strong> (scope <code>mcp:write</code>) : create_task, complete_task,
-            create_project, update_project, update_contact, update_entity, log_time, add_note,
-            create_meeting, set_meeting_transcript, extract_meeting, push_project_quote,
-            push_project_milestone_invoice, push_coworking_invoice
+            create_project, update_project, update_contact, update_entity, log_time,
+            update_time_entries, add_note, create_meeting, set_meeting_transcript, extract_meeting,
+            push_project_quote, push_project_milestone_invoice, push_coworking_invoice
           </li>
           <li>
             <strong>Resources</strong> : <code>paradeos://projects</code>,{" "}

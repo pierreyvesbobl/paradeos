@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
 import { claudeCodeActivity } from "@/db/schema/claude-activity";
@@ -20,7 +20,7 @@ import {
   resolveRepo,
   trackClaudeTime,
 } from "../../mcp-server/tools/claude-time";
-import { logTime } from "../../mcp-server/tools/tasks-time";
+import { logTime, updateTimeEntries } from "../../mcp-server/tools/tasks-time";
 import { createTestDb, seedUser, type TestUser } from "./db";
 import { actAs, useTestDb } from "./setup";
 
@@ -460,5 +460,68 @@ describe("imputation depuis /temps", () => {
 
     const next = await listClaudeActivity({ date: "2026-11-03" }, ctx());
     expect(next.blocks.map((b) => b.minutes)).toEqual([20]);
+  });
+});
+
+describe("update_time_entries", () => {
+  it("modifie un lot de créneaux, champ par champ, tout ou rien", async () => {
+    const a = await seedProject("Lot A");
+    const b = await seedProject("Lot B");
+    const first = await logTime(
+      { startAt: at(14), endAt: at(15), projectId: a, title: "Atelier" },
+      ctx(),
+    );
+    const second = await logTime({ startAt: at(16), endAt: at(17), projectId: a }, ctx());
+    const other = await seedUser(db, { role: "member" });
+    const [foreign] = await db
+      .insert(timeEntries)
+      .values({ userId: other.id, startAt: new Date(at(9)), endAt: new Date(at(10)) })
+      .returning({ id: timeEntries.id });
+    if (!first || !second || !foreign) throw new Error("seed créneaux");
+
+    const res = await updateTimeEntries(
+      {
+        entries: [
+          { id: first.id, projectId: b, endAt: at(15, 30) },
+          { id: second.id, projectId: null, title: "Revue" },
+          { id: foreign.id, title: "pas à moi" },
+        ],
+      },
+      ctx(),
+    );
+    expect(res).toEqual({ updated: [first.id, second.id], notFound: [foreign.id] });
+
+    const rows = await db
+      .select({
+        id: timeEntries.id,
+        projectId: timeEntries.projectId,
+        title: timeEntries.title,
+        endAt: timeEntries.endAt,
+      })
+      .from(timeEntries)
+      .where(inArray(timeEntries.id, [first.id, second.id, foreign.id]));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(first.id)).toMatchObject({ projectId: b, title: "Atelier" });
+    expect(byId.get(first.id)?.endAt.toISOString()).toBe(at(15, 30));
+    expect(byId.get(second.id)).toMatchObject({ projectId: null, title: "Revue" });
+    expect(byId.get(foreign.id)?.title).toBeNull();
+
+    // Un créneau invalide bloque tout le lot.
+    await expect(
+      updateTimeEntries(
+        {
+          entries: [
+            { id: first.id, title: "Jamais écrit" },
+            { id: second.id, endAt: at(15) },
+          ],
+        },
+        ctx(),
+      ),
+    ).rejects.toThrow(/endAt/);
+    const [unchanged] = await db
+      .select({ title: timeEntries.title })
+      .from(timeEntries)
+      .where(eq(timeEntries.id, first.id));
+    expect(unchanged?.title).toBe("Atelier");
   });
 });

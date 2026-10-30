@@ -108,6 +108,8 @@ import {
   updateEntitySchema,
   updateProject,
   updateProjectSchema,
+  updateTimeEntries,
+  updateTimeEntriesSchema,
 } from "./_handlers";
 import { extractMeetingMcp, extractMeetingMcpSchema } from "./_meeting-handlers";
 
@@ -285,6 +287,13 @@ const TOOL_REGISTRY: Record<
     description: "Enregistre un créneau de temps.",
     schema: logTimeSchema,
     handler: (a, ctx) => logTime(a as never, ctx as never),
+  },
+  update_time_entries: {
+    write: true,
+    description:
+      "Modifie un lot de créneaux de temps (jusqu'à 200) : un patch par `id` (ids issus de list_my_time), seuls les champs fournis changent, `null` vide projectId/taskId/contactId/title/description. Tout ou rien ; seuls mes créneaux, les autres reviennent dans `notFound`.",
+    schema: updateTimeEntriesSchema,
+    handler: (a, ctx) => updateTimeEntries(a as never, ctx as never),
   },
   resolve_repo: {
     description:

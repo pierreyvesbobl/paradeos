@@ -113,6 +113,8 @@ import {
   updateEntitySchema,
   updateProject,
   updateProjectSchema,
+  updateTimeEntries,
+  updateTimeEntriesSchema,
 } from "./tools";
 
 // Si lancé en standalone (pas via Next), charge .env.local pour récupérer
@@ -316,6 +318,15 @@ server.tool(
   logTimeSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await logTime(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "update_time_entries",
+  "Modifie un lot de créneaux de temps (un patch par id, champs fournis seulement, null vide un rattachement). Tout ou rien, seuls mes créneaux.",
+  updateTimeEntriesSchema.shape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await updateTimeEntries(args, ctx), null, 2) }],
   }),
 );
 
