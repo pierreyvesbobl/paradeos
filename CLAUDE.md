@@ -13,4 +13,10 @@
   après toute nouvelle table.
 - Dougs : en local le push répond 401 (Cloudflare bloque Node), ça marche sur
   Vercel — ne pas déboguer ça.
+- Dougs de Parade (107610) : toute écriture (devis, factures, finalisation,
+  envoi, justificatifs, validation d'opérations) passe par Parade OS et ses
+  outils MCP (`push_*`, `update_dougs_invoice_draft`,
+  `send_document_to_client`), jamais par le MCP officiel Dougs, qui n'y sert
+  qu'à lire : sinon doublons et suivi perdu. Le connecteur « Dougs Perso »
+  est la holding G&O, un autre compte.
 - Commits en français, format conventionnel, un sujet par commit.
