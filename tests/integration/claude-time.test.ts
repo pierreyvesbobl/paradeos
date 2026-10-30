@@ -19,6 +19,7 @@ import {
   parisDayRange,
   resolveRepo,
   trackClaudeTime,
+  updateClaudeActivity,
 } from "../../mcp-server/tools/claude-time";
 import { logTime, updateTimeEntries } from "../../mcp-server/tools/tasks-time";
 import { createTestDb, seedUser, type TestUser } from "./db";
@@ -523,5 +524,74 @@ describe("update_time_entries", () => {
       .from(timeEntries)
       .where(eq(timeEntries.id, first.id));
     expect(unchanged?.title).toBe("Atelier");
+  });
+});
+
+describe("update_claude_activity", () => {
+  it("réimpute un lot de segments, tout ou rien", async () => {
+    const a = await seedProject("Segments A");
+    const b = await seedProject("Segments B");
+    const s1 = await trackClaudeTime(
+      { sourceRef: "u1:1", startAt: at(18), endAt: at(18, 30), projectId: a },
+      ctx(),
+    );
+    const s2 = await trackClaudeTime(
+      { sourceRef: "u1:2", startAt: at(19), endAt: at(19, 30), projectId: a },
+      ctx(),
+    );
+    const other = await seedUser(db);
+    const [foreign] = await db
+      .insert(claudeCodeActivity)
+      .values({
+        userId: other.id,
+        sourceRef: "x:1",
+        startedAt: new Date(at(18)),
+        endedAt: new Date(at(19)),
+      })
+      .returning({ id: claudeCodeActivity.id });
+    if (!s1.id || !s2.id || !foreign) throw new Error("seed segments");
+
+    const res = await updateClaudeActivity(
+      {
+        segments: [
+          { id: s1.id, projectId: b, endAt: at(18, 45) },
+          { id: s2.id, projectId: null },
+          { id: foreign.id, projectId: b },
+        ],
+      },
+      ctx(),
+    );
+    expect(res).toEqual({ updated: [s1.id, s2.id], notFound: [foreign.id] });
+
+    const rows = await db
+      .select({
+        id: claudeCodeActivity.id,
+        projectId: claudeCodeActivity.projectId,
+        endedAt: claudeCodeActivity.endedAt,
+      })
+      .from(claudeCodeActivity)
+      .where(inArray(claudeCodeActivity.id, [s1.id, s2.id, foreign.id]));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(s1.id)?.projectId).toBe(b);
+    expect(byId.get(s1.id)?.endedAt.toISOString()).toBe(at(18, 45));
+    expect(byId.get(s2.id)?.projectId).toBeNull();
+    expect(byId.get(foreign.id)?.projectId).toBeNull();
+
+    await expect(
+      updateClaudeActivity(
+        {
+          segments: [
+            { id: s1.id, projectId: a },
+            { id: s2.id, endAt: at(18) },
+          ],
+        },
+        ctx(),
+      ),
+    ).rejects.toThrow(/endAt/);
+    const [unchanged] = await db
+      .select({ projectId: claudeCodeActivity.projectId })
+      .from(claudeCodeActivity)
+      .where(eq(claudeCodeActivity.id, s1.id));
+    expect(unchanged?.projectId).toBe(b);
   });
 });

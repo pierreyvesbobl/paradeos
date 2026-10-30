@@ -102,6 +102,8 @@ import {
   setMeetingTranscriptSchema,
   trackClaudeTime,
   trackClaudeTimeSchema,
+  updateClaudeActivity,
+  updateClaudeActivitySchema,
   updateContact,
   updateContactSchema,
   updateEntity,
@@ -313,6 +315,13 @@ const TOOL_REGISTRY: Record<
       "Blocs d'activité Claude Code à imputer (séances fusionnées, par projet ou dépôt) pour un jour (Europe/Paris, défaut aujourd'hui) ou une période. Sert à consolider sa journée : chaque bloc devient un créneau via log_time + claudeSegmentIds.",
     schema: listClaudeActivitySchema,
     handler: (a, ctx) => listClaudeActivity(a as never, ctx as never),
+  },
+  update_claude_activity: {
+    write: true,
+    description:
+      "Corrige un lot de segments d'activité Claude Code (jusqu'à 500, ids issus des `segmentIds` de list_claude_activity) : startAt, endAt, projectId (`null` détache). Tout ou rien ; seuls mes segments, les autres reviennent dans `notFound`. Un segment encore en cours est réécrit par le mod à son prochain envoi.",
+    schema: updateClaudeActivitySchema,
+    handler: (a, ctx) => updateClaudeActivity(a as never, ctx as never),
   },
   repo_context: {
     description:

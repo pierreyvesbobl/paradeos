@@ -9,12 +9,13 @@
  * Et un tool pour l'humain qui consolide sa journée depuis Claude :
  *  - list_claude_activity : les blocs à imputer (séances fusionnées), que
  *    `log_time` transforme en créneau avec `claudeSegmentIds`.
+ *  - update_claude_activity : corrige un lot de segments (bornes, projet).
  *
  * `track_claude_time` écrit dans `claude_code_activity`, pas dans
  * `time_entries` : le temps passé dans Claude Code est un signal
  * d'imputation que l'humain arbitre, jamais un créneau réalisé.
  */
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { claudeCodeActivity } from "../../db/schema/claude-activity";
 import { projectRepos } from "../../db/schema/project-repos";
@@ -263,5 +264,74 @@ export async function listClaudeActivity(
       blocks.length === 0
         ? "Rien à imputer sur la période."
         : "Pour imputer un bloc : log_time avec startAt/endAt (ajustables), projectId et claudeSegmentIds = segmentIds du bloc. Un bloc dont le projet est null vient d'un dépôt ou dossier non rattaché : demande le projet, ou link_repo pour rattacher le remote.",
+  };
+}
+
+export const updateClaudeActivitySchema = z.object({
+  /** Un patch par segment (ids de `segmentIds` dans list_claude_activity) :
+   * seuls les champs fournis changent, `projectId: null` détache. */
+  segments: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        startAt: z.string().optional(),
+        endAt: z.string().optional(),
+        projectId: z.string().uuid().nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(500),
+});
+
+function parseDate(value: string, field: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) throw new Error(`${field} doit être une date ISO 8601 valide.`);
+  return d;
+}
+
+export async function updateClaudeActivity(
+  args: z.infer<typeof updateClaudeActivitySchema>,
+  ctx: UserContext,
+) {
+  const conn = db();
+  const ids = [...new Set(args.segments.map((s) => s.id))];
+  if (ids.length !== args.segments.length) throw new Error("Un même segment apparaît deux fois.");
+
+  const existing = await conn
+    .select({
+      id: claudeCodeActivity.id,
+      startedAt: claudeCodeActivity.startedAt,
+      endedAt: claudeCodeActivity.endedAt,
+    })
+    .from(claudeCodeActivity)
+    .where(and(eq(claudeCodeActivity.userId, ctx.userId), inArray(claudeCodeActivity.id, ids)));
+  const byId = new Map(existing.map((r) => [r.id, r]));
+
+  // Tout est validé avant la première écriture : un lot passe en entier ou pas du tout.
+  const patches = args.segments.flatMap((s) => {
+    const current = byId.get(s.id);
+    if (!current) return [];
+    const startedAt = s.startAt !== undefined ? parseDate(s.startAt, "startAt") : current.startedAt;
+    const endedAt = s.endAt !== undefined ? parseDate(s.endAt, "endAt") : current.endedAt;
+    if (endedAt <= startedAt) throw new Error(`Segment ${s.id} : endAt doit être > startAt.`);
+    const set: Partial<typeof claudeCodeActivity.$inferInsert> = { updatedAt: new Date() };
+    if (s.startAt !== undefined) set.startedAt = startedAt;
+    if (s.endAt !== undefined) set.endedAt = endedAt;
+    if (s.projectId !== undefined) set.projectId = s.projectId;
+    return [{ id: s.id, set }];
+  });
+
+  await conn.transaction(async (tx) => {
+    for (const p of patches) {
+      await tx
+        .update(claudeCodeActivity)
+        .set(p.set)
+        .where(and(eq(claudeCodeActivity.id, p.id), eq(claudeCodeActivity.userId, ctx.userId)));
+    }
+  });
+
+  return {
+    updated: patches.map((p) => p.id),
+    notFound: ids.filter((id) => !byId.has(id)),
   };
 }

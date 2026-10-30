@@ -103,6 +103,8 @@ import {
   setMeetingTranscriptSchema,
   trackClaudeTime,
   trackClaudeTimeSchema,
+  updateClaudeActivity,
+  updateClaudeActivitySchema,
   updateContact,
   updateContactSchema,
   updateCoworkingContract,
@@ -327,6 +329,17 @@ server.tool(
   updateTimeEntriesSchema.shape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await updateTimeEntries(args, ctx), null, 2) }],
+  }),
+);
+
+server.tool(
+  "update_claude_activity",
+  "Corrige un lot de segments d'activité Claude Code (bornes, projet ; null détache). Tout ou rien, seuls mes segments.",
+  updateClaudeActivitySchema.shape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await updateClaudeActivity(args, ctx), null, 2) },
+    ],
   }),
 );
 

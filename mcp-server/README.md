@@ -161,6 +161,9 @@ servers. Tu peux maintenant demander à Claude :
 - `update_time_entries` — modifie un lot de créneaux (≤ 200, ids de
   `list_my_time`) : patch par créneau, `null` vide un rattachement, tout ou
   rien, seuls les créneaux de l'utilisateur
+- `update_claude_activity` — corrige un lot de segments Claude Code
+  (≤ 500, `segmentIds` de `list_claude_activity`) : bornes et projet, même
+  règles ; un segment en cours est réécrit par le mod au prochain envoi
 - `add_note` — polymorphique (project/contact/etc.)
 - `create_meeting` — réunion depuis un transcript collé (+ participants)
 - `set_meeting_transcript` — pose / complète le transcript d'une réunion
