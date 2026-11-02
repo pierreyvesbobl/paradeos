@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { toMcpInputSchema } from "@/lib/mcp/json-schema";
 
-import { createMeetingSchema, setMeetingTranscriptSchema } from "../../mcp-server/tools";
+import { createMeetingSchema, setMeetingTranscriptSchema } from "../../mcp-server/tools/meetings";
 
 /** Cherche récursivement une borne exclusive restée booléenne. */
 function hasBooleanExclusiveBound(node: unknown): boolean {

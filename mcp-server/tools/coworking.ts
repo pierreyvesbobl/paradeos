@@ -3,6 +3,7 @@ import { z } from "zod";
 import { coworkingContracts } from "../../db/schema/coworking";
 import { invoices as invoicesTable } from "../../db/schema/invoices";
 import { brandTemplateFor } from "../../lib/billing/brand-templates";
+import { generateNextInvoiceForContract } from "../../lib/coworking/generate-invoice";
 import type { UserContext } from "../context";
 import { db } from "../db";
 import { DEFAULT_LIMIT } from "./shared";
@@ -323,15 +324,10 @@ export async function updateCoworkingInvoice(args: z.infer<typeof updateCoworkin
 }
 
 /**
- * Génère la facture suivante pour un contrat. Période = lendemain de
- * la dernière facture (ou contrat.startDate si aucune) + N mois selon
- * billing_frequency. Statut initial `a_facturer`.
- *
- * Implémentation inlinée (le helper `lib/coworking/generate-invoice.ts`
- * dépend de Next via `server-only` et des path aliases — incompatible
- * avec le runtime tsx standalone du MCP stdio). Marque, TVA et `billedBy`
- * doivent rester alignés sur ce helper : un contrat encaissé par G&O ne
- * doit pas produire de facture Parade, éligible à l'envoi.
+ * Génère la facture suivante pour un contrat, via le même helper que le
+ * bouton de la fiche contrat et le cron mensuel : période, marque, TVA et
+ * `billedBy` hérité du contrat. Crée même si la période est à venir, comme
+ * le bouton.
  */
 export const generateNextCoworkingInvoiceSchema = z.object({
   contractId: z.string().uuid(),
@@ -341,95 +337,18 @@ export async function generateNextCoworkingInvoice(
   args: z.infer<typeof generateNextCoworkingInvoiceSchema>,
   ctx: UserContext,
 ) {
-  const conn = db();
-  const [contract] = await conn
-    .select()
-    .from(coworkingContracts)
-    .where(eq(coworkingContracts.id, args.contractId))
-    .limit(1);
-  if (!contract) throw new Error("Contrat introuvable.");
-  if (contract.status === "termine") throw new Error("Contrat terminé — pas de facture suivante.");
-
-  const months = contract.billingFrequency === "monthly" ? 1 : 3;
-
-  const [last] = await conn
-    .select({ periodEnd: invoicesTable.periodEnd })
-    .from(invoicesTable)
-    .where(
-      and(
-        eq(invoicesTable.coworkingContractId, args.contractId),
-        eq(invoicesTable.kind, "coworking"),
-      ),
-    )
-    .orderBy(desc(invoicesTable.periodStart))
-    .limit(1);
-
-  const refDate = last?.periodEnd
-    ? addDays(parseDate(last.periodEnd), 1)
-    : parseDate(contract.startDate);
-  const periodStart = firstOfMonth(refDate);
-  const periodEnd = lastOfMonth(addMonths(periodStart, months - 1));
-  const label = periodLabel(periodStart, contract.billingFrequency);
-  const amountHt = Number(contract.unitPriceHt) * contract.desks * months;
-
-  const [row] = await conn
-    .insert(invoicesTable)
-    .values({
-      kind: "coworking",
-      brand: "coworking",
-      coworkingContractId: args.contractId,
-      label,
-      amountHt: amountHt.toFixed(2),
-      vatRate: brandTemplateFor("coworking").defaultVatRate.toString(),
-      status: "draft",
-      periodStart: fmtDate(periodStart),
-      periodEnd: fmtDate(periodEnd),
-      desks: contract.desks,
-      unitPriceHt: contract.unitPriceHt,
-      billedBy: contract.billedBy,
-      createdBy: ctx.userId,
-    })
-    .returning({ id: invoicesTable.id, name: invoicesTable.label });
-  return {
-    ...row,
-    periodStart: fmtDate(periodStart),
-    periodEnd: fmtDate(periodEnd),
-  };
-}
-
-// ---------- Helpers de date (locaux) ----------
-
-function parseDate(s: string): Date {
-  return new Date(`${s}T00:00:00`);
-}
-function fmtDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-function addDays(d: Date, n: number): Date {
-  const out = new Date(d);
-  out.setDate(out.getDate() + n);
-  return out;
-}
-function addMonths(d: Date, n: number): Date {
-  const out = new Date(d);
-  out.setMonth(out.getMonth() + n);
-  return out;
-}
-function firstOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-function lastOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
-}
-function periodLabel(start: Date, freq: "monthly" | "quarterly"): string {
-  const year = start.getFullYear();
-  if (freq === "monthly") {
-    const monthName = start.toLocaleDateString("fr-FR", { month: "long" });
-    return `${monthName} ${year}`;
+  const res = await generateNextInvoiceForContract({
+    contractId: args.contractId,
+    createdBy: ctx.userId,
+    forceFuture: true,
+  });
+  if (!res.ok) throw new Error(res.message);
+  if (!res.created) {
+    throw new Error(
+      res.reason === "contract_terminated"
+        ? "Contrat terminé — pas de facture suivante."
+        : "Contrat introuvable.",
+    );
   }
-  const q = Math.floor(start.getMonth() / 3) + 1;
-  return `T${q} ${year}`;
+  return { id: res.id, name: res.name, periodStart: res.periodStart, periodEnd: res.periodEnd };
 }
