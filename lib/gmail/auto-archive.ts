@@ -21,7 +21,7 @@ import { isCalendarMail } from "./calendar-mail";
 
 /**
  * Archivage automatique de la boîte de réception : retirer de l'inbox,
- * jamais supprimer. Deux règles, chacune derrière un réglage :
+ * jamais supprimer. Trois règles, chacune derrière un réglage :
  *
  *  - `task_done` : toutes les tâches liées au fil (passages verbatim de
  *    `task_sources`, propositions acceptées) sont terminées ou annulées,
@@ -34,18 +34,22 @@ import { isCalendarMail } from "./calendar-mail";
  *    (cf. automated-sender.ts) et le dernier a plus de N jours. Les mails
  *    d'agenda (invitations, rappels, confirmations de rendez-vous, cf.
  *    calendar-mail.ts) restent en boîte quoi qu'il arrive.
+ *  - `replied` : le dernier message du fil est un envoi de l'utilisateur,
+ *    vieux de plus de N jours, sans brouillon en cours. La balle est dans
+ *    l'autre camp ; sa réponse remettra le fil en boîte côté Gmail.
  *
- * Dans les deux cas, un fil où un message attend une action de
+ * Pour les deux premières, un fil où un message attend une action de
  * l'utilisateur reste en boîte : « réponse attendue » posé par l'extraction
  * (`extraction_meta.needsReply`), ou un objet qui l'annonce (cf.
  * action-required.ts : paiement refusé, pièce à signer, compte à
- * confirmer, expiration…).
+ * confirmer, expiration…). Un message auquel l'utilisateur a répondu
+ * depuis n'attend plus rien.
  *
  * Un fil déjà archivé par ici n'est repris que si un message plus récent
  * est arrivé : remettre un fil en boîte à la main tient.
  */
 
-export type AutoArchiveReason = "task_done" | "automated";
+export type AutoArchiveReason = "task_done" | "automated" | "replied";
 
 export const AUTOMATED_DAYS_CHOICES: { value: string; label: string }[] = [
   { value: "off", label: "Jamais" },
@@ -53,6 +57,16 @@ export const AUTOMATED_DAYS_CHOICES: { value: string; label: string }[] = [
   { value: "7", label: "Après 7 jours" },
   { value: "14", label: "Après 14 jours" },
 ];
+
+export const REPLIED_DAYS_CHOICES: { value: string; label: string }[] = [
+  { value: "off", label: "Jamais" },
+  { value: "1", label: "Après 1 jour" },
+  { value: "3", label: "Après 3 jours" },
+  { value: "7", label: "Après 7 jours" },
+];
+
+/** Délai de la règle `replied` quand le réglage est absent. */
+const DEFAULT_REPLIED_DAYS = 1;
 
 /**
  * Borne les appels Gmail d'un run ; le reste attend la relève suivante
@@ -65,17 +79,27 @@ export type AutoArchiveSettings = {
   doneTasks: boolean;
   /** Âge minimal en jours des fils de robots, ou null si la règle est coupée. */
   automatedDays: number | null;
+  /** Âge minimal en jours de la dernière réponse de l'utilisateur, ou null si coupé. */
+  repliedDays: number | null;
 };
 
+function parseDays(value: string | null, fallback: number | null): number | null {
+  if (value === null) return fallback;
+  if (value === "off") return null;
+  const days = Number(value);
+  return Number.isFinite(days) && days > 0 ? days : null;
+}
+
 export async function getAutoArchiveSettings(): Promise<AutoArchiveSettings> {
-  const [done, automated] = await Promise.all([
+  const [done, automated, replied] = await Promise.all([
     getSetting(SETTING_KEYS.GMAIL_ARCHIVE_DONE_TASKS),
     getSetting(SETTING_KEYS.GMAIL_ARCHIVE_AUTOMATED_DAYS),
+    getSetting(SETTING_KEYS.GMAIL_ARCHIVE_REPLIED_DAYS),
   ]);
-  const days = automated && automated !== "off" ? Number(automated) : Number.NaN;
   return {
     doneTasks: done !== "false",
-    automatedDays: Number.isFinite(days) && days > 0 ? days : null,
+    automatedDays: parseDays(automated || null, null),
+    repliedDays: parseDays(replied || null, DEFAULT_REPLIED_DAYS),
   };
 }
 
@@ -97,7 +121,25 @@ function demandsAction(m: { subject: string | null; extractionMeta: unknown }): 
   return meta?.needsReply === true || requiresAction(m);
 }
 
-/** Parmi `threadIds`, ceux où au moins un message attend une action. */
+const isSent = (m: { labels: string[] }) => m.labels.includes("SENT");
+
+/**
+ * Date du dernier envoi de l'utilisateur par fil : tout message reçu
+ * jusque-là a eu sa réponse et n'attend plus rien.
+ */
+function lastSentByThread(
+  rows: { threadId: string; labels: string[]; internalDate: Date | null }[],
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of rows) {
+    if (!isSent(r) || !r.internalDate) continue;
+    const at = r.internalDate.getTime();
+    if (at > (out.get(r.threadId) ?? 0)) out.set(r.threadId, at);
+  }
+  return out;
+}
+
+/** Parmi `threadIds`, ceux où un message encore sans réponse attend une action. */
 async function threadsDemandingAction(conn: Database, threadIds: string[]): Promise<Set<string>> {
   if (threadIds.length === 0) return new Set();
   const rows = await conn
@@ -105,11 +147,18 @@ async function threadsDemandingAction(conn: Database, threadIds: string[]): Prom
       threadId: gmailMessages.threadId,
       subject: gmailMessages.subject,
       extractionMeta: gmailMessages.extractionMeta,
+      labels: gmailMessages.labels,
+      internalDate: gmailMessages.internalDate,
     })
     .from(gmailMessages)
     .where(inArray(gmailMessages.threadId, threadIds));
+  const answeredUntil = lastSentByThread(rows);
   const out = new Set<string>();
-  for (const r of rows) if (demandsAction(r)) out.add(r.threadId);
+  for (const r of rows) {
+    const until = answeredUntil.get(r.threadId);
+    if (until !== undefined && (r.internalDate?.getTime() ?? 0) <= until) continue;
+    if (demandsAction(r)) out.add(r.threadId);
+  }
   return out;
 }
 
@@ -290,13 +339,75 @@ export async function selectAutomatedThreads(
     .map((t) => ({ threadId: t.id, reason: "automated" as const }));
 }
 
+/** Fils où l'utilisateur a écrit le dernier message, il y a plus de `days` jours. */
+export async function selectRepliedThreads(
+  conn: Database,
+  opts: { userId: string; days: number; now?: Date; limit?: number },
+): Promise<ArchiveCandidate[]> {
+  const now = opts.now ?? new Date();
+  const cutoff = new Date(now.getTime() - opts.days * 86_400_000);
+  const threads = await conn
+    .select({
+      id: gmailThreads.id,
+      hasUnread: gmailThreads.hasUnread,
+      lastMessageAt: gmailThreads.lastMessageAt,
+      autoArchivedAt: gmailThreads.autoArchivedAt,
+    })
+    .from(gmailThreads)
+    .where(
+      and(
+        eq(gmailThreads.userId, opts.userId),
+        lt(gmailThreads.lastMessageAt, cutoff),
+        inArray(gmailThreads.id, inboxThreadIds(conn, opts.userId)),
+      ),
+    )
+    .orderBy(gmailThreads.lastMessageAt);
+  const fresh = threads.filter(
+    (t) => !t.hasUnread && isNewerThanArchive(t.lastMessageAt, t.autoArchivedAt),
+  );
+  if (fresh.length === 0) return [];
+
+  const rows = await conn
+    .select({
+      threadId: gmailMessages.threadId,
+      labels: gmailMessages.labels,
+      isDraft: gmailMessages.isDraft,
+      internalDate: gmailMessages.internalDate,
+    })
+    .from(gmailMessages)
+    .where(
+      inArray(
+        gmailMessages.threadId,
+        fresh.map((t) => t.id),
+      ),
+    );
+  // Un brouillon en cours : l'utilisateur n'en a pas fini avec le fil.
+  const drafting = new Set(rows.filter((r) => r.isDraft).map((r) => r.threadId));
+  const last = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    if (r.isDraft) continue;
+    const prev = last.get(r.threadId);
+    if (!prev || (r.internalDate?.getTime() ?? 0) > (prev.internalDate?.getTime() ?? 0)) {
+      last.set(r.threadId, r);
+    }
+  }
+  const limit = opts.limit ?? MAX_ARCHIVES_PER_RUN;
+  return fresh
+    .filter((t) => {
+      const m = last.get(t.id);
+      return m !== undefined && isSent(m) && !drafting.has(t.id);
+    })
+    .slice(0, limit)
+    .map((t) => ({ threadId: t.id, reason: "replied" as const }));
+}
+
 /** Vrai si le fil n'a jamais été archivé par ici, ou a reçu un message depuis. */
 function isNewerThanArchive(lastMessageAt: Date | null, autoArchivedAt: Date | null): boolean {
   if (!autoArchivedAt) return true;
   return Boolean(lastMessageAt && lastMessageAt > autoArchivedAt);
 }
 
-/** Les deux règles, selon les réglages, bornées à `MAX_ARCHIVES_PER_RUN`. */
+/** Les trois règles, selon les réglages, bornées à `MAX_ARCHIVES_PER_RUN`. */
 export async function selectThreadsToArchive(
   conn: Database,
   opts: { userId: string; settings: AutoArchiveSettings; now?: Date },
@@ -314,6 +425,19 @@ export async function selectThreadsToArchive(
         limit: remaining,
       });
       for (const c of automated) if (!seen.has(c.threadId)) out.push(c);
+    }
+  }
+  if (opts.settings.repliedDays !== null) {
+    const remaining = MAX_ARCHIVES_PER_RUN - out.length;
+    if (remaining > 0) {
+      const seen = new Set(out.map((c) => c.threadId));
+      const replied = await selectRepliedThreads(conn, {
+        userId: opts.userId,
+        days: opts.settings.repliedDays,
+        now: opts.now,
+        limit: remaining,
+      });
+      for (const c of replied) if (!seen.has(c.threadId)) out.push(c);
     }
   }
   return out.slice(0, MAX_ARCHIVES_PER_RUN);
@@ -485,7 +609,7 @@ export async function runAutoArchive(args: {
   shouldStop?: () => boolean;
 }): Promise<{ archived: number; forgotten: number; requeued: number; errors: string[] }> {
   const settings = await getAutoArchiveSettings();
-  if (!settings.doneTasks && settings.automatedDays === null) {
+  if (!settings.doneTasks && settings.automatedDays === null && settings.repliedDays === null) {
     return { archived: 0, forgotten: 0, requeued: 0, errors: [] };
   }
   const conn = await db();

@@ -278,12 +278,14 @@ export const purgeLocalGmail = action(z.object({}), async ({ user }) => {
 
 /**
  * Réglages de l'archivage automatique (cf. lib/gmail/auto-archive.ts) :
- * fils aux tâches terminées, et fils de robots au-delà d'un âge.
+ * fils aux tâches terminées, fils de robots au-delà d'un âge, et fils où
+ * l'utilisateur a répondu en dernier.
  */
 export const setGmailAutoArchive = action(
   z.object({
     doneTasks: z.boolean().optional(),
     automatedDays: z.enum(["off", "3", "7", "14"]).optional(),
+    repliedDays: z.enum(["off", "1", "3", "7"]).optional(),
   }),
   async ({ input, user }) => {
     if (input.doneTasks !== undefined) {
@@ -295,6 +297,9 @@ export const setGmailAutoArchive = action(
     }
     if (input.automatedDays !== undefined) {
       await setSetting(SETTING_KEYS.GMAIL_ARCHIVE_AUTOMATED_DAYS, input.automatedDays, user.id);
+    }
+    if (input.repliedDays !== undefined) {
+      await setSetting(SETTING_KEYS.GMAIL_ARCHIVE_REPLIED_DAYS, input.repliedDays, user.id);
     }
     revalidatePath("/settings/integrations");
     return { ok: true as const };

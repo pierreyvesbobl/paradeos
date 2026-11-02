@@ -9,7 +9,23 @@ import { setGmailAutoArchive } from "@/lib/actions/gmail";
 
 type Props =
   | { kind: "doneTasks"; enabled: boolean }
-  | { kind: "automatedDays"; value: string; choices: { value: string; label: string }[] };
+  | {
+      kind: "automatedDays" | "repliedDays";
+      value: string;
+      choices: { value: string; label: string }[];
+    };
+
+const DAYS_MESSAGES = {
+  automatedDays: {
+    off: "Les notifications de robots restent en boîte.",
+    on: (days: string) => `Les notifications de robots de plus de ${days} jours seront archivées.`,
+  },
+  repliedDays: {
+    off: "Les fils où tu as répondu en dernier restent en boîte.",
+    on: (days: string) =>
+      `Les fils où tu as répondu en dernier seront archivés après ${days} jour${days === "1" ? "" : "s"}.`,
+  },
+};
 
 export function GmailAutoArchiveForm(props: Props) {
   const router = useRouter();
@@ -52,18 +68,20 @@ export function GmailAutoArchiveForm(props: Props) {
       value={props.value}
       disabled={pending}
       onChange={(e) => {
-        const next = e.target.value as "off" | "3" | "7" | "14";
+        const { kind } = props;
+        const next = e.target.value;
         startTransition(async () => {
-          const res = await setGmailAutoArchive({ automatedDays: next });
+          const res = await setGmailAutoArchive(
+            kind === "automatedDays"
+              ? { automatedDays: next as "off" | "3" | "7" | "14" }
+              : { repliedDays: next as "off" | "1" | "3" | "7" },
+          );
           if (!res.ok) {
             toast.error(res.message);
             return;
           }
-          toast.success(
-            next === "off"
-              ? "Les notifications de robots restent en boîte."
-              : `Les notifications de robots de plus de ${next} jours seront archivées.`,
-          );
+          const messages = DAYS_MESSAGES[kind];
+          toast.success(next === "off" ? messages.off : messages.on(next));
           router.refresh();
         });
       }}

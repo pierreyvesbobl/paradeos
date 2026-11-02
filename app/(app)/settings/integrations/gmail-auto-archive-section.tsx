@@ -4,8 +4,10 @@ import { db } from "@/lib/db/server";
 import {
   AUTOMATED_DAYS_CHOICES,
   getAutoArchiveSettings,
+  REPLIED_DAYS_CHOICES,
   selectAutomatedThreads,
   selectDoneTaskThreads,
+  selectRepliedThreads,
 } from "@/lib/gmail/auto-archive";
 import { GmailAutoArchiveForm } from "./gmail-auto-archive-form";
 
@@ -16,12 +18,18 @@ import { GmailAutoArchiveForm } from "./gmail-auto-archive-form";
 export async function GmailAutoArchiveSection({ userId }: { userId: string }) {
   const conn = await db();
   const settings = await getAutoArchiveSettings();
-  const [doneCandidates, automatedCandidates, archivedRows] = await Promise.all([
+  const [doneCandidates, automatedCandidates, repliedCandidates, archivedRows] = await Promise.all([
     selectDoneTaskThreads(conn, { userId }),
     // Aperçu sur le réglage courant, ou sur 7 jours quand la règle est coupée.
     selectAutomatedThreads(conn, {
       userId,
       days: settings.automatedDays ?? 7,
+      limit: 10_000,
+    }),
+    // Même logique d'aperçu, sur 1 jour quand la règle est coupée.
+    selectRepliedThreads(conn, {
+      userId,
+      days: settings.repliedDays ?? 1,
       limit: 10_000,
     }),
     conn
@@ -31,7 +39,9 @@ export async function GmailAutoArchiveSection({ userId }: { userId: string }) {
       .groupBy(gmailThreads.autoArchiveReason),
   ]);
   const archivedByReason = new Map(archivedRows.map((r) => [r.reason, r.n]));
-  const active = settings.doneTasks || settings.automatedDays !== null;
+  const active =
+    settings.doneTasks || settings.automatedDays !== null || settings.repliedDays !== null;
+  const repliedArchived = archivedByReason.get("replied") ?? 0;
 
   return (
     <section className="rounded-lg border bg-card p-6">
@@ -88,6 +98,26 @@ export async function GmailAutoArchiveSection({ userId }: { userId: string }) {
               kind="automatedDays"
               value={settings.automatedDays === null ? "off" : String(settings.automatedDays)}
               choices={AUTOMATED_DAYS_CHOICES}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-medium text-xs">Répondu en dernier</h3>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Un fil lu dont le dernier message est le tien, sans brouillon en cours : la balle
+                est dans l'autre camp, sa réponse remettra le fil en boîte.{" "}
+                {repliedCandidates.length} fil{repliedCandidates.length > 1 ? "s" : ""} de plus de{" "}
+                {settings.repliedDays ?? 1} jour{(settings.repliedDays ?? 1) > 1 ? "s" : ""}{" "}
+                aujourd'hui · {repliedArchived} déjà archivé{repliedArchived > 1 ? "s" : ""}.
+              </p>
+            </div>
+            <GmailAutoArchiveForm
+              kind="repliedDays"
+              value={settings.repliedDays === null ? "off" : String(settings.repliedDays)}
+              choices={REPLIED_DAYS_CHOICES}
             />
           </div>
         </div>

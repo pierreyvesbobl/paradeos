@@ -150,6 +150,12 @@ export const SETTING_KEYS = {
    */
   GMAIL_ARCHIVE_AUTOMATED_DAYS: "GMAIL_ARCHIVE_AUTOMATED_DAYS",
   /**
+   * Archivage Gmail des fils dont le dernier message est une réponse de
+   * l'utilisateur, plus vieille que N jours : "off", "1" (défaut si absent),
+   * "3" ou "7". La réponse de l'autre remet le fil en boîte.
+   */
+  GMAIL_ARCHIVE_REPLIED_DAYS: "GMAIL_ARCHIVE_REPLIED_DAYS",
+  /**
    * Jeton GitHub (fine-grained PAT) qui lit les issues des dépôts rattachés
    * aux projets (`project_repos`). Portée minimale : « Issues : lecture »
    * sur les dépôts concernés. Sans lui, la fiche projet n'affiche pas les

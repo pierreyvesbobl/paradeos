@@ -11,6 +11,7 @@ import {
   runAutoArchive,
   selectAutomatedThreads,
   selectDoneTaskThreads,
+  selectRepliedThreads,
 } from "@/lib/gmail/auto-archive";
 import { listThreadsByLabel, modifyThreadLabels } from "@/lib/google/gmail-api";
 import { createTestDb, seedUser, type TestUser } from "./db";
@@ -35,7 +36,14 @@ vi.mock("@/lib/settings", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/settings")>();
   return {
     ...original,
-    getSetting: vi.fn(async (key: string) => (key === "GMAIL_ARCHIVE_AUTOMATED_DAYS" ? "7" : null)),
+    // Réponses : coupé ici, pour que la relève ne touche qu'aux fils que chaque test prépare.
+    getSetting: vi.fn(async (key: string) =>
+      key === "GMAIL_ARCHIVE_AUTOMATED_DAYS"
+        ? "7"
+        : key === "GMAIL_ARCHIVE_REPLIED_DAYS"
+          ? "off"
+          : null,
+    ),
   };
 });
 
@@ -65,6 +73,7 @@ async function insertThread(opts: {
     labels?: string[];
     needsReply?: boolean;
     extracted?: boolean;
+    draft?: boolean;
     meta?: Record<string, unknown>;
   }[];
   hasUnread?: boolean;
@@ -98,6 +107,7 @@ async function insertThread(opts: {
         subject: opts.subject,
         internalDate: m.at,
         labels: m.labels ?? ["INBOX"],
+        isDraft: m.draft ?? false,
         bodyText: "Corps du message.",
         extractionStatus: m.extracted ? "extracted" : "skipped",
         extractionMeta:
@@ -197,6 +207,70 @@ describe("fils aux tâches terminées", () => {
     expect(ids.has(unread.threadId)).toBe(false);
     // Tâche close, mais le mail attend une réponse : il reste.
     expect(ids.has(awaiting.threadId)).toBe(false);
+  });
+});
+
+describe("fils où l'utilisateur a répondu en dernier", () => {
+  it("retient le fil lu dont le dernier message est un envoi assez vieux, sans brouillon", async () => {
+    const PY = "pierreyves@automato.tech";
+    const replied = await insertThread({
+      subject: "Re: Clé API",
+      messages: [
+        { from: "vittorio@gpasplus.com", at: daysAgo(5), needsReply: true },
+        { from: PY, at: daysAgo(4), labels: ["SENT", "INBOX"] },
+      ],
+    });
+    const answeredBack = await insertThread({
+      subject: "Re: Accès API",
+      messages: [
+        { from: PY, at: daysAgo(5), labels: ["SENT", "INBOX"] },
+        { from: "vittorio@gpasplus.com", at: daysAgo(4) },
+      ],
+    });
+    const tooRecent = await insertThread({
+      subject: "Re: Joybuy",
+      messages: [
+        { from: "vittorio@gpasplus.com", at: daysAgo(2) },
+        { from: PY, at: new Date(Date.now() - 3_600_000), labels: ["SENT", "INBOX"] },
+      ],
+    });
+    const drafting = await insertThread({
+      subject: "Re: Export",
+      messages: [
+        { from: "vittorio@gpasplus.com", at: daysAgo(6) },
+        { from: PY, at: daysAgo(5), labels: ["SENT", "INBOX"] },
+        { from: PY, at: daysAgo(4), labels: ["DRAFT"], draft: true },
+      ],
+    });
+    const unread = await insertThread({
+      subject: "Re: Prix",
+      messages: [{ from: PY, at: daysAgo(5), labels: ["SENT", "INBOX"] }],
+      hasUnread: true,
+    });
+
+    const picked = await selectRepliedThreads(db, { userId: actor.id, days: 1 });
+    const ids = new Set(picked.map((c) => c.threadId));
+    // La question reçue avant la réponse n'attend plus rien.
+    expect(ids.has(replied.threadId)).toBe(true);
+    expect(ids.has(answeredBack.threadId)).toBe(false);
+    expect(ids.has(tooRecent.threadId)).toBe(false);
+    expect(ids.has(drafting.threadId)).toBe(false);
+    expect(ids.has(unread.threadId)).toBe(false);
+    expect(picked.every((c) => c.reason === "replied")).toBe(true);
+  });
+
+  it("ne compte plus une réponse attendue à laquelle l'utilisateur a répondu depuis", async () => {
+    const answered = await insertThread({
+      subject: "Livraison",
+      messages: [
+        { from: "vittorio@gpasplus.com", at: daysAgo(6), extracted: true, needsReply: true },
+        { from: "pierreyves@automato.tech", at: daysAgo(5), labels: ["SENT", "INBOX"] },
+        { from: "vittorio@gpasplus.com", at: daysAgo(4), extracted: true, needsReply: false },
+      ],
+    });
+    await linkTask(answered.messageIds[0] as string, { status: "done", completedAt: daysAgo(3) });
+    const picked = await selectDoneTaskThreads(db, { userId: actor.id });
+    expect(picked.some((c) => c.threadId === answered.threadId)).toBe(true);
   });
 });
 
