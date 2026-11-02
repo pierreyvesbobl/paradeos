@@ -142,6 +142,9 @@ préférence pour OAuth.
   `push_coworking_invoice` — brouillons Dougs
 - `update_dougs_invoice_draft`, `send_document_to_client` — retouche d'un
   brouillon, puis finalisation + envoi en deux temps (aperçu, confirmation)
+- `send_due_coworking_invoices` — envoi groupé des factures coworking dues
+  (bouton de la page Coworking) : liste sans `confirm`, envoi des
+  `invoiceIds` relus avec `confirm=true`
 
 ### Search
 - `search_all` — full-text sur projets, tâches, contacts, entités, meetings, **notes**

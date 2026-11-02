@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { sendDueCoworkingInvoicesMcp } from "@/app/api/mcp/_coworking-handlers";
 import type { Database } from "@/db/client";
 import { appSettings } from "@/db/schema/app-settings";
 import { contacts } from "@/db/schema/contacts";
@@ -395,5 +396,41 @@ describe("sendDueCoworkingInvoices (envoi groupé)", () => {
       expect(row.autoSentAt).toBeNull();
     }
     expect((await invoiceById(alreadySent.invoiceId)).dougsInvoiceId).toBeNull();
+  });
+});
+
+describe("send_due_coworking_invoices (MCP)", () => {
+  it("sans confirm : liste ce qui partirait, sans toucher à Dougs", async () => {
+    await setGlobalAutoSend(true);
+    await db.update(invoices).set({ autoSentAt: new Date() }).where(eq(invoices.kind, "coworking"));
+    const due = await createContractWithInvoice({});
+
+    const res = await sendDueCoworkingInvoicesMcp({}, { userId: actor.id });
+    expect(res).toMatchObject({ enabled: true });
+    expect("due" in res && res.due?.map((d) => d.invoiceId)).toEqual([due.invoiceId]);
+    expect(pushDougsSalesInvoiceDraft).not.toHaveBeenCalled();
+    expect(deliverDocumentEmail).not.toHaveBeenCalled();
+  });
+
+  it("confirm sans invoiceIds : refusé", async () => {
+    await expect(
+      sendDueCoworkingInvoicesMcp({ confirm: true }, { userId: actor.id }),
+    ).rejects.toThrow(/invoiceIds/);
+    expect(finalizeDougsSalesInvoice).not.toHaveBeenCalled();
+  });
+
+  it("confirm : n'envoie que les factures relues", async () => {
+    await setGlobalAutoSend(true);
+    await db.update(invoices).set({ autoSentAt: new Date() }).where(eq(invoices.kind, "coworking"));
+    const reviewed = await createContractWithInvoice({});
+    const appearedSince = await createContractWithInvoice({});
+
+    const res = await sendDueCoworkingInvoicesMcp(
+      { confirm: true, invoiceIds: [reviewed.invoiceId] },
+      { userId: actor.id },
+    );
+    expect("sent" in res && res.sent.map((s) => s.contractName)).toEqual([reviewed.contract.name]);
+    expect(finalizeDougsSalesInvoice).toHaveBeenCalledTimes(1);
+    expect((await invoiceById(appearedSince.invoiceId)).autoSentAt).toBeNull();
   });
 });

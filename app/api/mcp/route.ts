@@ -27,6 +27,10 @@ import {
   wwwAuthenticate,
 } from "@/lib/oauth/resource-server";
 import {
+  sendDueCoworkingInvoicesMcp,
+  sendDueCoworkingInvoicesMcpSchema,
+} from "./_coworking-handlers";
+import {
   pushCoworkingInvoiceMcp,
   pushCoworkingInvoiceMcpSchema,
   pushProjectMilestoneInvoice,
@@ -499,6 +503,17 @@ const TOOL_REGISTRY: Record<
       "Génère la facture suivante d'un contrat dans Parade OS (statut a_facturer), sans rien envoyer à Dougs. Période = lendemain de la dernière facture (ou début du contrat) + 1 ou 3 mois selon la fréquence. Enchaîner avec push_coworking_invoice pour créer le brouillon Dougs.",
     schema: generateNextCoworkingInvoiceSchema,
     handler: (a, ctx) => generateNextCoworkingInvoice(a as never, ctx as never),
+  },
+  send_due_coworking_invoices: {
+    write: true,
+    description:
+      "Envoie les factures coworking dues, comme le bouton de la page Coworking : brouillon Dougs, finalisation, mail coworking avec le PDF au coworker, classement Drive. " +
+      "Seuls partent les contrats avec l'envoi auto coché, hors G&O, si le réglage global est actif. " +
+      "DEUX ÉTAPES. 1) Appelle sans confirm : renvoie la liste de ce qui partirait, rien n'est émis. " +
+      "2) Montre-la à l'utilisateur et, sur son accord explicite, rappelle avec confirm=true et les invoiceIds relus. " +
+      "Irréversible : une facture finalisée ne s'annule que par un avoir. Args: invoiceIds (optionnel), confirm (optionnel).",
+    schema: sendDueCoworkingInvoicesMcpSchema,
+    handler: (a, ctx) => sendDueCoworkingInvoicesMcp(a as never, ctx as never),
   },
   push_coworking_invoice: {
     write: true,

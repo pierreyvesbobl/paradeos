@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { contacts as contactsTable } from "@/db/schema/contacts";
@@ -13,10 +13,11 @@ import { billingIdentityWarnings } from "@/lib/billing/billing-identity";
 import { resolveInvoiceDocument } from "@/lib/billing/brand-documents";
 import { brandTemplateFor } from "@/lib/billing/brand-templates";
 import { pushDougsSalesInvoiceDraft, resolveDougsClientData } from "@/lib/billing/dougs-push";
-import { autoSendCoworkingInvoice, isCoworkingAutoSendEnabled } from "@/lib/coworking/auto-send";
+import { autoSendCoworkingInvoice } from "@/lib/coworking/auto-send";
 import { generateNextInvoiceForContract } from "@/lib/coworking/generate-invoice";
+import { sendDueCoworkingInvoicesCore } from "@/lib/coworking/send-due";
 import { db } from "@/lib/db/server";
-import { DougsAuthError, getDougsDraftUrl } from "@/lib/dougs/client";
+import { getDougsDraftUrl } from "@/lib/dougs/client";
 import {
   createCoworkingContractSchema,
   monthsBetween,
@@ -309,86 +310,10 @@ export type DueCoworkingInvoice = {
   blocker: string | null;
 };
 
-/**
- * Envoie en une fois les factures coworking dues.
- *
- * Remplace la passe d'envoi du cron : l'API Dougs s'authentifie par un cookie
- * de session rafraîchi par l'extension Chrome, donc un envoi déclenché à 6 h du
- * matin sans personne devant la machine est un pari. Déclenché à la main, le
- * cookie est frais par construction.
- *
- * Les garde-fous restent ceux de l'envoi unitaire — réglage global, opt-in par
- * contrat, G&O exclu, destinataire requis — appliqués facture par facture.
- */
-export const sendDueCoworkingInvoices = action(z.object({}), async ({ user }) => {
-  const enabled = await isCoworkingAutoSendEnabled();
-  if (!enabled) throw new Error("L'envoi groupé est désactivé dans les réglages.");
-
-  const conn = await db();
-  const queue = await conn
-    .select({ id: invoices.id, label: invoices.label, contractName: coworkingContracts.name })
-    .from(invoices)
-    .innerJoin(coworkingContracts, eq(coworkingContracts.id, invoices.coworkingContractId))
-    .where(
-      and(
-        eq(invoices.kind, "coworking"),
-        isNull(invoices.autoSentAt),
-        eq(coworkingContracts.autoSend, true),
-        ne(coworkingContracts.billedBy, "g_and_o"),
-        or(
-          eq(invoices.status, "draft"),
-          // Déjà émise mais le mail n'est pas parti : il reste l'envoi.
-          and(eq(invoices.status, "sent"), isNotNull(invoices.dougsInvoiceId)),
-        ),
-      ),
-    )
-    .orderBy(asc(invoices.periodStart));
-
-  const sent: Array<{ contractName: string; label: string; reference: string }> = [];
-  const blocked: Array<{ contractName: string; label: string; reason: string }> = [];
-  const errors: Array<{ contractName: string; label: string; message: string }> = [];
-
-  for (const item of queue) {
-    try {
-      const res = await autoSendCoworkingInvoice({
-        userId: user.id,
-        invoiceId: item.id,
-        enabled: true,
-      });
-      if (!res.ok) {
-        errors.push({ contractName: item.contractName, label: item.label, message: res.message });
-      } else if (res.sent) {
-        sent.push({ contractName: item.contractName, label: item.label, reference: res.reference });
-      } else {
-        blocked.push({
-          contractName: item.contractName,
-          label: item.label,
-          reason:
-            res.reason === "blockers"
-              ? (res.blockers ?? []).map((b) => b.message).join(" · ")
-              : res.reason,
-        });
-      }
-    } catch (err) {
-      // Cookie expiré : inutile d'insister sur les suivantes, et c'est
-      // exactement la panne qui a fait sortir l'envoi du cron.
-      if (err instanceof DougsAuthError) {
-        errors.push({ contractName: item.contractName, label: item.label, message: err.message });
-        break;
-      }
-      errors.push({
-        contractName: item.contractName,
-        label: item.label,
-        message: err instanceof Error ? err.message : "erreur inconnue",
-      });
-    }
-  }
-
-  revalidateTag(`dougs:${user.id}`, { expire: 0 });
-  revalidatePath("/coworking");
-  revalidatePath("/compta");
-  return { sent, blocked, errors };
-});
+/** Envoie en une fois les factures coworking dues (cf. `lib/coworking/send-due.ts`). */
+export const sendDueCoworkingInvoices = action(z.object({}), async ({ user }) =>
+  sendDueCoworkingInvoicesCore({ userId: user.id }),
+);
 
 /** Qui encaisse les factures de ce contrat. `g_and_o` interdit tout envoi. */
 export const setCoworkingContractBilledBy = action(

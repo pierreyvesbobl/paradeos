@@ -160,7 +160,8 @@ export function McpSetupGuide() {
             create_meeting, set_meeting_transcript, extract_meeting, push_project_quote,
             push_project_milestone_invoice, create_coworking_contract, update_coworking_contract,
             create_coworking_invoice, update_coworking_invoice, generate_next_coworking_invoice,
-            push_coworking_invoice, update_dougs_invoice_draft, send_document_to_client
+            push_coworking_invoice, send_due_coworking_invoices, update_dougs_invoice_draft,
+            send_document_to_client
           </li>
           <li>
             <strong>Resources</strong> : <code>paradeos://projects</code>,{" "}
