@@ -2,6 +2,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { coworkingContracts } from "../../db/schema/coworking";
 import { invoices as invoicesTable } from "../../db/schema/invoices";
+import { brandTemplateFor } from "../../lib/billing/brand-templates";
 import type { UserContext } from "../context";
 import { db } from "../db";
 import { DEFAULT_LIMIT } from "./shared";
@@ -34,6 +35,7 @@ export async function listCoworkingContracts(args: z.infer<typeof listCoworkingC
       unitPriceHt: coworkingContracts.unitPriceHt,
       status: coworkingContracts.status,
       billingFrequency: coworkingContracts.billingFrequency,
+      billedBy: coworkingContracts.billedBy,
     })
     .from(coworkingContracts)
     .where(conds.length ? and(...conds) : undefined)
@@ -236,7 +238,11 @@ export async function createCoworkingInvoice(
 ) {
   const conn = db();
   const [contract] = await conn
-    .select({ desks: coworkingContracts.desks, unitPriceHt: coworkingContracts.unitPriceHt })
+    .select({
+      desks: coworkingContracts.desks,
+      unitPriceHt: coworkingContracts.unitPriceHt,
+      billedBy: coworkingContracts.billedBy,
+    })
     .from(coworkingContracts)
     .where(eq(coworkingContracts.id, args.contractId))
     .limit(1);
@@ -255,16 +261,17 @@ export async function createCoworkingInvoice(
     .insert(invoicesTable)
     .values({
       kind: "coworking",
+      brand: "coworking",
       coworkingContractId: args.contractId,
       label: args.name,
       amountHt: amountHt.toFixed(2),
-      vatRate: args.vatRate ?? "0.2",
+      vatRate: args.vatRate ?? brandTemplateFor("coworking").defaultVatRate.toString(),
       status: toDbStatusCoworking(args.status ?? "a_facturer"),
       periodStart: args.periodStart,
       periodEnd: args.periodEnd,
       desks: contract.desks,
       unitPriceHt: contract.unitPriceHt,
-      billedBy: args.billedBy ?? "parade",
+      billedBy: args.billedBy ?? contract.billedBy,
       invoicedAt: args.invoiceDate ? new Date(args.invoiceDate) : null,
       notes: args.notes ?? null,
       createdBy: ctx.userId,
@@ -322,7 +329,9 @@ export async function updateCoworkingInvoice(args: z.infer<typeof updateCoworkin
  *
  * Implémentation inlinée (le helper `lib/coworking/generate-invoice.ts`
  * dépend de Next via `server-only` et des path aliases — incompatible
- * avec le runtime tsx standalone du MCP stdio).
+ * avec le runtime tsx standalone du MCP stdio). Marque, TVA et `billedBy`
+ * doivent rester alignés sur ce helper : un contrat encaissé par G&O ne
+ * doit pas produire de facture Parade, éligible à l'envoi.
  */
 export const generateNextCoworkingInvoiceSchema = z.object({
   contractId: z.string().uuid(),
@@ -367,16 +376,17 @@ export async function generateNextCoworkingInvoice(
     .insert(invoicesTable)
     .values({
       kind: "coworking",
+      brand: "coworking",
       coworkingContractId: args.contractId,
       label,
       amountHt: amountHt.toFixed(2),
-      vatRate: "0.2",
+      vatRate: brandTemplateFor("coworking").defaultVatRate.toString(),
       status: "draft",
       periodStart: fmtDate(periodStart),
       periodEnd: fmtDate(periodEnd),
       desks: contract.desks,
       unitPriceHt: contract.unitPriceHt,
-      billedBy: "parade",
+      billedBy: contract.billedBy,
       createdBy: ctx.userId,
     })
     .returning({ id: invoicesTable.id, name: invoicesTable.label });
