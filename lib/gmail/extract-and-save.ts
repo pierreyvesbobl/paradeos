@@ -3,7 +3,6 @@ import "server-only";
 import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { emailProposals, gmailMessages, gmailTags } from "@/db/schema/gmail";
 import { projectContacts } from "@/db/schema/project-contacts";
-import { projects } from "@/db/schema/projects";
 import {
   fuzzyMatchContact,
   fuzzyMatchEntity,
