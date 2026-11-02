@@ -174,16 +174,20 @@ export function McpSetupGuide({ userId }: { userId: string }) {
         </summary>
         <ul className="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2">
           <li>
-            <strong>Lecture</strong> : list_projects, get_project, list_tasks, list_my_tasks,
-            list_meetings, get_meeting, get_meeting_transcript, list_my_time, list_contacts,
-            list_entities, list_notes, get_note, list_emails, get_email_thread, search_all
+            <strong>Lecture</strong> : list_projects, get_project, list_project_invoices,
+            list_tasks, list_my_tasks, list_meetings, get_meeting, get_meeting_transcript,
+            list_my_time, list_contacts, list_entities, list_notes, get_note, list_emails,
+            get_email_thread, list_coworking_contracts, get_coworking_contract,
+            list_coworking_invoices, search_all
           </li>
           <li>
             <strong>Écriture</strong> (scope <code>mcp:write</code>) : create_task, complete_task,
-            create_project, update_project, update_contact, update_entity, log_time,
-            update_time_entries, update_claude_activity, add_note, create_meeting,
-            set_meeting_transcript, extract_meeting, push_project_quote,
-            push_project_milestone_invoice, push_coworking_invoice
+            create_project, update_project, create_contact, update_contact, create_entity,
+            update_entity, log_time, update_time_entries, update_claude_activity, add_note,
+            create_meeting, set_meeting_transcript, extract_meeting, push_project_quote,
+            push_project_milestone_invoice, create_coworking_contract, update_coworking_contract,
+            create_coworking_invoice, update_coworking_invoice, generate_next_coworking_invoice,
+            push_coworking_invoice, update_dougs_invoice_draft, send_document_to_client
           </li>
           <li>
             <strong>Resources</strong> : <code>paradeos://projects</code>,{" "}
