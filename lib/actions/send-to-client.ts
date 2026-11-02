@@ -11,7 +11,7 @@
 
 import { z } from "zod";
 import { action } from "@/lib/actions/action";
-import { sendProjectInvoiceCore, sendProjectQuoteCore } from "@/lib/billing/send-document";
+import { sendInvoiceCore, sendProjectQuoteCore } from "@/lib/billing/send-document";
 
 const schema = z.object({
   invoiceId: z.string().uuid(),
@@ -31,7 +31,7 @@ const schema = z.object({
 // `async` obligatoire : Next refuse une server action synchrone, même quand
 // elle ne fait que déléguer.
 export const sendProjectInvoiceToClient = action(schema, async ({ input, user }) =>
-  sendProjectInvoiceCore({ ...input, userId: user.id }),
+  sendInvoiceCore({ ...input, userId: user.id }),
 );
 
 export const sendProjectQuoteToClient = action(schema, async ({ input, user }) =>

@@ -539,7 +539,7 @@ export const sendDocumentMcpSchema = z.object({
   body: z.string().trim().min(1).max(10000),
   /**
    * Adresses en copie (un assistant, un second interlocuteur…). Le
-   * destinataire principal est toujours le contact du projet. Comme l'objet et
+   * destinataire principal est le contact du projet ou du contrat. Comme l'objet et
    * le corps, la liste doit être **identique** entre l'aperçu et l'envoi.
    */
   cc: z.array(z.string().trim().email()).max(10).optional(),
@@ -567,10 +567,10 @@ export async function sendDocumentMcp(
   const send = args.confirm === true;
   // On appelle le module serveur, pas la server action : une requête MCP n'a
   // pas de cookie Supabase, donc l'action ne saurait pas qui agit.
-  const { sendProjectInvoiceCore, sendProjectQuoteCore } = await import(
+  const { sendInvoiceCore, sendProjectQuoteCore } = await import(
     "../../../lib/billing/send-document"
   );
-  const core = row.kind === "quote" ? sendProjectQuoteCore : sendProjectInvoiceCore;
+  const core = row.kind === "quote" ? sendProjectQuoteCore : sendInvoiceCore;
   const result = await core({
     userId: ctx.userId,
     invoiceId: args.invoiceId,
