@@ -225,15 +225,14 @@ export async function requeueThreadsWithPendingProposals(
 }
 
 /**
- * Rattachements de fil à un projet que personne ne peut trancher : aucun
- * projet nommé dans le mail et plus de `maxCandidates` candidats. La règle
- * vaut à l'extraction depuis le 28/10 ; celles d'avant expirent ici.
+ * Rattachements de fil (projet, entité) encore en attente : l'extraction
+ * n'en propose plus depuis le 02/11, la liaison se pose seule quand elle
+ * est sûre, sinon par le libellé Gmail. Celles d'avant expirent ici.
  */
-export async function expireUndecidableProjectLinks(
+export async function expireLinkProposals(
   conn: Database,
-  opts: { userId: string; maxCandidates?: number; now?: Date },
+  opts: { userId: string; now?: Date },
 ): Promise<number> {
-  const max = opts.maxCandidates ?? 5;
   const rows = await conn
     .select({ id: emailProposals.id })
     .from(emailProposals)
@@ -241,10 +240,8 @@ export async function expireUndecidableProjectLinks(
     .where(
       and(
         eq(emailProposals.status, "pending"),
-        eq(emailProposals.kind, "project_link"),
+        inArray(emailProposals.kind, ["project_link", "entity_link"]),
         eq(gmailMessages.userId, opts.userId),
-        sql`${emailProposals.payload}->>'llmMentionedName' is null`,
-        sql`jsonb_array_length(coalesce(${emailProposals.payload}->'candidates', '[]'::jsonb)) > ${max}`,
       ),
     );
   if (rows.length === 0) return 0;

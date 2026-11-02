@@ -1,7 +1,6 @@
 import "server-only";
 
 import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
-import { entities } from "@/db/schema/entities";
 import { emailProposals, gmailMessages, gmailTags } from "@/db/schema/gmail";
 import { projectContacts } from "@/db/schema/project-contacts";
 import { projects } from "@/db/schema/projects";
@@ -42,12 +41,6 @@ type ProposalKind =
   | "project"
   | "draft_reply"
   | "task_completion";
-
-/**
- * Au-delà, une proposition de rattachement sans projet nommé dans le mail
- * ne se tranche jamais : le fil se rattache à la main depuis sa page.
- */
-const MAX_PROJECT_LINK_CANDIDATES = 5;
 
 type ProposalRow = {
   messageId: string;
@@ -254,7 +247,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
     completionDone: 0,
     completionDecided: 0,
     completionPendingElsewhere: 0,
-    tooManyCandidates: 0,
+    unsureProjectLink: 0,
     answered: 0,
   };
   // Ce que le mail dit des tâches (lib/tasks/task-sources.ts) : on repart
@@ -372,7 +365,9 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   //      ou dans l'autre)
   //    - 1 seul candidat clair (LLM match + 0 candidats côté serveur, ou 1 seul candidat = LLM match)
   //      → liaison posée directement
-  //    - N candidats ambigus → proposition project_link à valider avec candidateProjectIds[]
+  //    - sinon rien : pas de proposition à trancher dans /inbox (4 % d'acceptation),
+  //      l'utilisateur pose le libellé Paradeos/Projets/… dans Gmail s'il le veut,
+  //      la relève le lit comme une liaison (syncThreadLabelsFromGmail).
   let autoAppliedProjectLinks = 0;
   let autoLinkedProjectId: string | null = null;
   const candidateProjectIds = new Set<string>(signals?.candidateProjectIds ?? []);
@@ -391,18 +386,6 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   const candidateList = [...candidateProjectIds];
 
   if (!signals?.projectDimensionLocked && candidateList.length > 0) {
-    // Récupère les infos des candidats pour le payload (nom lisible côté UI).
-    const projectRows = await conn
-      .select({ id: projects.id, name: projects.name, status: projects.status })
-      .from(projects)
-      .where(inArray(projects.id, candidateList));
-    const candidatesPayload = projectRows.map((p) => ({
-      id: p.id,
-      name: p.name,
-      status: p.status,
-      llmMatched: llmProjectMatch?.id === p.id,
-    }));
-
     // Liaison posée sans proposition quand le projet est sûr : un seul
     // candidat, ou bien le projet que le mail nomme en toutes lettres est
     // aussi l'un de ceux que les participants désignent (deux signaux
@@ -443,61 +426,26 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
           // Push Gmail peut échouer (token/quota) — la liaison reste posée.
         }
       }
-    } else if (!llmProjectMatch && candidateList.length > MAX_PROJECT_LINK_CANDIDATES) {
-      // Le mail ne nomme aucun projet et les participants en désignent
-      // trop (un contact actif sur vingt projets) : personne ne choisit
-      // dans une telle liste.
-      skipped.tooManyCandidates++;
     } else {
-      // N candidats → proposition à valider.
-      // suggested = LLM match si présent, sinon premier candidat (le user pourra changer).
-      // Fallback vide impossible : le branche else n'est atteinte qu'avec candidateList.length >= 2.
-      const suggested = llmProjectMatch?.id ?? candidateList[0] ?? "";
-      const suggestedRow = projectRows.find((p) => p.id === suggested);
-      rows.push({
-        messageId,
-        kind: "project_link",
-        payload: {
-          candidates: candidatesPayload,
-          suggestedProjectId: suggested,
-          suggestedProjectName: suggestedRow?.name ?? null,
-          llmMentionedName: result.proposedProjectName ?? null,
-        },
-        matchedId: suggested,
-        matchConfidence: llmProjectMatch ? llmProjectMatch.confidence.toFixed(3) : null,
-      });
+      skipped.unsureProjectLink++;
     }
   }
 
-  // 2b. entity_link : entités matchées par domaine — sync a déjà auto-appliqué
-  // le tag entité, mais si N entités matchent un même domaine (rare mais
-  // possible), on émet une proposition pour laisser l'humain trancher.
-  if (signals && signals.matchedEntityIds.length > 1) {
-    const entityRows = await conn
-      .select({ id: entities.id, name: entities.name })
-      .from(entities)
-      .where(inArray(entities.id, signals.matchedEntityIds));
-    const candidatesPayload = entityRows.map((e) => ({ id: e.id, name: e.name }));
-    rows.push({
-      messageId,
-      kind: "entity_link",
-      payload: {
-        candidates: candidatesPayload,
-        suggestedEntityId: entityRows[0]?.id ?? null,
-      },
-      matchedId: entityRows[0]?.id ?? null,
-      matchConfidence: null,
-    });
-  }
+  // 2b. Rattachement entité : la relève pose le libellé quand le domaine
+  // désigne une seule entité ; à plusieurs, rien n'est proposé, le libellé
+  // se pose dans Gmail comme pour les projets.
 
   // 2c. project_contact_link : pour chaque contact CRM matché du thread
-  // qui n'est pas rattaché à un des projets candidats, propose le
-  // rattachement. Rend visible le trou "contact connu mais absent de
-  // project_contacts" qui est la cause #1 des projets vides.
+  // qui n'est pas rattaché au projet du fil, propose le rattachement. Rend
+  // visible le trou "contact connu mais absent de project_contacts" qui est
+  // la cause #1 des projets vides. Seulement quand le projet du fil est sûr
+  // (liaison posée ci-dessus) : sur un projet deviné, la proposition était
+  // refusée ou laissée à l'abandon.
+  const targetProjectId = autoLinkedProjectId;
   if (
     signals &&
+    targetProjectId &&
     signals.matchedContactIds.length > 0 &&
-    candidateList.length > 0 &&
     !signals.projectDimensionLocked
   ) {
     const existingLinks = await conn
@@ -509,14 +457,10 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
       .where(
         and(
           inArray(projectContacts.contactId, signals.matchedContactIds),
-          inArray(projectContacts.projectId, candidateList),
+          eq(projectContacts.projectId, targetProjectId),
         ),
       );
     const linkedPairs = new Set(existingLinks.map((l) => `${l.contactId}:${l.projectId}`));
-    // Ne proposer que sur le projet suggéré (celui que l'user va accepter en priorité)
-    // pour éviter d'exploser la file de propositions.
-    // candidateList.length > 0 (garanti par le if outer) → [0] est défini.
-    const targetProjectId = llmProjectMatch?.id ?? (candidateList[0] as string);
     for (const contactId of signals.matchedContactIds) {
       if (linkedPairs.has(`${contactId}:${targetProjectId}`)) continue;
       rows.push({
@@ -723,7 +667,7 @@ export async function extractAndSaveEmailProposals(messageId: string): Promise<{
   }
   if (Object.values(skipped).some((n) => n > 0)) {
     console.info(
-      `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.decidedHere} déjà tranchée(s) sur ce message, ${skipped.tooManyCandidates} rattachement(s) sans projet nommé parmi trop de candidats, ${skipped.answered} « répondre » déjà répondu(s) ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
+      `[extract email ${messageId}] propositions écartées : ${skipped.alreadyKnown} déjà en base à coup sûr, ${skipped.dupTask} tâche(s) déjà ouverte(s), ${skipped.pendingElsewhere} déjà en attente ailleurs, ${skipped.decidedHere} déjà tranchée(s) sur ce message, ${skipped.unsureProjectLink} rattachement(s) projet incertain(s), ${skipped.answered} « répondre » déjà répondu(s) ; clôtures : ${skipped.completionDone} tâche(s) déjà fermée(s), ${skipped.completionDecided} déjà tranchée(s) ici, ${skipped.completionPendingElsewhere} déjà en attente ailleurs.`,
     );
   }
 

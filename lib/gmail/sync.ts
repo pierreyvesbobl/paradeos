@@ -12,7 +12,7 @@ import {
   expireStaleMeetingProposals,
 } from "@/lib/crm/expire-proposals";
 import {
-  expireUndecidableProjectLinks,
+  expireLinkProposals,
   requeueThreadsWithPendingProposals,
 } from "@/lib/crm/pending-proposals";
 import { db } from "@/lib/db/server";
@@ -44,6 +44,7 @@ import { looksLikeInvoiceMessage } from "./invoice-detect";
 import { processInvoiceFiling, queueInvoiceCandidates } from "./invoice-filer";
 import {
   autoLinkThreadByParticipants,
+  ensureActiveProjectLabels,
   loadGmailLabelCache,
   pushThreadLabelsToGmail,
   syncThreadLabelsFromGmail,
@@ -998,6 +999,17 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
 
   endPhase("link");
 
+  // Libellé Gmail de chaque projet actif : le rattachement manuel se fait
+  // en le posant dans Gmail, il doit exister.
+  if (!outOfTime(LLM_ITEM_RESERVE_MS)) {
+    try {
+      const r = await ensureActiveProjectLabels({ userId, accessToken, cache: labelCache });
+      result.errors.push(...r.errors);
+    } catch (err) {
+      result.errors.push(`project labels: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   // ─── 4bis-a. Archivage automatique (réglages) ──────────────────────
   // Fils dont toutes les tâches liées sont terminées, fils de robots
   // anciens : retirés de la boîte de réception, jamais supprimés. Placé
@@ -1060,7 +1072,7 @@ async function syncIncrementalUnlocked(userId: string, deadline: number): Promis
     result.proposalsExpired += await expireStaleEmailProposals(conn, { userId });
     result.proposalsExpired += await expireAutomatedSenderProposals(conn, { userId });
     result.proposalsExpired += await expireAnsweredProposals(conn, { userId });
-    result.proposalsExpired += await expireUndecidableProjectLinks(conn, { userId });
+    result.proposalsExpired += await expireLinkProposals(conn, { userId });
     // Fils dont un message plus récent n'a pas encore revu les propositions :
     // rejoués à la relève suivante, en mode passages seuls.
     result.threadsRequeued += await requeueThreadsWithPendingProposals(conn, { userId });

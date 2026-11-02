@@ -777,6 +777,58 @@ export async function clearThreadLinkDecisions(args: {
  * pousse les labels correspondants côté Gmail. Idempotent — joué par
  * « Recalculer les liens » dans /settings/integrations.
  */
+/** Libellés de projet créés au plus par relève : un appel Gmail chacun. */
+const PROJECT_LABELS_PER_RUN = 10;
+
+/**
+ * Chaque projet actif a son libellé dans Gmail : c'est en le posant à la
+ * main sur un fil qu'on rattache ce que l'extraction n'a pas su trancher
+ * (cf. `syncThreadLabelsFromGmail`). Sans lui, le rattachement n'a pas de
+ * geste possible côté Gmail. Ne touche qu'aux projets sans libellé Gmail.
+ */
+export async function ensureActiveProjectLabels(args: {
+  userId: string;
+  accessToken: string;
+  cache: LabelCache;
+}): Promise<{ created: number; errors: string[] }> {
+  const conn = await db();
+  const missing = await conn
+    .select({ id: projects.id, name: projects.name })
+    .from(projects)
+    .leftJoin(
+      gmailTags,
+      and(
+        eq(gmailTags.userId, args.userId),
+        eq(gmailTags.kind, "project"),
+        eq(gmailTags.targetId, projects.id),
+      ),
+    )
+    .where(and(eq(projects.status, "active"), isNull(gmailTags.gmailLabelId)))
+    .limit(PROJECT_LABELS_PER_RUN);
+  let created = 0;
+  const errors: string[] = [];
+  for (const p of missing) {
+    try {
+      const label = await ensureCrmLabel({
+        userId: args.userId,
+        kind: "project",
+        targetId: p.id,
+        displayName: p.name,
+      });
+      const gmailLabelId = await getOrCreateGmailLabel(
+        args.accessToken,
+        label.labelName,
+        args.cache,
+      );
+      await conn.update(gmailTags).set({ gmailLabelId }).where(eq(gmailTags.id, label.id));
+      created++;
+    } catch (err) {
+      errors.push(`project label ${p.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return { created, errors };
+}
+
 export async function backfillCrmLabels(userId: string): Promise<{
   projectsLabeled: number;
   entitiesLabeled: number;

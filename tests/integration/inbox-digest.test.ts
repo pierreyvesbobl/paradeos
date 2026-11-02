@@ -13,7 +13,7 @@ import {
   PROPOSAL_TTL_DAYS,
 } from "@/lib/crm/expire-proposals";
 import {
-  expireUndecidableProjectLinks,
+  expireLinkProposals,
   requeueThreadsWithPendingProposals,
 } from "@/lib/crm/pending-proposals";
 import { extractEmail } from "@/lib/gmail/extract";
@@ -412,22 +412,36 @@ describe("rattrapage des propositions en attente", () => {
     expect(await requeueThreadsWithPendingProposals(db, { userId: actor.id })).toBe(0);
   });
 
-  it("fait expirer un rattachement sans projet nommé parmi plus de cinq candidats", async () => {
+  it("fait expirer les rattachements de fil en attente, projet comme entité", async () => {
     const msgId = await insertMessage({ userId: actor.id, fromEmail: "client@acme.fr" });
-    const candidates = Array.from({ length: 21 }, (_, i) => ({ id: `p${i}`, name: `P${i}` }));
-    const [wide, narrow] = await db
+    const candidates = [
+      { id: "p1", name: "P1" },
+      { id: "p2", name: "P2" },
+    ];
+    const [project, entity, contact] = await db
       .insert(emailProposals)
       .values([
-        { messageId: msgId, kind: "project_link", payload: { candidates, llmMentionedName: null } },
+        { messageId: msgId, kind: "project_link", payload: { candidates, llmMentionedName: "P1" } },
+        { messageId: msgId, kind: "entity_link", payload: { candidates } },
         {
           messageId: msgId,
-          kind: "project_link",
-          payload: { candidates: candidates.slice(0, 3), llmMentionedName: null },
+          kind: "project_contact_link",
+          payload: { contactId: "c", projectId: "p1" },
         },
       ])
       .returning({ id: emailProposals.id });
-    if (!wide || !narrow) throw new Error("insert");
-    expect(await expireUndecidableProjectLinks(db, { userId: actor.id })).toBe(1);
+    if (!project || !entity || !contact) throw new Error("insert");
+    expect(await expireLinkProposals(db, { userId: actor.id })).toBe(2);
+    const status = async (id: string) =>
+      (
+        await db
+          .select({ s: emailProposals.status })
+          .from(emailProposals)
+          .where(eq(emailProposals.id, id))
+      )[0]?.s;
+    expect(await status(project.id)).toBe("expired");
+    expect(await status(entity.id)).toBe("expired");
+    expect(await status(contact.id)).toBe("pending");
   });
 });
 
