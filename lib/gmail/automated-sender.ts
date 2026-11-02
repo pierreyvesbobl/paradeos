@@ -11,6 +11,8 @@
 const LOCAL_PART_PATTERNS = [
   /^(no|do-?not|dont)[-_.]?reply/,
   /^noreply/,
+  // `microsoft-noreply`, `azure-noreply`, `data-studio-noreply` : préfixe de service.
+  /[-_.](?:no|do-?not)[-_.]?reply\b/,
   /^notifications?$/,
   /^notify$/,
   /^alerts?$/,

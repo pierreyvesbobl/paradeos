@@ -8,6 +8,9 @@ describe("isAutomatedSender", () => {
     expect(isAutomatedSender({ fromEmail: "notifications@stripe.com" })).toBe(true);
     expect(isAutomatedSender({ fromEmail: "alertes@automato.tech" })).toBe(true);
     expect(isAutomatedSender({ fromEmail: "MAILER-DAEMON@googlemail.com" })).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "microsoft-noreply@microsoft.com" })).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "azure-noreply@microsoft.com" })).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "team_no-reply@acme.io" })).toBe(true);
   });
 
   it("reconnaît les services machines, sous-domaines compris", () => {
