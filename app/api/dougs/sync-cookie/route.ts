@@ -16,6 +16,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { dougsSessions } from "@/db/schema/dougs";
 import { db } from "@/lib/db/server";
+import { companyAccessError, probeDougsCompanyAccess } from "@/lib/dougs/company-access";
 import { encryptCookie } from "@/lib/dougs/crypto";
 import { DOUGS_SYNC_TOKEN_PREFIX, resolveSyncToken } from "@/lib/dougs/sync-tokens";
 
@@ -81,11 +82,21 @@ export async function POST(req: NextRequest) {
     return withCors(NextResponse.json({ ok: false, error: "Payload invalide." }, { status: 400 }));
   }
 
+  const companyId = parsed.data.companyId ?? "107610";
+  // Refuse un cookie qui ne voit pas la société plutôt que d'écraser une
+  // session qui marche (reconnexion sur le compte Dougs d'une autre société).
+  const refusal = companyAccessError(
+    await probeDougsCompanyAccess(parsed.data.cookie, companyId),
+    companyId,
+  );
+  if (refusal) {
+    return withCors(NextResponse.json({ ok: false, error: refusal }, { status: 409 }));
+  }
+
   try {
     const conn = await db();
     const encrypted = encryptCookie(parsed.data.cookie);
     const expiresAt = resolveExpiresAt(parsed.data.expiresAt);
-    const companyId = parsed.data.companyId ?? "107610";
 
     const [existing] = await conn
       .select({ id: dougsSessions.id })

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { dougsSessions } from "@/db/schema/dougs";
 import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
+import { companyAccessError, probeDougsCompanyAccess } from "@/lib/dougs/company-access";
 import { encryptCookie } from "@/lib/dougs/crypto";
 
 const connectSchema = z.object({
@@ -22,6 +23,12 @@ const connectSchema = z.object({
  * à 24h (Dougs ne nous le dit pas explicitement).
  */
 export const connectDougsSession = action(connectSchema, async ({ input, user }) => {
+  const refusal = companyAccessError(
+    await probeDougsCompanyAccess(input.cookie, input.companyId),
+    input.companyId,
+  );
+  if (refusal) throw new Error(refusal);
+
   const conn = await db();
   const encrypted = encryptCookie(input.cookie);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
