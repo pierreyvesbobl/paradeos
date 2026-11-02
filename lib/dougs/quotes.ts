@@ -1,4 +1,10 @@
-import { DougsApiError, DougsAuthError, dougsFetch, loadSession } from "./http";
+import {
+  assertCreatedInSessionCompany,
+  DougsApiError,
+  DougsAuthError,
+  dougsFetch,
+  loadSession,
+} from "./http";
 import { buildDougsQuoteUrl } from "./sales-invoices";
 
 export type DougsQuoteDraft = {
@@ -20,7 +26,13 @@ export async function createDougsQuoteDraft(userId: string): Promise<DougsQuoteD
     method: "POST",
     body: "{}",
   });
-  return res.json();
+  const draft: DougsQuoteDraft = await res.json();
+  await assertCreatedInSessionCompany(
+    userId,
+    draft,
+    (companyId, id) => `/companies/${companyId}/invoicing/quote-drafts/${id}`,
+  );
+  return draft;
 }
 
 /**

@@ -45,6 +45,41 @@ export async function loadSession(userId: string): Promise<Session | null> {
   return { cookie: decryptCookie(row.cookieEncrypted), companyId: row.companyId };
 }
 
+/**
+ * Garde-fou après une création chez Dougs : le document doit appartenir à la
+ * société de la session. Dougs ignore la société de l'URL à la création et
+ * range le document dans celle du compte connecté ; un cookie du mauvais
+ * compte (G&O au lieu de Parade) crée donc des brouillons dans la compta d'une
+ * autre société, sans erreur. Le brouillon égaré est supprimé — il n'a pas de
+ * numéro, rien n'est perdu — puis on échoue.
+ */
+export async function assertCreatedInSessionCompany(
+  userId: string,
+  created: { id?: unknown; companyId?: unknown },
+  draftPath: (companyId: string, id: string) => string,
+): Promise<void> {
+  const session = await loadSession(userId);
+  if (!session || created.companyId === undefined || created.companyId === null) return;
+  const actual = String(created.companyId);
+  if (actual === session.companyId) return;
+
+  if (typeof created.id === "string") {
+    try {
+      await fetchWithRetry(`${BASE}${draftPath(actual, created.id)}`, {
+        method: "DELETE",
+        headers: { Cookie: session.cookie },
+        timeoutMs: 8000,
+        label: "Dougs DELETE brouillon hors société",
+      });
+    } catch (err) {
+      console.error("[dougs] brouillon hors société non supprimé", actual, created.id, err);
+    }
+  }
+  throw new DougsAuthError(
+    `La session Dougs enregistrée est celle d'un compte sans accès à la société ${session.companyId} : Dougs a créé le document dans la société ${actual} (supprimé aussitôt). Reconnecte-toi sur app.dougs.fr avec le compte de la bonne société.`,
+  );
+}
+
 export async function touchUsed(userId: string): Promise<void> {
   const conn = await db();
   await conn

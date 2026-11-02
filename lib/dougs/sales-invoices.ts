@@ -1,4 +1,11 @@
-import { BASE, DougsApiError, DougsAuthError, dougsFetch, loadSession } from "./http";
+import {
+  assertCreatedInSessionCompany,
+  BASE,
+  DougsApiError,
+  DougsAuthError,
+  dougsFetch,
+  loadSession,
+} from "./http";
 import type { DougsOperationAttachment } from "./payload";
 
 export type DougsClientSearchResult = {
@@ -60,7 +67,13 @@ export async function createDougsSalesInvoiceDraft(
     method: "POST",
     body: "{}",
   });
-  return res.json();
+  const draft: DougsSalesInvoiceDraft = await res.json();
+  await assertCreatedInSessionCompany(
+    userId,
+    draft,
+    (companyId, id) => `/companies/${companyId}/sales-invoices-drafts/${id}`,
+  );
+  return draft;
 }
 
 /**
