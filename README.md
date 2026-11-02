@@ -69,7 +69,7 @@ lib/
   gmail/ google/ dougs/ linkedin/ meetings/   intégrations
   format.ts               formats fr-FR (€, dates)
 proxy.ts                  auth gate global (ex-middleware.ts, convention Next 16)
-mcp-server/               serveur MCP stdio (dev local) ; tools/ par domaine, tools.ts les agrège
+mcp-server/               handlers MCP servis par app/api/mcp ; tools/ par domaine, tools.ts les agrège
 chrome-extension/         extension navigateur (synchro cookie Dougs, import LinkedIn)
 claude-mod/               mod Claude Code : suivi du temps → time_entries (source claude_code)
 scripts/                  seed, magic-link, diagnostics

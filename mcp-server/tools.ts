@@ -2,7 +2,7 @@
  * Définition des tools MCP : lectures, écritures, recherche.
  *
  * Chaque tool reçoit `(args, ctx)` où `ctx` porte le `userId` du
- * caller (résolu via env stdio ou token HTTP). Les tools "perso"
+ * caller (résolu depuis le token). Les tools "perso"
  * (préfixés `my_*`) filtrent par ctx.userId ; les tools "team"
  * exposent les données partagées.
  */

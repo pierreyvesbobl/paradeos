@@ -14,7 +14,7 @@ function getPgClient() {
   if (_client) return _client;
   const url = process.env.DATABASE_URL;
   if (!url) {
-    throw new Error("DATABASE_URL manquant. Pose-le dans la config Claude Desktop.");
+    throw new Error("DATABASE_URL manquant.");
   }
   _client = postgres(url, {
     prepare: false,

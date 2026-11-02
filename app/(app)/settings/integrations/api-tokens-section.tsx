@@ -58,7 +58,7 @@ export async function ApiTokensSection({ userId }: { userId: string }) {
         />
       </div>
 
-      <McpSetupGuide userId={userId} />
+      <McpSetupGuide />
     </section>
   );
 }

@@ -30,7 +30,7 @@ function cursorDeeplink(url: string) {
  * approuve sur l'écran de consentement. Le token personnel reste
  * disponible pour les clients qui ne savent pas faire OAuth.
  */
-export function McpSetupGuide({ userId }: { userId: string }) {
+export function McpSetupGuide() {
   const url = appUrl();
   const mcpUrl = `${url}/api/mcp`;
 
@@ -137,33 +137,6 @@ export function McpSetupGuide({ userId }: { userId: string }) {
   }
 }`}
             label="Config JSON manuelle"
-          />
-        </div>
-      </details>
-
-      <details className="text-muted-foreground text-xs">
-        <summary className="cursor-pointer hover:text-foreground">
-          Mode stdio (connexion directe à la base)
-        </summary>
-        <p className="mt-2">
-          Réservé au dev sur le repo cloné. Nécessite <code>DATABASE_URL</code> et ton UUID (
-          <code className="break-all">{userId}</code>).
-        </p>
-        <div className="mt-2">
-          <CodeBlock
-            code={`{
-  "mcpServers": {
-    "paradeos": {
-      "command": "/CHEMIN/paradeos/node_modules/.bin/tsx",
-      "args": ["/CHEMIN/paradeos/mcp-server/index.ts"],
-      "env": {
-        "DATABASE_URL": "postgres://…",
-        "PARADEOS_USER_ID": "${userId}"
-      }
-    }
-  }
-}`}
-            label="Stdio"
           />
         </div>
       </details>

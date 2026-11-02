@@ -5,10 +5,8 @@ import { db } from "../../../lib/db/server";
 import { extractAndSaveProposals } from "../../../lib/meetings/extract-and-save";
 
 /**
- * Extraction LLM d'une réunion, exposée en MCP. Vit ici et pas dans
- * `mcp-server/tools.ts` parce qu'elle tire tout le pipeline Next
- * (`server-only`, SDK ai, réglages modèle) : le transport stdio ne sait
- * pas le charger. Le tool n'est donc servi que par la route HTTP.
+ * Extraction LLM d'une réunion, exposée en MCP. Tire tout le pipeline
+ * Next (`server-only`, SDK ai, réglages modèle).
  *
  * Coût : plusieurs dizaines de secondes, jusqu'à 4 min sur un gros
  * transcript (cf. `LLM_BUDGET_MS.meetingExtraction`) — d'où le

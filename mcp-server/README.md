@@ -1,16 +1,17 @@
 # Paradeos MCP server
 
-Serveur MCP (Model Context Protocol) qui expose Paradeos comme un set
-d'outils consommables par Claude.ai / Claude Desktop / Claude Code /
-Cursor / tout client MCP.
+Handlers du serveur MCP (Model Context Protocol) qui expose Paradeos
+comme un set d'outils consommables par Claude.ai / Claude Desktop /
+Claude Code / Cursor / tout client MCP. Le serveur lui-même est la route
+HTTP `app/api/mcp/route.ts` : ce dossier n'a plus de point d'entrée
+propre (l'ancien transport stdio a été retiré le 02/11/2026).
 
-Trois modes de connexion, par ordre de préférence :
+Deux modes de connexion, par ordre de préférence :
 
 | Transport | Pour qui | Ce qu'il faut fournir |
 | --- | --- | --- |
 | **HTTP + OAuth** | tout le monde | l'URL, rien d'autre |
 | HTTP + token | clients sans OAuth | l'URL + un token personnel |
-| stdio | dev sur le repo cloné | `DATABASE_URL` + `PARADEOS_USER_ID` |
 
 ## Setup — HTTP + OAuth (recommandé)
 
@@ -92,49 +93,6 @@ https://<domain>/api/mcp --header "Authorization: Bearer paradeos_pat_…"`.
 Ces tokens portent tous les scopes et n'expirent pas — d'où la
 préférence pour OAuth.
 
-## Setup — stdio (dev local)
-
-### 1. Récupère ton `auth.uid` Supabase
-
-C'est l'UUID de ton user dans `auth.users` (Supabase). Tu peux le voir
-dans le dashboard Supabase ou via une requête SQL :
-
-```sql
-select id from public.users where full_name = 'Ton Nom';
-```
-
-### 2. Configure Claude Desktop
-
-Édite `~/Library/Application Support/Claude/claude_desktop_config.json` :
-
-```jsonc
-{
-  "mcpServers": {
-    "paradeos": {
-      "command": "/ABSOLUTE/PATH/TO/paradeos/node_modules/.bin/tsx",
-      "args": ["/ABSOLUTE/PATH/TO/paradeos/mcp-server/index.ts"],
-      "env": {
-        "DATABASE_URL": "postgres://postgres.<ref>:<password>@<host>:6543/postgres",
-        "PARADEOS_USER_ID": "<ton-auth-uid>"
-      }
-    }
-  }
-}
-```
-
-`DATABASE_URL` = même chaîne que dans `paradeos/.env.local` (Session
-pooler Supabase).
-
-### 3. Redémarre Claude Desktop
-
-Tu devrais voir l'outil `paradeos` apparaître dans le panel des MCP
-servers. Tu peux maintenant demander à Claude :
-
-- "Liste mes tâches en retard"
-- "Crée une tâche 'Préparer le devis' sur le projet Acme"
-- "Combien d'heures j'ai passé sur Refonte du Site cette semaine ?"
-- "Synthèse du projet Prev&care" (utilise le prompt `project_summary`)
-
 ## Tools exposés
 
 ### Reads
@@ -168,9 +126,22 @@ servers. Tu peux maintenant demander à Claude :
 - `create_meeting` — réunion depuis un transcript collé (+ participants)
 - `set_meeting_transcript` — pose / complète le transcript d'une réunion
   existante (`mode` replace|append ; écraser exige `confirmed`)
-- `extract_meeting` — **HTTP seulement** : lance l'extraction LLM (résumé
-  + propositions). Absente du transport stdio, qui ne peut pas charger le
-  pipeline Next (`server-only`, SDK ai). Compter jusqu'à ~4 min.
+- `extract_meeting` — lance l'extraction LLM (résumé + propositions).
+  Compter jusqu'à ~4 min.
+- `create_contact` / `update_contact`, `create_entity` / `update_entity`
+
+### Facturation (scope `mcp:write` pour les écritures)
+- `list_project_invoices` — devis, jalons, factures libres, avoirs d'un projet
+- `list_coworking_contracts` / `get_coworking_contract` /
+  `create_coworking_contract` / `update_coworking_contract`
+- `list_coworking_invoices` / `create_coworking_invoice` /
+  `update_coworking_invoice`
+- `generate_next_coworking_invoice` — facture suivante d'un contrat, même
+  helper que la fiche contrat et le cron (marque, TVA, `billedBy` hérité)
+- `push_project_quote`, `push_project_milestone_invoice`,
+  `push_coworking_invoice` — brouillons Dougs
+- `update_dougs_invoice_draft`, `send_document_to_client` — retouche d'un
+  brouillon, puis finalisation + envoi en deux temps (aperçu, confirmation)
 
 ### Search
 - `search_all` — full-text sur projets, tâches, contacts, entités, meetings, **notes**
@@ -185,7 +156,7 @@ servers. Tu peux maintenant demander à Claude :
 
 ## Prompts
 
-Slash commands disponibles dans Claude Desktop :
+Slash commands disponibles dans les clients qui exposent les prompts MCP :
 
 - `/plan_my_week` — planifie ta semaine depuis tâches + meetings + relances
 - `/project_summary <project>` — synthèse markdown d'un projet

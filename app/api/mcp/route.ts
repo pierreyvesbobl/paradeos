@@ -6,8 +6,7 @@
  *
  * Auth (cf. `lib/oauth/resource-server.ts`) : soit un token personnel
  * `paradeos_pat_…`, soit un access token OAuth `paradeos_oat_…`. Le
- * `userId` du token devient le contexte d'exécution des handlers
- * (équivalent à `PARADEOS_USER_ID` en stdio).
+ * `userId` du token devient le contexte d'exécution des handlers.
  *
  * Ce fichier joue le rôle de *resource server* OAuth 2.1 : sur 401 il
  * publie un `WWW-Authenticate` pointant vers les métadonnées, ce qui

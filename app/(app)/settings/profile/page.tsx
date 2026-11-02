@@ -5,7 +5,6 @@ import { db } from "@/lib/db/server";
 import { AvatarUploader } from "./avatar-uploader";
 import { PasswordForm } from "./password-form";
 import { ProfileForm } from "./profile-form";
-import { UserIdDisplay } from "./user-id-display";
 
 function initialsFromName(name: string | null, email: string | null | undefined): string {
   if (name?.trim()) {
@@ -52,7 +51,6 @@ export default async function ProfileSettingsPage() {
           <p className="text-muted-foreground text-xs uppercase tracking-wide">Rôle</p>
           <p className="text-sm capitalize">{profile?.role ?? "—"}</p>
         </div>
-        <UserIdDisplay userId={authUser.id} />
       </div>
 
       <ProfileForm
