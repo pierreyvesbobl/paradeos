@@ -9,6 +9,7 @@ import {
   gmailThreads,
   gmailThreadTags,
 } from "@/db/schema/gmail";
+import { meetings } from "@/db/schema/meetings";
 import { taskSources } from "@/db/schema/task-sources";
 import { tasks } from "@/db/schema/tasks";
 import { db } from "@/lib/db/server";
@@ -21,7 +22,8 @@ import { isCalendarMail } from "./calendar-mail";
 
 /**
  * Archivage automatique de la boîte de réception : retirer de l'inbox,
- * jamais supprimer. Trois règles, chacune derrière un réglage :
+ * jamais supprimer. Trois règles, chacune derrière un réglage, et une
+ * toujours active :
  *
  *  - `task_done` : toutes les tâches liées au fil (passages verbatim de
  *    `task_sources`, propositions acceptées) sont terminées ou annulées,
@@ -49,7 +51,7 @@ import { isCalendarMail } from "./calendar-mail";
  * est arrivé : remettre un fil en boîte à la main tient.
  */
 
-export type AutoArchiveReason = "task_done" | "automated" | "replied";
+export type AutoArchiveReason = "task_done" | "automated" | "replied" | "meeting";
 
 export const AUTOMATED_DAYS_CHOICES: { value: string; label: string }[] = [
   { value: "off", label: "Jamais" },
@@ -402,19 +404,71 @@ export async function selectRepliedThreads(
     .map((t) => ({ threadId: t.id, reason: "replied" as const }));
 }
 
+/**
+ * Fils dont un message a donné une réunion transcrite, sans rien de plus
+ * récent sur le fil. Pour un audio, on attend que Whisper ait rendu le
+ * transcript : avant, le mail reste la seule trace visible d'un échec.
+ */
+export async function selectMeetingThreads(
+  conn: Database,
+  opts: { userId: string },
+): Promise<ArchiveCandidate[]> {
+  const rows = await conn
+    .select({ threadId: gmailMessages.threadId, internalDate: gmailMessages.internalDate })
+    .from(gmailMessages)
+    .innerJoin(meetings, eq(meetings.sourceEmailMessageId, gmailMessages.gmailMessageId))
+    .where(
+      and(
+        eq(gmailMessages.userId, opts.userId),
+        isNotNull(meetings.transcript),
+        inArray(gmailMessages.threadId, inboxThreadIds(conn, opts.userId)),
+      ),
+    );
+  if (rows.length === 0) return [];
+
+  const ingestedUntil = new Map<string, number>();
+  for (const r of rows) {
+    const at = r.internalDate?.getTime() ?? 0;
+    if (at > (ingestedUntil.get(r.threadId) ?? -1)) ingestedUntil.set(r.threadId, at);
+  }
+  const threads = await conn
+    .select({
+      id: gmailThreads.id,
+      lastMessageAt: gmailThreads.lastMessageAt,
+      autoArchivedAt: gmailThreads.autoArchivedAt,
+    })
+    .from(gmailThreads)
+    .where(inArray(gmailThreads.id, [...ingestedUntil.keys()]));
+  return threads
+    .filter((t) => {
+      const until = ingestedUntil.get(t.id) ?? 0;
+      return (
+        (t.lastMessageAt?.getTime() ?? 0) <= until &&
+        isNewerThanArchive(t.lastMessageAt, t.autoArchivedAt)
+      );
+    })
+    .slice(0, MAX_ARCHIVES_PER_RUN)
+    .map((t) => ({ threadId: t.id, reason: "meeting" as const }));
+}
+
 /** Vrai si le fil n'a jamais été archivé par ici, ou a reçu un message depuis. */
 function isNewerThanArchive(lastMessageAt: Date | null, autoArchivedAt: Date | null): boolean {
   if (!autoArchivedAt) return true;
   return Boolean(lastMessageAt && lastMessageAt > autoArchivedAt);
 }
 
-/** Les trois règles, selon les réglages, bornées à `MAX_ARCHIVES_PER_RUN`. */
+/** Les quatre règles, selon les réglages, bornées à `MAX_ARCHIVES_PER_RUN`. */
 export async function selectThreadsToArchive(
   conn: Database,
   opts: { userId: string; settings: AutoArchiveSettings; now?: Date },
 ): Promise<ArchiveCandidate[]> {
-  const out: ArchiveCandidate[] = [];
-  if (opts.settings.doneTasks) out.push(...(await selectDoneTaskThreads(conn, opts)));
+  const out: ArchiveCandidate[] = await selectMeetingThreads(conn, opts);
+  if (opts.settings.doneTasks) {
+    const seen = new Set(out.map((c) => c.threadId));
+    for (const c of await selectDoneTaskThreads(conn, opts)) {
+      if (!seen.has(c.threadId)) out.push(c);
+    }
+  }
   if (opts.settings.automatedDays !== null) {
     const remaining = MAX_ARCHIVES_PER_RUN - out.length;
     if (remaining > 0) {
@@ -610,9 +664,6 @@ export async function runAutoArchive(args: {
   shouldStop?: () => boolean;
 }): Promise<{ archived: number; forgotten: number; requeued: number; errors: string[] }> {
   const settings = await getAutoArchiveSettings();
-  if (!settings.doneTasks && settings.automatedDays === null && settings.repliedDays === null) {
-    return { archived: 0, forgotten: 0, requeued: 0, errors: [] };
-  }
   const conn = await db();
   const errors: string[] = [];
   let forgotten = 0;

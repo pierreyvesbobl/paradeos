@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/db/client";
 import { gmailMessages, gmailTags, gmailThreads, gmailThreadTags } from "@/db/schema/gmail";
+import { meetings } from "@/db/schema/meetings";
 import { projects } from "@/db/schema/projects";
 import { taskSources } from "@/db/schema/task-sources";
 import { tasks } from "@/db/schema/tasks";
@@ -11,6 +12,7 @@ import {
   runAutoArchive,
   selectAutomatedThreads,
   selectDoneTaskThreads,
+  selectMeetingThreads,
   selectRepliedThreads,
 } from "@/lib/gmail/auto-archive";
 import { listThreadsByLabel, modifyThreadLabels } from "@/lib/google/gmail-api";
@@ -314,6 +316,60 @@ describe("rattrapage des fils sans lien de tâche", () => {
     expect((m?.meta as { requeuedForDoneTasks?: boolean } | null)?.requeuedForDoneTasks).toBe(true);
     // Déjà en file : pas rejoué une seconde fois.
     expect(await requeueThreadsForDoneTasks(db, { userId: actor.id })).toBe(0);
+  });
+});
+
+describe("mails de réunion transcrits", () => {
+  it("retient le fil dont le mail a donné une réunion transcrite, sans réponse depuis", async () => {
+    const at = daysAgo(0);
+    const done = await insertThread({
+      subject: "2 nov. à 14:22",
+      messages: [{ from: "py.sage@gmail.com", at }],
+      hasUnread: true,
+    });
+    const pendingAudio = await insertThread({
+      subject: "Audio en cours",
+      messages: [{ from: "py.sage@gmail.com", at }],
+    });
+    const answered = await insertThread({
+      subject: "Transcript discuté",
+      messages: [
+        { from: "py.sage@gmail.com", at: daysAgo(1) },
+        { from: "client@example.com", at },
+      ],
+    });
+    const gmailIdOf = async (messageId: string) => {
+      const [m] = await db
+        .select({ g: gmailMessages.gmailMessageId })
+        .from(gmailMessages)
+        .where(eq(gmailMessages.id, messageId));
+      return m?.g ?? "";
+    };
+    await db.insert(meetings).values([
+      {
+        title: "Réunion transcrite",
+        transcript: "Bonjour à tous, on fait le point.",
+        sourceEmailMessageId: await gmailIdOf(done.messageIds[0] as string),
+        createdBy: actor.id,
+      },
+      {
+        title: "Audio pas encore passé par Whisper",
+        transcript: null,
+        sourceEmailMessageId: await gmailIdOf(pendingAudio.messageIds[0] as string),
+        createdBy: actor.id,
+      },
+      {
+        title: "Réunion avec réponse",
+        transcript: "Compte-rendu.",
+        sourceEmailMessageId: await gmailIdOf(answered.messageIds[0] as string),
+        createdBy: actor.id,
+      },
+    ]);
+
+    const ids = (await selectMeetingThreads(db, { userId: actor.id })).map((c) => c.threadId);
+    expect(ids).toContain(done.threadId);
+    expect(ids).not.toContain(pendingAudio.threadId);
+    expect(ids).not.toContain(answered.threadId);
   });
 });
 

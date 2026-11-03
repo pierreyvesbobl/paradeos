@@ -7,6 +7,7 @@ import {
   REPLIED_DAYS_CHOICES,
   selectAutomatedThreads,
   selectDoneTaskThreads,
+  selectMeetingThreads,
   selectRepliedThreads,
 } from "@/lib/gmail/auto-archive";
 import { GmailAutoArchiveForm } from "./gmail-auto-archive-form";
@@ -18,30 +19,33 @@ import { GmailAutoArchiveForm } from "./gmail-auto-archive-form";
 export async function GmailAutoArchiveSection({ userId }: { userId: string }) {
   const conn = await db();
   const settings = await getAutoArchiveSettings();
-  const [doneCandidates, automatedCandidates, repliedCandidates, archivedRows] = await Promise.all([
-    selectDoneTaskThreads(conn, { userId }),
-    // Aperçu sur le réglage courant, ou sur 7 jours quand la règle est coupée.
-    selectAutomatedThreads(conn, {
-      userId,
-      days: settings.automatedDays ?? 7,
-      limit: 10_000,
-    }),
-    // Même logique d'aperçu, sur 1 jour quand la règle est coupée.
-    selectRepliedThreads(conn, {
-      userId,
-      days: settings.repliedDays ?? 1,
-      limit: 10_000,
-    }),
-    conn
-      .select({ reason: gmailThreads.autoArchiveReason, n: sql<number>`count(*)::int` })
-      .from(gmailThreads)
-      .where(and(eq(gmailThreads.userId, userId), isNotNull(gmailThreads.autoArchivedAt)))
-      .groupBy(gmailThreads.autoArchiveReason),
-  ]);
+  const [doneCandidates, automatedCandidates, repliedCandidates, meetingCandidates, archivedRows] =
+    await Promise.all([
+      selectDoneTaskThreads(conn, { userId }),
+      // Aperçu sur le réglage courant, ou sur 7 jours quand la règle est coupée.
+      selectAutomatedThreads(conn, {
+        userId,
+        days: settings.automatedDays ?? 7,
+        limit: 10_000,
+      }),
+      // Même logique d'aperçu, sur 1 jour quand la règle est coupée.
+      selectRepliedThreads(conn, {
+        userId,
+        days: settings.repliedDays ?? 1,
+        limit: 10_000,
+      }),
+      selectMeetingThreads(conn, { userId }),
+      conn
+        .select({ reason: gmailThreads.autoArchiveReason, n: sql<number>`count(*)::int` })
+        .from(gmailThreads)
+        .where(and(eq(gmailThreads.userId, userId), isNotNull(gmailThreads.autoArchivedAt)))
+        .groupBy(gmailThreads.autoArchiveReason),
+    ]);
   const archivedByReason = new Map(archivedRows.map((r) => [r.reason, r.n]));
-  const active =
-    settings.doneTasks || settings.automatedDays !== null || settings.repliedDays !== null;
+  // La règle des réunions ne se coupe pas : l'archivage tourne toujours.
+  const active = true;
   const repliedArchived = archivedByReason.get("replied") ?? 0;
+  const meetingArchived = archivedByReason.get("meeting") ?? 0;
 
   return (
     <section className="rounded-lg border bg-card p-6">
@@ -120,6 +124,17 @@ export async function GmailAutoArchiveSection({ userId }: { userId: string }) {
               choices={REPLIED_DAYS_CHOICES}
             />
           </div>
+        </div>
+
+        <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+          <h3 className="font-medium text-xs">Réunions transcrites</h3>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            Un mail envoyé à l'adresse des réunions sort de la boîte dès que sa réunion a son
+            transcript, sauf si quelqu'un a répondu sur le fil depuis. Toujours actif.{" "}
+            {meetingCandidates.length} fil{meetingCandidates.length > 1 ? "s" : ""} concerné
+            {meetingCandidates.length > 1 ? "s" : ""} aujourd'hui · {meetingArchived} déjà archivé
+            {meetingArchived > 1 ? "s" : ""}.
+          </p>
         </div>
       </div>
     </section>
