@@ -75,4 +75,51 @@ describe("isAutomatedSender", () => {
     expect(isAutomatedSender({ fromEmail: "contact@bobl.fr", fromName: "BOBL" })).toBe(true);
     expect(isAutomatedSender({ fromEmail: null })).toBe(false);
   });
+
+  it("reconnaît l'envoi en masse déguisé en personne", () => {
+    const linkavista = { fromEmail: "mickael@linkavista.fr", fromName: "L'équipe Linkavista" };
+    // Le nom suffit…
+    expect(isAutomatedSender(linkavista)).toBe(true);
+    // …et, sans lui, l'onglet Gmail ou le lien de désinscription.
+    expect(
+      isAutomatedSender({ fromEmail: "mickael@linkavista.fr", labels: ["CATEGORY_PROMOTIONS"] }),
+    ).toBe(true);
+    expect(
+      isAutomatedSender({ fromEmail: "mickael@linkavista.fr", labels: ["CATEGORY_SOCIAL"] }),
+    ).toBe(true);
+    expect(
+      isAutomatedSender({
+        fromEmail: "mickael@linkavista.fr",
+        bodyHtml: '<a href="https://x.fr/u">Se désinscrire</a>',
+      }),
+    ).toBe(true);
+    expect(
+      isAutomatedSender({
+        fromEmail: "julie@acme.fr",
+        bodyHtml: '<a href="https://list.acme.fr/unsubscribe?u=1">Gérer mes préférences</a>',
+      }),
+    ).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "x@acme.fr", fromName: "Équipe Qonto" })).toBe(true);
+    expect(isAutomatedSender({ fromEmail: "x@acme.fr", fromName: "The Linear Team" })).toBe(true);
+  });
+
+  it("ne range pas un échange réel parmi les envois en masse", () => {
+    expect(
+      isAutomatedSender({
+        fromEmail: "julie@acme.fr",
+        fromName: "Julie Martin",
+        labels: ["INBOX", "IMPORTANT", "CATEGORY_UPDATES", "CATEGORY_PERSONAL"],
+        bodyHtml: "<p>Bonjour, je vous envoie le devis signé.</p>",
+      }),
+    ).toBe(false);
+    // Le mot seul, dans un vrai échange, ne suffit pas : il faut un lien.
+    expect(
+      isAutomatedSender({
+        fromEmail: "julie@acme.fr",
+        bodyHtml: "<p>Il faut gérer la désinscription des utilisateurs (unsubscribe).</p>",
+      }),
+    ).toBe(false);
+    // « Team » au milieu d'un nom propre n'est pas une signature d'équipe.
+    expect(isAutomatedSender({ fromEmail: "a@b.fr", fromName: "Teamia Dupont" })).toBe(false);
+  });
 });

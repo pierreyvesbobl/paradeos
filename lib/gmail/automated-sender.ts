@@ -5,7 +5,9 @@
  * continuent de lire ces mails (le reçu reste une pièce comptable).
  *
  * Règles pures, sans DB : partie locale de l'adresse, domaine (sous-domaines
- * compris), nom d'affichage.
+ * compris), nom d'affichage, et — quand l'appelant les a — la catégorie Gmail
+ * et le lien de désinscription. Ces deux derniers attrapent l'envoi en masse
+ * qui se déguise en personne (`mickael@linkavista.fr`, « L'équipe Linkavista »).
  */
 
 const LOCAL_PART_PATTERNS = [
@@ -96,14 +98,43 @@ const NAME_PATTERNS = [
   /^[\p{Lu}][\p{L}'-]+ (?:de|from|chez|at|@) [\p{Lu}][\p{L}\d.&-]*$/u,
   // « PROMEOM », « STELLO » : une marque en capitales, sans personne derrière.
   /^[\p{Lu}\d&.' -]{4,}$/u,
+  // « L'équipe Linkavista », « Équipe Qonto », « Team Notion », « The Linear Team ».
+  /^(?:l['’]\s*)?(?:[ée]quipe|team)\s/iu,
+  /\bteam$/i,
 ];
+
+/**
+ * Onglets Gmail réservés à l'envoi en masse. `CATEGORY_UPDATES` n'en fait pas
+ * partie : Gmail y range aussi des échanges réels (confirmations, suivis).
+ */
+const BULK_GMAIL_CATEGORIES = new Set([
+  "CATEGORY_PROMOTIONS",
+  "CATEGORY_SOCIAL",
+  "CATEGORY_FORUMS",
+]);
+
+/**
+ * Lien de désinscription : la marque légale d'un envoi en masse. On ne regarde
+ * que les liens du HTML (texte cliquable ou URL) — le mot seul apparaît dans
+ * de vrais échanges (« la désinscription des utilisateurs » dans un cahier des
+ * charges).
+ */
+const UNSUBSCRIBE_LINK =
+  /<a\b[^>]*>[^<]*(?:unsubscribe|d[ée]sinscri|d[ée]sabonn|ne\s+plus\s+recevoir)[^<]*<\/a>|href=["'][^"']*(?:unsubscribe|desinscri|d%C3%A9sinscri|desabonn|opt-?out)/i;
 
 export type SenderLike = {
   fromEmail: string | null | undefined;
   fromName?: string | null | undefined;
+  /** Libellés Gmail du message, quand l'appelant les a chargés. */
+  labels?: readonly string[] | null | undefined;
+  /** Corps HTML du message, quand l'appelant l'a chargé. */
+  bodyHtml?: string | null | undefined;
 };
 
-/** Vrai quand l'adresse ou le nom dit « machine » : aucune extraction CRM. */
+/**
+ * Vrai quand l'adresse, le nom, l'onglet Gmail ou le corps dit « machine » ou
+ * « envoi en masse » : aucune extraction CRM.
+ */
 export function isAutomatedSender(sender: SenderLike): boolean {
   const email = sender.fromEmail?.trim().toLowerCase() ?? "";
   const at = email.lastIndexOf("@");
@@ -116,5 +147,7 @@ export function isAutomatedSender(sender: SenderLike): boolean {
   }
   const name = sender.fromName?.trim() ?? "";
   if (name && NAME_PATTERNS.some((re) => re.test(name))) return true;
+  if (sender.labels?.some((l) => BULK_GMAIL_CATEGORIES.has(l))) return true;
+  if (sender.bodyHtml && UNSUBSCRIBE_LINK.test(sender.bodyHtml)) return true;
   return false;
 }

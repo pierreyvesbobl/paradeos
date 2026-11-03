@@ -315,6 +315,7 @@ export async function selectAutomatedThreads(
       threadId: gmailMessages.threadId,
       fromEmail: gmailMessages.fromEmail,
       fromName: gmailMessages.fromName,
+      labels: gmailMessages.labels,
       subject: gmailMessages.subject,
       extractionMeta: gmailMessages.extractionMeta,
     })

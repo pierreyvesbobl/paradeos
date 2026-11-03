@@ -69,6 +69,8 @@ export async function expireAutomatedSenderProposals(
       id: emailProposals.id,
       fromEmail: gmailMessages.fromEmail,
       fromName: gmailMessages.fromName,
+      labels: gmailMessages.labels,
+      bodyHtml: gmailMessages.bodyHtml,
     })
     .from(emailProposals)
     .innerJoin(gmailMessages, eq(gmailMessages.id, emailProposals.messageId))
