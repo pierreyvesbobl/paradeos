@@ -7,6 +7,16 @@ const config: NextConfig = {
     ignoreBuildErrors: false,
   },
   /**
+   * Sur Vercel, l'optimisation d'images est faite par la plateforme et
+   * `next/og` passe par resvg (wasm) : sharp, embarqué par Next en
+   * dépendance optionnelle, ne sert jamais à l'exécution. Ses binaires
+   * libvips alourdissaient chaque fonction, donc le « Functions Storage »
+   * du compte, qui cumule tous les déploiements conservés.
+   */
+  outputFileTracingExcludes: {
+    "*": ["**/node_modules/sharp/**", "**/node_modules/@img/**"],
+  },
+  /**
    * En-têtes de sécurité. Pas de CSP stricte pour l'instant (Next inline
    * ses scripts, il faudrait des nonces) : on pose ce qui ne casse rien.
    * `frame-ancestors 'none'` protège surtout l'écran de consentement
