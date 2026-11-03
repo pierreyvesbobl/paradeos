@@ -129,6 +129,8 @@ préférence pour OAuth.
 - `extract_meeting` — lance l'extraction LLM (résumé + propositions).
   Compter jusqu'à ~4 min.
 - `create_contact` / `update_contact`, `create_entity` / `update_entity`
+- `delete_contact` / `delete_entity` — suppression définitive en deux temps :
+  impact sans `confirm`, suppression avec `confirm=true`
 
 ### Facturation (scope `mcp:write` pour les écritures)
 - `list_project_invoices` — devis, jalons, factures libres, avoirs d'un projet

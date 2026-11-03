@@ -2,7 +2,9 @@ import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { contactEmails } from "../../db/schema/contact-emails";
 import { contacts } from "../../db/schema/contacts";
+import { coworkingContracts } from "../../db/schema/coworking";
 import { entities } from "../../db/schema/entities";
+import { meetingParticipants } from "../../db/schema/meeting-participants";
 import { meetings } from "../../db/schema/meetings";
 import { notes } from "../../db/schema/notes";
 import { projects } from "../../db/schema/projects";
@@ -428,4 +430,121 @@ export async function updateEntity(args: z.infer<typeof updateEntitySchema>) {
     siret: update.siret ?? undefined,
     vatNumber: update.vatNumber ?? undefined,
   };
+}
+
+// ---------- DELETE : Contacts / Entités ----------
+
+/**
+ * Suppressions définitives, en deux temps comme les envois : sans `confirm`,
+ * on décrit ce que la suppression touche (rien n'est modifié) ; avec
+ * `confirm: true`, on supprime. Même effet que le bouton de la fiche : les
+ * liaisons (emails, participations, liens projet) partent en cascade, les
+ * projets, contrats et contacts rattachés restent mais perdent le lien. Les
+ * notes, polymorphes, restent en base sans sujet.
+ */
+export const deleteContactSchema = z.object({
+  id: z.string().uuid(),
+  /** `true` = supprime. Absent ou `false` = aperçu de l'impact. */
+  confirm: z.boolean().optional(),
+});
+
+export async function deleteContact(args: z.infer<typeof deleteContactSchema>) {
+  const conn = db();
+  const [row] = await conn
+    .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
+    .from(contacts)
+    .where(eq(contacts.id, args.id))
+    .limit(1);
+  if (!row) throw new Error("Contact introuvable.");
+  const name = `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || row.id;
+
+  if (args.confirm !== true) {
+    const [projectRows, contractRows, meetingRows, noteRows] = await Promise.all([
+      conn
+        .select({ id: projects.id, name: projects.name })
+        .from(projects)
+        .where(eq(projects.contactId, args.id)),
+      conn
+        .select({
+          id: coworkingContracts.id,
+          name: coworkingContracts.name,
+          status: coworkingContracts.status,
+        })
+        .from(coworkingContracts)
+        .where(eq(coworkingContracts.contactId, args.id)),
+      conn
+        .select({ n: sql<number>`count(*)::int` })
+        .from(meetingParticipants)
+        .where(eq(meetingParticipants.contactId, args.id)),
+      conn
+        .select({ n: sql<number>`count(*)::int` })
+        .from(notes)
+        .where(and(eq(notes.subjectType, "contact"), eq(notes.subjectId, args.id))),
+    ]);
+    return {
+      preview: true as const,
+      contact: name,
+      projectsLosingContact: projectRows,
+      coworkingContractsLosingContact: contractRows,
+      meetingParticipations: meetingRows[0]?.n ?? 0,
+      orphanedNotes: noteRows[0]?.n ?? 0,
+      note: "Rien n'a été supprimé. Montre cet impact à l'utilisateur ; sur son accord explicite, rappelle avec confirm=true. Un contrat coworking en cours sans contact n'a plus de destinataire pour ses factures.",
+    };
+  }
+
+  await conn.delete(contacts).where(eq(contacts.id, args.id));
+  return { deleted: true as const, id: args.id, contact: name };
+}
+
+export const deleteEntitySchema = z.object({
+  id: z.string().uuid(),
+  /** `true` = supprime. Absent ou `false` = aperçu de l'impact. */
+  confirm: z.boolean().optional(),
+});
+
+export async function deleteEntity(args: z.infer<typeof deleteEntitySchema>) {
+  const conn = db();
+  const [row] = await conn
+    .select({ id: entities.id, name: entities.name })
+    .from(entities)
+    .where(eq(entities.id, args.id))
+    .limit(1);
+  if (!row) throw new Error("Entité introuvable.");
+
+  if (args.confirm !== true) {
+    const [contactRows, projectRows, contractRows, noteRows] = await Promise.all([
+      conn
+        .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
+        .from(contacts)
+        .where(eq(contacts.entityId, args.id)),
+      conn
+        .select({ id: projects.id, name: projects.name })
+        .from(projects)
+        .where(eq(projects.entityId, args.id)),
+      conn
+        .select({
+          id: coworkingContracts.id,
+          name: coworkingContracts.name,
+          status: coworkingContracts.status,
+        })
+        .from(coworkingContracts)
+        .where(eq(coworkingContracts.billToEntityId, args.id)),
+      conn
+        .select({ n: sql<number>`count(*)::int` })
+        .from(notes)
+        .where(and(eq(notes.subjectType, "entity"), eq(notes.subjectId, args.id))),
+    ]);
+    return {
+      preview: true as const,
+      entity: row.name,
+      contactsLosingEntity: contactRows,
+      projectsLosingEntity: projectRows,
+      coworkingContractsLosingBillTo: contractRows,
+      orphanedNotes: noteRows[0]?.n ?? 0,
+      note: "Rien n'a été supprimé. Montre cet impact à l'utilisateur ; sur son accord explicite, rappelle avec confirm=true. Un contrat coworking facturé à cette entité repasse en facturation B2C au nom du contact.",
+    };
+  }
+
+  await conn.delete(entities).where(eq(entities.id, args.id));
+  return { deleted: true as const, id: args.id, entity: row.name };
 }

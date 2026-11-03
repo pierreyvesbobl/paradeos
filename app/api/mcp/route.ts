@@ -62,6 +62,10 @@ import {
   createProjectSchema,
   createTask,
   createTaskSchema,
+  deleteContact,
+  deleteContactSchema,
+  deleteEntity,
+  deleteEntitySchema,
   generateNextCoworkingInvoice,
   generateNextCoworkingInvoiceSchema,
   getCoworkingContract,
@@ -284,6 +288,14 @@ const TOOL_REGISTRY: Record<
     schema: createContactSchema,
     handler: (a, ctx) => createContact(a as never, ctx as never),
   },
+  delete_contact: {
+    write: true,
+    description:
+      "Supprime définitivement un contact CRM. DEUX ÉTAPES. 1) Sans confirm : renvoie l'impact (projets et contrats coworking qui perdent ce contact, participations aux réunions, notes orphelines), rien n'est supprimé. " +
+      "2) Montre-le à l'utilisateur et, sur son accord explicite, rappelle avec confirm=true. Irréversible. Args: id, confirm (optionnel).",
+    schema: deleteContactSchema,
+    handler: (a) => deleteContact(a as never),
+  },
   list_entities: {
     description: "Liste les entités CRM.",
     schema: listEntitiesSchema,
@@ -300,6 +312,14 @@ const TOOL_REGISTRY: Record<
     description: "Crée une entité CRM (société). Propriétaire = l'utilisateur courant.",
     schema: createEntitySchema,
     handler: (a, ctx) => createEntity(a as never, ctx as never),
+  },
+  delete_entity: {
+    write: true,
+    description:
+      "Supprime définitivement une entité CRM (société). DEUX ÉTAPES. 1) Sans confirm : renvoie l'impact (contacts, projets et contrats coworking qui perdent le lien, notes orphelines), rien n'est supprimé. " +
+      "2) Montre-le à l'utilisateur et, sur son accord explicite, rappelle avec confirm=true. Irréversible. Args: id, confirm (optionnel).",
+    schema: deleteEntitySchema,
+    handler: (a) => deleteEntity(a as never),
   },
   create_task: {
     write: true,

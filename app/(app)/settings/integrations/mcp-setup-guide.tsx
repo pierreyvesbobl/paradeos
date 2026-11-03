@@ -155,13 +155,13 @@ export function McpSetupGuide() {
           </li>
           <li>
             <strong>Écriture</strong> (scope <code>mcp:write</code>) : create_task, complete_task,
-            create_project, update_project, create_contact, update_contact, create_entity,
-            update_entity, log_time, update_time_entries, update_claude_activity, add_note,
-            create_meeting, set_meeting_transcript, extract_meeting, push_project_quote,
-            push_project_milestone_invoice, create_coworking_contract, update_coworking_contract,
-            create_coworking_invoice, update_coworking_invoice, generate_next_coworking_invoice,
-            push_coworking_invoice, send_due_coworking_invoices, update_dougs_invoice_draft,
-            send_document_to_client
+            create_project, update_project, create_contact, update_contact, delete_contact,
+            create_entity, update_entity, delete_entity, log_time, update_time_entries,
+            update_claude_activity, add_note, create_meeting, set_meeting_transcript,
+            extract_meeting, push_project_quote, push_project_milestone_invoice,
+            create_coworking_contract, update_coworking_contract, create_coworking_invoice,
+            update_coworking_invoice, generate_next_coworking_invoice, push_coworking_invoice,
+            send_due_coworking_invoices, update_dougs_invoice_draft, send_document_to_client
           </li>
           <li>
             <strong>Resources</strong> : <code>paradeos://projects</code>,{" "}
