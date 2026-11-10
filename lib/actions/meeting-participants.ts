@@ -9,6 +9,10 @@ import { action } from "@/lib/actions/action";
 import { db } from "@/lib/db/server";
 import { formatPersonName } from "@/lib/format";
 import {
+  dropHomonymContactParticipant,
+  hasHomonymTeamParticipant,
+} from "@/lib/meetings/participants";
+import {
   addMeetingParticipantSchema,
   removeMeetingParticipantSchema,
 } from "@/lib/schemas/meetings";
@@ -17,6 +21,12 @@ export const addMeetingParticipant = action(
   addMeetingParticipantSchema,
   async ({ input, user }) => {
     const conn = await db();
+
+    // Une fiche contact homonyme d'un membre déjà présent n'ajoute
+    // personne : c'est la même personne, déjà là sous son compte.
+    if (input.contactId && (await hasHomonymTeamParticipant(input.meetingId, input.contactId))) {
+      return { ok: true };
+    }
 
     await conn
       .insert(meetingParticipants)
@@ -33,9 +43,13 @@ export const addMeetingParticipant = action(
 
     // Le participant prend la place du nom brut correspondant s'il en
     // existe un : l'extraction pose « Marc Dupont » sans fiche, l'ajout du
-    // vrai contact doit remplacer le mémo, pas le doubler.
+    // vrai contact doit remplacer le mémo, pas le doubler. Un membre de
+    // l'équipe reprend aussi la place de sa fiche contact homonyme.
     const canonicalName = await resolveName(input.userId, input.contactId);
-    if (canonicalName) await dropLooseName(input.meetingId, canonicalName);
+    if (canonicalName) {
+      await dropLooseName(input.meetingId, canonicalName);
+      if (input.userId) await dropHomonymContactParticipant(input.meetingId, canonicalName);
+    }
 
     revalidatePath(`/meetings/${input.meetingId}`);
     return { ok: true };

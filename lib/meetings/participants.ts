@@ -1,7 +1,10 @@
 import "server-only";
 
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { contacts } from "@/db/schema/contacts";
+import { googleAccounts } from "@/db/schema/google-accounts";
 import { meetingParticipants } from "@/db/schema/meeting-participants";
+import { users } from "@/db/schema/users";
 import { contactHasEmail } from "@/lib/crm/contact-emails";
 import { fuzzyMatchContact, fuzzyMatchUser } from "@/lib/crm/match";
 import { getMeetingParticipants } from "@/lib/db/queries/meeting-participants";
@@ -57,16 +60,36 @@ export async function syncParticipantsFromAttendees(
     existing.filter((p) => p.kind === "contact").map((p) => p.refId),
   );
   const seenNames = new Set(existing.map((p) => p.name.trim().toLowerCase()));
+  const existingByName = new Map(existing.map((p) => [p.name.trim().toLowerCase(), p]));
 
   let added = 0;
   for (const raw of attendees) {
     const name = sanitizeNameInput(raw.name).trim();
     if (name.length < 2) continue;
     const key = name.toLowerCase();
-    if (seenNames.has(key)) continue;
 
     const role = raw.role && raw.role.trim().length > 0 ? raw.role.trim() : null;
     const target = await resolveAttendee(name, raw.email);
+
+    if (seenNames.has(key)) {
+      // Un membre de l'équipe déjà présent sous une fiche contact
+      // homonyme (ou en nom brut) reprend sa vraie identité : la ligne
+      // est requalifiée, pas doublée.
+      const prior = existingByName.get(key);
+      if (
+        target.kind === "user" &&
+        prior &&
+        prior.kind !== "user" &&
+        !linkedUserIds.has(target.id)
+      ) {
+        await conn
+          .update(meetingParticipants)
+          .set({ userId: target.id, contactId: null, displayName: null })
+          .where(eq(meetingParticipants.id, prior.id));
+        linkedUserIds.add(target.id);
+      }
+      continue;
+    }
 
     if (target.kind === "user") {
       if (linkedUserIds.has(target.id)) continue;
@@ -98,12 +121,25 @@ export async function syncParticipantsFromAttendees(
 type AttendeeTarget = { kind: "user" | "contact"; id: string } | { kind: "name" };
 
 /**
- * Seuils : l'email exact prime, puis l'équipe (liste courte, un prénom
- * suffit à trancher), puis les contacts. 0.5 côté users — en dessous, un
- * homonyme client se ferait passer pour un collègue.
+ * Ordre : l'équipe d'abord, par le mail de son compte Google puis par son
+ * nom quand il est net ; ensuite l'email exact d'un contact ; puis
+ * l'équipe au seuil large (liste courte, un prénom suffit) ; enfin les
+ * contacts. Un membre de l'équipe peut avoir une fiche contact homonyme
+ * (il est aussi coworker, ou importé d'un carnet) : la fiche ne doit
+ * jamais lui voler sa place dans une réunion. 0.5 côté users en dernier
+ * recours — en dessous, un homonyme client se ferait passer pour un
+ * collègue.
  */
 async function resolveAttendee(name: string, email: string | null): Promise<AttendeeTarget> {
   const conn = await db();
+
+  if (email?.includes("@")) {
+    const teamUser = await findTeamUserByEmail(email);
+    if (teamUser) return { kind: "user", id: teamUser };
+  }
+
+  const certainUser = await fuzzyMatchUser(name, 0.9);
+  if (certainUser) return { kind: "user", id: certainUser.id };
 
   if (email?.includes("@")) {
     const [row] = await conn
@@ -124,4 +160,72 @@ async function resolveAttendee(name: string, email: string | null): Promise<Atte
   if (contactMatch) return { kind: "contact", id: contactMatch.id };
 
   return { kind: "name" };
+}
+
+/**
+ * Membre de l'équipe dont le compte Google porte cette adresse. `users`
+ * n'a pas de colonne email : l'adresse connue est celle du compte
+ * connecté (`google_accounts`), qui est aussi celle qui apparaît dans les
+ * transcripts Meet et les invitations.
+ */
+export async function findTeamUserByEmail(email: string): Promise<string | null> {
+  const conn = await db();
+  const [row] = await conn
+    .select({ id: users.id })
+    .from(googleAccounts)
+    .innerJoin(users, eq(users.id, googleAccounts.userId))
+    .where(sql`lower(${googleAccounts.email}) = lower(${email.trim()})`)
+    .limit(1);
+  return row?.id ?? null;
+}
+
+/**
+ * Retire d'une réunion la fiche contact homonyme d'un membre de l'équipe
+ * qui vient d'y être ajouté : la personne est là une fois, sous son
+ * compte. Renvoie le nombre de lignes retirées.
+ */
+export async function dropHomonymContactParticipant(
+  meetingId: string,
+  userFullName: string,
+): Promise<number> {
+  const conn = await db();
+  const rows = await conn
+    .delete(meetingParticipants)
+    .where(
+      and(
+        eq(meetingParticipants.meetingId, meetingId),
+        isNotNull(meetingParticipants.contactId),
+        sql`${meetingParticipants.contactId} in (
+          select ${contacts.id} from ${contacts}
+          where lower(trim(coalesce(${contacts.firstName}, '') || ' ' || coalesce(${contacts.lastName}, ''))) = lower(trim(${userFullName}))
+        )`,
+      ),
+    )
+    .returning({ id: meetingParticipants.id });
+  return rows.length;
+}
+
+/**
+ * Vrai si un membre de l'équipe homonyme de ce contact est déjà participant
+ * de la réunion : ajouter la fiche contact ferait apparaître la même
+ * personne deux fois.
+ */
+export async function hasHomonymTeamParticipant(
+  meetingId: string,
+  contactId: string,
+): Promise<boolean> {
+  const conn = await db();
+  const [row] = await conn
+    .select({ id: meetingParticipants.id })
+    .from(meetingParticipants)
+    .innerJoin(users, eq(users.id, meetingParticipants.userId))
+    .innerJoin(contacts, eq(contacts.id, contactId))
+    .where(
+      and(
+        eq(meetingParticipants.meetingId, meetingId),
+        sql`lower(trim(${users.fullName})) = lower(trim(coalesce(${contacts.firstName}, '') || ' ' || coalesce(${contacts.lastName}, '')))`,
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
 }
