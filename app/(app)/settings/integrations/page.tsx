@@ -11,6 +11,7 @@ import { getSetting, getSettingStatus, SETTING_KEYS } from "@/lib/settings";
 import { ApiTokensSection } from "./api-tokens-section";
 import { BrandLogosSection } from "./brand-logos-section";
 import { CandidaturesSection } from "./candidatures-section";
+import { ClaudeModSection } from "./claude-mod-section";
 import { CoworkingAutoSendSection } from "./coworking-autosend-section";
 import { DevAutoConfirmSection } from "./dev-auto-confirm-section";
 import { DougsSection } from "./dougs-section";
@@ -163,6 +164,8 @@ export default async function IntegrationsSettingsPage({
     </>
   );
 
+  const claudeTab = <ClaudeModSection userId={user.id} />;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -173,7 +176,7 @@ export default async function IntegrationsSettingsPage({
 
       {params.google ? <OauthCallbackToast status={params.google} /> : null}
 
-      <IntegrationsTabs compta={comptaTab} google={googleTab} api={apiTab} />
+      <IntegrationsTabs compta={comptaTab} google={googleTab} api={apiTab} claude={claudeTab} />
     </div>
   );
 }

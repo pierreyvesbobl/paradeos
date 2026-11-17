@@ -1,6 +1,6 @@
 "use client";
 
-import { Cloud, Key, Money } from "@phosphor-icons/react";
+import { Cloud, Key, Money, TerminalWindow } from "@phosphor-icons/react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -10,6 +10,7 @@ const TABS = [
   { value: "compta", label: "Compta", icon: Money },
   { value: "google", label: "Google", icon: Cloud },
   { value: "api", label: "API & LLM", icon: Key },
+  { value: "claude", label: "Claude Code", icon: TerminalWindow },
 ] as const;
 type TabValue = (typeof TABS)[number]["value"];
 
@@ -17,6 +18,7 @@ type Props = {
   compta: React.ReactNode;
   google: React.ReactNode;
   api: React.ReactNode;
+  claude: React.ReactNode;
 };
 
 /**
@@ -24,7 +26,7 @@ type Props = {
  * via `?tab=` pour les liens partageables et le retour de redirect
  * OAuth Google.
  */
-export function IntegrationsTabs({ compta, google, api }: Props) {
+export function IntegrationsTabs({ compta, google, api, claude }: Props) {
   const params = useSearchParams();
   const tabParam = params.get("tab");
   const initialValue: TabValue = TABS.some((t) => t.value === tabParam)
@@ -43,7 +45,7 @@ export function IntegrationsTabs({ compta, google, api }: Props) {
     window.history.replaceState(null, "", url);
   }, []);
 
-  const contents: Record<TabValue, React.ReactNode> = { compta, google, api };
+  const contents: Record<TabValue, React.ReactNode> = { compta, google, api, claude };
 
   return (
     <Tabs value={value} onValueChange={handleChange}>

@@ -1,10 +1,12 @@
 "use client";
 
-import { ArrowSquareOut, Check, CircleNotch, Copy, X } from "@phosphor-icons/react";
+import { ArrowSquareOut, Check, CircleNotch, X } from "@phosphor-icons/react";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { checkMcpSetup, type DiagnosticStep } from "@/lib/actions/mcp-setup";
+import { CodeBlock } from "./code-block";
 
 const FALLBACK_URL = "https://paradeos.vercel.app";
 
@@ -86,25 +88,12 @@ export function McpSetupGuide() {
         title="Claude Code · suivi du temps"
         subtitle="Le mod paradeos-temps impute le temps de chaque session au projet du dépôt."
       >
-        <ol className="space-y-2 text-xs">
-          <Step n={1}>
-            Clone le dépôt Parade OS, puis lance Claude Code avec le dossier du mod :
-          </Step>
-        </ol>
-        <CodeBlock code="claude --plugin-dir /CHEMIN/paradeos/claude-mod" label="Au lancement" />
-        <ol className="mt-2 space-y-2 text-xs">
-          <Step n={2}>
-            Au premier tour, <code>/mcp</code> pour autoriser le serveur <code>paradeos</code> que
-            le mod embarque.
-          </Step>
-          <Step n={3}>
-            Dépôt inconnu : Claude Code te demande le projet une fois. Tu peux aussi rattacher un
-            dépôt depuis la fiche projet, section « Dépôts git ».
-          </Step>
-        </ol>
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Ne quittent ta machine que des horodatages et le remote git, jamais le contenu des
-          échanges. Règles de comptage dans <code>claude-mod/README.md</code>.
+        <p className="text-xs">
+          Installation en une commande, état par machine et mise à jour : onglet{" "}
+          <Link href="/settings/integrations?tab=claude" className="underline underline-offset-2">
+            Claude Code
+          </Link>
+          .
         </p>
       </Card>
 
@@ -260,47 +249,5 @@ function Step({ n, children }: { n: number; children: React.ReactNode }) {
       </span>
       <div className="flex-1 leading-relaxed">{children}</div>
     </li>
-  );
-}
-
-function CodeBlock({ code, label }: { code: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error("Copie impossible.");
-    }
-  }
-
-  return (
-    <div className="rounded border bg-muted/40">
-      <div className="flex items-center justify-between border-b px-2 py-1">
-        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</span>
-        <button
-          type="button"
-          onClick={copy}
-          className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] hover:bg-background"
-        >
-          {copied ? (
-            <>
-              <Check className="size-3" />
-              Copié
-            </>
-          ) : (
-            <>
-              <Copy className="size-3" />
-              Copier
-            </>
-          )}
-        </button>
-      </div>
-      <pre className="overflow-x-auto whitespace-pre-wrap p-2 font-mono text-[11px] leading-relaxed">
-        {code}
-      </pre>
-    </div>
   );
 }

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "paradeos",
+  "description": "Mods Claude Code de Parade OS : suivi du temps et contexte projet dans la session.",
+  "owner": {
+    "name": "Parade"
+  },
+  "plugins": [
+    {
+      "name": "paradeos-temps",
+      "description": "Suivi automatique du temps passé dans Claude Code, imputé au projet Parade OS rattaché au dépôt git, et contexte du projet (tâches, feuille de route) injecté dans la session.",
+      "author": {
+        "name": "Parade"
+      },
+      "category": "productivity",
+      "source": "./claude-mod"
+    }
+  ]
+}

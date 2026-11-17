@@ -71,7 +71,7 @@ lib/
 proxy.ts                  auth gate global (ex-middleware.ts, convention Next 16)
 mcp-server/               handlers MCP servis par app/api/mcp ; tools/ par domaine, tools.ts les agrège
 chrome-extension/         extension navigateur (synchro cookie Dougs, import LinkedIn)
-claude-mod/               mod Claude Code : suivi du temps → time_entries (source claude_code)
+claude-mod/               mod Claude Code : signal d'activité → claude_code_activity, contexte projet
 scripts/                  seed, magic-link, diagnostics
 scripts/archive/          scripts one-shot déjà joués (ne pas relancer)
 supabase/migrations/      RLS + triggers SQL
@@ -92,17 +92,20 @@ RLS**. Toute la sécurité repose donc sur le code applicatif :
 
 ### Suivi du temps Claude Code (`claude-mod/`)
 
-Un mod Claude Code (plugin de function hooks, `claude --plugin-dir claude-mod`)
-compte le temps d'attention passé dans une session et l'écrit dans
-`time_entries` avec `source = claude_code`, imputé au projet dont un dépôt
-(`project_repos`, remote normalisé par `lib/git/remote.ts`) correspond au
-remote git de la session. Un dépôt inconnu déclenche une question dans
-Claude Code ; la réponse est partagée entre machines. Côté serveur, trois
-tools MCP : `resolve_repo`, `link_repo`, `track_claude_time` (upsert par
-`source_ref`). Le rapport /temps ventile par provenance et partage à parts
-égales les minutes de deux sessions ouvertes en parallèle
-(`lib/time/overlap.ts`). Règles de comptage et installation :
-`claude-mod/README.md`.
+Un mod Claude Code (plugin de function hooks) compte le temps d'attention
+passé dans une session et l'écrit dans `claude_code_activity` comme
+**signal** d'imputation, jamais comme temps réalisé, rattaché au projet
+dont un dépôt (`project_repos`, remote normalisé par `lib/git/remote.ts`)
+correspond au remote git de la session. Il donne aussi à la session le
+contexte du projet (`repo_context`) et remonte les commits
+(`report_commits`). Le dépôt porte un marketplace Claude Code à sa racine
+(`.claude-plugin/marketplace.json`) : installation en une commande,
+`claude plugin install paradeos-temps --marketplace pierreyvesbobl/paradeos`,
+et la page Réglages → Intégrations → Claude Code (`lib/claude-mod/install.ts`)
+donne la commande, l'état du signal par compte et la mise à jour. La grille
+de /temps affiche les segments en blocs fantômes à imputer, et partage à
+parts égales les minutes de deux sessions ouvertes en parallèle
+(`lib/time/overlap.ts`). Règles de comptage : `claude-mod/README.md`.
 
 Les dépôts GitHub rattachés donnent aussi une fenêtre sur leurs issues
 ouvertes depuis la fiche projet (`components/projets/project-issues-section.tsx`,

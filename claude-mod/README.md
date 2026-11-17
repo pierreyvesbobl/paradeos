@@ -24,6 +24,28 @@ aux réunions et aux créneaux déjà saisis, et enregistre ce qu'on valide.
 
 ## Installation
 
+Le dépôt Parade OS est public et porte un marketplace Claude Code à sa
+racine (`.claude-plugin/marketplace.json`). Une commande suffit, depuis un
+terminal, Claude Code ouvert ou non (2.1.292 ou plus récent) :
+
+```bash
+claude plugin install paradeos-temps --marketplace pierreyvesbobl/paradeos
+```
+
+Puis, dans une session, `/mcp` → `paradeos` → **Autoriser** : le mod connecte
+le serveur MCP déclaré dans `.mcp.json` (OAuth, une fois par machine).
+Chaque utilisateur écrit ses propres segments : l'identité vient du token.
+La page Réglages → Intégrations → Claude Code de Parade OS donne cette
+commande, l'état par compte (autorisé, premier signal reçu, silencieux) et
+les commandes de mise à jour (`claude plugin update paradeos-temps@paradeos`,
+puis `/reload-plugins`) et de désinstallation.
+
+Claude Code plus ancien : `claude plugin marketplace add pierreyvesbobl/paradeos`
+puis `claude plugin install paradeos-temps@paradeos`.
+
+Pour développer le mod, charger le clone à la place de la version publiée
+(pas les deux à la fois) :
+
 ```bash
 claude --plugin-dir /chemin/vers/paradeos/claude-mod
 ```
@@ -33,11 +55,6 @@ ou, pour toutes les sessions, dans `~/.claude/settings.json` :
 ```json
 { "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/chemin/vers/paradeos/claude-mod" } }
 ```
-
-Au premier envoi, le mod connecte le serveur MCP `paradeos` déclaré dans
-`.mcp.json` : `/mcp` dans Claude Code pour autoriser (OAuth, une fois par
-machine). Chaque utilisateur écrit ses propres segments : l'identité vient
-du token.
 
 ## Règles de comptage (tracker.ts)
 

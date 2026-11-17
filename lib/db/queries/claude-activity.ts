@@ -202,3 +202,42 @@ export async function getClaudeBlocksForUser(
 ): Promise<ClaudeBlock[]> {
   return fetchClaudeBlocks(await db(), userId, start, end);
 }
+
+export type ClaudeModSignal = {
+  /** Fin du dernier segment reçu, toutes périodes. */
+  lastSegmentAt: Date | null;
+  /** Segments reçus sur les sept derniers jours. */
+  segments7d: number;
+  /** Dépôts (ou dossiers `local/…`) vus sur les sept derniers jours. */
+  remotes7d: string[];
+};
+
+/**
+ * Ce que le mod a envoyé pour un utilisateur : sert à la page d'installation
+ * pour dire « ça marche » sans qu'il ait à ouvrir /temps.
+ */
+export async function getClaudeModSignal(userId: string): Promise<ClaudeModSignal> {
+  const conn = await db();
+  const since = new Date(Date.now() - 7 * 86_400_000);
+  const [[last], recent] = await Promise.all([
+    conn
+      .select({ lastSegmentAt: sql<Date | string | null>`max(${claudeCodeActivity.endedAt})` })
+      .from(claudeCodeActivity)
+      .where(eq(claudeCodeActivity.userId, userId)),
+    conn
+      .select({ remote: claudeCodeActivity.remote, n: sql<number>`count(*)::int` })
+      .from(claudeCodeActivity)
+      .where(and(eq(claudeCodeActivity.userId, userId), gte(claudeCodeActivity.startedAt, since)))
+      .groupBy(claudeCodeActivity.remote),
+  ]);
+  const raw = last?.lastSegmentAt ?? null;
+  const lastSegmentAt = raw ? (raw instanceof Date ? raw : new Date(raw)) : null;
+  return {
+    lastSegmentAt: lastSegmentAt && !Number.isNaN(lastSegmentAt.getTime()) ? lastSegmentAt : null,
+    segments7d: recent.reduce((sum, r) => sum + r.n, 0),
+    remotes7d: recent
+      .map((r) => r.remote)
+      .filter((r): r is string => !!r)
+      .sort(),
+  };
+}
