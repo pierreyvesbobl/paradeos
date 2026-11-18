@@ -17,6 +17,7 @@ import {
 type RecentReply = {
   id: string;
   status: "pending" | "replied" | "rejected" | "error";
+  kind: "candidature" | "prestation" | null;
   candidate: string;
   subject: string;
   detail: string;
@@ -29,9 +30,16 @@ type Props = {
   /** Valeurs en base (vide = défaut). */
   from: string;
   body: string;
+  prestataireBody: string;
   defaultFrom: string;
   defaultBody: string;
+  defaultPrestataireBody: string;
   recent: RecentReply[];
+};
+
+const KIND_LABEL: Record<NonNullable<RecentReply["kind"]>, string> = {
+  candidature: "Candidature",
+  prestation: "Prestation",
 };
 
 const STATUS_LABEL: Record<RecentReply["status"], string> = {
@@ -57,13 +65,18 @@ export function CandidaturesSettings({
   enabled,
   from,
   body,
+  prestataireBody,
   defaultFrom,
   defaultBody,
+  defaultPrestataireBody,
   recent,
 }: Props) {
   const router = useRouter();
   const [fromInput, setFromInput] = useState(from || defaultFrom);
   const [bodyInput, setBodyInput] = useState(body || defaultBody);
+  const [prestataireInput, setPrestataireInput] = useState(
+    prestataireBody || defaultPrestataireBody,
+  );
   const [pending, startTransition] = useTransition();
 
   function toggleEnabled() {
@@ -83,12 +96,13 @@ export function CandidaturesSettings({
       const res = await setCandidatureReplyTemplate({
         from: fromInput === defaultFrom ? "" : fromInput,
         body: bodyInput === defaultBody ? "" : bodyInput,
+        prestataireBody: prestataireInput === defaultPrestataireBody ? "" : prestataireInput,
       });
       if (!res.ok) {
         toast.error(res.message);
         return;
       }
-      toast.success("Réponse enregistrée.");
+      toast.success("Réponses enregistrées.");
       router.refresh();
     });
   }
@@ -140,7 +154,7 @@ export function CandidaturesSettings({
 
       <div className="space-y-1">
         <label htmlFor="candidature-body" className="font-medium text-[11px]">
-          Texte de la réponse
+          Réponse aux candidatures
         </label>
         <Textarea
           id="candidature-body"
@@ -151,7 +165,25 @@ export function CandidaturesSettings({
           className="text-xs"
         />
         <p className="text-[10px] text-muted-foreground">
-          <code>{"{prenom}"}</code> est remplacé par le prénom du candidat quand on le connaît.
+          <code>{"{prenom}"}</code> est remplacé par le prénom de l'auteur quand on le connaît, dans
+          les deux réponses.
+        </p>
+      </div>
+
+      <div className="space-y-1">
+        <label htmlFor="prestataire-body" className="font-medium text-[11px]">
+          Réponse aux offres de prestation
+        </label>
+        <Textarea
+          id="prestataire-body"
+          value={prestataireInput}
+          onChange={(e) => setPrestataireInput(e.target.value)}
+          disabled={pending}
+          rows={10}
+          className="text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground">
+          Freelances, agences, renforts et sous-traitants qui proposent leurs services.
         </p>
       </div>
 
@@ -160,7 +192,7 @@ export function CandidaturesSettings({
           type="button"
           size="sm"
           onClick={saveTemplate}
-          disabled={pending || !bodyInput.trim()}
+          disabled={pending || !bodyInput.trim() || !prestataireInput.trim()}
           className="gap-1.5"
         >
           <FloppyDisk className="size-3.5" />
@@ -184,10 +216,10 @@ export function CandidaturesSettings({
           onClick={drainPending}
           disabled={pending || !enabled}
           className="gap-1.5"
-          title="Traite jusqu'à 20 candidatures en attente d'un coup"
+          title="Traite jusqu'à 20 mails en attente d'un coup"
         >
           <Play className={`size-3.5 ${pending ? "animate-spin" : ""}`} />
-          Traiter les candidatures en attente
+          Traiter les mails en attente
         </Button>
       </div>
 
@@ -201,6 +233,11 @@ export function CandidaturesSettings({
               <div className="min-w-0 flex-1">
                 <p className="truncate">
                   <span className="font-medium">{r.candidate}</span>
+                  {r.kind ? (
+                    <span className="ml-1.5 rounded border px-1 py-px text-[10px] text-muted-foreground">
+                      {KIND_LABEL[r.kind]}
+                    </span>
+                  ) : null}
                   <span className="text-muted-foreground"> · {r.subject}</span>
                 </p>
                 {r.detail ? (

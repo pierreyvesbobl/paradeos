@@ -40,11 +40,15 @@ export const setCandidatureAutoReplyEnabled = action(
   },
 );
 
-/** Expéditeur et corps de la réponse. Une valeur vide rétablit le défaut. */
+/**
+ * Expéditeur et corps des deux réponses (candidature, offre de
+ * prestation). Une valeur vide rétablit le défaut.
+ */
 export const setCandidatureReplyTemplate = action(
   z.object({
     from: z.string().max(200),
     body: z.string().max(5_000),
+    prestataireBody: z.string().max(5_000),
   }),
   async ({ input, user }) => {
     await requireAdmin(user);
@@ -57,6 +61,11 @@ export const setCandidatureReplyTemplate = action(
     }
     await setSetting(SETTING_KEYS.CANDIDATURE_REPLY_FROM, from || null, user.id);
     await setSetting(SETTING_KEYS.CANDIDATURE_REPLY_BODY, input.body.trim() || null, user.id);
+    await setSetting(
+      SETTING_KEYS.CANDIDATURE_PRESTATAIRE_REPLY_BODY,
+      input.prestataireBody.trim() || null,
+      user.id,
+    );
     revalidatePath("/settings/integrations");
     return { ok: true as const };
   },

@@ -16,20 +16,25 @@ import {
 } from "./candidature-detect";
 import {
   candidatureReplySubject,
-  DEFAULT_CANDIDATURE_REPLY_BODY,
   DEFAULT_CANDIDATURE_REPLY_FROM,
+  defaultReplyBodyFor,
   renderCandidatureReply,
+  type SollicitationKind,
 } from "./candidature-reply";
 import { markThreadCandidature } from "./links";
 import { parseEmailThread } from "./thread-parse";
 
 /**
- * Agent candidatures. Trois étapes, toutes idempotentes :
+ * Agent candidatures. Il couvre deux sollicitations qui appellent le même
+ * « non » poli : les candidatures (emploi, stage, alternance) et les
+ * offres de prestation (freelance, renfort, sous-traitance, « proposition
+ * de collaboration »). Trois étapes, toutes idempotentes :
  *   1. `queueCandidature` : le sync a repéré un mail (règles sur le sujet /
  *      le libellé) et a téléchargé son corps → ligne `pending` ;
  *   2. `processCandidatureReply` : gardes (fil déjà traité, pas de corps,
- *      trop vieux), confirmation LLM, envoi de la réponse dans le fil,
- *      libellé Paradeos/Candidature, archivage ;
+ *      trop vieux), confirmation LLM qui dit aussi de quel type il s'agit,
+ *      envoi de la réponse type correspondante dans le fil, libellé
+ *      Paradeos/Candidature, archivage ;
  *   3. `recoverMissedCandidatures` : rattrape les mails déjà en base en
  *      métadonnées seules (ingérés avant que l'agent existe).
  *
@@ -120,8 +125,9 @@ export async function processCandidatureReply(replyId: string): Promise<Candidat
     )
     .limit(1);
   if (alreadyReplied) return reject(row.id, "fil déjà répondu.");
-  // Le même candidat qui ouvre un second fil (« candidature actualisée »)
-  // a déjà sa réponse : la lui renvoyer ferait automate.
+  // Le même expéditeur qui ouvre un second fil (« candidature actualisée »,
+  // relance d'une offre de services) a déjà sa réponse : la lui renvoyer
+  // ferait automate.
   if (msg.fromEmail) {
     const [sameCandidate] = await conn
       .select({ repliedAt: candidatureReplies.repliedAt })
@@ -176,14 +182,15 @@ export async function processCandidatureReply(replyId: string): Promise<Candidat
   } catch (err) {
     return markError(row.id, `LLM : ${err instanceof Error ? err.message : String(err)}`);
   }
+  const kind: SollicitationKind | null = verdict.kind === "none" ? null : verdict.kind;
   await conn
     .update(candidatureReplies)
-    .set({ confidence: verdict.confidence.toFixed(3), reason: verdict.summary })
+    .set({ confidence: verdict.confidence.toFixed(3), reason: verdict.summary, kind })
     .where(eq(candidatureReplies.id, row.id));
-  if (!verdict.isCandidature || verdict.confidence < MIN_CONFIDENCE) {
+  if (!kind || verdict.confidence < MIN_CONFIDENCE) {
     return reject(
       row.id,
-      `pas une candidature selon le LLM (confiance ${verdict.confidence.toFixed(2)}) : ${verdict.summary}`,
+      `ni candidature ni offre de prestation selon le LLM (confiance ${verdict.confidence.toFixed(2)}) : ${verdict.summary}`,
     );
   }
 
@@ -204,8 +211,11 @@ export async function processCandidatureReply(replyId: string): Promise<Candidat
   }
   if (!replyTo) return markError(row.id, "destinataire de la réponse introuvable.");
 
-  const template =
-    (await getSetting(SETTING_KEYS.CANDIDATURE_REPLY_BODY)) ?? DEFAULT_CANDIDATURE_REPLY_BODY;
+  const templateKey =
+    kind === "prestation"
+      ? SETTING_KEYS.CANDIDATURE_PRESTATAIRE_REPLY_BODY
+      : SETTING_KEYS.CANDIDATURE_REPLY_BODY;
+  const template = (await getSetting(templateKey)) ?? defaultReplyBodyFor(kind);
   const from =
     (await getSetting(SETTING_KEYS.CANDIDATURE_REPLY_FROM)) ?? DEFAULT_CANDIDATURE_REPLY_FROM;
   const firstName = verdict.firstName?.trim() || firstNameFromSender(msg.fromName);
@@ -216,7 +226,7 @@ export async function processCandidatureReply(replyId: string): Promise<Candidat
     const sent = await sendGmailMessage(accessToken, {
       to: replyTo,
       from,
-      subject: candidatureReplySubject(msg.subject),
+      subject: candidatureReplySubject(msg.subject, kind),
       body,
       gmailThreadId: msg.gmailThreadId,
       inReplyToHeader,

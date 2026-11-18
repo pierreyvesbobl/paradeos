@@ -5,16 +5,18 @@ import { db } from "@/lib/db/server";
 import {
   DEFAULT_CANDIDATURE_REPLY_BODY,
   DEFAULT_CANDIDATURE_REPLY_FROM,
+  DEFAULT_PRESTATAIRE_REPLY_BODY,
 } from "@/lib/gmail/candidature-reply";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { CandidaturesSettings } from "./candidatures-settings";
 
 export async function CandidaturesSection({ userId }: { userId: string }) {
   const conn = await db();
-  const [enabledSetting, from, body, statsRows, recent] = await Promise.all([
+  const [enabledSetting, from, body, prestataireBody, statsRows, recent] = await Promise.all([
     getSetting(SETTING_KEYS.CANDIDATURE_AUTOREPLY_ENABLED),
     getSetting(SETTING_KEYS.CANDIDATURE_REPLY_FROM),
     getSetting(SETTING_KEYS.CANDIDATURE_REPLY_BODY),
+    getSetting(SETTING_KEYS.CANDIDATURE_PRESTATAIRE_REPLY_BODY),
     conn
       .select({ status: candidatureReplies.status, n: sql<number>`count(*)::int` })
       .from(candidatureReplies)
@@ -24,6 +26,7 @@ export async function CandidaturesSection({ userId }: { userId: string }) {
       .select({
         id: candidatureReplies.id,
         status: candidatureReplies.status,
+        kind: candidatureReplies.kind,
         candidateEmail: candidatureReplies.candidateEmail,
         candidateName: candidatureReplies.candidateName,
         reason: candidatureReplies.reason,
@@ -48,10 +51,12 @@ export async function CandidaturesSection({ userId }: { userId: string }) {
           <h2 className="font-medium text-sm">Agent candidatures</h2>
           <p className="mt-1 text-muted-foreground text-xs">
             À chaque sync Gmail, les mails de candidature (spontanée, stage, alternance) reçoivent
-            la réponse « pas de poste ouvert » dans leur fil, puis le fil reçoit le libellé{" "}
-            <code>Paradeos/Candidature</code> et quitte la boîte de réception. Un LLM confirme
-            chaque candidature avant l'envoi ; un fil ne reçoit jamais deux réponses, et un mail de
-            plus de 30 jours n'en reçoit aucune.
+            la réponse « pas de poste ouvert », et les offres de prestation (freelance, renfort,
+            sous-traitance, proposition de collaboration) la réponse « pas de renfort externe »,
+            dans leur fil ; le fil reçoit ensuite le libellé <code>Paradeos/Candidature</code> et
+            quitte la boîte de réception. Un LLM confirme chaque mail et choisit la réponse avant
+            l'envoi ; un fil ne reçoit jamais deux réponses, et un mail de plus de 30 jours n'en
+            reçoit aucune.
           </p>
         </div>
         <span
@@ -72,11 +77,14 @@ export async function CandidaturesSection({ userId }: { userId: string }) {
         enabled={enabled}
         from={from ?? ""}
         body={body ?? ""}
+        prestataireBody={prestataireBody ?? ""}
         defaultFrom={DEFAULT_CANDIDATURE_REPLY_FROM}
         defaultBody={DEFAULT_CANDIDATURE_REPLY_BODY}
+        defaultPrestataireBody={DEFAULT_PRESTATAIRE_REPLY_BODY}
         recent={recent.map((r) => ({
           id: r.id,
           status: r.status,
+          kind: r.kind,
           candidate: r.candidateName || r.candidateEmail || "(inconnu)",
           subject: r.subject ?? "(sans objet)",
           detail: r.status === "error" ? (r.errorMessage ?? "") : (r.reason ?? ""),

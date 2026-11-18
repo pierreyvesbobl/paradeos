@@ -22,7 +22,9 @@ export const candidatureReplyStatus = pgEnum("candidature_reply_status", [
 /**
  * Journal de l'agent candidatures : un mail repéré comme candidature
  * (spontanée, stage, alternance…) reçoit automatiquement la réponse
- * « pas de poste ouvert », puis son fil est libellé et archivé.
+ * « pas de poste ouvert », une offre de prestation (freelance, renfort,
+ * sous-traitance) la réponse « pas de renfort externe », puis son fil
+ * est libellé et archivé.
  *
  * Une ligne par message repéré, jamais plus d'une réponse par fil : une
  * relance du même candidat retombe en `rejected` avec la raison.
@@ -43,6 +45,12 @@ export const candidatureReplies = pgTable(
     candidateEmail: text("candidate_email"),
     candidateName: text("candidate_name"),
     status: candidatureReplyStatus("status").notNull().default("pending"),
+    /**
+     * Ce que le LLM a reconnu : `candidature` (emploi, stage, alternance)
+     * ou `prestation` (freelance, renfort, sous-traitance). Null tant que
+     * le LLM n'a pas tranché, ou s'il n'y a vu ni l'un ni l'autre.
+     */
+    kind: text("kind", { enum: ["candidature", "prestation"] }),
     /** Confiance du LLM que c'est bien une candidature (0–1). */
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
     /** Résumé LLM, ou raison du rejet. */

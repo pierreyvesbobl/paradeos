@@ -24,12 +24,29 @@ describe("looksLikeCandidatureMessage", () => {
   });
 
   it.each([
+    "Renfort en sous-traitance Make / n8n / Airtable pour Automato — ZAFYMIND",
+    "Freelance IA à Lyon — renfort sur vos missions",
+    "Proposition de collaboration",
+    "Proposition de partenariat technique",
+    "Développeur n8n disponible pour de nouvelles missions",
+    "Je vous propose mes services en automatisation",
+    "Mise à disposition de développeurs Make",
+    "Partnership proposal - dedicated developers for your agency",
+    "Sous-traitance en marque blanche",
+  ])("détecte l'offre de prestation « %s »", (subject) => {
+    expect(looksLikeCandidatureMessage(message({ subject }))).toBe(true);
+  });
+
+  it.each([
     "Demande devis formation",
     "Stage de formation Make du 12 mars",
     "Poste de travail coworking",
     "Re: Suite à la présentation d'Automato",
     "Votre facture d'hébergement",
     "Point projet + prochaines étapes",
+    "Re: 20 Minutes - Échange autour d'une collaboration en production vidéo IA",
+    "Partenariat Automato x Radio Paname : point d'étape",
+    "Mission de novembre : compte rendu",
   ])("ignore le sujet « %s »", (subject) => {
     expect(looksLikeCandidatureMessage(message({ subject }))).toBe(false);
   });

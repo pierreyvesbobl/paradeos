@@ -108,12 +108,13 @@ export const SETTING_KEYS = {
    */
   SALES_INVOICE_DRIVE_FOLDER_ID: "SALES_INVOICE_DRIVE_FOLDER_ID",
   /**
-   * Agent candidatures : réponse automatique « pas de poste ouvert » aux
-   * mails de candidature (spontanée, stage, alternance), puis libellé
-   * Paradeos/Candidature et archivage du fil. Absent ou "true" : actif ;
-   * "false" : les candidatures repérées restent en attente, rien ne part.
-   * Un LLM confirme chaque candidature avant l'envoi, et un fil ne
-   * reçoit jamais deux réponses.
+   * Agent candidatures : réponse automatique aux mails de candidature
+   * (spontanée, stage, alternance : « pas de poste ouvert ») et aux offres
+   * de prestation (freelance, renfort, sous-traitance : « pas de renfort
+   * externe »), puis libellé Paradeos/Candidature et archivage du fil.
+   * Absent ou "true" : actif ; "false" : les mails repérés restent en
+   * attente, rien ne part. Un LLM confirme chaque mail et choisit le
+   * gabarit avant l'envoi, et un fil ne reçoit jamais deux réponses.
    */
   CANDIDATURE_AUTOREPLY_ENABLED: "CANDIDATURE_AUTOREPLY_ENABLED",
   /**
@@ -124,10 +125,17 @@ export const SETTING_KEYS = {
    */
   CANDIDATURE_REPLY_FROM: "CANDIDATURE_REPLY_FROM",
   /**
-   * Corps de la réponse, texte brut ; `{prenom}` est remplacé par le
-   * prénom du candidat. Défaut dans `lib/gmail/candidature-reply.ts`.
+   * Corps de la réponse aux candidatures, texte brut ; `{prenom}` est
+   * remplacé par le prénom du candidat. Défaut dans
+   * `lib/gmail/candidature-reply.ts`.
    */
   CANDIDATURE_REPLY_BODY: "CANDIDATURE_REPLY_BODY",
+  /**
+   * Corps de la réponse aux offres de prestation (freelance, renfort,
+   * sous-traitance), même mécanique que `CANDIDATURE_REPLY_BODY`, même
+   * expéditeur. Défaut dans `lib/gmail/candidature-reply.ts`.
+   */
+  CANDIDATURE_PRESTATAIRE_REPLY_BODY: "CANDIDATURE_PRESTATAIRE_REPLY_BODY",
   /**
    * Clôture automatique des tâches : quand un mail ou une réunion donne
    * une tâche ouverte pour faite **à coup sûr**, la tâche passe en `done`

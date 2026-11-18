@@ -48,7 +48,7 @@ vi.mock("@/lib/google/gmail-api", async (importOriginal) => {
 
 vi.mock("@/lib/gmail/candidature-classify", () => ({
   classifyCandidature: vi.fn(async () => ({
-    isCandidature: true,
+    kind: "candidature" as const,
     confidence: 0.95,
     firstName: "Candice",
     language: "fr",
@@ -190,6 +190,41 @@ describe("agent candidatures", () => {
     expect(msg?.labels).not.toContain("INBOX");
   });
 
+  it("une offre de prestation reçoit le gabarit « pas de renfort externe »", async () => {
+    vi.mocked(classifyCandidature).mockResolvedValueOnce({
+      kind: "prestation",
+      confidence: 0.92,
+      firstName: "Gael",
+      language: "fr",
+      summary: "Agence malgache qui propose un renfort Make / n8n en sous-traitance.",
+    });
+    const threadId = await createThread("gt-1b");
+    const messageId = await createMessage({
+      threadId,
+      gmailMessageId: "gm-1b",
+      fromEmail: "gael@example.com",
+      fromName: "Gael Ulrich",
+      subject: "Renfort en sous-traitance Make / n8n / Airtable pour Automato — ZAFYMIND",
+      bodyText:
+        "Bonjour,\n\nSi vous avez besoin de renfort, je peux prendre un lot en sous-traitance.\n\nGael",
+    });
+    const replyId = await queue(threadId, messageId);
+
+    const outcome = await processCandidatureReply(replyId);
+    expect(outcome.status).toBe("replied");
+    const [, sent] = vi.mocked(sendGmailMessage).mock.calls[0] ?? [];
+    expect(sent?.body.startsWith("Bonjour Gael,")).toBe(true);
+    expect(sent?.body).toContain("sous-traitants");
+    expect(sent?.body).not.toContain("poste ouvert");
+
+    const [row] = await db
+      .select({ kind: candidatureReplies.kind, status: candidatureReplies.status })
+      .from(candidatureReplies)
+      .where(eq(candidatureReplies.id, replyId));
+    expect(row?.status).toBe("replied");
+    expect(row?.kind).toBe("prestation");
+  });
+
   it("une relance dans le même fil ne reçoit pas de seconde réponse", async () => {
     const threadId = await createThread("gt-2");
     const first = await createMessage({ threadId, gmailMessageId: "gm-2a" });
@@ -235,11 +270,11 @@ describe("agent candidatures", () => {
 
   it("n'envoie rien quand le LLM n'y voit pas une candidature", async () => {
     vi.mocked(classifyCandidature).mockResolvedValueOnce({
-      isCandidature: false,
+      kind: "none",
       confidence: 0.9,
       firstName: null,
       language: "fr",
-      summary: "Freelance qui propose ses services.",
+      summary: "Client qui demande un devis.",
     });
     const threadId = await createThread("gt-3");
     const messageId = await createMessage({ threadId, gmailMessageId: "gm-3" });
@@ -247,14 +282,14 @@ describe("agent candidatures", () => {
 
     const outcome = await processCandidatureReply(replyId);
     expect(outcome.status).toBe("rejected");
-    expect(outcome.reason).toContain("pas une candidature");
+    expect(outcome.reason).toContain("ni candidature ni offre de prestation");
     expect(sendGmailMessage).not.toHaveBeenCalled();
     expect(modifyThreadLabels).not.toHaveBeenCalled();
   });
 
   it("n'envoie rien quand le LLM hésite", async () => {
     vi.mocked(classifyCandidature).mockResolvedValueOnce({
-      isCandidature: true,
+      kind: "candidature",
       confidence: 0.5,
       firstName: null,
       language: "fr",

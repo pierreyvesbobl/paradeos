@@ -1,13 +1,16 @@
 /**
- * Détection des mails de candidature (spontanée, stage, alternance,
- * réponse à une offre). Module pur, partagé par le sync Gmail et le
- * rattrapage, testable.
+ * Détection des mails de sollicitation entrante : candidatures (spontanée,
+ * stage, alternance, réponse à une offre) et propositions de prestation
+ * (freelance ou agence qui offre ses services, un renfort, de la
+ * sous-traitance, une « collaboration »). Module pur, partagé par le sync
+ * Gmail et le rattrapage, testable.
  *
  * C'est un pré-filtre bon marché sur les métadonnées : il décide si on
- * télécharge le corps du mail. La confirmation finale est faite par le
- * LLM (cf. `candidature-classify.ts`) avant tout envoi de réponse — un
- * faux positif ici ne coûte qu'un `format=full`, un faux positif là-bas
- * enverrait un refus à un client.
+ * télécharge le corps du mail. La confirmation finale, et le choix entre
+ * les deux réponses types, sont faits par le LLM (cf.
+ * `candidature-classify.ts`) avant tout envoi — un faux positif ici ne
+ * coûte qu'un `format=full`, un faux positif là-bas enverrait un refus à
+ * un client.
  */
 
 /**
@@ -17,6 +20,16 @@
  */
 const CANDIDATURE_SUBJECT_RE =
   /(candidature|candidat\b|alternan[ct]e?s?|apprentissage|apprenti|\bstage de fin|demande de stage|recherche (de |d'un |d'une )?(stage|alternance|emploi)|opportunit[ée]s? de (stage|d'alternance|stage|emploi)|offre d'emploi|recrutement|\bcv\b|curriculum|lettre de motivation|internship|\bintern\b|apprenticeship|job application|applying for|cover letter|\bresume\b|\bcandidacy\b|open position|job opportunity)/i;
+
+/**
+ * Sujets d'une offre de prestation : quelqu'un propose de travailler POUR
+ * nous (renfort, sous-traitance, freelance en quête de missions, agence
+ * offshore, « proposition de collaboration »). « collaboration » et
+ * « partenariat » seuls sont trop fréquents dans les échanges avec les
+ * clients : on exige la tournure de la proposition.
+ */
+const PRESTATION_SUBJECT_RE =
+  /(sous[- ]?trait|\brenfort|free-?lance|prestataire|\bmes services\b|proposer (mes|nos) services|mise [àa] disposition|(proposition|proposer|offre|opportunit[ée]s?|demande|id[ée]e|projet) (de |d'une? )?(collaboration|partenariat)|(collaboration|partenariat) (free-?lance|en sous[- ]?traitance|commercial|technique|strat[ée]gique)|(recherche|en qu[êe]te) de (nouvelles )?missions|disponible pour (de nouvelles |des |vos )?missions|renfort sur vos missions|white[- ]label|marque blanche|subcontract|outsourc|partnership (proposal|opportunity)|offer (my|our) services|available for (new )?(projects|missions)|staff augmentation|dedicated developers?)/i;
 
 /**
  * Libellé Gmail (dernier segment) qui range le recrutement : « RH »,
@@ -42,6 +55,11 @@ export function isOwnOrAutomatedSender(fromEmail: string | null): boolean {
   return AUTOMATED_SENDER_RE.test(local);
 }
 
+/**
+ * Vrai si le mail ressemble à une candidature OU à une offre de
+ * prestation : les deux suivent le même chemin (file, LLM, réponse type),
+ * seul le texte de la réponse change.
+ */
 export function looksLikeCandidatureMessage(args: {
   subject: string | null;
   fromEmail: string | null;
@@ -50,6 +68,7 @@ export function looksLikeCandidatureMessage(args: {
 }): boolean {
   if (isOwnOrAutomatedSender(args.fromEmail)) return false;
   if (args.subject && CANDIDATURE_SUBJECT_RE.test(args.subject)) return true;
+  if (args.subject && PRESTATION_SUBJECT_RE.test(args.subject)) return true;
   return args.labelNames.some((name) =>
     CANDIDATURE_LABEL_RE.test(name.split("/").pop()?.trim() ?? ""),
   );
