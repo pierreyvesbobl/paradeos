@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Terminal } from "@phosphor-icons/react";
+import { Plus, Sparkle, Terminal } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,8 @@ export type GoogleEventSerialized = {
   htmlLink: string | null;
   calendarSummary: string | null;
   backgroundColor: string | null;
+  /** Projet reconnu par la relève (cf. lib/time/calendar-attach.ts), à imputer d'un clic. */
+  suggestion: { projectId: string; projectName: string } | null;
 };
 
 /**
@@ -415,6 +417,7 @@ export function WeekView({
                   endAt: g.endAt,
                   location: g.location,
                   htmlLink: g.htmlLink,
+                  suggestion: g.suggestion,
                 })
               }
               onClaudeBlockClick={(b) =>
@@ -682,20 +685,34 @@ function DayColumn({
                     e.stopPropagation();
                     onGoogleEventClick(g);
                   }}
-                  className="absolute z-1 cursor-pointer overflow-hidden rounded border-l-4 px-1.5 py-1 text-left text-[10px] leading-tight opacity-80 transition-opacity hover:opacity-100"
+                  className={`absolute z-1 cursor-pointer overflow-hidden rounded border-l-4 px-1.5 py-1 text-left text-[10px] leading-tight transition-opacity hover:opacity-100 ${g.suggestion ? "border border-l-4 border-dashed opacity-95" : "opacity-80"}`}
                   style={{
                     top,
                     height,
-                    backgroundColor: `${bg}20`,
-                    borderLeftColor: bg,
+                    backgroundColor: g.suggestion ? "var(--ds-tint-blue-bg)" : `${bg}20`,
+                    borderLeftColor: g.suggestion ? "var(--ds-tint-blue-dot)" : bg,
+                    borderColor: g.suggestion ? "var(--ds-tint-blue-dot)" : undefined,
                     left: `calc(${leftPct}% + 2px)`,
                     width: `calc(${widthPct}% - ${gutter + 2}px)`,
                   }}
-                  title={`${g.summary ?? "Sans titre"} — clic pour attribuer à un projet`}
+                  title={
+                    g.suggestion
+                      ? `${g.summary ?? "Sans titre"} — reconnu : ${g.suggestion.projectName}, clic pour imputer`
+                      : `${g.summary ?? "Sans titre"} — clic pour attribuer à un projet`
+                  }
                 >
                   <p className="truncate font-medium text-foreground/80">
                     {g.summary ?? "Sans titre"}
                   </p>
+                  {g.suggestion ? (
+                    <p
+                      className="flex items-center gap-1 truncate text-[9px]"
+                      style={{ color: "var(--ds-tint-blue-text)" }}
+                    >
+                      <Sparkle size={10} weight="duotone" className="shrink-0" />
+                      <span className="truncate">{g.suggestion.projectName}</span>
+                    </p>
+                  ) : null}
                   <p className="text-[9px] text-muted-foreground">
                     {formatHm(start)}–{formatHm(end)}
                     {g.location ? ` · ${g.location}` : ""}

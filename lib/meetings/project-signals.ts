@@ -22,7 +22,16 @@ export type ProjectSignalKind =
   /** Les participants externes sont des contacts de ce projet. */
   | "participants";
 
-export type ProjectSignal = { projectId: string; kind: ProjectSignalKind; weight: number };
+/**
+ * Un indice : un projet, le type d'indice, son poids. Générique sur le type
+ * d'indice pour que d'autres sources (rendez-vous du calendrier, cf.
+ * lib/time/calendar-signals.ts) partagent la règle de décision.
+ */
+export type ProjectSignal<K extends string = ProjectSignalKind> = {
+  projectId: string;
+  kind: K;
+  weight: number;
+};
 
 export const SIGNAL_WEIGHT: Record<ProjectSignalKind | "title_sole_entity", number> = {
   named: 0.8,
@@ -39,17 +48,19 @@ export const ATTACH_MIN_SCORE = 0.8;
 /** Au-delà, un second projet fait de la réunion une réunion transverse. */
 export const RIVAL_MAX_SCORE = 0.3;
 
-export type ProjectDecision = {
+export type ProjectDecision<K extends string = ProjectSignalKind> = {
   projectId: string;
   score: number;
-  reasons: ProjectSignalKind[];
+  reasons: K[];
 };
 
-export function decideMeetingProject(signals: ProjectSignal[]): ProjectDecision | null {
+export function decideProject<K extends string>(
+  signals: ProjectSignal<K>[],
+): ProjectDecision<K> | null {
   // Un même type d'indice ne compte qu'une fois par projet.
-  const byProject = new Map<string, Map<ProjectSignalKind, number>>();
+  const byProject = new Map<string, Map<K, number>>();
   for (const s of signals) {
-    const kinds = byProject.get(s.projectId) ?? new Map<ProjectSignalKind, number>();
+    const kinds = byProject.get(s.projectId) ?? new Map<K, number>();
     kinds.set(s.kind, Math.max(kinds.get(s.kind) ?? 0, s.weight));
     byProject.set(s.projectId, kinds);
   }

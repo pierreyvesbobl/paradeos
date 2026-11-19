@@ -16,15 +16,30 @@ import { googleCalendars } from "@/db/schema/google-calendars";
 import { db } from "@/lib/db/server";
 import { getGoogleAccount, getValidAccessToken } from "@/lib/google/account";
 import { type GoogleEvent, googleEventToRow, listGoogleEvents } from "@/lib/google/calendar-api";
+import { isCalendarAutoTimeEnabled } from "@/lib/settings";
+import { type AttachCalendarResult, attachCalendarEvents } from "@/lib/time/calendar-attach";
 
 const FETCH_WINDOW_FUTURE_DAYS = 30;
 const FETCH_WINDOW_PAST_DAYS = 7;
 
-export async function refreshUserEvents(userId: string): Promise<{ totalEvents: number }> {
+export type RefreshUserEventsResult = { totalEvents: number; attach: AttachCalendarResult | null };
+
+const NO_ATTACH: AttachCalendarResult = {
+  checked: 0,
+  suggested: 0,
+  applied: 0,
+  meetingsAttached: 0,
+};
+
+/**
+ * Relève des rendez-vous d'un utilisateur, puis rattachement aux projets et
+ * créneaux sans clic (cf. lib/time/calendar-attach.ts) sur le cache à jour.
+ */
+export async function refreshUserEvents(userId: string): Promise<RefreshUserEventsResult> {
   const account = await getGoogleAccount(userId);
-  if (!account) return { totalEvents: 0 };
+  if (!account) return { totalEvents: 0, attach: null };
   const accessToken = await getValidAccessToken(userId);
-  if (!accessToken) return { totalEvents: 0 };
+  if (!accessToken) return { totalEvents: 0, attach: null };
 
   const conn = await db();
   const enabledCalendars = await conn
@@ -34,7 +49,7 @@ export async function refreshUserEvents(userId: string): Promise<{ totalEvents: 
       and(eq(googleCalendars.googleAccountId, account.id), eq(googleCalendars.syncEnabled, true)),
     );
 
-  if (enabledCalendars.length === 0) return { totalEvents: 0 };
+  if (enabledCalendars.length === 0) return { totalEvents: 0, attach: null };
 
   const now = new Date();
   const timeMin = new Date(now.getTime() - FETCH_WINDOW_PAST_DAYS * 86400_000);
@@ -99,7 +114,10 @@ export async function refreshUserEvents(userId: string): Promise<{ totalEvents: 
     totalEvents += rows.length;
   }
 
-  return { totalEvents };
+  const attach = await attachCalendarEvents(conn, userId, {
+    autoTime: await isCalendarAutoTimeEnabled(),
+  });
+  return { totalEvents, attach };
 }
 
 /**
@@ -111,6 +129,7 @@ export async function refreshAllUsersEvents(): Promise<{
   succeeded: number;
   failed: number;
   events: number;
+  attach: AttachCalendarResult;
   errors: string[];
 }> {
   const conn = await db();
@@ -122,16 +141,26 @@ export async function refreshAllUsersEvents(): Promise<{
 
   let totalEvents = 0;
   let succeeded = 0;
+  const attach: AttachCalendarResult = { ...NO_ATTACH };
   const errors: string[] = [];
   for (const r of rows) {
     try {
-      const { totalEvents: n } = await refreshUserEvents(r.userId);
+      const { totalEvents: n, attach: a } = await refreshUserEvents(r.userId);
       totalEvents += n;
+      for (const k of Object.keys(attach) as (keyof AttachCalendarResult)[])
+        attach[k] += a?.[k] ?? 0;
       succeeded++;
     } catch (err) {
       console.warn("[calendar cron] user refresh failed", r.userId, err);
       errors.push(`${r.userId}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
-  return { users: rows.length, succeeded, failed: errors.length, events: totalEvents, errors };
+  return {
+    users: rows.length,
+    succeeded,
+    failed: errors.length,
+    events: totalEvents,
+    attach,
+    errors,
+  };
 }

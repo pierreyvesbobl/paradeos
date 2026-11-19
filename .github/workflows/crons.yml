@@ -89,6 +89,27 @@ jobs:
             "$BASE_URL/api/cron/sync-gmail"
           echo
 
+  calendar:
+    # Relève Google Calendar, puis rattachement des rendez-vous aux projets et
+    # créneaux sans clic (cf. lib/time/calendar-attach.ts). Le cron Vercel
+    # quotidien reste en filet ; un rendez-vous qui vient de finir doit être
+    # dans la grille de /temps dans le quart d'heure.
+    name: Calendrier (relève, projets, temps)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      BASE_URL: https://paradeos.vercel.app
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+    steps:
+      - name: Relever les rendez-vous
+        run: |
+          curl -sS --fail-with-body --max-time 120 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$BASE_URL/api/cron/refresh-calendar-events"
+          echo
+
   roadmaps:
     # Feuilles de route des dépôts suivis : un appel GitHub par dépôt, le
     # rapprochement LLM seulement si le fichier ou les tâches ont bougé.

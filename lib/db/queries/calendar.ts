@@ -1,9 +1,11 @@
 import "server-only";
 
-import { and, asc, between, eq, getTableColumns } from "drizzle-orm";
+import { and, asc, between, eq, getTableColumns, inArray } from "drizzle-orm";
+import { calendarEventLinks } from "@/db/schema/calendar-event-links";
 import { calendarEvents } from "@/db/schema/calendar-events";
 import { googleAccounts } from "@/db/schema/google-accounts";
 import { googleCalendars } from "@/db/schema/google-calendars";
+import { projects } from "@/db/schema/projects";
 import { db } from "@/lib/db/server";
 
 export async function getCalendarsForUser(userId: string) {
@@ -57,4 +59,64 @@ export async function getCalendarEventsForRange(userId: string, from: Date, to: 
       ),
     )
     .orderBy(asc(calendarEvents.startAt));
+}
+
+export type CalendarSuggestion = {
+  projectId: string;
+  projectName: string;
+  score: number | null;
+  reasons: string | null;
+  meetingId: string | null;
+};
+
+/** Clé d'un rendez-vous dans la carte des suggestions. */
+export function calendarEventKey(googleCalendarId: string, googleEventId: string): string {
+  return `${googleCalendarId}|${googleEventId}`;
+}
+
+/**
+ * Projets reconnus sur les rendez-vous encore sans créneau (`suggested`,
+ * cf. lib/time/calendar-attach.ts), pour la grille de /temps et l'agenda du
+ * jour. Clé : `calendarEventKey`.
+ */
+export async function getCalendarSuggestionsForEvents(
+  userId: string,
+  events: readonly { googleCalendarId: string; googleEventId: string }[],
+): Promise<Map<string, CalendarSuggestion>> {
+  const out = new Map<string, CalendarSuggestion>();
+  const calendarIds = [...new Set(events.map((e) => e.googleCalendarId))];
+  if (calendarIds.length === 0) return out;
+  const wanted = new Set(events.map((e) => calendarEventKey(e.googleCalendarId, e.googleEventId)));
+  const conn = await db();
+  const rows = await conn
+    .select({
+      googleCalendarId: calendarEventLinks.googleCalendarId,
+      googleEventId: calendarEventLinks.googleEventId,
+      projectId: projects.id,
+      projectName: projects.name,
+      score: calendarEventLinks.score,
+      reasons: calendarEventLinks.reasons,
+      meetingId: calendarEventLinks.meetingId,
+    })
+    .from(calendarEventLinks)
+    .innerJoin(projects, eq(projects.id, calendarEventLinks.projectId))
+    .where(
+      and(
+        eq(calendarEventLinks.userId, userId),
+        eq(calendarEventLinks.status, "suggested"),
+        inArray(calendarEventLinks.googleCalendarId, calendarIds),
+      ),
+    );
+  for (const r of rows) {
+    const key = calendarEventKey(r.googleCalendarId, r.googleEventId);
+    if (!wanted.has(key)) continue;
+    out.set(key, {
+      projectId: r.projectId,
+      projectName: r.projectName,
+      score: r.score === null ? null : Number(r.score),
+      reasons: r.reasons,
+      meetingId: r.meetingId,
+    });
+  }
+  return out;
 }

@@ -10,6 +10,7 @@ import { getSyncTokensForUser } from "@/lib/dougs/sync-tokens";
 import { getSetting, getSettingStatus, SETTING_KEYS } from "@/lib/settings";
 import { ApiTokensSection } from "./api-tokens-section";
 import { BrandLogosSection } from "./brand-logos-section";
+import { CalendarTimeSection } from "./calendar-time-section";
 import { CandidaturesSection } from "./candidatures-section";
 import { ClaudeModSection } from "./claude-mod-section";
 import { CoworkingAutoSendSection } from "./coworking-autosend-section";
@@ -100,6 +101,7 @@ export default async function IntegrationsSettingsPage({
     <>
       <GoogleDriveSection userId={user.id} />
       <GoogleCalendarSection userId={user.id} />
+      {isAdmin ? <CalendarTimeSection /> : null}
       <GmailSection userId={user.id} />
       <GmailAutoArchiveSection userId={user.id} />
       <InvoiceFilingSection userId={user.id} />

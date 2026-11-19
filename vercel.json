@@ -25,6 +25,10 @@
     {
       "path": "/api/cron/sync-roadmaps",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-calendar-events",
+      "schedule": "15 5 * * *"
     }
   ]
 }

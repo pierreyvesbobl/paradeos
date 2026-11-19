@@ -150,6 +150,41 @@ réévaluation par jour). Trace sur `meetings.project_auto_at` /
 `project_auto_reason` (migration `0099`) : une réunion détachée à la main
 après un rattachement automatique n'est plus jamais rattachée d'office.
 
+### Rendez-vous du calendrier → projet → temps (`calendar_event_links`)
+
+Les réunions ne sont pas les seules à dire où va le temps : les rendez-vous
+Google Calendar, eux, ont une heure de début et de fin. Après chaque relève
+(`lib/google/calendar-sync.ts`, toutes les quinze minutes par le workflow
+GitHub, une fois par jour par Vercel), chaque rendez-vous en cache est évalué
+par `lib/time/calendar-attach.ts` avec les règles pures de
+`lib/time/calendar-signals.ts` : nom du projet dans le titre 0,8 ; tous les
+contacts invités rattachés au même projet 0,8 ; une réunion Parade OS
+(transcript) tenue sur le créneau et portant un projet 0,8 ; un indice
+« client » (nom du client dans le titre, domaine e-mail des invités, invités
+rattachés à plusieurs projets du même client) 0,6 s'il n'a qu'un projet
+ouvert, 0,5 réparti sinon, les trois sources fusionnées en un seul indice
+pour qu'un client à deux projets ne voie pas le rival dépasser le seuil. Même
+décision que pour les réunions (`decideProject`) : 0,8 et aucun rival
+au-dessus de 0,3. Projets perdus, terminés et archivés exclus ; événements
+« journée entière » ignorés.
+
+Reconnu, le rendez-vous s'affiche en bleu dans la grille de /temps et dans
+l'agenda du tableau de bord, et un clic pose le créneau sur le projet proposé
+(dialogue d'attribution, bouton « Imputer »). Réglage
+`CALENDAR_AUTO_TIME_ENABLED` (actif par défaut, Réglages → Intégrations →
+Google) : un rendez-vous passé, reconnu, auquel l'utilisateur a pris part
+(accepté ou organisateur ; pas de « peut-être », pas d'invitation sans réponse,
+pas plus de 8 h) devient un créneau réalisé sans clic, `source = calendar`,
+contact rattaché quand un seul est connu. La décision survit au cache dans
+`calendar_event_links` (`suggested` / `applied` / `dismissed` / `unmatched`,
+migration `0102`) : supprimer le créneau marque le rendez-vous `dismissed`
+et la relève n'y revient plus ; une attribution à la main ferme le lien sans
+`auto_at`. Dans l'autre sens, une réunion Parade OS retrouvée sur le créneau
+et sans projet reçoit celui du rendez-vous (`project_auto_reason` préfixé
+`calendar:`). Avant de toucher aux poids :
+`NODE_OPTIONS="--import ./scripts/_lib/server-only-shim.mjs" pnpm tsx
+scripts/dry-run-calendar-attach.ts` rejoue l'évaluation à blanc.
+
 ### Ré-extraire une source déjà triée
 
 Relancer l'extraction d'une réunion ou d'un mail n'efface que ses

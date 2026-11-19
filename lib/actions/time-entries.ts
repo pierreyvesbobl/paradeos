@@ -11,6 +11,7 @@ import {
   moveTimeEntrySchema,
   updateTimeEntrySchema,
 } from "@/lib/schemas/time-entries";
+import { dismissCalendarLinkForTimeEntry } from "@/lib/time/calendar-attach";
 import { attachClaudeSegments, claimableClaudeSegments } from "@/lib/time/claude-blocks";
 
 export const createTimeEntry = action(createTimeEntrySchema, async ({ input, user }) => {
@@ -97,6 +98,13 @@ export const moveTimeEntry = action(moveTimeEntrySchema, async ({ input, user })
 
 export const deleteTimeEntry = action(deleteTimeEntrySchema, async ({ input, user }) => {
   const conn = await db();
+  // Miroir d'un rendez-vous : le supprimer vaut refus, la relève n'y revient pas.
+  const [own] = await conn
+    .select({ id: timeEntries.id })
+    .from(timeEntries)
+    .where(and(eq(timeEntries.id, input.id), eq(timeEntries.userId, user.id)))
+    .limit(1);
+  if (own) await dismissCalendarLinkForTimeEntry(conn, own.id);
   await conn
     .delete(timeEntries)
     .where(and(eq(timeEntries.id, input.id), eq(timeEntries.userId, user.id)));

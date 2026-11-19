@@ -1,6 +1,10 @@
 import { CalendarDots, MapPin, VideoCamera } from "@phosphor-icons/react/dist/ssr";
 import { requireUser } from "@/lib/auth/server";
-import { getCalendarEventsForRange } from "@/lib/db/queries/calendar";
+import {
+  calendarEventKey,
+  getCalendarEventsForRange,
+  getCalendarSuggestionsForEvents,
+} from "@/lib/db/queries/calendar";
 import { DemoBlur } from "@/lib/demo/components";
 import { endOfDay, hourFmt, SectionHeader, startOfDay } from "./shared";
 
@@ -21,11 +25,14 @@ export function AgendaSectionHeader({ count }: { count?: number }) {
 export async function AgendaSection() {
   const authUser = await requireUser();
   const agendaRaw = await getCalendarEventsForRange(authUser.id, startOfDay(), endOfDay());
+  const suggestions = await getCalendarSuggestionsForEvents(authUser.id, agendaRaw);
 
   const agenda = agendaRaw
     .filter((e) => !e.allDay)
     .slice(0, 4)
     .map((e) => {
+      const project =
+        suggestions.get(calendarEventKey(e.googleCalendarId, e.googleEventId))?.projectName ?? null;
       const isPhysical = !!e.location && !/visio|meet|zoom|http/i.test(e.location);
       const dot =
         e.calendarBackgroundColor && /^#[0-9a-fA-F]{6}$/.test(e.calendarBackgroundColor)
@@ -35,7 +42,7 @@ export async function AgendaSection() {
         id: e.id,
         time: hourFmt.format(e.startAt),
         title: e.summary ?? "Sans titre",
-        meta: e.location || (e.calendarSummary ?? ""),
+        meta: [project, e.location || (e.calendarSummary ?? "")].filter(Boolean).join(" · "),
         dot,
         physical: isPhysical,
       };

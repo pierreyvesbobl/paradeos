@@ -146,6 +146,14 @@ export const SETTING_KEYS = {
    */
   TASK_AUTOCOMPLETE_ENABLED: "TASK_AUTOCOMPLETE_ENABLED",
   /**
+   * Rendez-vous du calendrier → temps réalisé sans clic (cf.
+   * lib/time/calendar-attach.ts) : quand un rendez-vous passé est rattaché à
+   * un projet avec assez d'indices et que l'utilisateur y a pris part, un
+   * créneau réalisé est posé à la relève suivante. Absent ou "true" : actif ;
+   * "false" : les rendez-vous reconnus restent à imputer d'un clic dans /temps.
+   */
+  CALENDAR_AUTO_TIME_ENABLED: "CALENDAR_AUTO_TIME_ENABLED",
+  /**
    * Archivage Gmail des fils dont toutes les tâches liées sont terminées
    * (cf. lib/gmail/auto-archive.ts). Absent ou "true" : actif ; "false" :
    * coupé. Le fil est retiré de la boîte de réception, jamais supprimé.
@@ -251,4 +259,9 @@ export async function getSettingStatus(
 function maskKey(s: string): string {
   if (s.length <= 8) return "•".repeat(s.length);
   return `${s.slice(0, 3)}…${s.slice(-4)}`;
+}
+
+/** Créneaux posés sans clic depuis les rendez-vous reconnus : actif sauf réglage "false". */
+export async function isCalendarAutoTimeEnabled(): Promise<boolean> {
+  return (await getSetting(SETTING_KEYS.CALENDAR_AUTO_TIME_ENABLED)) !== "false";
 }

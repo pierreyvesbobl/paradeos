@@ -7,7 +7,11 @@ import { tasks } from "@/db/schema/tasks";
 import { timeEntries } from "@/db/schema/time-entries";
 import { requireUser } from "@/lib/auth/server";
 import { addDays, formatWeekRange, startOfIsoWeek } from "@/lib/calendar";
-import { getCalendarEventsForRange } from "@/lib/db/queries/calendar";
+import {
+  calendarEventKey,
+  getCalendarEventsForRange,
+  getCalendarSuggestionsForEvents,
+} from "@/lib/db/queries/calendar";
 import { claudeBlockTitle, getClaudeBlocksForUser } from "@/lib/db/queries/claude-activity";
 import { db } from "@/lib/db/server";
 import { formatDuration, formatPersonName } from "@/lib/format";
@@ -78,6 +82,10 @@ export async function PlanningView({ week }: { week?: string }) {
       // en fait un créneau. Rien n'entre dans le réalisé tant qu'on n'a pas cliqué.
       getClaudeBlocksForUser(user.id, weekStart, weekEnd),
     ]);
+
+  // Projets reconnus sur les rendez-vous pas encore imputés (cf.
+  // lib/time/calendar-attach.ts) : affichés sur le rendez-vous, un clic pose le créneau.
+  const suggestions = await getCalendarSuggestionsForEvents(user.id, googleEvents);
 
   const prevWeek = addDays(weekStart, -7);
   const nextWeek = addDays(weekStart, 7);
@@ -166,16 +174,23 @@ export async function PlanningView({ week }: { week?: string }) {
           );
           return googleEvents
             .filter((e) => !e.allDay && !trackedEventIds.has(e.googleEventId))
-            .map((e) => ({
-              id: e.id,
-              startAt: e.startAt.toISOString(),
-              endAt: e.endAt.toISOString(),
-              summary: e.summary,
-              location: e.location,
-              htmlLink: e.htmlLink,
-              calendarSummary: e.calendarSummary,
-              backgroundColor: e.calendarBackgroundColor,
-            }));
+            .map((e) => {
+              const suggestion =
+                suggestions.get(calendarEventKey(e.googleCalendarId, e.googleEventId)) ?? null;
+              return {
+                id: e.id,
+                startAt: e.startAt.toISOString(),
+                endAt: e.endAt.toISOString(),
+                summary: e.summary,
+                location: e.location,
+                htmlLink: e.htmlLink,
+                calendarSummary: e.calendarSummary,
+                backgroundColor: e.calendarBackgroundColor,
+                suggestion: suggestion
+                  ? { projectId: suggestion.projectId, projectName: suggestion.projectName }
+                  : null,
+              };
+            });
         })()}
         claudeBlocks={claudeBlocks.map((b) => ({
           id: b.id,

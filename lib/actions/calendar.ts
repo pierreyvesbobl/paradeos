@@ -17,6 +17,10 @@ import {
   toggleCalendarSyncSchema,
   unattributeTimeEntrySchema,
 } from "@/lib/schemas/calendar";
+import {
+  dismissCalendarLinkForTimeEntry,
+  recordManualCalendarLink,
+} from "@/lib/time/calendar-attach";
 
 /**
  * Récupère la liste des calendriers de l'user depuis Google et upsert
@@ -159,6 +163,13 @@ export const attributeCalendarEvent = action(
           updatedAt: new Date(),
         })
         .where(eq(timeEntries.id, existing.id));
+      await recordManualCalendarLink(conn, {
+        userId: user.id,
+        googleCalendarId: event.googleCalendarId,
+        googleEventId: event.googleEventId,
+        projectId: input.projectId ?? null,
+        timeEntryId: existing.id,
+      });
       revalidatePath("/temps");
       return { id: existing.id, created: false as const };
     }
@@ -181,6 +192,16 @@ export const attributeCalendarEvent = action(
       })
       .returning({ id: timeEntries.id });
 
+    if (row) {
+      await recordManualCalendarLink(conn, {
+        userId: user.id,
+        googleCalendarId: event.googleCalendarId,
+        googleEventId: event.googleEventId,
+        projectId: input.projectId ?? null,
+        timeEntryId: row.id,
+      });
+    }
+
     revalidatePath("/temps");
     return { id: row?.id, created: true as const };
   },
@@ -188,10 +209,17 @@ export const attributeCalendarEvent = action(
 
 /**
  * Retire l'attribution d'un event Google : supprime le time_entry
- * correspondant. L'event Google réapparaîtra dans la vue (lecture seule).
+ * correspondant. L'event Google réapparaîtra dans la vue (lecture seule),
+ * et la relève ne reposera plus de créneau dessus d'office.
  */
 export const unattributeTimeEntry = action(unattributeTimeEntrySchema, async ({ input, user }) => {
   const conn = await db();
+  const [own] = await conn
+    .select({ id: timeEntries.id })
+    .from(timeEntries)
+    .where(and(eq(timeEntries.id, input.timeEntryId), eq(timeEntries.userId, user.id)))
+    .limit(1);
+  if (own) await dismissCalendarLinkForTimeEntry(conn, own.id);
   await conn
     .delete(timeEntries)
     .where(and(eq(timeEntries.id, input.timeEntryId), eq(timeEntries.userId, user.id)));

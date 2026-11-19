@@ -8,7 +8,7 @@ import { meetingProposals, meetings } from "@/db/schema/meetings";
 import { projectContacts } from "@/db/schema/project-contacts";
 import { projects } from "@/db/schema/projects";
 import {
-  decideMeetingProject,
+  decideProject,
   type NamedProject,
   type ProjectDecision,
   type ProjectSignal,
@@ -137,7 +137,7 @@ export async function attachMeetingIfConfident(
     .where(eq(meetings.id, meetingId))
     .limit(1);
   if (!m || m.projectId || m.autoAt) return null;
-  const decision = decideMeetingProject(await gatherMeetingProjectSignals(conn, meetingId, extra));
+  const decision = decideProject(await gatherMeetingProjectSignals(conn, meetingId, extra));
   await conn
     .update(meetings)
     .set(

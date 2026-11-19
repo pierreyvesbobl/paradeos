@@ -2,6 +2,7 @@
 // Sert à drizzle-kit pushSchema pour matérialiser le schéma dans PGlite.
 export * from "@/db/schema/app-settings";
 export * from "@/db/schema/audit-log";
+export * from "@/db/schema/calendar-event-links";
 export * from "@/db/schema/calendar-events";
 export * from "@/db/schema/candidature-replies";
 export * from "@/db/schema/claude-activity";

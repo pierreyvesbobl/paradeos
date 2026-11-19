@@ -59,8 +59,10 @@ Deux caveats assumés : la planification GitHub peut dériver de 5 à 10
 minutes, et un workflow planifié est désactivé après 60 jours sans activité
 sur le dépôt. Pour un job d'ingestion, les deux sont sans conséquence.
 
-Le `refresh-calendar-events` (15 min) n'y est pas : à ajouter dans le même
-fichier avec un second `schedule` si le besoin se confirme.
+Le `refresh-calendar-events` y est depuis le 19/11/2026 (job `calendar`) : la
+relève enchaîne sur le rattachement des rendez-vous aux projets et les créneaux
+sans clic (cf. `lib/time/calendar-attach.ts`), qui n'ont de sens qu'au quart
+d'heure. Il garde un passage quotidien dans `vercel.json` (5 h 15) en filet.
 
 ## Les autres options
 

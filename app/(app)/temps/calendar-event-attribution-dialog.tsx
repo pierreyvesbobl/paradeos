@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowSquareOut, MagnifyingGlass } from "@phosphor-icons/react";
+import { ArrowSquareOut, MagnifyingGlass, Sparkle } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -24,6 +24,8 @@ export type AttributionDialogEvent = {
   endAt: string;
   location: string | null;
   htmlLink: string | null;
+  /** Projet reconnu par la relève : proposé en premier, un clic suffit. */
+  suggestion: { projectId: string; projectName: string } | null;
 };
 
 export function CalendarEventAttributionDialog({
@@ -46,6 +48,7 @@ export function CalendarEventAttributionDialog({
   }, [query, projects]);
 
   function attribute(projectId: string) {
+    if (!projectId) return;
     startTransition(async () => {
       const res = await attributeCalendarEvent({
         calendarEventId: event.calendarEventId,
@@ -73,7 +76,35 @@ export function CalendarEventAttributionDialog({
         </DialogHeader>
 
         <div className="space-y-3">
-          <p className="font-medium text-foreground text-sm">Attribuer à un projet</p>
+          {event.suggestion ? (
+            <div
+              className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+              style={{
+                borderColor: "var(--ds-tint-blue-dot)",
+                background: "var(--ds-tint-blue-bg)",
+                color: "var(--ds-tint-blue-text)",
+              }}
+            >
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide opacity-80">
+                  <Sparkle size={12} weight="duotone" />
+                  Projet reconnu
+                </p>
+                <p className="truncate font-medium text-sm">{event.suggestion.projectName}</p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                disabled={pending}
+                onClick={() => attribute(event.suggestion?.projectId ?? "")}
+              >
+                Imputer
+              </Button>
+            </div>
+          ) : null}
+          <p className="font-medium text-foreground text-sm">
+            {event.suggestion ? "Ou choisir un autre projet" : "Attribuer à un projet"}
+          </p>
           <div className="relative">
             <MagnifyingGlass className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <input

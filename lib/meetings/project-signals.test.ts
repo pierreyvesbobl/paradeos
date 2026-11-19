@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  decideMeetingProject,
-  participantSignals,
-  taskSignals,
-  titleSignals,
-} from "./project-signals";
+import { decideProject, participantSignals, taskSignals, titleSignals } from "./project-signals";
 
 const gpas = {
   id: "gpas",
@@ -57,9 +52,9 @@ describe("titleSignals", () => {
   });
 });
 
-describe("decideMeetingProject", () => {
+describe("decideProject", () => {
   it("rattache quand le titre et les participants concordent", () => {
-    const d = decideMeetingProject([
+    const d = decideProject([
       ...titleSignals("Point Channel Health GpasPlus", [gpas, geek]),
       ...participantSignals([["gpas"], ["gpas"]]),
     ]);
@@ -67,24 +62,24 @@ describe("decideMeetingProject", () => {
   });
 
   it("rattache sur un indice fort seul", () => {
-    expect(
-      decideMeetingProject([{ projectId: "geek", kind: "named", weight: 0.8 }])?.projectId,
-    ).toBe("geek");
+    expect(decideProject([{ projectId: "geek", kind: "named", weight: 0.8 }])?.projectId).toBe(
+      "geek",
+    );
   });
 
   it("ne rattache pas sur un indice faible seul", () => {
-    expect(decideMeetingProject(taskSignals(["gpas", "gpas", "gpas"]))).toBeNull();
+    expect(decideProject(taskSignals(["gpas", "gpas", "gpas"]))).toBeNull();
   });
 
   it("une réunion transverse reste sans projet", () => {
     expect(
-      decideMeetingProject([
+      decideProject([
         { projectId: "gpas", kind: "named", weight: 0.8 },
         { projectId: "geek", kind: "named", weight: 0.8 },
       ]),
     ).toBeNull();
     expect(
-      decideMeetingProject([
+      decideProject([
         ...taskSignals(["gpas", "gpas", "gpas", "geek"]),
         ...participantSignals([["gpas"]]),
         { projectId: "geek", kind: "title_entity", weight: 0.5 },
